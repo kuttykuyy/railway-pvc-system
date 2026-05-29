@@ -1,0 +1,992 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "../node_modules/.prisma/client"
+}
+
+datasource db {
+    provider  = "postgresql"
+    url       = env("DATABASE_URL")
+    directUrl = env("DIRECT_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id                    String                 @id @default(cuid())
+  name                  String?
+  email                 String                 @unique
+  emailVerified         DateTime?
+  image                 String?
+  password              String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  address               String?
+  companyName           String?
+  freeTrialUsed         Int                    @default(0)
+  gstin                 String?
+  isTrialActive         Boolean                @default(true)
+  panNumber             String?
+  phone                 String?
+  totalBillsProcessed   Int                    @default(0)
+  role                  String                 @default("contractor")
+  failedLoginAttempts   Int                    @default(0)
+  lastLoginAt           DateTime?
+  lastLoginIp           String?
+  lastPasswordChange    DateTime?
+  lockedUntil           DateTime?
+  passwordExpiresAt     DateTime?
+  logoPath              String?
+  reportFooterText      String?
+  reportHeaderColor     String?
+  reportHeaderText      String?
+  showLogoInReports     Boolean                @default(true)
+  customProcessingFee   Float?
+  isFreeAccount         Boolean                @default(false)
+  department            String?
+  designation           String?
+  division              String?
+  divisionName          String?
+  headquartersStation   String?
+  isCurrentPosting      Boolean                @default(true)
+  officeLocation        String?
+  postingEndDate        DateTime?
+  postingStartDate      DateTime?
+  railwayZone           String?
+  railwayZoneName       String?
+  section               String?
+  resetToken            String?
+  resetTokenExpiry      DateTime?
+  accounts              Account[]
+  sessions              Session[]
+  billApprovalHistory   BillApprovalHistory[]
+  billTransactions      BillTransaction[]
+  pvcChecks             PvcCheck[]
+  billApprovals         Bill[]                 @relation("BillApprovals")
+  contracts             Contract[]
+  creditTransactions    CreditTransaction[]
+  customerAccount       CustomerAccount?
+  invoices              Invoice[]
+  reportTemplates       ReportTemplate[]
+  billAccess            UserBillAccess[]
+  contractAccess        UserContractAccess[]
+  pageAccess            UserPageAccess[]
+  labourIndexDocuments  LabourIndexDocument[]
+  gstInvoices           GstInvoice[]
+  whatsappConversations  WhatsAppConversation[]
+  telegramConversations  TelegramConversation[]
+  whatsappLogs          WhatsAppLog[]
+  apiKeys               ApiKey[]
+
+  @@index([email])
+  @@index([role])
+  @@index([createdAt])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model PhoneOtp {
+  id          String   @id @default(cuid())
+  phone       String
+  otp         String
+  attempts    Int      @default(0)
+  verified    Boolean  @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([phone, otp])
+  @@index([phone, verified])
+  @@map("phone_otps")
+}
+
+model ClassificationGroup {
+  id                 String              @id @default(cuid())
+  code               String              @unique
+  name               String
+  description        String?
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  subClassifications SubClassification[]
+
+  @@map("classification_groups")
+}
+
+model SubClassification {
+  id                        String                    @id @default(cuid())
+  code                      String                    @unique
+  name                      String
+  description               String?
+  groupId                   String
+  fixed                     Float                     @default(15)
+  labour                    Float                     @default(0)
+  steel                     Float                     @default(0)
+  cement                    Float                     @default(0)
+  plantMachinery            Float                     @default(0)
+  fuel                      Float                     @default(0)
+  otherMaterials            Float                     @default(0)
+  explosives                Float                     @default(0)
+  isActive                  Boolean                   @default(true)
+  isDefault                 Boolean                   @default(false)
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+  billClassificationEntries BillClassificationEntry[] @relation("SubClassificationEntries")
+  group                     ClassificationGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@map("sub_classifications")
+}
+
+model Classification {
+  id                        String                    @id @default(cuid())
+  code                      String                    @unique
+  name                      String
+  description               String?
+  fixed                     Float                     @default(15)
+  labour                    Float                     @default(20)
+  steel                     Float                     @default(0)
+  cement                    Float                     @default(0)
+  plantMachinery            Float                     @default(20)
+  fuel                      Float                     @default(15)
+  otherMaterials            Float                     @default(20)
+  explosives                Float                     @default(10)
+  isActive                  Boolean                   @default(true)
+  isDefault                 Boolean                   @default(false)
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+  subClassifications        Json?                     @default("[]")
+  billClassificationEntries BillClassificationEntry[] @relation("LegacyClassificationEntries")
+  bills                     Bill[]
+
+  @@map("classifications")
+}
+
+model Contract {
+  id                           String               @id @default(cuid())
+  agreementNo                  String               @unique
+  loaNo                        String?
+  loaDate                      DateTime?
+  contractorName               String
+  contractorPhone              String?
+  workDescription              String
+  workClassification           String?
+  dateOfOpening                DateTime
+  baseMonth                    DateTime
+  createdAt                    DateTime             @default(now())
+  updatedAt                    DateTime             @updatedAt
+  userId                       String?
+  currentCompletionDate        DateTime?
+  extensionGrantedDate         DateTime?
+  extensionReason              String?
+  extensionType                String?
+  isExtended                   Boolean              @default(false)
+  originalCompletionDate       DateTime?
+  completionPeriodMonths       Int?
+  contractValue                Float?
+  hasRailwaySuppliedMaterials  Boolean              @default(false)
+  pvcApplicable                Boolean              @default(true)
+  pvcEligibilityNote           String?
+  railwaySuppliedMaterialsNote String?
+  tenderAdvertisedValue        Float?
+  coveringLetterDesignation    String?
+  schedules                    Json?                @default("[]")
+  bills                        Bill[]
+  extensions                   ContractExtension[]
+  user                         User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pvcCalculations              PvcCalculation[]
+  pvcChecks                    PvcCheck[]
+  userAccess                   UserContractAccess[]
+
+  @@index([userId])
+  @@index([agreementNo])
+  @@index([dateOfOpening])
+  @@index([createdAt])
+  @@map("contracts")
+}
+
+model ContractExtension {
+  id                     String    @id @default(cuid())
+  contractId             String
+  extensionType          String
+  extensionReason        String?
+  originalCompletionDate DateTime
+  extendedCompletionDate DateTime
+  extensionDuration      Int
+  isPvcRestricted        Boolean   @default(false)
+  pvcRestrictionDate     DateTime?
+  approvedBy             String?
+  approvalDate           DateTime  @default(now())
+  orderNumber            String?
+  liquidatedDamagesRate  Float?
+  isLiquidatedDamages    Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  extensionSubcategory   String?
+  contract               Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@map("contract_extensions")
+}
+
+model ExtensionSubcategory {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String
+  description  String   @default("")
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("extension_subcategories")
+}
+
+model PriceIndex {
+  id            String              @id @default(cuid())
+  name          String              @unique
+  baseValue     Float
+  description   String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  monthlyValues MonthlyIndexValue[]
+
+  @@map("price_indices")
+}
+
+model MonthlyIndexValue {
+  id            String     @id @default(cuid())
+  priceIndexId  String
+  month         DateTime
+  value         Float
+  source        String?
+  isProvisional Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  priceIndex    PriceIndex @relation(fields: [priceIndexId], references: [id], onDelete: Cascade)
+
+  @@unique([priceIndexId, month])
+  @@index([month])
+  @@index([priceIndexId, month])
+  @@map("monthly_index_values")
+}
+
+// JPC Steel Item Records - stores individual JPC items with fortnightly prices
+model JpcSteelItem {
+  id           String   @id @default(cuid())
+  itemCode     String // e.g., "tmt_10mm", "isa_75x75x6"
+  itemName     String // e.g., "TMT 10 MM", "ANGLES 75X75X6 MM"
+  category     String // TMT, ANGLE, CHANNEL, JOIST, PLATE, HR_COIL, CR_COIL, ROUND, WIRE_ROD, OTHER
+  indexMapping String? // Which steel index this maps to: TMT, ANGLE_CHANNEL, PLATES, OTHER_SECTIONS
+  month        DateTime
+  city         String   @default("Chennai")
+  f1           Float? // First fortnight price
+  f2           Float? // Second fortnight price
+  average      Float? // Calculated (f1+f2)/2
+  source       String? // e.g., "JPC Bulletin May 2025"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([itemCode, month, city])
+  @@index([month])
+  @@index([category])
+  @@index([indexMapping])
+  @@map("jpc_steel_items")
+}
+
+// Daily fuel prices from PPAC (Petroleum Planning & Analysis Cell)
+model DailyFuelPrice {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  delhi     Float // Diesel price in Delhi (Rs/Litre)
+  mumbai    Float // Diesel price in Mumbai (Rs/Litre)
+  chennai   Float // Diesel price in Chennai (Rs/Litre)
+  kolkata   Float // Diesel price in Kolkata (Rs/Litre)
+  source    String? // e.g., "PPAC"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([date])
+  @@index([date])
+  @@map("daily_fuel_prices")
+}
+
+enum ComponentType {
+  LABOUR
+  PLANT_MACHINERY_SPARES
+  MPNG_FUEL
+  OTHER_MATERIALS
+  CEMENT
+  TMT_BARS
+  ANGLE_CHANNEL
+  PLATES
+  OTHER_SECTIONS
+}
+
+model LabourIndexDocument {
+  id               String        @id @default(cuid())
+  componentType    ComponentType
+  year             Int
+  months           Int[]
+  fileName         String
+  cloudStoragePath String
+  uploadedBy       String
+  isProvisional    Boolean       @default(true)
+  remarks          String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  user             User          @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@index([componentType, year])
+  @@index([year])
+  @@index([isProvisional])
+  @@map("labour_index_documents")
+}
+
+model Bill {
+  id                       String                    @id @default(cuid())
+  contractId               String
+  billNo                   String
+  billAmount               Float
+  dateOfMeasurement        DateTime
+  quarter                  String
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  isChargeable             Boolean                   @default(true)
+  processingFee            Float                     @default(1000)
+  cementAmount             Float?                    @default(0)
+  steelAmount              Float?                    @default(0)
+  selectedSteelComponent   String?                   @default("Steel TMT Bars")
+  steelTypes               Json?                     @default("[]") // Array of steel types for classification-based calculations: ["TMT", "ANGLE_CHANNEL", "PLATES", "OTHER_SECTIONS"]
+  isFinalPvc               Boolean                   @default(false)
+  pvcNumber                String?
+  zone                     String?
+  fuelPriceType            String?                   @default("four_city_avg") // "four_city_avg" or "zone_city"
+  dateOfCompletion         DateTime?
+  nonScheduleItems         Json?                     @default("[]")
+  steelAngleChannelAmount  Float?                    @default(0)
+  steelOtherSectionsAmount Float?                    @default(0)
+  steelPlatesAmount        Float?                    @default(0)
+  steelTmtBarsAmount       Float?                    @default(0)
+  grossBillAmount          Float
+  subClassifications       Json?                     @default("[]")
+  workClassificationId     String?
+  batchId                  String?
+  batchName                String?
+  approvalComments         String?
+  approvedAt               DateTime?
+  approvedBy               String?
+  rejectionReason          String?
+  status                   String                    @default("draft")
+  submittedAt              DateTime?
+  hasBeenEditedOnce        Boolean                   @default(false)
+  lastEditedBy             String?
+  lastEditedAt             DateTime?
+  approvalHistory          BillApprovalHistory[]
+  classificationEntries    BillClassificationEntry[]
+  billTransaction          BillTransaction?
+  approvedByUser           User?                     @relation("BillApprovals", fields: [approvedBy], references: [id])
+  contract                 Contract                  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  workClassification       Classification?           @relation(fields: [workClassificationId], references: [id])
+  pvcCalculation           PvcCalculation?
+  userAccess               UserBillAccess[]
+  whatsappLogs             WhatsAppLog[]
+
+  @@index([contractId])
+  @@index([billNo])
+  @@index([dateOfMeasurement])
+  @@index([quarter])
+  @@index([createdAt])
+  @@index([isChargeable])
+  @@index([batchId])
+  @@index([status])
+  @@index([approvedBy])
+  @@map("bills")
+}
+
+model BillClassificationEntry {
+  id                 String  @id @default(cuid())
+  billId             String
+  classificationId   String?
+  subClassifications Json    @default("[]")
+  amount             Float
+  description        String?
+  steelTypes         Json?   @default("[]") // Array of steel types: ["TMT", "ANGLE_CHANNEL", "PLATES", "OTHER_SECTIONS"]
+  scheduleItem       String?
+  itemNumber         String?  // Item number from bill (e.g., "1130 10 (G)")
+  quantity           Float?   // Qty executed since last bill
+  agreementRate      Float?   // Agreement Rate in Rs.
+  itemRows           Json?    // Array of {itemNumber, quantity, agreementRate} for multi-item entries
+
+  // Per-entry PVC breakdown (calculated during bill processing)
+  labourPvc         Float? @default(0)
+  plantMachineryPvc Float? @default(0)
+  fuelPowerPvc      Float? @default(0)
+  otherMaterialsPvc Float? @default(0)
+  cementPvc         Float? @default(0)
+  steelPvc          Float? @default(0)
+  explosivesPvc     Float? @default(0)
+  totalPvc          Float? @default(0)
+
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  subClassificationId String?
+  bill                Bill               @relation(fields: [billId], references: [id], onDelete: Cascade)
+  classification      Classification?    @relation("LegacyClassificationEntries", fields: [classificationId], references: [id])
+  subClassification   SubClassification? @relation("SubClassificationEntries", fields: [subClassificationId], references: [id])
+
+  @@index([billId])
+  @@index([classificationId])
+  @@index([subClassificationId])
+  @@map("bill_classification_entries")
+}
+
+model PvcCalculation {
+  id                             String    @id @default(cuid())
+  contractId                     String
+  billId                         String    @unique
+  labourPvc                      Float     @default(0)
+  plantMachineryPvc              Float     @default(0)
+  fuelPowerPvc                   Float     @default(0)
+  otherMaterialsPvc              Float     @default(0)
+  cementPvc                      Float     @default(0)
+  explosivesPvc                  Float     @default(0)
+  steelPvc                       Float     @default(0)
+  totalPvc                       Float
+  previousPvcTotal               Float     @default(0)
+  cumulativePvc                  Float
+  createdAt                      DateTime  @default(now())
+  updatedAt                      DateTime  @updatedAt
+  dedicatedCementPvc             Float     @default(0)
+  dedicatedSteelPvc              Float     @default(0)
+  cappedCementIndex              Float?    @default(0)
+  cappedExplosivesIndex          Float?    @default(0)
+  cappedFuelIndex                Float?    @default(0)
+  cappedLabourIndex              Float?    @default(0)
+  cappedMaterialsIndex           Float?    @default(0)
+  cappedPlantIndex               Float?    @default(0)
+  cappedSteelIndex               Float?    @default(0)
+  extensionType                  String?
+  indexCapDate                   DateTime?
+  isExtensionPeriod              Boolean   @default(false)
+  isIndexCapped                  Boolean   @default(false)
+  originalPvcAmount              Float?    @default(0)
+  pvcRestrictionReason           String?
+  pvcSavingsDueToRestriction     Float?    @default(0)
+  restrictedPvcAmount            Float?    @default(0)
+  dedicatedSteelAngleChannelPvc  Float     @default(0)
+  dedicatedSteelOtherSectionsPvc Float     @default(0)
+  dedicatedSteelPlatesPvc        Float     @default(0)
+  dedicatedSteelTmtBarsPvc       Float     @default(0)
+  indexL_Cement                  Float?    @default(0)
+  indexL_Explosives              Float?    @default(0)
+  indexL_Fuel                    Float?    @default(0)
+  indexL_Labour                  Float?    @default(0)
+  indexL_Materials               Float?    @default(0)
+  indexL_Plant                   Float?    @default(0)
+  indexL_Steel                   Float?    @default(0)
+  bill                           Bill      @relation(fields: [billId], references: [id], onDelete: Cascade)
+  contract                       Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@map("pvc_calculations")
+}
+
+model CustomerAccount {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  status            String   @default("active")
+  billingEmail      String?
+  paymentMethod     String?
+  currentTier       String   @default("standard")
+  monthlyBillCount  Int      @default(0)
+  creditBalance     Float    @default(0)
+  outstandingAmount Float    @default(0)
+  lastMonthBills    Int      @default(0)
+  currentMonthBills Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("customer_accounts")
+}
+
+model BillTransaction {
+  id             String       @id @default(cuid())
+  userId         String
+  billId         String       @unique
+  amount         Float
+  originalAmount Float        @default(1000)
+  discount       Float        @default(0)
+  discountType   String?
+  status         String       @default("pending")
+  isFree         Boolean      @default(false)
+  paymentMethod  String?
+  transactionRef String?
+  paidAt         DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  metadata       Json?
+  bill           Bill         @relation(fields: [billId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoiceItem    InvoiceItem?
+
+  @@index([userId])
+  @@index([billId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("bill_transactions")
+}
+
+model PvcCheck {
+  id             String   @id @default(cuid())
+  userId         String
+  contractId     String
+  billNo         String?
+  zone           String?
+  fuelPriceType  String   @default("four_city_avg")
+  dateOfMeasurement DateTime
+  totalPvc       Float
+  isPositive     Boolean
+  amount         Float    @default(500)
+  isFree         Boolean  @default(false)
+  breakdown      Json?
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contract       Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([contractId])
+  @@index([createdAt])
+  @@map("pvc_checks")
+}
+
+model Invoice {
+  id                 String        @id @default(cuid())
+  userId             String
+  invoiceNumber      String        @unique
+  invoiceDate        DateTime      @default(now())
+  dueDate            DateTime
+  billingPeriodStart DateTime
+  billingPeriodEnd   DateTime
+  subtotal           Float
+  taxAmount          Float         @default(0)
+  totalAmount        Float
+  paidAmount         Float         @default(0)
+  outstandingAmount  Float
+  status             String        @default("draft")
+  paymentDueDate     DateTime
+  paymentMethod      String?
+  paidAt             DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  items              InvoiceItem[]
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments           Payment[]
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id                String          @id @default(cuid())
+  invoiceId         String
+  billTransactionId String          @unique
+  description       String
+  quantity          Int             @default(1)
+  unitPrice         Float
+  totalPrice        Float
+  discount          Float           @default(0)
+  createdAt         DateTime        @default(now())
+  billTransaction   BillTransaction @relation(fields: [billTransactionId], references: [id])
+  invoice           Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_items")
+}
+
+model Payment {
+  id               String   @id @default(cuid())
+  invoiceId        String
+  amount           Float
+  paymentMethod    String
+  transactionRef   String?
+  status           String   @default("completed")
+  paymentDate      DateTime @default(now())
+  bankName         String?
+  chequeNumber     String?
+  upiTransactionId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  invoice          Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model PricingTier {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  displayName      String
+  description      String?
+  minBillsPerMonth Int
+  maxBillsPerMonth Int?
+  pricePerBill     Float
+  discountPercent  Float
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("pricing_tiers")
+}
+
+model UsageReport {
+  id              String   @id @default(cuid())
+  userId          String
+  reportMonth     String
+  reportYear      Int
+  billsProcessed  Int
+  totalAmount     Float
+  discountAmount  Float
+  netAmount       Float
+  standardBills   Int      @default(0)
+  discountedBills Int      @default(0)
+  freeBills       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, reportMonth])
+  @@map("usage_reports")
+}
+
+model CreditTransaction {
+  id             String   @id @default(cuid())
+  userId         String
+  amount         Float
+  type           String
+  reason         String
+  balanceBefore  Float
+  balanceAfter   Float
+  adminUserId    String?
+  adminUserEmail String?
+  billId         String?
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("credit_transactions")
+}
+
+model AdminSettings {
+  id                 String   @id @default(cuid())
+  key                String   @unique
+  value              String
+  description        String?
+  dataType           String   @default("string")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  updatedByUserId    String?
+  updatedByUserEmail String?
+
+  @@map("admin_settings")
+}
+
+model PvcComparisonSession {
+  id                String   @id @default(cuid())
+  userId            String
+  sessionToken      String   @unique
+  paymentStatus     String   @default("unpaid") // unpaid, paid, free
+  amount            Float    @default(250)
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  razorpaySignature String?
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+  @@index([sessionToken])
+  @@map("pvc_comparison_sessions")
+}
+
+model PvcComparisonDailyUsage {
+  id         String   @id @default(cuid())
+  userId     String
+  date       DateTime @default(now()) // Date of usage (stored as start of day)
+  usageCount Int      @default(0) // Number of comparisons done today
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@map("pvc_comparison_daily_usage")
+}
+
+model RazorpayTransaction {
+  id                String    @id @default(cuid())
+  userId            String
+  orderId           String    @unique
+  razorpayOrderId   String
+  razorpayPaymentId String?
+  razorpaySignature String?
+  amount            Float
+  currency          String    @default("INR")
+  status            String    @default("created") // created, pending, success, failed
+  notes             Json?
+  receipt           String
+  creditAmount      Float // Credit amount to be added (excluding GST)
+  gstAmount         Float // GST amount
+  totalAmount       Float // Total amount (creditAmount + gstAmount)
+  paymentMethod     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  completedAt       DateTime?
+
+  @@index([userId])
+  @@index([razorpayOrderId])
+  @@map("razorpay_transactions")
+}
+
+model GstInvoice {
+  id                    String   @id @default(cuid())
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoiceNumber         String   @unique
+  razorpayTransactionId String   @unique
+  customerName          String
+  customerEmail         String
+  customerPhone         String?
+  customerGstin         String?
+  customerAddress       String?
+  invoiceDate           DateTime @default(now())
+  subtotal              Float // Amount before GST
+  cgst                  Float // CGST amount
+  sgst                  Float // SGST amount
+  igst                  Float    @default(0) // IGST amount (for interstate)
+  totalGst              Float // Total GST
+  totalAmount           Float // Final amount
+  description           String
+  hsn                   String   @default("998314") // HSN for IT services
+  isInterstate          Boolean  @default(false)
+  pdfPath               String?
+  status                String   @default("generated") // generated, sent, paid
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([userId])
+  @@index([invoiceNumber])
+  @@map("gst_invoices")
+}
+
+model UserContractAccess {
+  id              String    @id @default(cuid())
+  userId          String
+  contractId      String
+  canView         Boolean   @default(true)
+  canEdit         Boolean   @default(false)
+  canDelete       Boolean   @default(false)
+  canCreateBills  Boolean   @default(true)
+  grantedByUserId String
+  grantedAt       DateTime  @default(now())
+  notes           String?
+  expiresAt       DateTime?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  contract        Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contractId])
+  @@map("user_contract_access")
+}
+
+model UserBillAccess {
+  id              String    @id @default(cuid())
+  userId          String
+  billId          String
+  canView         Boolean   @default(true)
+  canEdit         Boolean   @default(false)
+  canDelete       Boolean   @default(false)
+  canDownloadPdf  Boolean   @default(true)
+  grantedByUserId String
+  grantedAt       DateTime  @default(now())
+  notes           String?
+  expiresAt       DateTime?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  bill            Bill      @relation(fields: [billId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, billId])
+  @@map("user_bill_access")
+}
+
+model ReportTemplate {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  isGlobal    Boolean  @default(false)
+  sections    Json     @default("{\"allBillsTable\": true, \"monthlyIndices\": true, \"pvcCalculation\": true, \"contractDetails\": true, \"workClassification\": true, \"componentIndexDocuments\": true}")
+  fields      Json     @default("{\"pvcCalculation\": {\"summary\": true, \"componentWise\": true, \"quarterlyData\": true, \"dedicatedAmounts\": true, \"showCalculationSteps\": true}, \"contractDetails\": {\"zone\": true, \"loaNo\": true, \"baseMonth\": true, \"pvcNumber\": true, \"isFinalPvc\": true, \"agreementNo\": true, \"dateOfOpening\": true, \"contractorName\": true, \"workDescription\": true}, \"workClassification\": {\"code\": true, \"name\": true, \"description\": true, \"nonScheduleItems\": true, \"componentBreakdown\": true, \"subClassifications\": true}}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("report_templates")
+}
+
+model UserPageAccess {
+  id              String    @id @default(cuid())
+  userId          String
+  pagePath        String
+  pageName        String
+  pageCategory    String?
+  canAccess       Boolean   @default(true)
+  grantedByUserId String
+  grantedAt       DateTime  @default(now())
+  notes           String?
+  expiresAt       DateTime?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, pagePath])
+  @@index([userId])
+  @@index([pagePath])
+  @@map("user_page_access")
+}
+
+model BillApprovalHistory {
+  id             String   @id @default(cuid())
+  billId         String
+  userId         String
+  action         String
+  comments       String?
+  previousStatus String
+  newStatus      String
+  timestamp      DateTime @default(now())
+  bill           Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@index([billId])
+  @@index([userId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("bill_approval_history")
+}
+
+model WhatsAppConversation {
+  id               String    @id @default(cuid())
+  phoneNumber      String // WhatsApp phone number (91XXXXXXXXXX format)
+  userId           String? // Linked user if authenticated
+  currentStep      String    @default("IDLE") // IDLE, AWAITING_COMMAND, CREATING_BILL, AWAITING_CONTRACT, AWAITING_BILL_NO, AWAITING_AMOUNT, AWAITING_DATE, CONFIRMING
+  conversationData Json      @default("{}") // Stores temporary data during conversation
+  lastMessageAt    DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  expiresAt        DateTime? // Conversation expires after inactivity
+  user             User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([phoneNumber])
+  @@index([userId])
+  @@index([currentStep])
+  @@index([lastMessageAt])
+  @@map("whatsapp_conversations")
+}
+
+model TelegramConversation {
+  id               String    @id @default(cuid())
+  chatId           String // Telegram chat ID
+  userId           String? // Linked user if authenticated
+  currentStep      String    @default("IDLE")
+  conversationData Json      @default("{}")
+  lastMessageAt    DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  expiresAt        DateTime?
+  user             User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([chatId])
+  @@index([userId])
+  @@index([currentStep])
+  @@index([lastMessageAt])
+  @@map("telegram_conversations")
+}
+
+model WhatsAppLog {
+  id            String    @id @default(cuid())
+  billId        String? // Bill ID if message is related to a bill
+  userId        String // User who triggered the message
+  phoneNumber   String // Recipient phone number
+  recipientName String? // Recipient name
+  template      String // Template name used
+  parameters    Json // Template parameters sent
+  status        String    @default("pending") // pending, sent, delivered, read, failed
+  messageId     String? // WhatsApp message ID from provider
+  errorMessage  String? // Error message if failed
+  pdfUrl        String? // PDF URL if attached
+  sentAt        DateTime  @default(now())
+  deliveredAt   DateTime?
+  readAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  bill          Bill?     @relation(fields: [billId], references: [id], onDelete: SetNull)
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@index([billId])
+  @@index([userId])
+  @@index([phoneNumber])
+  @@index([status])
+  @@index([sentAt])
+  @@index([template])
+  @@map("whatsapp_logs")
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  name        String // Friendly name for the API key
+  key         String    @unique // The actual API key (hashed)
+  userId      String // User who owns this API key
+  description String? // Optional description of what this key is for
+  scopes      Json      @default("[]") // Array of allowed scopes/endpoints
+  isActive    Boolean   @default(true) // Can be deactivated without deletion
+  expiresAt   DateTime? // Optional expiration date
+  lastUsedAt  DateTime? // Track last usage
+  usageCount  Int       @default(0) // Track number of API calls
+  rateLimit   Int       @default(100) // Requests per minute limit
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([key])
+  @@index([userId])
+  @@index([isActive])
+  @@map("api_keys")
+}

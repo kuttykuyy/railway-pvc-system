@@ -1,0 +1,337 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
+import { TrendingUp, Users, IndianRupee, Activity } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+
+interface AnalyticsData {
+  summary: {
+    totalChecks: number;
+    totalUsers: number;
+    totalRevenue: number;
+    checkGrowth: number | string;
+    revenueGrowth: number | string;
+    averageRevenuePerUser: string;
+  };
+  monthlyData: Array<{
+    month: string;
+    checks: number;
+    users: number;
+    revenue: number;
+  }>;
+  weeklyData: Array<{
+    week: string;
+    checks: number;
+    users: number;
+    revenue: number;
+  }>;
+  topContracts: Array<{
+    contractId: string;
+    contractNumber: string;
+    checkCount: number;
+    revenue: number;
+  }>;
+  topUsers: Array<{
+    userId: string;
+    name: string;
+    email: string;
+    checkCount: number;
+    totalSpent: number;
+  }>;
+}
+
+const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1', '#f97316', '#14b8a6', '#d946ef'];
+
+export default function AnalyticsPage() {
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [timeRange, setTimeRange] = useState('30d');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await fetch(`/api/admin/analytics/pvc-checks?timeRange=${timeRange}`);
+        if (!response.ok) throw new Error('Failed to fetch analytics');
+        const analyticsData = await response.json();
+        setData(analyticsData);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load analytics');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAnalytics();
+  }, [timeRange]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 text-center">
+        <p className="text-red-600 font-semibold">Error: {error}</p>
+        <Button onClick={() => window.location.reload()} className="mt-4">
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const StatCard = ({
+    title,
+    value,
+    icon: Icon,
+    subtitle,
+    trend,
+    trendColor,
+  }: {
+    title: string;
+    value: string | number;
+    icon: React.ReactNode;
+    subtitle?: string;
+    trend?: number | string;
+    trendColor?: string;
+  }) => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <div className="text-muted-foreground">{Icon}</div>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
+        {trend !== undefined && (
+          <p className={`text-xs font-semibold mt-2 ${trendColor || 'text-green-600'}`}>
+            {typeof trend === 'number' && trend > 0 ? '+' : ''}{trend}% vs previous period
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <div className="space-y-6 p-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">PVC Check Analytics</h1>
+          <p className="text-muted-foreground mt-1">Monitor PVC check usage, revenue, and user engagement</p>
+        </div>
+        <div className="flex gap-2">
+          {['7d', '30d', '90d', '1y', 'all'].map((range) => (
+            <Button
+              key={range}
+              variant={timeRange === range ? 'default' : 'outline'}
+              onClick={() => setTimeRange(range)}
+              size="sm"
+            >
+              {range === '7d' ? '7 Days'
+                : range === '30d' ? '30 Days'
+                  : range === '90d' ? '90 Days'
+                    : range === '1y' ? '1 Year'
+                      : 'All Time'}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <StatCard
+          title="Total Checks"
+          value={data.summary.totalChecks.toLocaleString('en-IN')}
+          icon={<Activity className="h-4 w-4" />}
+          trend={typeof data.summary.checkGrowth === 'number' ? data.summary.checkGrowth : undefined}
+          trendColor={typeof data.summary.checkGrowth === 'number' && data.summary.checkGrowth > 0 ? 'text-green-600' : 'text-red-600'}
+        />
+        <StatCard
+          title="Unique Users"
+          value={data.summary.totalUsers.toLocaleString('en-IN')}
+          icon={<Users className="h-4 w-4" />}
+          subtitle="Who used PVC Check"
+        />
+        <StatCard
+          title="Total Revenue"
+          value={`₹${(data.summary.totalRevenue / 100000).toFixed(1)}L`}
+          icon={<IndianRupee className="h-4 w-4" />}
+          trend={typeof data.summary.revenueGrowth === 'number' ? data.summary.revenueGrowth : undefined}
+          trendColor={typeof data.summary.revenueGrowth === 'number' && data.summary.revenueGrowth > 0 ? 'text-green-600' : 'text-red-600'}
+        />
+        <StatCard
+          title="Avg Revenue/User"
+          value={`₹${data.summary.averageRevenuePerUser}`}
+          icon={<IndianRupee className="h-4 w-4" />}
+          subtitle="Per unique user"
+        />
+        <StatCard
+          title="Avg Checks/User"
+          value={(data.summary.totalChecks / data.summary.totalUsers || 0).toFixed(2)}
+          icon={<TrendingUp className="h-4 w-4" />}
+          subtitle="Engagement rate"
+        />
+      </div>
+
+      {/* Charts */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Monthly Trend */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Monthly Trend</CardTitle>
+            <CardDescription>Checks and revenue by month</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data.monthlyData.reverse()}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" angle={-45} textAnchor="end" height={80} />
+                <YAxis yAxisId="left" />
+                <YAxis yAxisId="right" orientation="right" />
+                <Tooltip />
+                <Legend />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="checks"
+                  stroke="#3b82f6"
+                  dot={false}
+                  strokeWidth={2}
+                  name="Total Checks"
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#10b981"
+                  dot={false}
+                  strokeWidth={2}
+                  name="Revenue (₹)"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Weekly Trend */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Weekly Trend (Last 12 Weeks)</CardTitle>
+            <CardDescription>Checks and users by week</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={data.weeklyData.reverse()}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="week" angle={-45} textAnchor="end" height={80} fontSize={12} />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="checks" fill="#3b82f6" name="Checks" />
+                <Bar dataKey="users" fill="#8b5cf6" name="Unique Users" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Top Contracts and Users */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Top Contracts */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Contracts by Usage</CardTitle>
+            <CardDescription>Most active contracts</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {data.topContracts.length > 0 ? (
+                data.topContracts.map((contract, idx) => (
+                  <div key={contract.contractId} className="flex items-center justify-between pb-3 border-b last:border-0">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm font-semibold">
+                          {idx + 1}
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{contract.contractNumber}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">{contract.checkCount}</p>
+                      <p className="text-xs text-green-600">₹{contract.revenue.toLocaleString('en-IN')}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-muted-foreground text-sm">No data available</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Top Users */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Users by Spending</CardTitle>
+            <CardDescription>Most engaged users</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {data.topUsers.length > 0 ? (
+                data.topUsers.map((user, idx) => (
+                  <div key={user.userId} className="flex items-center justify-between pb-3 border-b last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 text-purple-600 text-sm font-semibold">
+                          {idx + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate">{user.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right ml-2">
+                      <p className="font-semibold text-sm">{user.checkCount}x</p>
+                      <p className="text-xs text-blue-600">₹{user.totalSpent.toLocaleString('en-IN')}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-muted-foreground text-sm">No data available</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,756 @@
+/**
+ * Telegram Message Handler
+ * Processes incoming Telegram messages and manages bill creation conversation flow
+ */
+
+import {
+  getOrCreateTelegramConversation,
+  updateTelegramConversation,
+  resetTelegramConversation,
+  getTelegramConversationData,
+  linkTelegramToUser,
+  TelegramStep,
+} from './telegram-conversation';
+import { sendTelegramMessage, replyKeyboard } from './telegram-api';
+import { prisma } from './db';
+
+/**
+ * Main entry point — called from webhook route
+ */
+export async function handleTelegramMessage(chatId: string, text: string) {
+  try {
+    const conversation = await getOrCreateTelegramConversation(chatId);
+    const msg = text.trim();
+    const lower = msg.toLowerCase();
+
+    // Global commands
+    if (lower === '/start' || lower === '/help' || lower === 'help' || lower === 'menu') {
+      return sendHelpMessage(chatId);
+    }
+    if (lower === '/cancel' || lower === 'cancel' || lower === 'stop') {
+      await resetTelegramConversation(conversation.id);
+      return sendTelegramMessage(chatId, '❌ Operation cancelled. Type /help to see available commands.');
+    }
+
+    // Route by step
+    switch (conversation.currentStep) {
+      case TelegramStep.IDLE:
+      case TelegramStep.AWAITING_COMMAND:
+        return handleCommand(conversation, lower, chatId);
+      case TelegramStep.AWAITING_PHONE:
+        return handlePhoneLinking(conversation, msg, chatId);
+      // Contract creation steps
+      case TelegramStep.AWAITING_AGREEMENT_NO:
+        return handleAgreementNo(conversation, msg, chatId);
+      case TelegramStep.AWAITING_CONTRACTOR_NAME:
+        return handleContractorName(conversation, msg, chatId);
+      case TelegramStep.AWAITING_WORK_DESCRIPTION:
+        return handleWorkDescription(conversation, msg, chatId);
+      case TelegramStep.AWAITING_OPENING_DATE:
+        return handleOpeningDate(conversation, msg, chatId);
+      case TelegramStep.AWAITING_LOA_NO:
+        return handleLoaNo(conversation, msg, chatId);
+      case TelegramStep.AWAITING_CONTRACTOR_PHONE:
+        return handleContractorPhone(conversation, msg, chatId);
+      case TelegramStep.CONFIRMING_CONTRACT:
+        return handleConfirmContract(conversation, lower, chatId);
+      // Bill creation steps
+      case TelegramStep.AWAITING_CONTRACT:
+        return handleContractSelection(conversation, msg, chatId);
+      case TelegramStep.AWAITING_BILL_NO:
+        return handleBillNumber(conversation, msg, chatId);
+      case TelegramStep.AWAITING_AMOUNT:
+        return handleBillAmount(conversation, msg, chatId);
+      case TelegramStep.AWAITING_DATE:
+        return handleMeasurementDate(conversation, msg, chatId);
+      case TelegramStep.AWAITING_CLASSIFICATION:
+        return handleClassificationSelection(conversation, msg, chatId);
+      case TelegramStep.AWAITING_CEMENT_CONFIRM:
+        return handleCementConfirmation(conversation, lower, chatId);
+      case TelegramStep.AWAITING_CEMENT_PERCENTAGE:
+        return handleCementPercentage(conversation, msg, chatId);
+      case TelegramStep.AWAITING_STEEL_CONFIRM:
+        return handleSteelConfirmation(conversation, lower, chatId);
+      case TelegramStep.AWAITING_STEEL_PERCENTAGE:
+        return handleSteelPercentage(conversation, msg, chatId);
+      case TelegramStep.AWAITING_STEEL_TYPE:
+        return handleSteelTypeSelection(conversation, msg, chatId);
+      case TelegramStep.CONFIRMING:
+        return handleConfirmation(conversation, lower, chatId);
+      default:
+        await resetTelegramConversation(conversation.id);
+        return sendTelegramMessage(chatId, 'Something went wrong. Type /help to start over.');
+    }
+  } catch (error: any) {
+    console.error('Telegram handler error:', error);
+    return sendTelegramMessage(chatId, '❌ An error occurred. Please try again or type /cancel.');
+  }
+}
+
+// ─── Commands ────────────────────────────────────────
+
+async function sendHelpMessage(chatId: string) {
+  const msg =
+    `📋 <b>IR-PVC Bill Management Bot</b>\n\n` +
+    `Available commands:\n\n` +
+    `▫️ /createcontract — Create a new contract\n` +
+    `▫️ /createbill — Create a new PVC bill\n` +
+    `▫️ /status — Check your recent bills\n` +
+    `▫️ /help — Show this menu\n` +
+    `▫️ /cancel — Cancel current operation\n\n` +
+    `Simply type the command to get started!`;
+  return sendTelegramMessage(chatId, msg);
+}
+
+async function handleCommand(conversation: any, command: string, chatId: string) {
+  if (command === '/createcontract' || command === 'create contract' || command === 'new contract' || command === 'contract') {
+    // Check if user is linked
+    if (!conversation.userId) {
+      await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_PHONE);
+      return sendTelegramMessage(
+        chatId,
+        '🔗 <b>Link Your Account</b>\n\n' +
+          'Your Telegram is not yet linked to an IR-PVC account.\n\n' +
+          'Please enter the <b>phone number</b> registered on IR-PVC (e.g., 9876543210):'
+      );
+    }
+    return startContractCreation(conversation, chatId);
+  }
+
+  if (command === '/createbill' || command === 'create bill' || command === 'new bill' || command === 'bill') {
+    // Check if user is linked
+    if (!conversation.userId) {
+      await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_PHONE);
+      return sendTelegramMessage(
+        chatId,
+        '🔗 <b>Link Your Account</b>\n\n' +
+          'Your Telegram is not yet linked to an IR-PVC account.\n\n' +
+          'Please enter the <b>phone number</b> registered on IR-PVC (e.g., 9876543210):'
+      );
+    }
+    return startBillCreation(conversation, chatId);
+  }
+
+  if (command === '/status' || command === 'status' || command === 'my bills') {
+    if (!conversation.userId) {
+      await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_PHONE);
+      return sendTelegramMessage(
+        chatId,
+        '🔗 <b>Link Your Account</b>\n\nPlease enter the <b>phone number</b> registered on IR-PVC:'
+      );
+    }
+    return sendBillStatus(conversation, chatId);
+  }
+
+  return sendHelpMessage(chatId);
+}
+
+// ─── Phone Linking ───────────────────────────────────
+
+async function handlePhoneLinking(conversation: any, msg: string, chatId: string) {
+  const phone = msg.replace(/[\s\-\+]/g, '');
+  if (!/^\d{10,12}$/.test(phone)) {
+    return sendTelegramMessage(chatId, '❌ Invalid phone number. Please enter a 10-digit number (e.g., 9876543210).');
+  }
+
+  const user = await linkTelegramToUser(conversation.id, phone);
+  if (!user) {
+    return sendTelegramMessage(
+      chatId,
+      '❌ No IR-PVC account found with this phone number.\n\n' +
+        `Please sign up first at ${process.env.NEXTAUTH_URL || 'https://irpvc.in'} and add your phone number.`
+    );
+  }
+
+  // Refresh conversation with linked user
+  const refreshed = await getOrCreateTelegramConversation(chatId);
+  await sendTelegramMessage(chatId, `✅ Account linked! Welcome, <b>${user.name || user.email}</b>.\n\nType /createcontract to create a new contract or /createbill to create a new bill.`);
+}
+
+// ─── Contract Creation Flow ──────────────────────────
+
+async function startContractCreation(conversation: any, chatId: string) {
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_AGREEMENT_NO);
+  return sendTelegramMessage(
+    chatId,
+    `📋 <b>Create New Contract</b>\n\n` +
+      `Let's create a new railway contract.\n\n` +
+      `Step 1 of 6: Enter the <b>Agreement Number</b> (e.g., AG-001, LOA-2025-123):`
+  );
+}
+
+async function handleAgreementNo(conversation: any, msg: string, chatId: string) {
+  const agreementNo = msg.trim().toUpperCase();
+  if (agreementNo.length < 2 || agreementNo.length > 50) {
+    return sendTelegramMessage(chatId, '❌ Invalid Agreement Number. Please enter a value between 2 and 50 characters.');
+  }
+
+  // Check if agreement number already exists
+  const existing = await prisma.contract.findUnique({ where: { agreementNo } });
+  if (existing) {
+    return sendTelegramMessage(chatId, `❌ A contract with Agreement Number "<b>${agreementNo}</b>" already exists.\n\nPlease use a different Agreement Number.`);
+  }
+
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_CONTRACTOR_NAME, { agreementNo });
+  return sendTelegramMessage(
+    chatId,
+    `✅ Agreement Number: <b>${agreementNo}</b>\n\n` +
+      `Step 2 of 6: Enter the <b>Contractor Name</b> (e.g., ABC Construction Ltd):`
+  );
+}
+
+async function handleContractorName(conversation: any, msg: string, chatId: string) {
+  const contractorName = msg.trim();
+  if (contractorName.length < 2 || contractorName.length > 100) {
+    return sendTelegramMessage(chatId, '❌ Invalid name. Please enter between 2 and 100 characters.');
+  }
+
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_WORK_DESCRIPTION, { contractorName });
+  return sendTelegramMessage(
+    chatId,
+    `✅ Contractor: <b>${contractorName}</b>\n\n` +
+      `Step 3 of 6: Enter the <b>Work Description</b> (e.g., Railway bridge construction):`
+  );
+}
+
+async function handleWorkDescription(conversation: any, msg: string, chatId: string) {
+  const workDescription = msg.trim();
+  if (workDescription.length < 5 || workDescription.length > 500) {
+    return sendTelegramMessage(chatId, '❌ Invalid description. Please enter between 5 and 500 characters.');
+  }
+
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_OPENING_DATE, { workDescription });
+  return sendTelegramMessage(
+    chatId,
+    `✅ Work: <b>${workDescription.substring(0, 50)}...</b>\n\n` +
+      `Step 4 of 6: Enter <b>Date of Opening</b> in DD/MM/YYYY format (from LOA):\n` +
+      `(e.g., 15/03/2025)`
+  );
+}
+
+async function handleOpeningDate(conversation: any, msg: string, chatId: string) {
+  const match = msg.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) {
+    return sendTelegramMessage(chatId, '❌ Invalid date. Use DD/MM/YYYY format (e.g., 15/03/2025).');
+  }
+
+  const [, day, month, year] = match;
+  const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  if (isNaN(date.getTime())) {
+    return sendTelegramMessage(chatId, '❌ Invalid date. Please enter a valid date.');
+  }
+
+  const formatted = date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric' });
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_LOA_NO, { dateOfOpening: date.toISOString() });
+  return sendTelegramMessage(
+    chatId,
+    `✅ Opening Date: <b>${formatted}</b>\n\n` +
+      `Step 5 of 6: Enter the <b>LOA Number</b> (optional - press SKIP to skip):\n` +
+      `(e.g., LOA-2025-001)`
+  );
+}
+
+async function handleLoaNo(conversation: any, msg: string, chatId: string) {
+  const input = msg.trim().toUpperCase();
+
+  if (input === 'SKIP' || input === 'S') {
+    await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_CONTRACTOR_PHONE, { loaNo: '' });
+    return sendTelegramMessage(
+      chatId,
+      `⏭️ <b>LOA Number skipped</b>\n\n` +
+        `Step 6 of 6: Enter <b>Contractor Phone Number</b> (optional - press SKIP to skip):\n` +
+        `(e.g., 9876543210)`
+    );
+  }
+
+  if (input.length < 2 || input.length > 50) {
+    return sendTelegramMessage(chatId, '❌ Invalid LOA Number. Enter between 2-50 characters or type SKIP.');
+  }
+
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_CONTRACTOR_PHONE, { loaNo: input });
+  return sendTelegramMessage(
+    chatId,
+    `✅ LOA Number: <b>${input}</b>\n\n` +
+      `Step 6 of 6: Enter <b>Contractor Phone Number</b> (optional - press SKIP to skip):\n` +
+      `(e.g., 9876543210)`
+  );
+}
+
+async function handleContractorPhone(conversation: any, msg: string, chatId: string) {
+  const input = msg.trim();
+
+  let phone = '';
+  if (input !== 'SKIP' && input !== 'S' && input !== '') {
+    phone = input.replace(/[\s\-\+]/g, '');
+    if (!/^\d{10,12}$/.test(phone)) {
+      return sendTelegramMessage(chatId, '❌ Invalid phone. Enter 10 digits or type SKIP.');
+    }
+  }
+
+  await updateTelegramConversation(conversation.id, TelegramStep.CONFIRMING_CONTRACT, { contractorPhone: phone });
+  return sendConfirmContractSummary(conversation, chatId);
+}
+
+async function sendConfirmContractSummary(conversation: any, chatId: string) {
+  const data = getTelegramConversationData(conversation);
+  const date = new Date(data.dateOfOpening!);
+  const formatted = date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  let msg =
+    `📋 <b>Contract Summary</b>\n\n` +
+    `📄 Agreement No: <b>${data.agreementNo}</b>\n` +
+    `👤 Contractor: <b>${data.contractorName}</b>\n` +
+    `🏗️ Work: <b>${data.workDescription}</b>\n` +
+    `📅 Opening Date: <b>${formatted}</b>\n`;
+  
+  if (data.loaNo) msg += `📋 LOA No: <b>${data.loaNo}</b>\n`;
+  if (data.contractorPhone) msg += `📞 Phone: <b>${data.contractorPhone}</b>\n`;
+
+  msg += `\nIs this correct?\n\n▫️ <b>YES</b> to create\n▫️ <b>NO</b> to cancel`;
+
+  return sendTelegramMessage(chatId, msg);
+}
+
+async function handleConfirmContract(conversation: any, msg: string, chatId: string) {
+  if (msg === 'yes' || msg === 'y' || msg === 'confirm') {
+    return createContractFromTelegram(conversation, chatId);
+  }
+  if (msg === 'no' || msg === 'n') {
+    await resetTelegramConversation(conversation.id);
+    return sendTelegramMessage(chatId, '❌ Cancelled. Type /createcontract to start over.');
+  }
+  return sendTelegramMessage(chatId, 'Reply <b>YES</b> to confirm or <b>NO</b> to cancel.');
+}
+
+async function createContractFromTelegram(conversation: any, chatId: string) {
+  const data = getTelegramConversationData(conversation);
+  try {
+    const contract = await prisma.contract.create({
+      data: {
+        agreementNo: data.agreementNo!,
+        contractorName: data.contractorName!,
+        workDescription: data.workDescription!,
+        dateOfOpening: new Date(data.dateOfOpening!),
+        loaNo: data.loaNo || null,
+        contractorPhone: data.contractorPhone || null,
+        baseMonth: getBaseMonthFromOpeningDate(new Date(data.dateOfOpening!)),
+        userId: conversation.userId,
+        pvcApplicable: true,
+      },
+    });
+
+    await sendTelegramMessage(
+      chatId,
+      `✅ <b>Contract Created Successfully!</b>\n\n` +
+        `📄 Agreement No: <b>${contract.agreementNo}</b>\n` +
+        `👤 Contractor: <b>${contract.contractorName}</b>\n` +
+        `🏗️ Work: <b>${contract.workDescription}</b>\n\n` +
+        `View contract: ${process.env.NEXTAUTH_URL || 'https://irpvc.in'}/contracts/${contract.id}\n\n` +
+        `Now you can create bills for this contract! Type /createbill to get started.`
+    );
+
+    await resetTelegramConversation(conversation.id);
+  } catch (error: any) {
+    console.error('Error creating contract from Telegram:', error);
+    
+    // Check for specific error types
+    if (error.code === 'P2002') {
+      // Unique constraint violation
+      return sendTelegramMessage(chatId, `❌ A contract with Agreement Number "<b>${data.agreementNo}</b>" already exists.\n\nPlease try again with a different number.`);
+    }
+    
+    await sendTelegramMessage(chatId, `❌ Error: ${error.message || 'Failed to create contract'}\n\nPlease try again or contact support.`);
+    await resetTelegramConversation(conversation.id);
+  }
+}
+
+// Helper function to calculate base month from opening date
+function getBaseMonthFromOpeningDate(openingDate: Date): Date {
+  const date = new Date(openingDate);
+  date.setMonth(date.getMonth() - 1);
+  date.setDate(1);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+// ─── Bill Creation Flow ──────────────────────────────
+
+async function startBillCreation(conversation: any, chatId: string) {
+  const contracts = await prisma.contract.findMany({
+    where: { userId: conversation.userId },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+  });
+
+  if (contracts.length === 0) {
+    await resetTelegramConversation(conversation.id);
+    return sendTelegramMessage(
+      chatId,
+      `❌ No contracts found. Please create a contract first at ${process.env.NEXTAUTH_URL || 'https://irpvc.in'}`
+    );
+  }
+
+  let msg = '📋 <b>Select a Contract</b>\n\nReply with the number:\n\n';
+  contracts.forEach((c, i) => {
+    const desc = c.workDescription.length > 50 ? c.workDescription.substring(0, 50) + '...' : c.workDescription;
+    msg += `<b>${i + 1}.</b> ${c.agreementNo}\n    ${desc}\n\n`;
+  });
+  msg += 'Type /cancel to cancel.';
+
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_CONTRACT, {
+    contractIds: contracts.map(c => c.id),
+  });
+  return sendTelegramMessage(chatId, msg);
+}
+
+async function handleContractSelection(conversation: any, msg: string, chatId: string) {
+  const data = getTelegramConversationData(conversation);
+  const ids = data.contractIds || [];
+  const sel = parseInt(msg);
+
+  if (isNaN(sel) || sel < 1 || sel > ids.length) {
+    return sendTelegramMessage(chatId, `❌ Invalid. Reply with a number between 1 and ${ids.length}.`);
+  }
+
+  const contract = await prisma.contract.findUnique({ where: { id: ids[sel - 1] } });
+  if (!contract) {
+    await resetTelegramConversation(conversation.id);
+    return sendTelegramMessage(chatId, '❌ Contract not found. Please try again.');
+  }
+
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_BILL_NO, { contractId: contract.id });
+  return sendTelegramMessage(
+    chatId,
+    `✅ Contract: <b>${contract.agreementNo}</b>\n\nPlease enter the <b>Bill Number</b> (e.g., B1, B2):`
+  );
+}
+
+async function handleBillNumber(conversation: any, msg: string, chatId: string) {
+  const billNo = msg.trim();
+  if (billNo.length < 1 || billNo.length > 50) {
+    return sendTelegramMessage(chatId, '❌ Invalid bill number. Please enter a valid one (e.g., B1, Bill-001).');
+  }
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_AMOUNT, { billNo });
+  return sendTelegramMessage(chatId, `✅ Bill No: <b>${billNo}</b>\n\nEnter the <b>Bill Amount</b> in ₹ (numbers only, e.g., 50000):`);
+}
+
+async function handleBillAmount(conversation: any, msg: string, chatId: string) {
+  const amount = parseFloat(msg.replace(/[^\d.]/g, ''));
+  if (isNaN(amount) || amount <= 0) {
+    return sendTelegramMessage(chatId, '❌ Invalid amount. Enter a valid number (e.g., 50000).');
+  }
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_DATE, { billAmount: amount });
+  return sendTelegramMessage(
+    chatId,
+    `✅ Amount: <b>₹${amount.toLocaleString('en-IN')}</b>\n\nEnter <b>Date of Measurement</b> in DD/MM/YYYY format (e.g., 15/08/2025):`
+  );
+}
+
+async function handleMeasurementDate(conversation: any, msg: string, chatId: string) {
+  const match = msg.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) {
+    return sendTelegramMessage(chatId, '❌ Invalid date. Use DD/MM/YYYY format (e.g., 15/08/2025).');
+  }
+  const [, day, month, year] = match;
+  const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  if (isNaN(date.getTime())) {
+    return sendTelegramMessage(chatId, '❌ Invalid date. Please enter a valid date.');
+  }
+
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_CLASSIFICATION, {
+    dateOfMeasurement: date.toISOString(),
+  });
+  return sendClassificationSelection(conversation, chatId);
+}
+
+// ─── Classification ──────────────────────────────────
+
+async function sendClassificationSelection(conversation: any, chatId: string) {
+  const classifications = await prisma.classification.findMany({
+    where: { isActive: true },
+    orderBy: { code: 'asc' },
+    take: 20,
+  });
+
+  if (classifications.length === 0) {
+    await resetTelegramConversation(conversation.id);
+    return sendTelegramMessage(chatId, '❌ No work classifications available. Contact support.');
+  }
+
+  let msg = '🏗️ <b>Select Work Classification</b>\n\nReply with the number:\n\n';
+  classifications.forEach((c, i) => {
+    msg += `<b>${i + 1}.</b> ${c.code}\n    ${c.name}\n    Cement: ${c.cement}%, Steel: ${c.steel}%\n\n`;
+  });
+  msg += 'Type /cancel to cancel.';
+
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_CLASSIFICATION, {
+    classificationIds: classifications.map(c => c.id),
+  });
+  return sendTelegramMessage(chatId, msg);
+}
+
+async function handleClassificationSelection(conversation: any, msg: string, chatId: string) {
+  const data = getTelegramConversationData(conversation);
+  const ids = data.classificationIds || [];
+  const sel = parseInt(msg);
+
+  if (isNaN(sel) || sel < 1 || sel > ids.length) {
+    return sendTelegramMessage(chatId, `❌ Invalid. Reply with a number between 1 and ${ids.length}.`);
+  }
+
+  const classification = await prisma.classification.findUnique({ where: { id: ids[sel - 1] } });
+  if (!classification) {
+    await resetTelegramConversation(conversation.id);
+    return sendTelegramMessage(chatId, '❌ Classification not found.');
+  }
+
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_CEMENT_CONFIRM, {
+    classificationId: classification.id,
+    classificationName: classification.name,
+    cementPercentage: classification.cement,
+    steelPercentage: classification.steel,
+  });
+
+  if (classification.cement > 0) {
+    return sendTelegramMessage(
+      chatId,
+      `✅ Classification: <b>${classification.code} - ${classification.name}</b>\n\n` +
+        `🧱 <b>Cement Component</b>\nDefault: <b>${classification.cement}%</b>\n\n` +
+        `Reply:\n▫️ <b>YES</b> to use ${classification.cement}%\n▫️ <b>NO</b> to enter custom %\n▫️ <b>SKIP</b> for 0%`
+    );
+  }
+  // No cement → go to steel
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_STEEL_CONFIRM, { cementPercentage: 0 });
+  return sendSteelConfirm(conversation, classification, chatId);
+}
+
+// ─── Cement ──────────────────────────────────────────
+
+async function handleCementConfirmation(conversation: any, msg: string, chatId: string) {
+  const data = getTelegramConversationData(conversation);
+  const classification = await prisma.classification.findUnique({ where: { id: data.classificationId } });
+  if (!classification) { await resetTelegramConversation(conversation.id); return sendTelegramMessage(chatId, '❌ Classification error.'); }
+
+  if (msg === 'yes' || msg === 'y') {
+    await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_STEEL_CONFIRM);
+    return sendSteelConfirm(conversation, classification, chatId);
+  }
+  if (msg === 'no' || msg === 'n') {
+    await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_CEMENT_PERCENTAGE);
+    return sendTelegramMessage(chatId, '📊 Enter custom cement percentage (0-100):');
+  }
+  if (msg === 'skip' || msg === 's') {
+    await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_STEEL_CONFIRM, { cementPercentage: 0 });
+    return sendSteelConfirm(conversation, classification, chatId);
+  }
+  return sendTelegramMessage(chatId, 'Please reply with <b>YES</b>, <b>NO</b>, or <b>SKIP</b>.');
+}
+
+async function handleCementPercentage(conversation: any, msg: string, chatId: string) {
+  const pct = parseFloat(msg.replace(/[^\d.]/g, ''));
+  if (isNaN(pct) || pct < 0 || pct > 100) {
+    return sendTelegramMessage(chatId, '❌ Invalid. Enter a number between 0 and 100.');
+  }
+  const data = getTelegramConversationData(conversation);
+  const classification = await prisma.classification.findUnique({ where: { id: data.classificationId } });
+  if (!classification) { await resetTelegramConversation(conversation.id); return sendTelegramMessage(chatId, '❌ Error.'); }
+
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_STEEL_CONFIRM, { cementPercentage: pct });
+  return sendSteelConfirm(conversation, classification, chatId);
+}
+
+// ─── Steel ───────────────────────────────────────────
+
+async function sendSteelConfirm(conversation: any, classification: any, chatId: string) {
+  const data = getTelegramConversationData(conversation);
+  if (classification.steel > 0) {
+    return sendTelegramMessage(
+      chatId,
+      `✅ Cement: <b>${data.cementPercentage}%</b>\n\n` +
+        `🔩 <b>Steel Component</b>\nDefault: <b>${classification.steel}%</b>\n\n` +
+        `Reply:\n▫️ <b>YES</b> to use ${classification.steel}%\n▫️ <b>NO</b> to enter custom %\n▫️ <b>SKIP</b> for 0%`
+    );
+  }
+  // No steel → confirmation
+  await updateTelegramConversation(conversation.id, TelegramStep.CONFIRMING, { steelPercentage: 0, selectedSteelTypes: [] });
+  return sendConfirmation(conversation, chatId);
+}
+
+async function handleSteelConfirmation(conversation: any, msg: string, chatId: string) {
+  const data = getTelegramConversationData(conversation);
+  const classification = await prisma.classification.findUnique({ where: { id: data.classificationId } });
+  if (!classification) { await resetTelegramConversation(conversation.id); return; }
+
+  if (msg === 'yes' || msg === 'y') {
+    if (classification.steel > 0) {
+      await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_STEEL_TYPE);
+      return sendSteelTypeSelection(chatId);
+    }
+    await updateTelegramConversation(conversation.id, TelegramStep.CONFIRMING, { steelPercentage: 0, selectedSteelTypes: [] });
+    return sendConfirmation(conversation, chatId);
+  }
+  if (msg === 'no' || msg === 'n') {
+    await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_STEEL_PERCENTAGE);
+    return sendTelegramMessage(chatId, '📊 Enter custom steel percentage (0-100):');
+  }
+  if (msg === 'skip' || msg === 's') {
+    await updateTelegramConversation(conversation.id, TelegramStep.CONFIRMING, { steelPercentage: 0, selectedSteelTypes: [] });
+    return sendConfirmation(conversation, chatId);
+  }
+  return sendTelegramMessage(chatId, 'Please reply with <b>YES</b>, <b>NO</b>, or <b>SKIP</b>.');
+}
+
+async function handleSteelPercentage(conversation: any, msg: string, chatId: string) {
+  const pct = parseFloat(msg.replace(/[^\d.]/g, ''));
+  if (isNaN(pct) || pct < 0 || pct > 100) {
+    return sendTelegramMessage(chatId, '❌ Invalid. Enter a number between 0 and 100.');
+  }
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_STEEL_TYPE, { steelPercentage: pct });
+  if (pct > 0) return sendSteelTypeSelection(chatId);
+  await updateTelegramConversation(conversation.id, TelegramStep.CONFIRMING, { selectedSteelTypes: [] });
+  return sendConfirmation(conversation, chatId);
+}
+
+async function sendSteelTypeSelection(chatId: string) {
+  return sendTelegramMessage(
+    chatId,
+    '🔩 <b>Select Steel Types</b>\n\n' +
+      'Reply with numbers separated by commas:\n\n' +
+      '1. TMT Bars\n2. Angle/Channel\n3. Plates\n4. Other Sections\n\n' +
+      '<i>Example: 1,3 for TMT Bars and Plates</i>'
+  );
+}
+
+async function handleSteelTypeSelection(conversation: any, msg: string, chatId: string) {
+  const selections = msg.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 4);
+  if (selections.length === 0) {
+    return sendTelegramMessage(chatId, '❌ Invalid. Enter numbers 1-4 separated by commas (e.g., 1,3).');
+  }
+  const map: Record<number, string> = { 1: 'TMT', 2: 'ANGLE_CHANNEL', 3: 'PLATES', 4: 'OTHER_SECTIONS' };
+  const types = selections.map(s => map[s]);
+  await updateTelegramConversation(conversation.id, TelegramStep.CONFIRMING, { selectedSteelTypes: types });
+  return sendConfirmation(conversation, chatId);
+}
+
+// ─── Confirmation & Bill Creation ────────────────────
+
+async function sendConfirmation(conversation: any, chatId: string) {
+  const data = getTelegramConversationData(conversation);
+  const contract = await prisma.contract.findUnique({ where: { id: data.contractId } });
+  if (!contract) { await resetTelegramConversation(conversation.id); return sendTelegramMessage(chatId, '❌ Contract error.'); }
+
+  const date = new Date(data.dateOfMeasurement!);
+  const formatted = date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  const steelNames: Record<string, string> = { TMT: 'TMT Bars', ANGLE_CHANNEL: 'Angle/Channel', PLATES: 'Plates', OTHER_SECTIONS: 'Other Sections' };
+  const steelList = (data.selectedSteelTypes || []).map((t: string) => steelNames[t]).join(', ');
+
+  let msg =
+    `📋 <b>Bill Summary</b>\n\n` +
+    `📄 Contract: <b>${contract.agreementNo}</b>\n` +
+    `🔢 Bill No: <b>${data.billNo}</b>\n` +
+    `💰 Amount: <b>₹${data.billAmount?.toLocaleString('en-IN')}</b>\n` +
+    `📅 Date: <b>${formatted}</b>\n` +
+    `🏗️ Classification: <b>${data.classificationName}</b>\n` +
+    `🧱 Cement: <b>${data.cementPercentage}%</b>\n` +
+    `🔩 Steel: <b>${data.steelPercentage}%</b>\n`;
+  if (steelList) msg += `    Steel Types: <b>${steelList}</b>\n`;
+  msg += `\nIs this correct?\n\n▫️ <b>YES</b> to create\n▫️ <b>NO</b> to cancel`;
+
+  return sendTelegramMessage(chatId, msg);
+}
+
+async function handleConfirmation(conversation: any, msg: string, chatId: string) {
+  if (msg === 'yes' || msg === 'y' || msg === 'confirm') {
+    return createBillFromTelegram(conversation, chatId);
+  }
+  if (msg === 'no' || msg === 'n') {
+    await resetTelegramConversation(conversation.id);
+    return sendTelegramMessage(chatId, '❌ Cancelled. Type /createbill to start over.');
+  }
+  return sendTelegramMessage(chatId, 'Reply <b>YES</b> to confirm or <b>NO</b> to cancel.');
+}
+
+async function createBillFromTelegram(conversation: any, chatId: string) {
+  const data = getTelegramConversationData(conversation);
+  try {
+    const contract = await prisma.contract.findUnique({ where: { id: data.contractId } });
+    if (!contract) { await resetTelegramConversation(conversation.id); return sendTelegramMessage(chatId, '❌ Contract not found.'); }
+
+    const billAmount = data.billAmount!;
+    const cementPct = data.cementPercentage || 0;
+    const steelPct = data.steelPercentage || 0;
+    const cementAmount = (billAmount * cementPct) / 100;
+    const steelAmount = (billAmount * steelPct) / 100;
+    const steelTypes = data.selectedSteelTypes || [];
+    const steelPerType = steelTypes.length > 0 ? steelAmount / steelTypes.length : 0;
+
+    const bill = await prisma.bill.create({
+      data: {
+        contractId: data.contractId!,
+        billNo: data.billNo!,
+        billAmount,
+        grossBillAmount: billAmount,
+        dateOfMeasurement: new Date(data.dateOfMeasurement!),
+        quarter: 'Q1',
+        isChargeable: true,
+        processingFee: 1000,
+        workClassificationId: data.classificationId,
+        cementAmount,
+        steelAmount,
+        steelTypes,
+        steelTmtBarsAmount: steelTypes.includes('TMT') ? steelPerType : 0,
+        steelAngleChannelAmount: steelTypes.includes('ANGLE_CHANNEL') ? steelPerType : 0,
+        steelPlatesAmount: steelTypes.includes('PLATES') ? steelPerType : 0,
+        steelOtherSectionsAmount: steelTypes.includes('OTHER_SECTIONS') ? steelPerType : 0,
+        selectedSteelComponent: steelTypes.length > 0 ? 'Steel TMT Bars' : null,
+      },
+    });
+
+    await sendTelegramMessage(
+      chatId,
+      `✅ <b>Bill Created Successfully!</b>\n\n` +
+        `📄 Bill No: <b>${bill.billNo}</b>\n` +
+        `💰 Amount: <b>₹${bill.billAmount.toLocaleString('en-IN')}</b>\n` +
+        `🧱 Cement: ${cementPct}% (₹${cementAmount.toLocaleString('en-IN')})\n` +
+        `🔩 Steel: ${steelPct}% (₹${steelAmount.toLocaleString('en-IN')})\n\n` +
+        `View bill: ${process.env.NEXTAUTH_URL || 'https://irpvc.in'}/bills/${bill.id}\n\n` +
+        `Type /help to see other commands.`
+    );
+
+    await resetTelegramConversation(conversation.id);
+  } catch (error: any) {
+    console.error('Error creating bill from Telegram:', error);
+    await sendTelegramMessage(chatId, `❌ Error: ${error.message}\n\nPlease try again or contact support.`);
+    await resetTelegramConversation(conversation.id);
+  }
+}
+
+// ─── Bill Status ─────────────────────────────────────
+
+async function sendBillStatus(conversation: any, chatId: string) {
+  if (!conversation.userId) {
+    return sendTelegramMessage(chatId, '❌ Account not linked. Type /createbill to link first.');
+  }
+
+  const bills = await prisma.bill.findMany({
+    where: { contract: { userId: conversation.userId } },
+    include: { contract: true },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+  });
+
+  if (bills.length === 0) {
+    return sendTelegramMessage(chatId, '📋 No bills found. Type /createbill to create your first bill.');
+  }
+
+  let msg = '📋 <b>Your Recent Bills</b>\n\n';
+  bills.forEach((bill, i) => {
+    msg += `<b>${i + 1}.</b> ${bill.billNo}\n`;
+    msg += `    Contract: ${bill.contract?.agreementNo}\n`;
+    msg += `    Amount: ₹${bill.billAmount.toLocaleString('en-IN')}\n`;
+    msg += `    Date: ${new Date(bill.dateOfMeasurement).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n`;
+  });
+  msg += `View all: ${process.env.NEXTAUTH_URL || 'https://irpvc.in'}/bills`;
+  return sendTelegramMessage(chatId, msg);
+}

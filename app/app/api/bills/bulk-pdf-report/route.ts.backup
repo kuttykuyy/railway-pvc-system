@@ -1,0 +1,1841 @@
+
+
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import { getQuarterMonths, getQuarterFromDate, calculateWeightedComponents, calculatePvcComponentWithSteps, calculateDedicatedCementPvcWithSteps, calculateDedicatedSteelPvcWithSteps } from '@/lib/pvc-calculations';
+import { getQuarterlyAverages } from '@/lib/db-utils';
+import { format, addMonths, startOfMonth } from 'date-fns';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { getClassificationOrDefault } from '@/lib/classification-helper';
+import { getFileUrl } from '@/lib/s3';
+import { withTimeout, TIMEOUT_DEFAULTS } from '@/lib/api-timeout';
+import rateLimiter, { RATE_LIMITS, getIdentifier } from '@/lib/rate-limiter';
+import { embedLabourIndex, embedComponentIndicesRange } from '@/lib/pdf/utils/labour-index-embedder';
+
+export const dynamic = "force-dynamic";
+
+// Extend jsPDF type to include autoTable
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF;
+    lastAutoTable: { finalY: number };
+  }
+}
+
+// POST /api/bills/bulk-pdf-report - Generate enhanced combined PDF report for multiple bills
+export async function POST(request: NextRequest) {
+  try {
+    // Rate limiting for expensive bulk PDF generation
+    const identifier = getIdentifier(request);
+    const rateLimit = rateLimiter.check(identifier, RATE_LIMITS.EXPENSIVE.limit, RATE_LIMITS.EXPENSIVE.windowMs);
+    
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { 
+          error: 'Rate limit exceeded',
+          message: `Too many bulk PDF generation requests. Please try again in ${Math.ceil(rateLimit.resetIn / 1000)} seconds.`
+        },
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': Math.ceil(rateLimit.resetIn / 1000).toString(),
+          }
+        }
+      );
+    }
+
+    // Execute with timeout protection (60 seconds for bulk PDF generation)
+    return await withTimeout(
+      (async () => {
+        if (!jsPDF) {
+          throw new Error('jsPDF is not available');
+        }
+        
+        const { billIds } = await request.json();
+    
+    if (!billIds || !Array.isArray(billIds) || billIds.length === 0) {
+      return NextResponse.json(
+        { error: 'Bill IDs are required and must be an array' },
+        { status: 400 }
+      );
+    }
+
+    // Get all selected bills with detailed information
+    const bills = await prisma.bill.findMany({
+      where: { 
+        id: { in: billIds }
+      },
+      include: {
+        contract: true,
+        pvcCalculation: true,
+        workClassification: true,
+        classificationEntries: {
+          include: {
+            classification: true,
+            subClassification: true
+          }
+        }
+      },
+      orderBy: [
+        { contract: { agreementNo: 'asc' } },
+        { createdAt: 'asc' }
+      ]
+    });
+
+    if (bills.length === 0) {
+      return NextResponse.json(
+        { error: 'No bills found for the provided IDs' },
+        { status: 404 }
+      );
+    }
+
+    // Validate all bills are from the same contract
+    const uniqueContractIds = [...new Set(bills.map(bill => bill.contractId))];
+    if (uniqueContractIds.length > 1) {
+      return NextResponse.json(
+        { 
+          error: 'Invalid bill selection',
+          details: 'All bills must be from the same contract. Please select bills from only one contract.' 
+        },
+        { status: 400 }
+      );
+    }
+    
+    // Get all required indices for all bills
+    const allIndicesData = new Map();
+    for (const bill of bills) {
+      const baseMonthDate = bill.contract.baseMonth ? new Date(bill.contract.baseMonth) : addMonths(new Date(bill.contract.dateOfOpening), -1);
+      const measurementDate = new Date(bill.dateOfMeasurement);
+      
+      // Get all monthly index values from base month to measurement date (inclusive of measurement month)
+      // Use end of measurement month to ensure measurement month is included
+      const measurementMonthEnd = new Date(measurementDate.getFullYear(), measurementDate.getMonth() + 1, 0);
+      const indicesData = await prisma.monthlyIndexValue.findMany({
+        where: {
+          month: {
+            gte: startOfMonth(baseMonthDate),
+            lte: startOfMonth(measurementMonthEnd)
+          }
+        },
+        include: {
+          priceIndex: true
+        },
+        orderBy: { month: 'asc' }
+      });
+      
+      allIndicesData.set(bill.id, {
+        indices: indicesData,
+        baseMonth: baseMonthDate,
+        measurementDate
+      });
+    }
+
+    // Create PDF in A3 Landscape format with proper margins
+    const pdf = new jsPDF('l', 'mm', 'a3'); // 'l' for landscape, 'a3' for A3 size
+    
+    // Apply autoTable to the PDF instance
+    pdf.autoTable = (options: any) => {
+      autoTable(pdf, options);
+      pdf.lastAutoTable = { finalY: (pdf as any).lastAutoTable?.finalY || 0 };
+      return pdf;
+    };
+
+    const pageWidth = pdf.internal.pageSize.getWidth(); // 420mm for A3 landscape
+    const pageHeight = pdf.internal.pageSize.getHeight(); // 297mm for A3 landscape
+    const marginTop = 20; // Increased top margin for better spacing
+    const marginBottom = 15; // Space for page number
+    const marginLeft = 12;
+    const marginRight = 12;
+    const contentWidth = pageWidth - marginLeft - marginRight; // 396mm content width
+    let yPosition = marginTop;
+
+    // Get session to fetch user branding settings
+    const session = await getServerSession(authOptions);
+    let brandingSettings = {
+      logoPath: null as string | null,
+      logoUrl: null as string | null,
+      reportHeaderText: 'INDIAN RAILWAY',
+      reportHeaderColor: '#000000',
+      reportFooterText: '',
+      showLogoInReports: true,
+    };
+    
+    if (session?.user?.email) {
+      const user = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: {
+          id: true,
+          logoPath: true,
+          reportHeaderText: true,
+          reportHeaderColor: true,
+          reportFooterText: true,
+          showLogoInReports: true,
+        },
+      });
+
+      if (user) {
+        brandingSettings = {
+          logoPath: user.logoPath,
+          logoUrl: null,
+          reportHeaderText: user.reportHeaderText || 'INDIAN RAILWAY',
+          reportHeaderColor: user.reportHeaderColor || '#000000',
+          reportFooterText: user.reportFooterText || '',
+          showLogoInReports: user.showLogoInReports,
+        };
+
+        // Generate signed URL for logo if it exists
+        if (user.logoPath && user.showLogoInReports) {
+          try {
+            brandingSettings.logoUrl = await getFileUrl(user.logoPath, 3600);
+          } catch (error) {
+            console.error('Error generating logo URL:', error);
+          }
+        }
+      }
+    }
+
+    // Override with first bill's contract owner's branding if different from session user
+    if (bills.length > 0 && bills[0].contract.userId) {
+      const contractUser = await prisma.user.findUnique({
+        where: { id: bills[0].contract.userId },
+        select: {
+          logoPath: true,
+          reportHeaderText: true,
+          reportHeaderColor: true,
+          reportFooterText: true,
+          showLogoInReports: true,
+        }
+      });
+      
+      if (contractUser) {
+        brandingSettings = {
+          logoPath: contractUser.logoPath,
+          logoUrl: null,
+          reportHeaderText: contractUser.reportHeaderText || 'INDIAN RAILWAY',
+          reportHeaderColor: contractUser.reportHeaderColor || '#000000',
+          reportFooterText: contractUser.reportFooterText || '',
+          showLogoInReports: contractUser.showLogoInReports,
+        };
+
+        // Generate signed URL for logo if it exists
+        if (contractUser.logoPath && contractUser.showLogoInReports) {
+          try {
+            brandingSettings.logoUrl = await getFileUrl(contractUser.logoPath, 3600);
+          } catch (error) {
+            console.error('Error generating logo URL:', error);
+          }
+        }
+      }
+    }
+
+    // Helper function to check if we need a new page
+    const checkNewPage = (requiredHeight: number) => {
+      if (yPosition + requiredHeight > pageHeight - marginBottom) {
+        pdf.addPage();
+        yPosition = marginTop;
+        return true;
+      }
+      return false;
+    };
+
+    // Header with Logo and Branding - Add extra space above
+    let headerYStart = 20;
+    
+    // Add logo if enabled and available
+    if (brandingSettings.showLogoInReports && brandingSettings.logoUrl) {
+      try {
+        // Fetch logo image
+        const logoResponse = await fetch(brandingSettings.logoUrl);
+        const logoBlob = await logoResponse.arrayBuffer();
+        const logoBase64 = Buffer.from(logoBlob).toString('base64');
+        const logoDataUrl = `data:image/png;base64,${logoBase64}`;
+        
+        // Add logo centered at top
+        const logoWidth = 60;
+        const logoHeight = 24;
+        const logoX = marginLeft + (contentWidth / 2) - (logoWidth / 2);
+        pdf.addImage(logoDataUrl, 'PNG', logoX, headerYStart, logoWidth, logoHeight);
+        headerYStart += logoHeight + 4;
+      } catch (error) {
+        console.error('Error adding logo to PDF:', error);
+      }
+    }
+    
+    // Title and Header with custom branding
+    pdf.setTextColor(0, 0, 0); // Black text for all content
+    pdf.setFontSize(18);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(brandingSettings.reportHeaderText, marginLeft + (contentWidth / 2), headerYStart, { align: 'center' });
+    
+    headerYStart += 6;
+    pdf.setFontSize(16);
+    pdf.text("BULK PVC REPORTS - CONSOLIDATED ANALYSIS", marginLeft + (contentWidth / 2), headerYStart, { align: 'center' });
+
+    // Add simple separator line
+    headerYStart += 3;
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.5);
+    pdf.line(marginLeft, headerYStart, pageWidth - marginRight, headerYStart);
+
+    // Set yPosition after header with proper spacing
+    yPosition = headerYStart + 8;
+
+    // Get summary statistics
+    const totalPvcAmount = bills.reduce((sum, bill) => sum + (bill.pvcCalculation?.totalPvc || 0), 0);
+    const contractsCount = new Set(bills.map(b => b.contract.id)).size;
+
+    // CONTRACT INFORMATION SECTION (First page after header)
+    // Get the first contract info for display
+    const firstContract = bills[0].contract;
+    const firstBill = bills[0];
+    const firstBaseMonth = firstContract.baseMonth ? new Date(firstContract.baseMonth) : addMonths(new Date(firstContract.dateOfOpening), -1);
+    
+    pdf.setFontSize(16);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("CONTRACT INFORMATION", marginLeft, yPosition);
+    
+    // Underline the section header
+    const contractInfoTitle = "CONTRACT INFORMATION";
+    const contractInfoWidth = pdf.getTextWidth(contractInfoTitle);
+    pdf.setLineWidth(0.5);
+    pdf.line(marginLeft, yPosition + 2, marginLeft + contractInfoWidth, yPosition + 2);
+    yPosition += 12;
+    
+    // Two-column layout for contract information
+    const col1X = marginLeft + 10;
+    const col2X = marginLeft + (contentWidth / 2) + 10;
+    
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Agreement No:", col1X, yPosition);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(firstContract.agreementNo, col1X + 60, yPosition);
+    
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Date of Opening:", col2X, yPosition);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(format(new Date(firstContract.dateOfOpening), 'dd MMM yyyy'), col2X + 60, yPosition);
+    yPosition += 7;
+    
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Contractor:", col1X, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const contractorText = pdf.splitTextToSize(firstContract.contractorName, (contentWidth / 2) - 80);
+    pdf.text(contractorText, col1X + 60, yPosition);
+    
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Base Month:", col2X, yPosition);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(format(firstBaseMonth, 'MMM yyyy'), col2X + 60, yPosition);
+    yPosition += Math.max(7, contractorText.length * 5);
+    
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Work Description:", col1X, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const workDescLines = pdf.splitTextToSize(firstContract.workDescription, contentWidth - 100);
+    pdf.text(workDescLines, col1X + 60, yPosition);
+    yPosition += workDescLines.length * 5 + 10;
+    
+    // Add thin separator line after CONTRACT INFORMATION section
+    pdf.setDrawColor(200, 200, 200); // Light gray
+    pdf.setLineWidth(0.3);
+    pdf.line(marginLeft, yPosition, pageWidth - marginRight, yPosition);
+    yPosition += 8;
+
+    // SELECTED BILLS OVERVIEW (moved here after contract information)
+    checkNewPage(60);
+    pdf.setFontSize(16);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("SELECTED BILLS OVERVIEW", marginLeft, yPosition);
+    
+    // Underline the title
+    const billsOverviewTitle = "SELECTED BILLS OVERVIEW";
+    const billsOverviewTitleWidth = pdf.getTextWidth(billsOverviewTitle);
+    pdf.line(marginLeft, yPosition + 2, marginLeft + billsOverviewTitleWidth, yPosition + 2);
+    yPosition += 10;
+
+    const billsTableData = bills.map(bill => {
+      // Calculate quarter dynamically if not present or invalid
+      let displayQuarter = bill.quarter;
+      if (!displayQuarter || displayQuarter === 'null' || displayQuarter === 'undefined') {
+        try {
+          const baseMonthDate = bill.contract.baseMonth ? new Date(bill.contract.baseMonth) : addMonths(new Date(bill.contract.dateOfOpening), -1);
+          const measurementDate = new Date(bill.dateOfMeasurement);
+          displayQuarter = getQuarterFromDate(measurementDate, baseMonthDate);
+        } catch (error) {
+          console.error(`Error calculating quarter for bill ${bill.billNo}:`, error);
+          displayQuarter = 'N/A';
+        }
+      }
+      
+      return [
+        bill.billNo,
+        format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy'),
+        displayQuarter,
+        bill.billAmount.toLocaleString('en-IN'),
+        bill.pvcCalculation ? bill.pvcCalculation.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : 'Not Calculated',
+        bill.pvcCalculation ? bill.pvcCalculation.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '-'
+      ];
+    });
+
+    pdf.autoTable({
+      startY: yPosition,
+      head: [['Bill No.', 'Measurement Date', 'Quarter', 'Bill Amount', 'PVC Amount', 'Cumulative PVC']],
+      body: billsTableData,
+      theme: 'grid',
+      headStyles: { 
+        fontStyle: 'bold',
+        fontSize: 10,
+        halign: 'center'
+      },
+      styles: { 
+        fontSize: 9, 
+        cellPadding: 3,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.5
+      },
+      margin: { left: marginLeft, right: marginRight },
+      tableWidth: contentWidth,
+      columnStyles: {
+        0: { cellWidth: contentWidth * 0.16, halign: 'center', fontStyle: 'bold' },
+        1: { cellWidth: contentWidth * 0.17, halign: 'center' },
+        2: { cellWidth: contentWidth * 0.12, halign: 'center' },
+        3: { cellWidth: contentWidth * 0.18, halign: 'right' },
+        4: { cellWidth: contentWidth * 0.18, halign: 'right', fontStyle: 'bold' },
+        5: { cellWidth: contentWidth * 0.19, halign: 'right', fontStyle: 'bold' }
+      }
+    });
+
+    yPosition = pdf.lastAutoTable.finalY + 15;
+    
+    // Add thin separator line after BILLS OVERVIEW section
+    pdf.setDrawColor(200, 200, 200); // Light gray
+    pdf.setLineWidth(0.3);
+    pdf.line(marginLeft, yPosition, pageWidth - marginRight, yPosition);
+    yPosition += 8;
+
+    // ============================================================================
+    // CONSOLIDATED MONTHLY INDICES TABLE (shown once for all bills)
+    // ============================================================================
+    
+    // Find the earliest base month and latest measurement date across all bills
+    let earliestBaseMonth: Date | null = null;
+    let latestMeasurementDate: Date | null = null;
+    const allZones = new Set<string>();
+    
+    // Define consolidatedQuarterlyData at outer scope so it can be used later for component calculations
+    let consolidatedQuarterlyData: any[] = [];
+    
+    for (const bill of bills) {
+      const baseMonth = bill.contract.baseMonth ? new Date(bill.contract.baseMonth) : addMonths(new Date(bill.contract.dateOfOpening), -1);
+      const measurementDate = new Date(bill.dateOfMeasurement);
+      
+      if (!earliestBaseMonth || baseMonth < earliestBaseMonth) {
+        earliestBaseMonth = baseMonth;
+      }
+      if (!latestMeasurementDate || measurementDate > latestMeasurementDate) {
+        latestMeasurementDate = measurementDate;
+      }
+      
+      if (bill.zone) {
+        allZones.add(bill.zone);
+      }
+    }
+    
+    if (earliestBaseMonth && latestMeasurementDate) {
+      // Fetch all indices
+      const consolidatedIndices = await prisma.priceIndex.findMany({
+        orderBy: { name: 'asc' }
+      });
+      
+      // Fetch all monthly values for the date range
+      const consolidatedMonthlyValues = await prisma.monthlyIndexValue.findMany({
+        where: {
+          month: {
+            gte: new Date(earliestBaseMonth.getFullYear(), earliestBaseMonth.getMonth(), 1),
+            lte: new Date(latestMeasurementDate.getFullYear(), latestMeasurementDate.getMonth() + 1, 0)
+          }
+        },
+        include: {
+          priceIndex: true
+        },
+        orderBy: {
+          month: 'asc'
+        }
+      });
+      
+      // Build all monthly values map
+      const consolidatedMonthlyValuesMap: { [indexName: string]: { [monthKey: string]: number } } = {};
+      for (const index of consolidatedIndices) {
+        consolidatedMonthlyValuesMap[index.name] = {};
+      }
+      
+      const startMonth = new Date(earliestBaseMonth);
+      const measurementEndDate = new Date(latestMeasurementDate.getFullYear(), latestMeasurementDate.getMonth() + 1, 0);
+      
+      for (const index of consolidatedIndices) {
+        let currentMonth = new Date(startMonth);
+        while (currentMonth <= measurementEndDate) {
+          const monthKey = format(currentMonth, 'yyyy-MM');
+          const monthlyValue = consolidatedMonthlyValues.find((idx: any) => 
+            idx.priceIndexId === index.id &&
+            format(new Date(idx.month), 'yyyy-MM') === monthKey
+          );
+          
+          const indexValue = monthlyValue ? monthlyValue.value : index.baseValue;
+          consolidatedMonthlyValuesMap[index.name][monthKey] = indexValue;
+          currentMonth.setMonth(currentMonth.getMonth() + 1);
+        }
+      }
+      
+      // Get quarterly data for consolidated table
+      // (consolidatedQuarterlyData is already declared at outer scope)
+      const currentMonth = new Date(startMonth);
+      const quarterCache = new Map();
+      
+      while (currentMonth <= measurementEndDate) {
+        const quarter = getQuarterFromDate(new Date(currentMonth), earliestBaseMonth);
+        if (!quarterCache.has(quarter)) {
+          // Skip Q0 and Base quarters
+          if (['Q0', 'Base'].includes(quarter)) {
+            currentMonth.setMonth(currentMonth.getMonth() + 1);
+            continue;
+          }
+          
+          const allQuarterMonths = getQuarterMonths(quarter, earliestBaseMonth);
+          const measurementMonthEnd = new Date(latestMeasurementDate.getFullYear(), latestMeasurementDate.getMonth() + 1, 0);
+          let quarterMonths = allQuarterMonths.filter(qMonth => qMonth <= measurementMonthEnd);
+          
+          // For quarterly calculations, we need exactly 3 months
+          if (quarterMonths.length > 0 && quarterMonths.length < 3) {
+            const lastAvailableMonth = quarterMonths[quarterMonths.length - 1];
+            const monthsNeeded = 3 - quarterMonths.length;
+            
+            for (let i = 1; i <= monthsNeeded; i++) {
+              const futureMonth = new Date(lastAvailableMonth);
+              futureMonth.setMonth(futureMonth.getMonth() + i);
+              const normalizedFutureMonth = new Date(futureMonth.getFullYear(), futureMonth.getMonth(), 1);
+              quarterMonths.push(normalizedFutureMonth);
+            }
+          }
+          
+          const quarterData = {
+            quarter,
+            quarterMonths,
+            averages: {} as { [key: string]: number },
+            monthlyData: {} as { [key: string]: { [monthKey: string]: number } }
+          };
+          
+          // Calculate averages and collect monthly data for each index
+          for (const index of consolidatedIndices) {
+            quarterData.monthlyData[index.name] = {};
+            const monthlyValues = [];
+            
+            for (const qMonth of quarterMonths) {
+              const monthKey = format(qMonth, 'yyyy-MM');
+              let value = consolidatedMonthlyValuesMap[index.name][monthKey];
+              
+              if (!value) {
+                const futureMonthValue = await prisma.monthlyIndexValue.findFirst({
+                  where: {
+                    priceIndexId: index.id,
+                    month: {
+                      gte: new Date(qMonth.getFullYear(), qMonth.getMonth(), 1),
+                      lt: new Date(qMonth.getFullYear(), qMonth.getMonth() + 1, 1)
+                    }
+                  },
+                  orderBy: {
+                    month: 'desc'
+                  }
+                });
+                
+                value = futureMonthValue?.value || index.baseValue;
+                consolidatedMonthlyValuesMap[index.name][monthKey] = value;
+              }
+              
+              quarterData.monthlyData[index.name][monthKey] = value;
+              monthlyValues.push(value);
+            }
+            
+            quarterData.averages[index.name] = monthlyValues.length > 0 
+              ? monthlyValues.reduce((sum, val) => sum + val, 0) / monthlyValues.length
+              : index.baseValue;
+          }
+          
+          consolidatedQuarterlyData.push(quarterData);
+          quarterCache.set(quarter, quarterData);
+        }
+        currentMonth.setMonth(currentMonth.getMonth() + 3);
+      }
+      
+      // Create consolidated base index data
+      const consolidatedBaseIndexData: { [key: string]: number } = {};
+      for (const index of consolidatedIndices) {
+        const normalizedBaseMonth = new Date(earliestBaseMonth.getFullYear(), earliestBaseMonth.getMonth(), 1);
+        
+        const baseMonthValue = await prisma.monthlyIndexValue.findFirst({
+          where: {
+            priceIndexId: index.id,
+            month: {
+              gte: normalizedBaseMonth,
+              lt: new Date(normalizedBaseMonth.getFullYear(), normalizedBaseMonth.getMonth() + 1, 1)
+            }
+          },
+          orderBy: {
+            month: 'desc'
+          }
+        });
+        
+        consolidatedBaseIndexData[index.name] = baseMonthValue?.value || index.baseValue;
+      }
+      
+      // Render the consolidated monthly indices table
+      checkNewPage(150);
+      pdf.setFontSize(16);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(`MONTHLY PRICE INDICES`, marginLeft, yPosition);
+      
+      const indicesTitle = `MONTHLY PRICE INDICES`;
+      const indicesTitleWidth = pdf.getTextWidth(indicesTitle);
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.5);
+      pdf.line(marginLeft, yPosition + 2, marginLeft + indicesTitleWidth, yPosition + 2);
+      yPosition += 12;
+
+      // Build a map of quarters to bill numbers
+      const quarterToBillsMap = new Map<string, string[]>();
+      for (const bill of bills) {
+        // Calculate quarter dynamically if not present or invalid
+        let billQuarter = bill.quarter;
+        if (!billQuarter || billQuarter === 'null' || billQuarter === 'undefined') {
+          try {
+            const baseMonthDate = bill.contract.baseMonth ? new Date(bill.contract.baseMonth) : addMonths(new Date(bill.contract.dateOfOpening), -1);
+            const measurementDate = new Date(bill.dateOfMeasurement);
+            billQuarter = getQuarterFromDate(measurementDate, baseMonthDate);
+          } catch (error) {
+            console.error(`Error calculating quarter for bill ${bill.billNo}:`, error);
+            billQuarter = 'N/A';
+          }
+        }
+        quarterToBillsMap.set(billQuarter, [...(quarterToBillsMap.get(billQuarter) || []), bill.billNo]);
+      }
+
+      // Create comprehensive monthly indices table
+      const consolidatedMonthlyTableData = [];
+
+      // Base month row
+      // Helper function to format steel indices - show decimals if available
+      const formatSteelIndex = (value: number | undefined) => {
+        if (value === undefined || value === null) return '';
+        // Check if value has decimals
+        if (value % 1 !== 0) {
+          return value.toString(); // Show natural decimals
+        }
+        return value.toString(); // Show as integer if no decimals
+      };
+
+      const consolidatedBaseRow = [
+        `BASE (${format(earliestBaseMonth, 'MMM yyyy')})  [Base Month]`,
+        consolidatedBaseIndexData['Labour']?.toFixed(2) || '',
+        consolidatedBaseIndexData['RBI Plant Machinery']?.toFixed(2) || '',
+        consolidatedBaseIndexData['MPNG Fuel']?.toFixed(2) || '',
+        consolidatedBaseIndexData['RBI Other Materials']?.toFixed(2) || '',
+        consolidatedBaseIndexData['RBI Cement']?.toFixed(2) || '',
+        consolidatedBaseIndexData['RBI Explosives']?.toFixed(2) || '',
+        formatSteelIndex(consolidatedBaseIndexData['Steel TMT Bars']),
+        formatSteelIndex(consolidatedBaseIndexData['Steel Angle/Channel']),
+        formatSteelIndex(consolidatedBaseIndexData['Steel Plates']),
+        formatSteelIndex(consolidatedBaseIndexData['Steel Other Sections'])
+      ];
+      consolidatedMonthlyTableData.push(consolidatedBaseRow);
+
+      // Add all monthly data for each quarter
+      for (const qData of consolidatedQuarterlyData) {
+        // Quarter header
+        consolidatedMonthlyTableData.push([
+          `QUARTER ${qData.quarter}`,
+          '', '', '', '', '', '', '', '', '', ''
+        ]);
+
+        // Monthly data for this quarter
+        for (const qMonth of qData.quarterMonths) {
+          const monthKey = format(qMonth, 'yyyy-MM');
+          const monthLabel = format(qMonth, 'MMM yyyy');
+          
+          const monthRow = [
+            monthLabel,
+            qData.monthlyData['Labour']?.[monthKey]?.toFixed(2) || '',
+            qData.monthlyData['RBI Plant Machinery']?.[monthKey]?.toFixed(2) || '',
+            qData.monthlyData['MPNG Fuel']?.[monthKey]?.toFixed(2) || '',
+            qData.monthlyData['RBI Other Materials']?.[monthKey]?.toFixed(2) || '',
+            qData.monthlyData['RBI Cement']?.[monthKey]?.toFixed(2) || '',
+            qData.monthlyData['RBI Explosives']?.[monthKey]?.toFixed(2) || '',
+            formatSteelIndex(qData.monthlyData['Steel TMT Bars']?.[monthKey]),
+            formatSteelIndex(qData.monthlyData['Steel Angle/Channel']?.[monthKey]),
+            formatSteelIndex(qData.monthlyData['Steel Plates']?.[monthKey]),
+            formatSteelIndex(qData.monthlyData['Steel Other Sections']?.[monthKey])
+          ];
+          consolidatedMonthlyTableData.push(monthRow);
+        }
+
+        // Quarter average row with bill numbers in the period column
+        const firstMonth = qData.quarterMonths[0];
+        const lastMonth = qData.quarterMonths[qData.quarterMonths.length - 1];
+        const quarterLabel = qData.quarterMonths.length === 1 
+          ? format(firstMonth, 'MMM yyyy')
+          : format(firstMonth, 'MMM') + '-' + format(lastMonth, 'MMM yyyy');
+        
+        // Get bill numbers that use this quarter
+        const billsForQuarter = quarterToBillsMap.get(qData.quarter) || [];
+        const periodWithBills = billsForQuarter.length > 0 
+          ? `${quarterLabel} AVERAGE\n[Bills: ${billsForQuarter.join(', ')}]`
+          : `${quarterLabel} AVERAGE`;
+        
+        const avgRow = [
+          periodWithBills,
+          qData.averages['Labour']?.toFixed(2) || '',
+          qData.averages['RBI Plant Machinery']?.toFixed(2) || '',
+          qData.averages['MPNG Fuel']?.toFixed(2) || '',
+          qData.averages['RBI Other Materials']?.toFixed(2) || '',
+          qData.averages['RBI Cement']?.toFixed(2) || '',
+          qData.averages['RBI Explosives']?.toFixed(2) || '',
+          qData.averages['Steel TMT Bars']?.toFixed(2) || '',
+          qData.averages['Steel Angle/Channel']?.toFixed(2) || '',
+          qData.averages['Steel Plates']?.toFixed(2) || '',
+          qData.averages['Steel Other Sections']?.toFixed(2) || ''
+        ];
+        consolidatedMonthlyTableData.push(avgRow);
+      }
+
+      // Add zone information to table header if available
+      const zoneText = allZones.size > 0 ? ` (${Array.from(allZones).join(', ')})` : '';
+      
+      // Calculate optimized column widths - removed remarks column, extended to full width
+      const periodColWidth = contentWidth * 0.15;
+      const indexColWidth = (contentWidth - periodColWidth) / 10;
+      
+      pdf.autoTable({
+        startY: yPosition,
+        head: [
+          [
+            { content: 'Period', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+            { content: 'Labour', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+            { content: 'Plant Machinery & Spares', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+            { content: 'MPNG Fuel', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+            { content: 'Other Materials', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+            { content: 'Cement', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+            { content: 'Explosives', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+            { content: `Steel${zoneText}`, colSpan: 4, styles: { halign: 'center', fontStyle: 'bold' } }
+          ],
+          ['TMT Bars', 'Angle/Channel', 'Plates', 'Other Sections']
+        ],
+        body: consolidatedMonthlyTableData,
+        theme: 'grid',
+        headStyles: { 
+          fontStyle: 'bold',
+          fontSize: 11,
+          halign: 'center'
+        },
+        styles: { 
+          fontSize: 9.5, 
+          cellPadding: 2.5,
+          lineColor: [0, 0, 0],
+          lineWidth: 0.5
+        },
+        margin: { left: marginLeft, right: marginRight },
+        tableWidth: contentWidth,
+        columnStyles: {
+          0: { cellWidth: periodColWidth, fontStyle: 'bold', halign: 'left', fontSize: 8.5 },
+          1: { cellWidth: indexColWidth, halign: 'center' },
+          2: { cellWidth: indexColWidth, halign: 'center' },
+          3: { cellWidth: indexColWidth, halign: 'center' },
+          4: { cellWidth: indexColWidth, halign: 'center' },
+          5: { cellWidth: indexColWidth, halign: 'center' },
+          6: { cellWidth: indexColWidth, halign: 'center' },
+          7: { cellWidth: indexColWidth, halign: 'center' },
+          8: { cellWidth: indexColWidth, halign: 'center' },
+          9: { cellWidth: indexColWidth, halign: 'center' },
+          10: { cellWidth: indexColWidth, halign: 'center' }
+        }
+      });
+
+      yPosition = pdf.lastAutoTable.finalY + 15;
+      
+      // Add thin separator line after MONTHLY INDICES section
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.3);
+      pdf.line(marginLeft, yPosition, pageWidth - marginRight, yPosition);
+      yPosition += 8;
+      
+      // ============================================================================
+      // CONSOLIDATED CEMENT AND STEEL DETAILS TABLE
+      // ============================================================================
+      
+      // Calculate total cement and steel amounts across all bills
+      let totalCementAmount = 0;
+      let totalSteelAmount = 0;
+      let totalCementPvc = 0;
+      let totalSteelPvc = 0;
+      
+      const cementSteelTableData: any[] = [];
+      
+      for (const bill of bills) {
+        if (!bill.pvcCalculation) continue;
+        
+        const cementPvc = (bill.pvcCalculation.cementPvc || 0) + (bill.pvcCalculation.dedicatedCementPvc || 0);
+        const steelPvc = (bill.pvcCalculation.steelPvc || 0) + 
+          (bill.pvcCalculation.dedicatedSteelTmtBarsPvc || 0) +
+          (bill.pvcCalculation.dedicatedSteelAngleChannelPvc || 0) +
+          (bill.pvcCalculation.dedicatedSteelPlatesPvc || 0) +
+          (bill.pvcCalculation.dedicatedSteelOtherSectionsPvc || 0);
+        
+        // Only include bills with cement or steel components
+        if (cementPvc > 0 || steelPvc > 0) {
+          // Use actual cement and steel amounts stored in the bill
+          let cementAmount = bill.cementAmount || 0;
+          let steelAmount = (bill.steelTmtBarsAmount || 0) + 
+                           (bill.steelAngleChannelAmount || 0) + 
+                           (bill.steelPlatesAmount || 0) + 
+                           (bill.steelOtherSectionsAmount || 0);
+          
+          // If no dedicated amounts are provided, calculate from classification percentages
+          if (cementAmount === 0 && steelAmount === 0) {
+            if (bill.classificationEntries && bill.classificationEntries.length > 0) {
+              // Use calculateWeightedComponents to get percentages
+              const weightedComponents = await calculateWeightedComponents(
+                bill.classificationEntries.map((entry: any) => ({
+                  subClassificationId: entry.subClassificationId,
+                  classificationId: entry.classificationId,
+                  amount: parseFloat(entry.amount) || 0
+                }))
+              );
+              
+              cementAmount = (bill.billAmount * weightedComponents.cement) / 100;
+              steelAmount = (bill.billAmount * weightedComponents.steel) / 100;
+            } else if (bill.workClassification) {
+              cementAmount = (bill.billAmount * (bill.workClassification.cement || 0)) / 100;
+              steelAmount = (bill.billAmount * (bill.workClassification.steel || 0)) / 100;
+            }
+          }
+          
+          totalCementAmount += cementAmount;
+          totalSteelAmount += steelAmount;
+          totalCementPvc += cementPvc;
+          totalSteelPvc += steelPvc;
+          
+          cementSteelTableData.push([
+            bill.billNo,
+            cementAmount > 0 ? cementAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '-',
+            cementPvc > 0 ? cementPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '-',
+            steelAmount > 0 ? steelAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '-',
+            steelPvc > 0 ? steelPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '-'
+          ]);
+        }
+      }
+      
+      // Only show the table if there are cement or steel components
+      if (cementSteelTableData.length > 0) {
+        checkNewPage(100);
+        
+        pdf.setFontSize(16);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(`CEMENT & STEEL WORK DETAILS`, marginLeft, yPosition);
+        
+        const cementSteelTitle = `CEMENT & STEEL WORK DETAILS`;
+        const cementSteelTitleWidth = pdf.getTextWidth(cementSteelTitle);
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(0.5);
+        pdf.line(marginLeft, yPosition + 2, marginLeft + cementSteelTitleWidth, yPosition + 2);
+        yPosition += 12;
+        
+        // Add total row
+        cementSteelTableData.push([
+          { content: 'TOTAL', styles: { fontStyle: 'bold', halign: 'center' } },
+          { content: totalCementAmount > 0 ? totalCementAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '-', styles: { fontStyle: 'bold' } },
+          { content: totalCementPvc > 0 ? totalCementPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '-', styles: { fontStyle: 'bold' } },
+          { content: totalSteelAmount > 0 ? totalSteelAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '-', styles: { fontStyle: 'bold' } },
+          { content: totalSteelPvc > 0 ? totalSteelPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '-', styles: { fontStyle: 'bold' } }
+        ]);
+        
+        pdf.autoTable({
+          startY: yPosition,
+          head: [[
+            { content: 'Bill No.', styles: { halign: 'center' } },
+            { content: 'Cement Amount', styles: { halign: 'center' } },
+            { content: 'Cement PVC', styles: { halign: 'center' } },
+            { content: 'Steel Amount', styles: { halign: 'center' } },
+            { content: 'Steel PVC', styles: { halign: 'center' } }
+          ]],
+          body: cementSteelTableData,
+          theme: 'grid',
+          headStyles: { 
+            fontStyle: 'bold',
+            fontSize: 11,
+            halign: 'center',
+            fillColor: [41, 128, 185]
+          },
+          styles: { 
+            fontSize: 10, 
+            cellPadding: 3,
+            lineColor: [0, 0, 0],
+            lineWidth: 0.5
+          },
+          margin: { left: marginLeft, right: marginRight },
+          tableWidth: contentWidth,
+          columnStyles: {
+            0: { cellWidth: contentWidth * 0.20, halign: 'center', fontStyle: 'bold' },
+            1: { cellWidth: contentWidth * 0.20, halign: 'right' },
+            2: { cellWidth: contentWidth * 0.20, halign: 'right' },
+            3: { cellWidth: contentWidth * 0.20, halign: 'right' },
+            4: { cellWidth: contentWidth * 0.20, halign: 'right' }
+          }
+        });
+        
+        yPosition = pdf.lastAutoTable.finalY + 15;
+        
+        // Add thin separator line after CEMENT & STEEL DETAILS section
+        pdf.setDrawColor(200, 200, 200);
+        pdf.setLineWidth(0.3);
+        pdf.line(marginLeft, yPosition, pageWidth - marginRight, yPosition);
+        yPosition += 8;
+      }
+      
+      // Note: Detailed cement and steel calculations are now shown within each bill's section
+      // This removed section will be moved to individual bill sections below
+    }
+
+    // ============================================================================
+    // END OF CONSOLIDATED MONTHLY INDICES TABLE
+    // ============================================================================
+
+    // Helper function to get quarterly average for an index
+    const getQuarterlyAverage = (indices: any[], indexName: string, quarterMonths: Date[], baseMonth: Date) => {
+      const quarterValues = quarterMonths.map(monthDate => {
+        const monthIndex = indices.find(idx => 
+          format(new Date(idx.month), 'MMM-yyyy') === format(monthDate, 'MMM-yyyy') &&
+          idx.priceIndex.name === indexName
+        );
+        return monthIndex ? monthIndex.value : null;
+      }).filter(val => val !== null);
+      
+      if (quarterValues.length === 0) return null;
+      return quarterValues.reduce((sum: number, val: number) => sum + val, 0) / quarterValues.length;
+    };
+
+    // Helper function to get base index value
+    const getBaseIndexValue = (indices: any[], indexName: string, baseMonth: Date) => {
+      const baseMonthIndex = indices.find(idx => 
+        format(new Date(idx.month), 'MMM-yyyy') === format(baseMonth, 'MMM-yyyy') &&
+        idx.priceIndex.name === indexName
+      );
+      return baseMonthIndex ? baseMonthIndex.value : null;
+    };
+
+    // Helper function to get component percentage
+    const getComponentPercentage = (classification: any, component: string): number => {
+      if (!classification) return 0;
+      
+      // Check if it's a database Classification model (has direct properties)
+      if (classification.cement !== undefined) {
+        return classification[component] || 0;
+      }
+      
+      // Check if it's a WorkClassification from constants (has components object)
+      if (classification.components) {
+        return classification.components[component] || 0;
+      }
+      
+      return 0;
+    };
+
+    // Enhanced Individual Bill Analysis
+    for (let i = 0; i < bills.length; i++) {
+      const bill = bills[i];
+      const billIndicesData = allIndicesData.get(bill.id);
+      if (!billIndicesData) continue;
+      
+      const { indices, baseMonth, measurementDate } = billIndicesData;
+      
+      // Handle quarter months calculation - special cases for Q0 or Base
+      let quarterMonths: Date[] = [];
+      if (bill.quarter && !['Q0', 'Base'].includes(bill.quarter)) {
+        quarterMonths = getQuarterMonths(bill.quarter, baseMonth);
+      } else {
+        // For Q0 or Base, use the measurement month only
+        quarterMonths = [measurementDate];
+      }
+      
+      checkNewPage(100);
+      
+      // Bill Header
+      pdf.setFontSize(18);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(`BILL ${i + 1}: ${bill.billNo} - DETAILED ANALYSIS`, marginLeft, yPosition);
+      
+      // Underline the bill header
+      const billHeaderText = `BILL ${i + 1}: ${bill.billNo} - DETAILED ANALYSIS`;
+      const billHeaderWidth = pdf.getTextWidth(billHeaderText);
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.8);
+      pdf.line(marginLeft, yPosition + 2, marginLeft + billHeaderWidth, yPosition + 2);
+      
+      yPosition += 10;
+      
+      // BUILD QUARTERLY DATA FOR THIS BILL (same as single PDF report)
+      // Get all unique indices from database
+      const allIndices = await prisma.priceIndex.findMany({
+        orderBy: { name: 'asc' }
+      });
+
+      // Build all monthly values map
+      const allMonthlyValues: { [indexName: string]: { [monthKey: string]: number } } = {};
+      for (const index of allIndices) {
+        allMonthlyValues[index.name] = {};
+      }
+
+      const startMonth = new Date(baseMonth);
+      const measurementEndDate = new Date(measurementDate.getFullYear(), measurementDate.getMonth() + 1, 0);
+      
+      for (const index of allIndices) {
+        let currentMonth = new Date(startMonth);
+        while (currentMonth <= measurementEndDate) {
+          const monthKey = format(currentMonth, 'yyyy-MM');
+          const monthlyValue = indices.find((idx: any) => 
+            idx.priceIndexId === index.id &&
+            format(new Date(idx.month), 'yyyy-MM') === monthKey
+          );
+          
+          const indexValue = monthlyValue ? monthlyValue.value : index.baseValue;
+          allMonthlyValues[index.name][monthKey] = indexValue;
+          currentMonth.setMonth(currentMonth.getMonth() + 1);
+        }
+      }
+
+      // Get quarterly data
+      const quarterlyData: any[] = [];
+      const currentMonth = new Date(startMonth);
+      const quarterCache = new Map();
+      
+      // Only process quarters up to and including the measurement month
+      while (currentMonth <= measurementEndDate) {
+        const quarter = getQuarterFromDate(new Date(currentMonth), baseMonth);
+        if (!quarterCache.has(quarter)) {
+          // Handle quarter months calculation - skip Q0 and Base quarters as they're pre-contract
+          if (['Q0', 'Base'].includes(quarter)) {
+            currentMonth.setMonth(currentMonth.getMonth() + 1);
+            continue;
+          }
+          
+          const allQuarterMonths = getQuarterMonths(quarter, baseMonth);
+          // Filter months to only include those up to and including the measurement month
+          const measurementMonthEnd = new Date(measurementDate.getFullYear(), measurementDate.getMonth() + 1, 0);
+          let quarterMonths = allQuarterMonths.filter(qMonth => qMonth <= measurementMonthEnd);
+          
+          // For quarterly calculations, we ALWAYS need exactly 3 months for a proper average
+          if (quarterMonths.length > 0 && quarterMonths.length < 3) {
+            const lastAvailableMonth = quarterMonths[quarterMonths.length - 1];
+            const monthsNeeded = 3 - quarterMonths.length;
+            
+            for (let i = 1; i <= monthsNeeded; i++) {
+              const futureMonth = new Date(lastAvailableMonth);
+              futureMonth.setMonth(futureMonth.getMonth() + i);
+              const normalizedFutureMonth = new Date(futureMonth.getFullYear(), futureMonth.getMonth(), 1);
+              quarterMonths.push(normalizedFutureMonth);
+            }
+          }
+          
+          const quarterData = {
+            quarter,
+            quarterMonths,
+            averages: {} as { [key: string]: number },
+            monthlyData: {} as { [key: string]: { [monthKey: string]: number } },
+            includesFutureMonths: quarterMonths.length === 3 && quarterMonths.some(qMonth => qMonth > measurementMonthEnd)
+          };
+          
+          // Calculate averages and collect monthly data for each index
+          for (const index of allIndices) {
+            quarterData.monthlyData[index.name] = {};
+            const monthlyValues = [];
+            
+            for (const qMonth of quarterMonths) {
+              const monthKey = format(qMonth, 'yyyy-MM');
+              let value = allMonthlyValues[index.name][monthKey];
+              
+              if (!value) {
+                // Try to fetch this month's value from the database
+                const futureMonthValue = await prisma.monthlyIndexValue.findFirst({
+                  where: {
+                    priceIndexId: index.id,
+                    month: {
+                      gte: new Date(qMonth.getFullYear(), qMonth.getMonth(), 1),
+                      lt: new Date(qMonth.getFullYear(), qMonth.getMonth() + 1, 1)
+                    }
+                  },
+                  orderBy: {
+                    month: 'desc'
+                  }
+                });
+                
+                value = futureMonthValue?.value || index.baseValue;
+                allMonthlyValues[index.name][monthKey] = value;
+              }
+              
+              quarterData.monthlyData[index.name][monthKey] = value;
+              monthlyValues.push(value);
+            }
+            
+            quarterData.averages[index.name] = monthlyValues.length > 0 
+              ? monthlyValues.reduce((sum, val) => sum + val, 0) / monthlyValues.length
+              : index.baseValue;
+          }
+          
+          quarterlyData.push(quarterData);
+          quarterCache.set(quarter, quarterData);
+        }
+        currentMonth.setMonth(currentMonth.getMonth() + 3);
+      }
+
+      // Create base index data for this bill
+      const baseIndexData: { [key: string]: number } = {};
+      for (const index of allIndices) {
+        const normalizedBaseMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1);
+        
+        const baseMonthValue = await prisma.monthlyIndexValue.findFirst({
+          where: {
+            priceIndexId: index.id,
+            month: {
+              gte: normalizedBaseMonth,
+              lt: new Date(normalizedBaseMonth.getFullYear(), normalizedBaseMonth.getMonth() + 1, 1)
+            }
+          },
+          orderBy: {
+            month: 'desc'
+          }
+        });
+        
+        baseIndexData[index.name] = baseMonthValue?.value || index.baseValue;
+      }
+
+      // Note: Monthly indices table is now shown once at the top for all bills (consolidated)
+      
+      // Use the workClassification from the bill (already included in the query)
+      const workClassification = bill.workClassification;
+      
+      // If bill doesn't have work classification, show warning and skip classification-dependent sections
+      if (!workClassification && (!bill.classificationEntries || bill.classificationEntries.length === 0)) {
+        checkNewPage(60);
+        
+        // Show warning message
+        pdf.setFontSize(16);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(255, 0, 0); // Red color for warning
+        pdf.text("⚠ WORK CLASSIFICATION NOT ASSIGNED", marginLeft, yPosition);
+        pdf.setTextColor(0, 0, 0); // Reset to black
+        
+        yPosition += 10;
+        pdf.setFontSize(11);
+        pdf.setFont("helvetica", "normal");
+        pdf.text("This bill does not have work classification assigned. PVC calculations cannot be performed.", marginLeft + 10, yPosition);
+        pdf.text("Please edit the bill and assign work classification to generate complete PVC report.", marginLeft + 10, yPosition + 6);
+        
+        yPosition += 20;
+        
+        // Skip to next bill
+        continue;
+      }
+
+      // CLASSIFICATION INFORMATION SECTION
+      checkNewPage(80);
+      
+      pdf.setFontSize(16);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("WORK CLASSIFICATIONS & AMOUNTS", marginLeft, yPosition);
+      
+      const classifTitle = "WORK CLASSIFICATIONS & AMOUNTS";
+      const classifTitleWidth = pdf.getTextWidth(classifTitle);
+      pdf.setLineWidth(0.5);
+      pdf.line(marginLeft, yPosition + 2, marginLeft + classifTitleWidth, yPosition + 2);
+      yPosition += 12;
+      
+      // Check if we have classification entries (new approach)
+      if (bill.classificationEntries && bill.classificationEntries.length > 0) {
+        const entryData: any[] = [];
+        let totalAmount = 0;
+        
+        bill.classificationEntries.forEach((entry: any, index: number) => {
+          const code = entry.subClassification?.code || entry.classification?.code || '';
+          const name = entry.subClassification?.name || entry.classification?.name || '';
+          const amount = parseFloat(entry.amount) || 0;
+          totalAmount += amount;
+          
+          entryData.push([
+            index + 1,
+            code,
+            name,
+            amount.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+          ]);
+        });
+        
+        // Add total row
+        entryData.push([
+          { content: 'TOTAL', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } },
+          { content: totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 }), styles: { fontStyle: 'bold' } }
+        ]);
+        
+        pdf.autoTable({
+          startY: yPosition,
+          head: [['S.No.', 'Code', 'Classification Name', 'Amount']],
+          body: entryData,
+          theme: 'grid',
+          headStyles: { 
+            fontStyle: 'bold',
+            fontSize: 10,
+            halign: 'center'
+          },
+          styles: { 
+            fontSize: 9, 
+            cellPadding: 3,
+            lineColor: [0, 0, 0],
+            lineWidth: 0.5
+          },
+          margin: { left: marginLeft, right: marginRight },
+          tableWidth: contentWidth,
+          columnStyles: {
+            0: { cellWidth: contentWidth * 0.08, halign: 'center' },
+            1: { cellWidth: contentWidth * 0.12, halign: 'center', fontStyle: 'bold' },
+            2: { cellWidth: contentWidth * 0.55, halign: 'left' },
+            3: { cellWidth: contentWidth * 0.25, halign: 'right', fontStyle: 'bold' }
+          }
+        });
+        
+        yPosition = pdf.lastAutoTable.finalY + 12;
+      } else if (workClassification) {
+        // Legacy approach: display single classification
+        pdf.setFontSize(11);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(`Classification Code: ${workClassification.code}`, marginLeft + 10, yPosition);
+        
+        yPosition += 6;
+        pdf.setFont("helvetica", "normal");
+        pdf.text(`Classification Name: ${workClassification.name}`, marginLeft + 10, yPosition);
+        
+        yPosition += 10;
+      }
+
+      // ============================================================================
+      // DETAILED CEMENT AND STEEL CALCULATIONS FOR THIS BILL
+      // ============================================================================
+      
+      if (bill.pvcCalculation) {
+        // Check if bill has cement or steel components
+        const hasCement = bill.cementAmount && bill.cementAmount > 0;
+        const hasSteel = (bill.steelTmtBarsAmount && bill.steelTmtBarsAmount > 0) ||
+                        (bill.steelAngleChannelAmount && bill.steelAngleChannelAmount > 0) ||
+                        (bill.steelPlatesAmount && bill.steelPlatesAmount > 0) ||
+                        (bill.steelOtherSectionsAmount && bill.steelOtherSectionsAmount > 0);
+        
+        if (hasCement || hasSteel) {
+          // Get quarterly averages for this bill's quarter
+          const dedicatedIndicesNames = [
+            'Labour', 'RBI Plant Machinery', 'MPNG Fuel', 'RBI Other Materials',
+            'RBI Cement', 'RBI Explosives',
+            'Steel TMT Bars', 'Steel Angle/Channel', 'Steel Plates', 'Steel Other Sections'
+          ];
+          
+          let billQuarterlyAverages: any[] = [];
+          try {
+            billQuarterlyAverages = await getQuarterlyAverages(bill.quarter, dedicatedIndicesNames, bill.contract.baseMonth, 'auto');
+          } catch (error) {
+            console.error(`Error getting quarterly averages for bill ${bill.billNo}:`, error);
+            billQuarterlyAverages = [];
+          }
+          
+          // STEEL CALCULATIONS SECTION (before cement to match user request)
+          if (hasSteel) {
+            // Steel Component mapping
+            const steelComponents = [
+              { 
+                name: 'TMT Bars', 
+                displayName: 'TMT Steel',
+                amount: bill.steelTmtBarsAmount || 0, 
+                pvc: bill.pvcCalculation.dedicatedSteelTmtBarsPvc || 0,
+                indexName: 'Steel TMT Bars'
+              },
+              { 
+                name: 'Angle/Channel', 
+                displayName: 'Structural Steel',
+                amount: bill.steelAngleChannelAmount || 0, 
+                pvc: bill.pvcCalculation.dedicatedSteelAngleChannelPvc || 0,
+                indexName: 'Steel Angle/Channel'
+              },
+              { 
+                name: 'Plates', 
+                displayName: 'MS Steel',
+                amount: bill.steelPlatesAmount || 0, 
+                pvc: bill.pvcCalculation.dedicatedSteelPlatesPvc || 0,
+                indexName: 'Steel Plates'
+              },
+              { 
+                name: 'Other Sections', 
+                displayName: 'Other Section',
+                amount: bill.steelOtherSectionsAmount || 0, 
+                pvc: bill.pvcCalculation.dedicatedSteelOtherSectionsPvc || 0,
+                indexName: 'Steel Other Sections'
+              }
+            ];
+            
+            // Create a separate section for each steel component type
+            for (const component of steelComponents) {
+              if (component.amount > 0) {
+                checkNewPage(80);
+                
+                // Section header
+                pdf.setFontSize(17);
+                pdf.setFont("helvetica", "bold");
+                pdf.text(`${component.displayName.toUpperCase()} CALCULATION`, marginLeft, yPosition);
+                yPosition += 10;
+                
+                // Get steel calculation details
+                const steelDetails = calculateDedicatedSteelPvcWithSteps(
+                  component.amount, 
+                  billQuarterlyAverages, 
+                  component.indexName
+                );
+                
+                if (steelDetails) {
+                  const steelPvc = steelDetails.finalPvc;
+                  const steelFormula = `${component.amount.toLocaleString('en-IN', { maximumFractionDigits: 1 })} × [(${steelDetails.averageIndex.toFixed(2)} - ${steelDetails.baseIndex.toFixed(2)}) ÷ ${steelDetails.baseIndex.toFixed(2)}] × 85%`;
+                  
+                  const steelTableData = [
+                    [
+                      `${component.displayName} (85%)`,
+                      steelFormula,
+                      steelPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+                    ]
+                  ];
+                  
+                  pdf.autoTable({
+                    startY: yPosition,
+                    head: [['Component', 'Calculation', 'PVC Amount']],
+                    body: steelTableData,
+                    theme: 'grid',
+                    headStyles: { 
+                      fontStyle: 'bold',
+                      fontSize: 13,
+                      halign: 'center',
+                      fillColor: [41, 128, 185]
+                    },
+                    styles: { 
+                      fontSize: 13, 
+                      cellPadding: 6,
+                      lineColor: [0, 0, 0],
+                      lineWidth: 0.8
+                    },
+                    margin: { left: marginLeft, right: marginRight },
+                    tableWidth: contentWidth,
+                    columnStyles: {
+                      0: { cellWidth: contentWidth * 0.25, fontStyle: 'bold', halign: 'left' },
+                      1: { cellWidth: contentWidth * 0.50, halign: 'center' },
+                      2: { cellWidth: contentWidth * 0.25, halign: 'right', fontStyle: 'bold' }
+                    }
+                  });
+                  
+                  yPosition = pdf.lastAutoTable.finalY + 15;
+                }
+              }
+            }
+          }
+          
+          // CEMENT CALCULATION SECTION
+          if (hasCement && bill.cementAmount) {
+            checkNewPage(80);
+            
+            // Section header
+            pdf.setFontSize(17);
+            pdf.setFont("helvetica", "bold");
+            pdf.text(`CEMENT CALCULATION`, marginLeft, yPosition);
+            yPosition += 10;
+            
+            // Get detailed cement calculation
+            const cementDetails = calculateDedicatedCementPvcWithSteps(bill.cementAmount, billQuarterlyAverages);
+            
+            if (cementDetails) {
+              const cementPvc = cementDetails.finalPvc;
+              const cementFormula = `${bill.cementAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })} × [(${cementDetails.averageIndex.toFixed(2)} - ${cementDetails.baseIndex.toFixed(2)}) ÷ ${cementDetails.baseIndex.toFixed(2)}] × 85%`;
+              
+              const cementTableData = [
+                [
+                  'Cement (85%)',
+                  cementFormula,
+                  cementPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+                ]
+              ];
+              
+              pdf.autoTable({
+                startY: yPosition,
+                head: [['Component', 'Calculation', 'PVC Amount']],
+                body: cementTableData,
+                theme: 'grid',
+                headStyles: { 
+                  fontStyle: 'bold',
+                  fontSize: 13,
+                  halign: 'center',
+                  fillColor: [41, 128, 185]
+                },
+                styles: { 
+                  fontSize: 13, 
+                  cellPadding: 6,
+                  lineColor: [0, 0, 0],
+                  lineWidth: 0.8
+                },
+                margin: { left: marginLeft, right: marginRight },
+                tableWidth: contentWidth,
+                columnStyles: {
+                  0: { cellWidth: contentWidth * 0.25, fontStyle: 'bold', halign: 'left' },
+                  1: { cellWidth: contentWidth * 0.50, halign: 'center' },
+                  2: { cellWidth: contentWidth * 0.25, halign: 'right', fontStyle: 'bold' }
+                }
+              });
+              
+              yPosition = pdf.lastAutoTable.finalY + 15;
+            }
+          }
+        }
+      }
+
+      // ============================================================================
+      // OTHER COMPONENTS CALCULATION (PVC BY CLASSIFICATION)
+      // ============================================================================
+
+      // PVC CALCULATION BY CLASSIFICATION (same structure as single bill PDF)
+      if (bill.pvcCalculation && bill.classificationEntries && bill.classificationEntries.length > 0) {
+        // Get quarterly averages for this bill using the same function as single bill PDF
+        const allIndicesNames = [
+          'Labour',
+          'RBI Plant Machinery',
+          'MPNG Fuel',
+          'RBI Other Materials',
+          'RBI Cement',
+          'Steel TMT Bars',
+          'Steel Angle/Channel',
+          'Steel Plates',
+          'Steel Other Sections',
+          'RBI Explosives'
+        ];
+        
+        // Get base indices
+        const baseIndexData: { [key: string]: number } = {};
+        for (const indexName of allIndicesNames) {
+          const baseValue = getBaseIndexValue(indices, indexName, baseMonth);
+          if (baseValue) {
+            baseIndexData[indexName] = baseValue;
+          }
+        }
+        
+        // Use the quarterly averages from consolidatedQuarterlyData (already calculated for monthly indices table)
+        // This ensures consistency between the monthly indices table and component calculations
+        let quarterlyAverageIndices: { [key: string]: number } = {};
+        
+        // Find the quarter data for this bill
+        const billQuarterData = consolidatedQuarterlyData.find(qData => qData.quarter === bill.quarter);
+        
+        if (billQuarterData) {
+          // Use the averages from the consolidated quarterly data
+          for (const indexName of allIndicesNames) {
+            if (billQuarterData.averages[indexName]) {
+              quarterlyAverageIndices[indexName] = billQuarterData.averages[indexName];
+            }
+          }
+          
+          console.log(`\n=====  BULK PDF: Using quarterly averages for ${bill.billNo} =====`);
+          console.log(`Quarter: ${bill.quarter}`);
+          console.log(`Using averages from consolidated quarterly data:`);
+          for (const indexName of allIndicesNames) {
+            if (quarterlyAverageIndices[indexName]) {
+              console.log(`  ${indexName}: ${quarterlyAverageIndices[indexName].toFixed(2)}`);
+            }
+          }
+          console.log('=====  End quarterly averages =====\n');
+        } else {
+          console.error(`WARNING: Could not find quarterly data for ${bill.quarter}`);
+          // Fallback to getQuarterlyAverages
+          try {
+            const quarterlyAvgs = await getQuarterlyAverages(bill.quarter, allIndicesNames, bill.contract.baseMonth, 'auto');
+            for (const avg of quarterlyAvgs) {
+              quarterlyAverageIndices[avg.indexName] = avg.average;
+            }
+          } catch (error) {
+            console.error('Error getting quarterly averages for bill:', error);
+          }
+        }
+        
+        checkNewPage(100);
+        
+        // Classification section header
+        pdf.setFontSize(16);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("PVC CALCULATION BY CLASSIFICATION", marginLeft, yPosition);
+        
+        const classTitle = "PVC CALCULATION BY CLASSIFICATION";
+        const classTitleWidth = pdf.getTextWidth(classTitle);
+        pdf.setLineWidth(0.5);
+        pdf.line(marginLeft, yPosition + 2, marginLeft + classTitleWidth, yPosition + 2);
+        
+        yPosition += 12;
+        
+        // Helper function to map component to index name
+        const getIndexNameForComponent = (component: string): string => {
+          const mapping: {[key: string]: string} = {
+            'labour': 'Labour',
+            'plantMachinery': 'RBI Plant Machinery',
+            'fuel': 'MPNG Fuel',
+            'otherMaterials': 'RBI Other Materials',
+            'cement': 'RBI Cement',
+            'explosives': 'RBI Explosives'
+          };
+          return mapping[component] || '';
+        };
+        
+        // Helper function to get component display name
+        const getComponentDisplayName = (component: string): string => {
+          const mapping: {[key: string]: string} = {
+            'fixed': 'Fixed Component',
+            'labour': 'Labour',
+            'plantMachinery': 'Plant Machinery & Spares',
+            'fuel': 'Fuel & Lubricants',
+            'otherMaterials': 'Other Materials',
+            'cement': 'Cement Component',
+            'steel': 'Steel Component',
+            'explosives': 'Explosives'
+          };
+          return mapping[component] || component;
+        };
+        
+
+        // Loop through each classification entry
+        for (let classIdx = 0; classIdx < bill.classificationEntries.length; classIdx++) {
+          const entry = bill.classificationEntries[classIdx];
+          const entryAmount = parseFloat(String(entry.amount)) || 0;
+          
+          if (entryAmount <= 0) continue;
+          
+          const classificationComponents = entry.subClassification || entry.classification;
+          if (!classificationComponents) continue;
+          
+          const classCode = classificationComponents.code;
+          const className = classificationComponents.name;
+          
+          checkNewPage(80);
+          
+          // Classification header
+          pdf.setFontSize(13);
+          pdf.setFont("helvetica", "bold");
+          pdf.text(`Classification ${classIdx + 1}: ${classCode} - ${className}`, marginLeft, yPosition);
+          yPosition += 7;
+          
+          pdf.setFontSize(12);
+          pdf.setFont("helvetica", "normal");
+          pdf.text(`Amount: ${entryAmount.toLocaleString('en-IN')}`, marginLeft, yPosition);
+          yPosition += 10;
+          
+          // Build component table for this classification
+          const componentData = [];
+          
+          // Define components in order
+          const components = [
+            { key: 'fixed', percent: classificationComponents.fixed || 0 },
+            { key: 'labour', percent: classificationComponents.labour || 0 },
+            { key: 'plantMachinery', percent: classificationComponents.plantMachinery || 0 },
+            { key: 'fuel', percent: classificationComponents.fuel || 0 },
+            { key: 'otherMaterials', percent: classificationComponents.otherMaterials || 0 },
+            { key: 'cement', percent: classificationComponents.cement || 0 },
+            { key: 'steel', percent: classificationComponents.steel || 0 },
+            { key: 'explosives', percent: classificationComponents.explosives || 0 }
+          ];
+          
+          // Calculate PVC for each component using the same function as single bill PDF
+          for (const component of components) {
+            if (component.percent <= 0) continue;
+            
+            const displayName = getComponentDisplayName(component.key);
+            const percentText = `${component.percent.toFixed(1)}%`;
+            
+            // Fixed component
+            if (component.key === 'fixed') {
+              componentData.push([
+                `${displayName} (${percentText})`,
+                'Not subject to price variation',
+                '0.00'
+              ]);
+              continue;
+            }
+            
+            // For steel, use Steel TMT Bars index (same as single bill PDF)
+            if (component.key === 'steel') {
+              const steelIndexName = 'Steel TMT Bars';
+              const steelBaseIndex = baseIndexData[steelIndexName] || 0;
+              const steelCurrentIndex = quarterlyAverageIndices[steelIndexName] || 0;
+              
+              if (steelBaseIndex > 0 && steelCurrentIndex > 0) {
+                // Use the same calculation function as single bill PDF
+                const calcResult = calculatePvcComponentWithSteps(
+                  entryAmount,
+                  steelCurrentIndex,
+                  steelBaseIndex,
+                  component.percent,
+                  displayName
+                );
+                
+                const pvcAmount = calcResult.finalPvc;
+                const formula = `${entryAmount.toLocaleString('en-IN')} × [(${steelCurrentIndex.toFixed(2)} - ${steelBaseIndex.toFixed(2)}) ÷ ${steelBaseIndex.toFixed(2)}] × ${percentText}`;
+                componentData.push([
+                  `${displayName} (${percentText})`,
+                  formula,
+                  pvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+                ]);
+              }
+              continue;
+            }
+            
+            // For other components, use the same calculation function as single bill PDF
+            const indexName = getIndexNameForComponent(component.key);
+            if (!indexName) continue;
+            
+            const baseIndex = baseIndexData[indexName] || 0;
+            const currentIndex = quarterlyAverageIndices[indexName] || 0;
+            
+            if (baseIndex > 0 && currentIndex > 0) {
+              // Use the standardized calculation function (same as single bill PDF)
+              const calcResult = calculatePvcComponentWithSteps(
+                entryAmount,
+                currentIndex,
+                baseIndex,
+                component.percent,
+                displayName
+              );
+              
+              const pvcAmount = calcResult.finalPvc;
+              const formula = `${entryAmount.toLocaleString('en-IN')} × [(${currentIndex.toFixed(2)} - ${baseIndex.toFixed(2)}) ÷ ${baseIndex.toFixed(2)}] × ${percentText}`;
+              componentData.push([
+                `${displayName} (${percentText})`,
+                formula,
+                pvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+              ]);
+            }
+          }
+          
+          // Calculate subtotal for this classification
+          let classificationSubtotal = 0;
+          for (const row of componentData) {
+            const amountStr = row[2] as string;
+            const amount = parseFloat(amountStr.replace(/,/g, ''));
+            if (!isNaN(amount)) {
+              classificationSubtotal += amount;
+            }
+          }
+          
+          // Add component rows
+          componentData.push([
+            { content: `SUBTOTAL PVC FOR ${classCode}`, styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: '', styles: { fillColor: [240, 240, 240] } },
+            { content: classificationSubtotal.toLocaleString('en-IN', { maximumFractionDigits: 2 }), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }
+          ]);
+          
+          // Render the table
+          pdf.autoTable({
+            startY: yPosition,
+            head: [['Component', 'Formula', 'PVC Amount']],
+            body: componentData,
+            theme: 'grid',
+            headStyles: {
+              fontStyle: 'bold',
+              fontSize: 10,
+              halign: 'center',
+              fillColor: [41, 128, 185]
+            },
+            styles: {
+              fontSize: 9,
+              cellPadding: 3,
+              lineColor: [0, 0, 0],
+              lineWidth: 0.5
+            },
+            margin: { left: marginLeft, right: marginRight },
+            tableWidth: contentWidth,
+            columnStyles: {
+              0: { cellWidth: contentWidth * 0.25, fontStyle: 'bold' },
+              1: { cellWidth: contentWidth * 0.55, fontSize: 8 },
+              2: { cellWidth: contentWidth * 0.20, halign: 'right', fontStyle: 'bold' }
+            }
+          });
+          
+          yPosition = pdf.lastAutoTable.finalY + 15;
+        }
+      } else {
+        // No PVC calculation available
+        checkNewPage(60);
+        pdf.setFontSize(12);
+        pdf.setFont("helvetica", "italic");
+        pdf.text("PVC calculation not available for this bill.", marginLeft + 10, yPosition);
+        yPosition += 20;
+      }
+
+      if (bill.pvcCalculation) {
+        // TOTAL PVC SUMMARY
+        checkNewPage(60);
+        
+        pdf.setFontSize(16);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(`BILL ${i + 1} - PVC SUMMARY`, marginLeft, yPosition);
+        
+        // Underline the section header
+        const billPvcSummaryTitle = `BILL ${i + 1} - PVC SUMMARY`;
+        const billPvcSummaryWidth = pdf.getTextWidth(billPvcSummaryTitle);
+        pdf.setLineWidth(0.5);
+        pdf.line(marginLeft, yPosition + 2, marginLeft + billPvcSummaryWidth, yPosition + 2);
+        
+        yPosition += 12;
+        
+        // Calculate the correct total PVC (same logic as single bill PDF)
+        // Start with the sum of all component PVCs
+        let calculatedTotal = 
+          (bill.pvcCalculation.labourPvc || 0) +
+          (bill.pvcCalculation.plantMachineryPvc || 0) +
+          (bill.pvcCalculation.fuelPowerPvc || 0) +
+          (bill.pvcCalculation.otherMaterialsPvc || 0) +
+          (bill.pvcCalculation.cementPvc || 0) +
+          (bill.pvcCalculation.steelPvc || 0) +
+          (bill.pvcCalculation.explosivesPvc || 0);
+        
+        // Apply dedicated cement/steel adjustments if present
+        const classificationBasedCementPvc = bill.pvcCalculation.cementPvc || 0;
+        const classificationBasedSteelPvc = bill.pvcCalculation.steelPvc || 0;
+        const dedicatedCementPvc = bill.pvcCalculation.dedicatedCementPvc || 0;
+        const dedicatedSteelPvc = bill.pvcCalculation.dedicatedSteelPvc || 0;
+        
+        // Only adjust if we have dedicated cement or steel values
+        if (dedicatedCementPvc !== 0 || dedicatedSteelPvc !== 0) {
+          calculatedTotal = calculatedTotal 
+            - classificationBasedCementPvc  // Remove classification-based cement
+            - classificationBasedSteelPvc   // Remove classification-based steel
+            + dedicatedCementPvc            // Add dedicated cement
+            + dedicatedSteelPvc;            // Add dedicated steel
+        }
+        
+        pdf.setFontSize(14);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("Total PVC Amount:", marginLeft, yPosition);
+        pdf.text(calculatedTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 }), marginLeft + 80, yPosition);
+        
+        yPosition += 15;
+      }
+
+      // Add separator between bills (except for the last one)
+      if (i < bills.length - 1) {
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(1);
+        pdf.line(marginLeft, yPosition, pageWidth - marginRight, yPosition);
+        yPosition += 15;
+      }
+    }
+
+
+
+    // Add page numbers and footer to all pages
+    const totalPages = pdf.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      pdf.setPage(i);
+      
+      // Footer line
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.3);
+      pdf.line(marginLeft, pageHeight - 10, pageWidth - marginRight, pageHeight - 10);
+      
+      // Page number
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(100, 100, 100);
+      const pageNumText = `Page ${i} of ${totalPages}`;
+      const pageNumWidth = pdf.getTextWidth(pageNumText);
+      pdf.text(pageNumText, pageWidth - marginRight - pageNumWidth, pageHeight - 6);
+      
+      // Report footer text (if any)
+      if (brandingSettings.reportFooterText) {
+        pdf.setFontSize(8);
+        pdf.text(brandingSettings.reportFooterText, marginLeft, pageHeight - 6);
+      }
+      
+      // Generation date
+      pdf.setFontSize(8);
+      const genDateText = `Generated: ${format(new Date(), 'dd MMM yyyy, HH:mm')}`;
+      pdf.text(genDateText, marginLeft + (contentWidth / 2) - (pdf.getTextWidth(genDateText) / 2), pageHeight - 6);
+      
+      // Reset text color
+      pdf.setTextColor(0, 0, 0);
+    }
+
+    // Generate initial PDF buffer
+    const initialPdfBytes = new Uint8Array(pdf.output('arraybuffer'));
+
+    // Embed labour index for the first bill's measurement month
+    // (for bulk reports, we use the first bill's date)
+    if (bills.length > 0) {
+      const firstBill = bills[0];
+      // Get base month from contract
+      const componentIndexStartDate = firstBill.contract.baseMonth 
+        ? new Date(firstBill.contract.baseMonth) 
+        : addMonths(new Date(firstBill.contract.dateOfOpening), -1);
+      
+      // Find the latest measurement date among all bills
+      const componentIndexEndDate = bills.reduce((latest, bill) => {
+        const measurementDate = new Date(bill.dateOfMeasurement);
+        return measurementDate > latest ? measurementDate : latest;
+      }, new Date(firstBill.dateOfMeasurement));
+
+      const finalPdfBytes = await embedComponentIndicesRange(initialPdfBytes, {
+        startDate: componentIndexStartDate,
+        endDate: componentIndexEndDate,
+      });
+
+      const pdfBuffer = Buffer.from(finalPdfBytes);
+
+      return new Response(pdfBuffer, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="Bulk_PVC_Report_${bills.length}_Bills_${format(new Date(), 'yyyy-MM-dd')}.pdf"`,
+          'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+        }
+      });
+    } else {
+      // If no bills, return without labour index
+      const pdfBuffer = Buffer.from(initialPdfBytes);
+      return new Response(pdfBuffer, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="Bulk_PVC_Report_${bills.length}_Bills_${format(new Date(), 'yyyy-MM-dd')}.pdf"`,
+          'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+        }
+      });
+    }
+      })(),
+      TIMEOUT_DEFAULTS.VERY_LONG,
+      'bulk-pdf-generation'
+    );
+
+  } catch (error) {
+    console.error('Error generating bulk PDF report:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    }
+    return NextResponse.json(
+      { error: 'Failed to generate bulk PDF report', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
+  }
+}

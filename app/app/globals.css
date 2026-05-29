@@ -1,0 +1,242 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+ 
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+ 
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+ 
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+ 
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+ 
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+ 
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+ 
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+ 
+    --radius: 0.5rem;
+  }
+ 
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+ 
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+ 
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+ 
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+ 
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+ 
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+ 
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+ 
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+}
+ 
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  
+  /* Accessibility improvements for elderly users */
+  html {
+    /* Larger base font size for better readability */
+    font-size: 16px;
+  }
+  
+  /* Increase line height for better readability */
+  body {
+    line-height: 1.6;
+  }
+  
+  /* Better focus indicators */
+  *:focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+  
+  /* Higher contrast for links */
+  a {
+    text-decoration-skip-ink: auto;
+  }
+  
+  /* Smooth scroll behavior */
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  /* Prevent text from being too wide (easier to read) */
+  p, li, td {
+    max-width: 80ch;
+  }
+}
+
+@layer utilities {
+  /* Mobile-first optimizations */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+
+  .scroll-smooth {
+    scroll-behavior: smooth;
+  }
+
+  /* PWA safe area support */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-area-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-area-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Mobile-specific scrollbar hiding */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Touch-friendly tap targets */
+  .tap-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Prevent text selection on touch devices */
+  .touch-select-none {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+
+  /* Pull-to-refresh indicator */
+  .pull-refresh {
+    overscroll-behavior: contain;
+  }
+
+  /* Loading animations optimized for mobile */
+  .pulse-mobile {
+    animation: pulse-mobile 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse-mobile {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  /* Mobile navigation transitions */
+  .nav-transition {
+    transition: transform 0.3s ease-in-out;
+  }
+
+  /* PWA display mode detection */
+  @media all and (display-mode: standalone) {
+    .pwa-only {
+      display: block;
+    }
+    .browser-only {
+      display: none;
+    }
+  }
+
+  .pwa-only {
+    display: none;
+  }
+
+  .browser-only {
+    display: block;
+  }
+}
+
+/* Mobile-specific responsive utilities */
+@layer components {
+  /* Mobile card layouts */
+  .mobile-card {
+    @apply rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-3;
+  }
+
+  /* Mobile form inputs */
+  .mobile-input {
+    @apply flex h-12 w-full rounded-md border border-input bg-background px-4 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  /* Mobile buttons */
+  .mobile-button {
+    @apply inline-flex h-12 items-center justify-center rounded-md text-base font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 touch-manipulation;
+  }
+
+  /* Mobile table rows */
+  .mobile-row {
+    @apply flex flex-col sm:flex-row sm:items-center border-b border-border p-4 space-y-2 sm:space-y-0 sm:space-x-4 hover:bg-muted/50 transition-colors touch-manipulation;
+  }
+
+  /* Sticky mobile header */
+  .mobile-header {
+    @apply sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border;
+  }
+
+  /* Mobile bottom navigation */
+  .mobile-nav-bottom {
+    @apply fixed bottom-0 left-0 right-0 z-40 bg-background border-t border-border safe-area-bottom;
+  }
+
+  /* Mobile floating action button */
+  .mobile-fab {
+    @apply fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full shadow-lg touch-manipulation;
+  }
+}

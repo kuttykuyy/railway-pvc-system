@@ -1,0 +1,954 @@
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { getQuarterFromDate, calculateClassificationBasedPvcWithComponents, calculateClassificationBasedPvc, calculateDedicatedCementPvc, calculateDedicatedSteelPvc, calculateWeightedComponents } from '@/lib/pvc-calculations';
+import { getQuarterlyAverages } from '@/lib/db-utils';
+import { calculateExtensionCompliantPvc, getCappedIndices } from '@/lib/extension-compliance';
+import { getServerSession } from 'next-auth';
+import { canUserDeleteBill, canUserEditBill } from '@/lib/bill-permissions';
+import { PVCCalculationLogger } from '@/lib/pvc-calculation-logger';
+
+export const dynamic = "force-dynamic";
+
+// DELETE /api/bills/[id] - Delete a single bill
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+
+    // Get user session
+    const session = await getServerSession();
+    
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Get user details
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true, role: true }
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if user can delete this bill
+    const { allowed, reason } = await canUserDeleteBill(user.id, id, user.role);
+
+    if (!allowed) {
+      return NextResponse.json(
+        { error: reason || 'You do not have permission to delete this bill' },
+        { status: 403 }
+      );
+    }
+
+    // Check if bill exists
+    const bill = await prisma.bill.findUnique({
+      where: { id },
+      include: { pvcCalculation: true }
+    });
+
+    if (!bill) {
+      return NextResponse.json(
+        { error: 'Bill not found' },
+        { status: 404 }
+      );
+    }
+
+    // Delete PVC calculation first (if exists)
+    if (bill.pvcCalculation) {
+      await prisma.pvcCalculation.delete({
+        where: { id: bill.pvcCalculation.id }
+      });
+    }
+
+    // Delete the bill
+    await prisma.bill.delete({
+      where: { id }
+    });
+
+    return NextResponse.json({ message: 'Bill deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting bill:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete bill' },
+      { status: 500 }
+    );
+  }
+}
+
+// GET /api/bills/[id] - Get a single bill
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+
+    const bill = await prisma.bill.findUnique({
+      where: { id },
+      include: {
+        contract: true,
+        pvcCalculation: true,
+        workClassification: true,
+        classificationEntries: {
+          include: {
+            subClassification: true
+          }
+        },
+        billTransaction: true
+      }
+    });
+
+    if (!bill) {
+      return NextResponse.json(
+        { error: 'Bill not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(bill);
+  } catch (error) {
+    console.error('Error fetching bill:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch bill' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT /api/bills/[id] - Update a bill
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+    const body = await request.json();
+    const { 
+      contractId, 
+      billNo, 
+      grossBillAmount,
+      billAmount, 
+      cementAmount = 0,
+      steelTmtBarsAmount = 0,
+      steelAngleChannelAmount = 0,
+      steelPlatesAmount = 0,
+      steelOtherSectionsAmount = 0,
+      selectedSteelComponent = 'Steel TMT Bars',
+      steelTypes = [], // Steel types for classification-based calculations
+      dateOfMeasurement, 
+      dateOfCompletion,
+      calculationMethod = 'auto', 
+      workClassification,
+      classificationEntries = [],
+      nonScheduleItems = [],
+      zone,
+      pvcNumber,
+      isFinalPvc = false
+    } = body;
+    
+    if (!contractId || !billNo || !dateOfMeasurement) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Get user session and check permissions
+    const session = await getServerSession();
+    
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Get user details
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true, role: true }
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if bill exists
+    const existingBill = await prisma.bill.findUnique({
+      where: { id },
+      include: {
+        contract: true,
+        workClassification: true,
+        pvcCalculation: true
+      }
+    });
+
+    if (!existingBill) {
+      return NextResponse.json(
+        { error: 'Bill not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if user can edit this bill
+    const { allowed, reason } = await canUserEditBill(user.id, id, user.role);
+
+    if (!allowed) {
+      return NextResponse.json(
+        { error: reason || 'You do not have permission to edit this bill' },
+        { status: 403 }
+      );
+    }
+
+    // Get the contract to access base month
+    const contract = await prisma.contract.findUnique({
+      where: { id: contractId }
+    });
+    
+    if (!contract) {
+      return NextResponse.json(
+        { error: 'Contract not found' },
+        { status: 404 }
+      );
+    }
+
+    const measurementDate = new Date(dateOfMeasurement);
+    const quarter = getQuarterFromDate(measurementDate, contract.baseMonth);
+    
+    // Get classification components
+    let classificationComponents = null;
+    let finalClassificationCode = '7A'; // Default
+    let selectedClassification = null;
+
+    // If we have classification entries (new system), use weighted components
+    if (classificationEntries && classificationEntries.length > 0) {
+      const { calculateWeightedComponents } = await import('@/lib/pvc-calculations');
+      const weightedComponents = await calculateWeightedComponents(classificationEntries);
+      
+      classificationComponents = {
+        fixed: weightedComponents.fixed,
+        labour: weightedComponents.labour,
+        steel: weightedComponents.steel,
+        cement: weightedComponents.cement,
+        plantMachinery: weightedComponents.plantMachinery,
+        fuel: weightedComponents.fuel,
+        otherMaterials: weightedComponents.otherMaterials,
+        explosives: weightedComponents.explosives,
+        steelTypes: weightedComponents.steelTypes // CRITICAL: Include steel types for accurate steel PVC calculation
+      };
+      
+      // Get the first classification for code reference
+      if (classificationEntries[0].subClassificationId) {
+        const firstSubClass = await prisma.subClassification.findUnique({
+          where: { id: classificationEntries[0].subClassificationId },
+          include: { group: true }
+        });
+        if (firstSubClass?.group) {
+          // Get the parent classification from the group
+          const parentClassification = await prisma.classification.findUnique({
+            where: { id: firstSubClass.groupId }
+          });
+          if (parentClassification) {
+            finalClassificationCode = parentClassification.code;
+            selectedClassification = parentClassification;
+          }
+        }
+      }
+    }
+    // Legacy: single classification field
+    else if (workClassification) {
+      // First try to find by ID (new approach)
+      selectedClassification = await prisma.classification.findUnique({
+        where: { id: workClassification }
+      });
+
+      // If not found by ID, try by code (backward compatibility)
+      if (!selectedClassification) {
+        selectedClassification = await prisma.classification.findFirst({
+          where: { code: workClassification, isActive: true }
+        });
+      }
+
+      if (selectedClassification) {
+        classificationComponents = {
+          fixed: selectedClassification.fixed,
+          labour: selectedClassification.labour,
+          steel: selectedClassification.steel,
+          cement: selectedClassification.cement,
+          plantMachinery: selectedClassification.plantMachinery,
+          fuel: selectedClassification.fuel,
+          otherMaterials: selectedClassification.otherMaterials,
+          explosives: selectedClassification.explosives,
+          steelTypes: Array.isArray(steelTypes) && steelTypes.length > 0 ? steelTypes : undefined
+        };
+        finalClassificationCode = selectedClassification.code;
+      }
+    }
+
+    // If no classification found, try to get default
+    if (!classificationComponents) {
+      selectedClassification = await prisma.classification.findFirst({
+        where: { isDefault: true, isActive: true }
+      });
+
+      if (selectedClassification) {
+        classificationComponents = {
+          fixed: selectedClassification.fixed,
+          labour: selectedClassification.labour,
+          steel: selectedClassification.steel,
+          cement: selectedClassification.cement,
+          plantMachinery: selectedClassification.plantMachinery,
+          fuel: selectedClassification.fuel,
+          otherMaterials: selectedClassification.otherMaterials,
+          explosives: selectedClassification.explosives,
+          steelTypes: Array.isArray(steelTypes) && steelTypes.length > 0 ? steelTypes : undefined
+        };
+        finalClassificationCode = selectedClassification.code;
+      }
+    }
+
+    // First, delete existing classification entries
+    await prisma.billClassificationEntry.deleteMany({
+      where: { billId: id }
+    });
+
+    // Determine if this is a contractor user
+    const isContractor = user.role === 'user' || user.role === 'contractor';
+
+    // Update the bill
+    const updatedBill = await prisma.bill.update({
+      where: { id },
+      data: {
+        contractId,
+        workClassificationId: selectedClassification?.id,
+        billNo,
+        grossBillAmount: parseFloat(grossBillAmount),
+        billAmount: parseFloat(billAmount),
+        cementAmount: cementAmount ? parseFloat(cementAmount) : 0,
+        steelTmtBarsAmount: steelTmtBarsAmount ? parseFloat(steelTmtBarsAmount) : 0,
+        steelAngleChannelAmount: steelAngleChannelAmount ? parseFloat(steelAngleChannelAmount) : 0,
+        steelPlatesAmount: steelPlatesAmount ? parseFloat(steelPlatesAmount) : 0,
+        steelOtherSectionsAmount: steelOtherSectionsAmount ? parseFloat(steelOtherSectionsAmount) : 0,
+        selectedSteelComponent,
+        steelTypes: Array.isArray(steelTypes) && steelTypes.length > 0 ? steelTypes : [], // Steel types for classification-based calculations
+        dateOfMeasurement: measurementDate,
+        dateOfCompletion: dateOfCompletion ? new Date(dateOfCompletion) : null,
+        quarter,
+        zone: zone || null,
+        pvcNumber: pvcNumber || null,
+        isFinalPvc: isFinalPvc || false,
+        subClassifications: [], // Clear old sub-classifications
+        nonScheduleItems: nonScheduleItems && nonScheduleItems.length > 0 ? nonScheduleItems : [],
+        // Mark as edited for contractors (one-time edit restriction)
+        hasBeenEditedOnce: isContractor ? true : existingBill.hasBeenEditedOnce,
+        lastEditedBy: user.id,
+        lastEditedAt: new Date()
+      }
+    });
+
+    // Create new classification entries
+    if (classificationEntries && classificationEntries.length > 0) {
+      await prisma.billClassificationEntry.createMany({
+        data: classificationEntries.map((entry: any) => ({
+          billId: id,
+          subClassificationId: entry.subClassificationId,
+          amount: parseFloat(entry.amount)
+        }))
+      });
+    }
+
+    // Get all possible indices for comprehensive calculation
+    const allIndices = [
+      'Labour', 'RBI Plant Machinery', 'MPNG Fuel', 'RBI Other Materials',
+      'RBI Cement', 'RBI Explosives',
+      'Steel TMT Bars', 'Steel Angle/Channel', 'Steel Plates', 'Steel Other Sections'
+    ];
+    
+    const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, calculationMethod);
+    
+    // CRITICAL FIX: Calculate weighted components if multiple classification entries exist
+    // This ensures PVC is calculated based on the actual work mix, not just a single classification
+    let componentsForPvcCalculation = classificationComponents;
+    
+    if (classificationEntries && Array.isArray(classificationEntries) && classificationEntries.length > 0) {
+      console.log('\n🔍 [BILL UPDATE] ===== CALCULATING WEIGHTED COMPONENTS FROM CLASSIFICATION ENTRIES =====');
+      console.log(`📊 Number of classification entries: ${classificationEntries.length}`);
+      console.log(`📊 Steel Types from bill update: ${Array.isArray(steelTypes) && steelTypes.length > 0 ? steelTypes.join(', ') : 'None'}`);
+      
+      // Calculate weighted components based on all classification entries
+      const weightedComponents = await calculateWeightedComponents(classificationEntries);
+      
+      console.log('📊 Weighted Components:');
+      console.log(`   Total Amount: ₹${weightedComponents.totalAmount.toLocaleString()}`);
+      console.log(`   Labour: ${weightedComponents.labour.toFixed(2)}%`);
+      console.log(`   Cement: ${weightedComponents.cement.toFixed(2)}%`);
+      console.log(`   Steel: ${weightedComponents.steel.toFixed(2)}%`);
+      console.log(`   Plant Machinery: ${weightedComponents.plantMachinery.toFixed(2)}%`);
+      console.log(`   Fuel: ${weightedComponents.fuel.toFixed(2)}%`);
+      console.log(`   Other Materials: ${weightedComponents.otherMaterials.toFixed(2)}%`);
+      console.log(`   Explosives: ${weightedComponents.explosives.toFixed(2)}%`);
+      console.log(`   Steel Types from entries: ${weightedComponents.steelTypes ? weightedComponents.steelTypes.join(', ') : 'None'}`);
+      console.log('🔍 [BILL UPDATE] ===== WEIGHTED COMPONENTS CALCULATION COMPLETE =====\n');
+      
+      // CRITICAL FIX: Use bill-level steel types if weighted components don't have any
+      // This ensures steel types from the bill form are used even if classification entries don't have them
+      const finalSteelTypes = weightedComponents.steelTypes && weightedComponents.steelTypes.length > 0
+        ? weightedComponents.steelTypes
+        : (Array.isArray(steelTypes) && steelTypes.length > 0 ? steelTypes : undefined);
+      
+      console.log(`🔧 [BILL UPDATE] Final Steel Types for calculation: ${finalSteelTypes ? finalSteelTypes.join(', ') : 'None (will use all steel types average)'}`);
+      
+      componentsForPvcCalculation = {
+        ...weightedComponents,
+        steelTypes: finalSteelTypes
+      };
+      
+      // CRITICAL: Update bill with final steel types
+      if (finalSteelTypes && finalSteelTypes.length > 0) {
+        console.log(`🔧 [BILL UPDATE] Updating bill with steel types: [${finalSteelTypes.join(', ')}]`);
+        await prisma.bill.update({
+          where: { id },
+          data: {
+            steelTypes: finalSteelTypes
+          }
+        });
+      }
+    } else {
+      console.log('\n⚠️  [BILL UPDATE] No classification entries provided, using default classification components\n');
+    }
+    
+    // Calculate PVC with GCC 17A/17B extension compliance
+    let extensionCompliantResult;
+    try {
+      extensionCompliantResult = await calculateExtensionCompliantPvc(
+        contractId,
+        parseFloat(billAmount),
+        measurementDate,
+        quarterlyAverages,
+        finalClassificationCode,
+        true, // Include detailed steps for logging
+        componentsForPvcCalculation // Pass weighted components or default classification components
+      );
+      
+      if (extensionCompliantResult.appliedRestrictions.isRestricted) {
+        console.log('✅ 17B Restriction Applied in Bill Update');
+      }
+    } catch (extensionError) {
+      console.error('Extension compliance calculation failed, using fallback:', extensionError);
+      
+      // Fallback to legacy calculation
+      let pvcResults;
+      if (classificationComponents) {
+        pvcResults = calculateClassificationBasedPvcWithComponents(parseFloat(billAmount), quarterlyAverages, classificationComponents);
+      } else {
+        pvcResults = await calculateClassificationBasedPvc(parseFloat(billAmount), quarterlyAverages, finalClassificationCode);
+      }
+      
+      extensionCompliantResult = {
+        ...pvcResults,
+        extensionDetails: {
+          isExtended: false,
+          isInExtensionPeriod: false,
+          requiresPvcRestriction: false
+        },
+        appliedRestrictions: {
+          isRestricted: false
+        }
+      };
+    }
+    
+    // Calculate dedicated cement and steel PVC (85% each)
+    // CRITICAL: When 17B restriction applies, use capped indices for dedicated cement/steel too
+    let dedicatedCementPvc = 0;
+    let dedicatedSteelPvc = 0;
+    
+    // For tracking financial impact on dedicated components
+    let unrestrictedDedicatedCementPvc = 0;
+    let unrestrictedDedicatedSteelPvc = 0;
+    
+    if (extensionCompliantResult.appliedRestrictions.isRestricted && 
+        extensionCompliantResult.appliedRestrictions.restrictionType === '17B_INDEX_CAP') {
+      // First calculate unrestricted values for comparison
+      unrestrictedDedicatedCementPvc = calculateDedicatedCementPvc(cementAmount ? parseFloat(cementAmount) : 0, quarterlyAverages);
+      
+      const unrestrictedSteelTmt = calculateDedicatedSteelPvc(steelTmtBarsAmount ? parseFloat(steelTmtBarsAmount) : 0, quarterlyAverages, 'Steel TMT Bars');
+      const unrestrictedSteelAngleChannel = calculateDedicatedSteelPvc(steelAngleChannelAmount ? parseFloat(steelAngleChannelAmount) : 0, quarterlyAverages, 'Steel Angle/Channel');
+      const unrestrictedSteelPlates = calculateDedicatedSteelPvc(steelPlatesAmount ? parseFloat(steelPlatesAmount) : 0, quarterlyAverages, 'Steel Plates');
+      const unrestrictedSteelOtherSections = calculateDedicatedSteelPvc(steelOtherSectionsAmount ? parseFloat(steelOtherSectionsAmount) : 0, quarterlyAverages, 'Steel Other Sections');
+      
+      unrestrictedDedicatedSteelPvc = unrestrictedSteelTmt + unrestrictedSteelAngleChannel + unrestrictedSteelPlates + unrestrictedSteelOtherSections;
+      
+      // Get the capped indices for restricted calculation
+      const restrictionDate = extensionCompliantResult.extensionDetails.pvcRestrictionDate || 
+                              extensionCompliantResult.extensionDetails.originalCompletionDate;
+      if (!restrictionDate) {
+        throw new Error('No restriction date found for 17B calculation');
+      }
+      
+      // Get the capped indices using the same method as the main PVC calculation
+      const { cappedIndices: cappedIndicesMap } = await getCappedIndices(
+        restrictionDate,
+        quarterlyAverages,
+        contract.baseMonth
+      );
+      
+      // Create restricted quarterly averages using the capped indices
+      const restrictedQuarterlyAverages: typeof quarterlyAverages = quarterlyAverages.map(qa => ({
+        ...qa,
+        average: cappedIndicesMap[qa.indexName] !== undefined ? cappedIndicesMap[qa.indexName] : qa.average
+      }));
+      
+      dedicatedCementPvc = calculateDedicatedCementPvc(cementAmount ? parseFloat(cementAmount) : 0, restrictedQuarterlyAverages);
+      
+      const dedicatedSteelTmtPvc = calculateDedicatedSteelPvc(steelTmtBarsAmount ? parseFloat(steelTmtBarsAmount) : 0, restrictedQuarterlyAverages, 'Steel TMT Bars');
+      const dedicatedSteelAngleChannelPvc = calculateDedicatedSteelPvc(steelAngleChannelAmount ? parseFloat(steelAngleChannelAmount) : 0, restrictedQuarterlyAverages, 'Steel Angle/Channel');
+      const dedicatedSteelPlatesPvc = calculateDedicatedSteelPvc(steelPlatesAmount ? parseFloat(steelPlatesAmount) : 0, restrictedQuarterlyAverages, 'Steel Plates');
+      const dedicatedSteelOtherSectionsPvc = calculateDedicatedSteelPvc(steelOtherSectionsAmount ? parseFloat(steelOtherSectionsAmount) : 0, restrictedQuarterlyAverages, 'Steel Other Sections');
+      
+      dedicatedSteelPvc = dedicatedSteelTmtPvc + dedicatedSteelAngleChannelPvc + dedicatedSteelPlatesPvc + dedicatedSteelOtherSectionsPvc;
+    } else {
+      // No restriction or lower indices - use unrestricted quarterly averages
+      dedicatedCementPvc = calculateDedicatedCementPvc(cementAmount ? parseFloat(cementAmount) : 0, quarterlyAverages);
+      
+      const dedicatedSteelTmtPvc = calculateDedicatedSteelPvc(steelTmtBarsAmount ? parseFloat(steelTmtBarsAmount) : 0, quarterlyAverages, 'Steel TMT Bars');
+      const dedicatedSteelAngleChannelPvc = calculateDedicatedSteelPvc(steelAngleChannelAmount ? parseFloat(steelAngleChannelAmount) : 0, quarterlyAverages, 'Steel Angle/Channel');
+      const dedicatedSteelPlatesPvc = calculateDedicatedSteelPvc(steelPlatesAmount ? parseFloat(steelPlatesAmount) : 0, quarterlyAverages, 'Steel Plates');
+      const dedicatedSteelOtherSectionsPvc = calculateDedicatedSteelPvc(steelOtherSectionsAmount ? parseFloat(steelOtherSectionsAmount) : 0, quarterlyAverages, 'Steel Other Sections');
+      
+      dedicatedSteelPvc = dedicatedSteelTmtPvc + dedicatedSteelAngleChannelPvc + dedicatedSteelPlatesPvc + dedicatedSteelOtherSectionsPvc;
+      
+      unrestrictedDedicatedCementPvc = dedicatedCementPvc;
+      unrestrictedDedicatedSteelPvc = dedicatedSteelPvc;
+    }
+    
+    // ================================================================================
+    // CRITICAL: TOTAL PVC CALCULATION - REVISED LOGIC
+    // ================================================================================
+    // When dedicated cement/steel amounts are provided, they REPLACE classification cement/steel
+    // Formula: TotalPVC = (classification WITHOUT cement/steel) + dedicated cement + dedicated steel
+    //
+    // Components included:
+    // 1. Always from classification: Labour, Plant & Machinery, Fuel, Other Materials, Explosives
+    // 2. Cement: Use dedicated cement if provided, otherwise use classification cement
+    // 3. Steel: Use dedicated steel if provided, otherwise use classification steel
+    // ================================================================================
+    
+    // Determine whether we have dedicated components
+    const hasDedicatedCement = (cementAmount && parseFloat(cementAmount) > 0);
+    const hasDedicatedSteel = (
+      (steelTmtBarsAmount && parseFloat(steelTmtBarsAmount) > 0) ||
+      (steelAngleChannelAmount && parseFloat(steelAngleChannelAmount) > 0) ||
+      (steelPlatesAmount && parseFloat(steelPlatesAmount) > 0) ||
+      (steelOtherSectionsAmount && parseFloat(steelOtherSectionsAmount) > 0)
+    );
+    
+    // Calculate classification-based cement and steel (will be excluded if dedicated exists)
+    const classificationCementPvc = extensionCompliantResult.cementPvc || 0;
+    const classificationSteelPvc = extensionCompliantResult.steelPvc || 0;
+    
+    // Calculate the final cement PVC to use
+    const finalCementPvc = hasDedicatedCement ? dedicatedCementPvc : classificationCementPvc;
+    
+    // Calculate the final steel PVC to use
+    const finalSteelPvc = hasDedicatedSteel ? dedicatedSteelPvc : classificationSteelPvc;
+    
+    // Calculate total PVC using the revised logic
+    let totalPvcWithDedicated = 
+      extensionCompliantResult.labourPvc +          // Labour from classification (always)
+      extensionCompliantResult.plantMachineryPvc +  // Plant & Machinery from classification (always)
+      extensionCompliantResult.fuelPowerPvc +       // Fuel & Power from classification (always)
+      extensionCompliantResult.otherMaterialsPvc +  // Other Materials from classification (always)
+      extensionCompliantResult.explosivesPvc +      // Explosives from classification (always)
+      finalCementPvc +                              // Cement: dedicated if exists, else classification
+      finalSteelPvc;                                // Steel: dedicated if exists, else classification
+    
+    console.log('\n🧮 [BILL UPDATE] ===== TOTAL PVC CALCULATION =====');
+    console.log(`   Labour PVC: ₹${extensionCompliantResult.labourPvc.toFixed(2)}`);
+    console.log(`   Plant & Machinery PVC: ₹${extensionCompliantResult.plantMachineryPvc.toFixed(2)}`);
+    console.log(`   Fuel & Power PVC: ₹${extensionCompliantResult.fuelPowerPvc.toFixed(2)}`);
+    console.log(`   Other Materials PVC: ₹${extensionCompliantResult.otherMaterialsPvc.toFixed(2)}`);
+    console.log(`   Explosives PVC: ₹${extensionCompliantResult.explosivesPvc.toFixed(2)}`);
+    console.log(`   Cement PVC (${hasDedicatedCement ? 'dedicated' : 'classification'}): ₹${finalCementPvc.toFixed(2)}`);
+    console.log(`   Steel PVC (${hasDedicatedSteel ? 'dedicated' : 'classification'}): ₹${finalSteelPvc.toFixed(2)}`);
+    console.log(`   TOTAL PVC: ₹${totalPvcWithDedicated.toFixed(2)}`);
+    console.log('🧮 [BILL UPDATE] ===== CALCULATION COMPLETE =====\n');
+    
+    // For 17B bills, calculate the original (unrestricted) and restricted amounts using the same logic
+    // The extensionCompliantResult provides originalPvcAmount and restrictedPvcAmount for classification
+    // We need to apply the same replacement logic: dedicated replaces classification for cement/steel
+    
+    let adjustedOriginalPvcAmount;
+    let adjustedRestrictedPvcAmount;
+    
+    if (extensionCompliantResult.appliedRestrictions.isRestricted) {
+      // Start with classification-based amounts from extensionCompliantResult
+      const originalClassification = extensionCompliantResult.appliedRestrictions.originalPvcAmount || extensionCompliantResult.totalPvc;
+      const restrictedClassification = extensionCompliantResult.appliedRestrictions.restrictedPvcAmount || extensionCompliantResult.totalPvc;
+      
+      // Get classification cement and steel PVCs (unrestricted and restricted)
+      const unrestrictedClassCement = extensionCompliantResult.appliedRestrictions.unrestrictedCementPvc || classificationCementPvc;
+      const unrestrictedClassSteel = extensionCompliantResult.appliedRestrictions.unrestrictedSteelPvc || classificationSteelPvc;
+      const restrictedClassCement = extensionCompliantResult.appliedRestrictions.restrictedCementPvc || classificationCementPvc;
+      const restrictedClassSteel = extensionCompliantResult.appliedRestrictions.restrictedSteelPvc || classificationSteelPvc;
+      
+      // Apply replacement logic for unrestricted (original) amount
+      if (hasDedicatedCement || hasDedicatedSteel) {
+        adjustedOriginalPvcAmount = originalClassification;
+        if (hasDedicatedCement) {
+          adjustedOriginalPvcAmount = adjustedOriginalPvcAmount - unrestrictedClassCement + unrestrictedDedicatedCementPvc;
+        }
+        if (hasDedicatedSteel) {
+          adjustedOriginalPvcAmount = adjustedOriginalPvcAmount - unrestrictedClassSteel + unrestrictedDedicatedSteelPvc;
+        }
+      } else {
+        adjustedOriginalPvcAmount = originalClassification;
+      }
+      
+      // Apply replacement logic for restricted amount
+      if (hasDedicatedCement || hasDedicatedSteel) {
+        adjustedRestrictedPvcAmount = restrictedClassification;
+        if (hasDedicatedCement) {
+          adjustedRestrictedPvcAmount = adjustedRestrictedPvcAmount - restrictedClassCement + dedicatedCementPvc;
+        }
+        if (hasDedicatedSteel) {
+          adjustedRestrictedPvcAmount = adjustedRestrictedPvcAmount - restrictedClassSteel + dedicatedSteelPvc;
+        }
+      } else {
+        adjustedRestrictedPvcAmount = restrictedClassification;
+      }
+    } else {
+      // No restriction - use the calculated total
+      adjustedOriginalPvcAmount = totalPvcWithDedicated;
+      adjustedRestrictedPvcAmount = totalPvcWithDedicated;
+    }
+    
+    // Calculate total savings including dedicated cement/steel
+    const adjustedSavings = Math.max(0, adjustedOriginalPvcAmount - adjustedRestrictedPvcAmount);
+    
+    // Calculate previous cumulative PVC (excluding current bill)
+    const previousPvcCalculations = await prisma.pvcCalculation.findMany({
+      where: { 
+        contractId,
+        billId: { not: id } // Exclude current bill
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+    
+    const previousPvcTotal = previousPvcCalculations.reduce((sum, calc) => sum + calc.totalPvc, 0);
+    
+    // ====== LOG PVC CALCULATION FOR BILL UPDATE ======
+    const calcLog = PVCCalculationLogger.createLog(
+      'UPDATE',
+      billNo,
+      parseFloat(billAmount),
+      contract.baseMonth.toISOString().slice(0, 10),
+      measurementDate.toISOString().slice(0, 10)
+    );
+    
+    // Log classification components (similar to CREATE)
+    if (classificationEntries && classificationEntries.length > 0) {
+      for (const entry of classificationEntries) {
+        const subClass = await prisma.subClassification.findUnique({
+          where: { id: entry.subClassificationId }
+        });
+        
+        if (subClass) {
+          const entryComponents = [];
+          const entryAmount = parseFloat(entry.amount);
+          
+          // Add labour component
+          if (subClass.labour > 0) {
+            const labourIndex = quarterlyAverages.find(qa => qa.indexName === 'Labour');
+            if (labourIndex) {
+              const componentAmount = (entryAmount * subClass.labour) / 100;
+              const variationRatio = (labourIndex.average / labourIndex.baseValue) - 1;
+              const componentPvc = componentAmount * variationRatio;
+              entryComponents.push({
+                name: 'Labour',
+                percentage: subClass.labour,
+                baseIndex: labourIndex.baseValue,
+                measurementIndex: labourIndex.average,
+                variationRatio,
+                billAmount: componentAmount,
+                pvcAmount: componentPvc
+              });
+            }
+          }
+          
+          PVCCalculationLogger.addClassification(calcLog, subClass.name || subClass.code, entryComponents, 0);
+        }
+      }
+    }
+    
+    // Log steel components
+    const totalDedicatedSteelPvc = dedicatedSteelPvc; // From calculation above
+    if (totalDedicatedSteelPvc > 0) {
+      if (steelTmtBarsAmount > 0) {
+        const steelTmtIndex = quarterlyAverages.find(qa => qa.indexName === 'Steel TMT Bars');
+        if (steelTmtIndex) {
+          const dedicatedTmtPvc = calculateDedicatedSteelPvc(
+            steelTmtBarsAmount ? parseFloat(steelTmtBarsAmount) : 0,
+            quarterlyAverages,
+            'Steel TMT Bars'
+          );
+          PVCCalculationLogger.addSteelComponent(calcLog, {
+            type: 'Steel TMT Bars',
+            percentage: 85,
+            baseIndex: steelTmtIndex.baseValue,
+            measurementIndex: steelTmtIndex.average,
+            variationRatio: (steelTmtIndex.average / steelTmtIndex.baseValue) - 1,
+            billAmount: parseFloat(steelTmtBarsAmount),
+            pvcAmount: dedicatedTmtPvc
+          });
+        }
+      }
+      
+      if (steelAngleChannelAmount > 0) {
+        const steelAngleIndex = quarterlyAverages.find(qa => qa.indexName === 'Steel Angle/Channel');
+        if (steelAngleIndex) {
+          const dedicatedAnglePvc = calculateDedicatedSteelPvc(
+            steelAngleChannelAmount ? parseFloat(steelAngleChannelAmount) : 0,
+            quarterlyAverages,
+            'Steel Angle/Channel'
+          );
+          PVCCalculationLogger.addSteelComponent(calcLog, {
+            type: 'Steel Angle/Channel',
+            percentage: 85,
+            baseIndex: steelAngleIndex.baseValue,
+            measurementIndex: steelAngleIndex.average,
+            variationRatio: (steelAngleIndex.average / steelAngleIndex.baseValue) - 1,
+            billAmount: parseFloat(steelAngleChannelAmount),
+            pvcAmount: dedicatedAnglePvc
+          });
+        }
+      }
+      
+      if (steelPlatesAmount > 0) {
+        const steelPlatesIndex = quarterlyAverages.find(qa => qa.indexName === 'Steel Plates');
+        if (steelPlatesIndex) {
+          const dedicatedPlatesPvc = calculateDedicatedSteelPvc(
+            steelPlatesAmount ? parseFloat(steelPlatesAmount) : 0,
+            quarterlyAverages,
+            'Steel Plates'
+          );
+          PVCCalculationLogger.addSteelComponent(calcLog, {
+            type: 'Steel Plates',
+            percentage: 85,
+            baseIndex: steelPlatesIndex.baseValue,
+            measurementIndex: steelPlatesIndex.average,
+            variationRatio: (steelPlatesIndex.average / steelPlatesIndex.baseValue) - 1,
+            billAmount: parseFloat(steelPlatesAmount),
+            pvcAmount: dedicatedPlatesPvc
+          });
+        }
+      }
+      
+      if (steelOtherSectionsAmount > 0) {
+        const steelOtherIndex = quarterlyAverages.find(qa => qa.indexName === 'Steel Other Sections');
+        if (steelOtherIndex) {
+          const dedicatedOtherPvc = calculateDedicatedSteelPvc(
+            steelOtherSectionsAmount ? parseFloat(steelOtherSectionsAmount) : 0,
+            quarterlyAverages,
+            'Steel Other Sections'
+          );
+          PVCCalculationLogger.addSteelComponent(calcLog, {
+            type: 'Steel Other Sections',
+            percentage: 85,
+            baseIndex: steelOtherIndex.baseValue,
+            measurementIndex: steelOtherIndex.average,
+            variationRatio: (steelOtherIndex.average / steelOtherIndex.baseValue) - 1,
+            billAmount: parseFloat(steelOtherSectionsAmount),
+            pvcAmount: dedicatedOtherPvc
+          });
+        }
+      }
+    }
+    
+    // Log dedicated cement
+    if (dedicatedCementPvc > 0) {
+      const cementIndex = quarterlyAverages.find(qa => qa.indexName === 'RBI Cement');
+      if (cementIndex) {
+        PVCCalculationLogger.addDedicatedCement(calcLog, {
+          type: 'cement',
+          baseIndex: cementIndex.baseValue,
+          measurementIndex: cementIndex.average,
+          variationRatio: (cementIndex.average / cementIndex.baseValue) - 1,
+          billAmount: parseFloat(cementAmount),
+          pvcAmount: dedicatedCementPvc
+        });
+      }
+    }
+    
+    // Log dedicated steel (combined)
+    if (totalDedicatedSteelPvc > 0) {
+      PVCCalculationLogger.addDedicatedSteel(calcLog, {
+        type: 'steel',
+        baseIndex: 0, // Combined value
+        measurementIndex: 0,
+        variationRatio: 0,
+        billAmount: 0,
+        pvcAmount: totalDedicatedSteelPvc
+      });
+    }
+    
+    // Finalize and log
+    PVCCalculationLogger.finalize(
+      calcLog,
+      extensionCompliantResult.labourPvc + extensionCompliantResult.plantMachineryPvc + 
+        extensionCompliantResult.fuelPowerPvc + extensionCompliantResult.otherMaterialsPvc + 
+        extensionCompliantResult.cementPvc + extensionCompliantResult.explosivesPvc,
+      extensionCompliantResult.steelPvc,
+      dedicatedCementPvc,
+      totalDedicatedSteelPvc,
+      totalPvcWithDedicated
+    );
+    
+    PVCCalculationLogger.logCalculation(calcLog);
+    // ====== END LOG PVC CALCULATION ======
+    
+    // Update or create PVC calculation with extension compliance data
+    if (existingBill.pvcCalculation) {
+      // Update existing PVC calculation
+      // Store both classification-based and dedicated values
+      // The frontend/PDF will use dedicated when available, classification otherwise
+      await prisma.pvcCalculation.update({
+        where: { id: existingBill.pvcCalculation.id },
+        data: {
+          labourPvc: extensionCompliantResult.labourPvc,
+          plantMachineryPvc: extensionCompliantResult.plantMachineryPvc,
+          fuelPowerPvc: extensionCompliantResult.fuelPowerPvc,
+          otherMaterialsPvc: extensionCompliantResult.otherMaterialsPvc,
+          cementPvc: extensionCompliantResult.cementPvc,  // Store classification cement
+          explosivesPvc: extensionCompliantResult.explosivesPvc,
+          steelPvc: extensionCompliantResult.steelPvc,    // Store classification steel
+          dedicatedCementPvc: dedicatedCementPvc,         // Store dedicated cement (if exists)
+          dedicatedSteelPvc: dedicatedSteelPvc,           // Store dedicated steel (if exists)
+          totalPvc: totalPvcWithDedicated,
+          previousPvcTotal,
+          cumulativePvc: previousPvcTotal + totalPvcWithDedicated,
+          
+          // GCC 17A/17B extension compliance fields
+          isExtensionPeriod: extensionCompliantResult.extensionDetails.isInExtensionPeriod,
+          extensionType: extensionCompliantResult.extensionDetails.extensionType,
+          isIndexCapped: extensionCompliantResult.appliedRestrictions.isRestricted,
+          indexCapDate: extensionCompliantResult.extensionDetails.pvcRestrictionDate,
+          
+          // Capped indices (if restricted)
+          cappedLabourIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.labour,
+          cappedPlantIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.plantMachinery,
+          cappedFuelIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.fuel,
+          cappedMaterialsIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.otherMaterials,
+          cappedCementIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.cement,
+          cappedSteelIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.steel,
+          cappedExplosivesIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.explosives,
+          
+          // PVC restriction details
+          pvcRestrictionReason: extensionCompliantResult.appliedRestrictions.isRestricted 
+            ? `GCC ${extensionCompliantResult.extensionDetails.extensionType} Extension - PVC restriction applied as per clause 46A.10`
+            : null,
+          originalPvcAmount: adjustedOriginalPvcAmount,
+          restrictedPvcAmount: adjustedRestrictedPvcAmount,
+          pvcSavingsDueToRestriction: adjustedSavings
+        }
+      });
+    } else {
+      // Create new PVC calculation with extension compliance data
+      // Store both classification-based and dedicated values
+      // The frontend/PDF will use dedicated when available, classification otherwise
+      await prisma.pvcCalculation.create({
+        data: {
+          contractId,
+          billId: id,
+          labourPvc: extensionCompliantResult.labourPvc,
+          plantMachineryPvc: extensionCompliantResult.plantMachineryPvc,
+          fuelPowerPvc: extensionCompliantResult.fuelPowerPvc,
+          otherMaterialsPvc: extensionCompliantResult.otherMaterialsPvc,
+          cementPvc: extensionCompliantResult.cementPvc,  // Store classification cement
+          explosivesPvc: extensionCompliantResult.explosivesPvc,
+          steelPvc: extensionCompliantResult.steelPvc,    // Store classification steel
+          dedicatedCementPvc: dedicatedCementPvc,         // Store dedicated cement (if exists)
+          dedicatedSteelPvc: dedicatedSteelPvc,           // Store dedicated steel (if exists)
+          totalPvc: totalPvcWithDedicated,
+          previousPvcTotal,
+          cumulativePvc: previousPvcTotal + totalPvcWithDedicated,
+          
+          // GCC 17A/17B extension compliance fields
+          isExtensionPeriod: extensionCompliantResult.extensionDetails.isInExtensionPeriod,
+          extensionType: extensionCompliantResult.extensionDetails.extensionType,
+          isIndexCapped: extensionCompliantResult.appliedRestrictions.isRestricted,
+          indexCapDate: extensionCompliantResult.extensionDetails.pvcRestrictionDate,
+          
+          // Capped indices (if restricted)
+          cappedLabourIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.labour,
+          cappedPlantIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.plantMachinery,
+          cappedFuelIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.fuel,
+          cappedMaterialsIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.otherMaterials,
+          cappedCementIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.cement,
+          cappedSteelIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.steel,
+          cappedExplosivesIndex: extensionCompliantResult.appliedRestrictions.cappedIndices?.explosives,
+          
+          // PVC restriction details
+          pvcRestrictionReason: extensionCompliantResult.appliedRestrictions.isRestricted 
+            ? `GCC ${extensionCompliantResult.extensionDetails.extensionType} Extension - PVC restriction applied as per clause 46A.10`
+            : null,
+          originalPvcAmount: adjustedOriginalPvcAmount,
+          restrictedPvcAmount: adjustedRestrictedPvcAmount,
+          pvcSavingsDueToRestriction: adjustedSavings
+        }
+      });
+    }
+    
+    // Update all subsequent bills' cumulative PVC amounts
+    const subsequentCalculations = await prisma.pvcCalculation.findMany({
+      where: {
+        contractId,
+        createdAt: { gt: existingBill.pvcCalculation?.createdAt || new Date() }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    let runningTotal = previousPvcTotal + totalPvcWithDedicated;
+    for (const calc of subsequentCalculations) {
+      await prisma.pvcCalculation.update({
+        where: { id: calc.id },
+        data: {
+          previousPvcTotal: runningTotal,
+          cumulativePvc: runningTotal + calc.totalPvc
+        }
+      });
+      runningTotal += calc.totalPvc;
+    }
+    
+    // Return updated bill with PVC calculation
+    const billWithPvc = await prisma.bill.findUnique({
+      where: { id },
+      include: {
+        contract: true,
+        workClassification: true,
+        pvcCalculation: true
+      }
+    });
+    
+    return NextResponse.json(billWithPvc);
+  } catch (error) {
+    console.error('Error updating bill:', error);
+    return NextResponse.json(
+      { error: 'Failed to update bill' },
+      { status: 500 }
+    );
+  }
+}

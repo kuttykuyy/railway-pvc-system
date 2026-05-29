@@ -1,0 +1,50 @@
+{
+  "source": "https://eaindustry.nic.in",
+  "baseYear": "2011-12",
+  "downloadUrlPattern": "https://eaindustry.nic.in/indx_download_1112/monthly_index_{YYYYMM}.xls",
+  "lastUpdated": "2026-01-25",
+  "indices": [
+    {
+      "name": "RBI Cement",
+      "wpiCode": "1313050000",
+      "wpiName": "e. Manufacture of cement, lime and plaster",
+      "wpiCategory": "Manufactured Products",
+      "wpiSubcategory": "Cement, Lime & Plaster",
+      "weight": 1.6448,
+      "description": "WPI index for cement manufacturing"
+    },
+    {
+      "name": "RBI Plant Machinery",
+      "wpiCode": "1318110000",
+      "wpiName": "k. Manufacture of machinery for mining, quarrying and construction",
+      "wpiCategory": "Manufactured Products",
+      "wpiSubcategory": "Mining, Quarrying & Construction Machinery",
+      "weight": 0.47463,
+      "description": "WPI index for mining, quarrying and construction machinery"
+    },
+    {
+      "name": "RBI Explosives",
+      "wpiCode": "1310070011",
+      "wpiName": "Explosive",
+      "wpiCategory": "Manufactured Products",
+      "wpiSubcategory": "Chemicals and Chemical Products",
+      "weight": 0.08728,
+      "description": "WPI index for explosives"
+    },
+    {
+      "name": "RBI Other Materials",
+      "wpiCode": "1000000000",
+      "wpiName": "All commodities",
+      "wpiCategory": "All Commodities",
+      "wpiSubcategory": "All Commodities",
+      "weight": 100,
+      "description": "WPI All Commodities index used for other materials"
+    }
+  ],
+  "notes": [
+    "Labour index comes from Labour Bureau (CPI-IW), not WPI",
+    "Steel indices use actual steel prices, not WPI",
+    "MPNG Fuel index uses PPAC daily diesel prices, not WPI",
+    "Latest two months in WPI data are typically provisional"
+  ]
+}

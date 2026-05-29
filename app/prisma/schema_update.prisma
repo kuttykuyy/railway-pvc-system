@@ -1,0 +1,63 @@
+
+// This is a proposed update to the schema structure
+// Main classification holds general info, sub-classifications hold component percentages
+
+// Main Classification (Category level: Earthwork, Tunnelling, Bridges, etc.)
+model MainClassification {
+  id          String   @id @default(cuid())
+  code        String   @unique  // "1", "2", "3", "4", "5", "6", "7", "8", "9"
+  name        String              // "Earthwork in Formation", "Tunnelling Works", etc.
+  description String?
+  
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relationship to sub-classifications
+  subClassifications SubClassification[]
+  
+  @@map("main_classifications")
+}
+
+// Sub-Classification (Specific variants with their own component percentages)
+model SubClassification {
+  id                    String              @id @default(cuid())
+  mainClassification    MainClassification  @relation(fields: [mainClassificationId], references: [id], onDelete: Cascade)
+  mainClassificationId  String
+  
+  code                  String   @unique    // "1A", "1B", "1C", "3A", "3B", etc.
+  name                  String              // "All Items", "Steel Supply", "Cement Supply", etc.
+  description           String?
+  
+  // Component percentages - these are now stored at sub-classification level
+  fixed           Float   @default(15)
+  labour          Float   @default(20)
+  steel           Float   @default(0)
+  cement          Float   @default(0)
+  plantMachinery  Float   @default(20)
+  fuel            Float   @default(15)
+  otherMaterials  Float   @default(20)
+  explosives      Float   @default(10)
+  
+  isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Bills now reference the sub-classification, not the old classification
+  bills       Bill[]   // Bills that use this sub-classification
+  
+  @@index([mainClassificationId])
+  @@map("sub_classifications")
+}
+
+// Update Bill model to reference SubClassification instead of old Classification
+model Bill {
+  // ... existing fields ...
+  
+  // Update this field
+  subClassification    SubClassification? @relation(fields: [subClassificationId], references: [id])
+  subClassificationId  String?
+  
+  // ... rest of existing fields ...
+}

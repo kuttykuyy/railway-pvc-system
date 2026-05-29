@@ -1,0 +1,473 @@
+
+import { prisma } from './db';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from './auth';
+
+export interface PaymentValidationResult {
+  canProcess: boolean;
+  reason?: string;
+  transaction?: any;
+  requiredPayment?: number;
+  isFree?: boolean;
+}
+
+/**
+ * Validates if a user can process a bill (payment confirmation required)
+ */
+export async function validateBillProcessing(
+  request: Request
+): Promise<PaymentValidationResult> {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.email) {
+      return {
+        canProcess: false,
+        reason: 'Authentication required'
+      };
+    }
+
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        customerAccount: true
+      }
+    });
+
+    if (!user) {
+      return {
+        canProcess: false,
+        reason: 'User not found'
+      };
+    }
+
+    // Check if user has a free account (no processing fees)
+    if (user.isFreeAccount) {
+      return {
+        canProcess: true,
+        isFree: true,
+        reason: 'Free account - no processing fee'
+      };
+    }
+
+    // Check if user has custom processing fee (could be 0)
+    if (user.customProcessingFee !== null) {
+      const customFee = user.customProcessingFee;
+      if (customFee === 0) {
+        return {
+          canProcess: true,
+          isFree: true,
+          reason: 'Custom processing fee set to ₹0'
+        };
+      }
+    }
+
+    // Check if user has free trial remaining
+    // Get billing settings
+    const { getBillingSettings } = await import('./admin-settings');
+    const billingSettings = await getBillingSettings();
+    const freeTrialLimit = billingSettings.freeTrialBills || 1;
+    const freeTrialRemaining = Math.max(0, freeTrialLimit - user.freeTrialUsed);
+    
+    if (user.isTrialActive && freeTrialRemaining > 0) {
+      return {
+        canProcess: true,
+        isFree: true,
+        reason: `Free trial bill (${freeTrialRemaining - 1} remaining after this)`
+      };
+    }
+
+    // For paid bills, calculate cost with daily volume discount
+    const baseBillCost = billingSettings.billCost || 10;
+    
+    // Count bills created by this user today (for daily tiered discount)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const dailyBillCount = await prisma.billTransaction.count({
+      where: {
+        userId: user.id,
+        createdAt: { gte: todayStart },
+        status: { in: ['pending', 'paid'] }
+      }
+    });
+
+    // Apply daily tiered discount: 1-5 full price, 6-10 20% off, 11+ 40% off
+    let billCost = baseBillCost;
+    let dailyDiscountInfo = '';
+    if (dailyBillCount >= 10) {
+      billCost = Math.round(baseBillCost * 0.6); // 40% off
+      dailyDiscountInfo = ` (40% daily volume discount applied - bill #${dailyBillCount + 1} today)`;
+    } else if (dailyBillCount >= 5) {
+      billCost = Math.round(baseBillCost * 0.8); // 20% off
+      dailyDiscountInfo = ` (20% daily volume discount applied - bill #${dailyBillCount + 1} today)`;
+    }
+    
+    // Check if user has sufficient balance in their customer account
+    const currentBalance = user.customerAccount?.creditBalance || 0;
+    
+    if (currentBalance >= billCost) {
+      return {
+        canProcess: true,
+        requiredPayment: billCost,
+        reason: `Payment of ₹${billCost} will be deducted from account balance (₹${currentBalance} available)${dailyDiscountInfo}`
+      };
+    }
+
+    // Insufficient balance - payment/credit top-up required
+    return {
+      canProcess: false,
+      requiredPayment: billCost,
+      reason: `Insufficient balance. Required: ₹${billCost}, Available: ₹${currentBalance}. Please add credits to continue.${dailyDiscountInfo}`
+    };
+
+  } catch (error) {
+    console.error('Payment validation error:', error);
+    return {
+      canProcess: false,
+      reason: 'Payment validation failed'
+    };
+  }
+}
+
+/**
+ * Process payment and create bill transaction
+ */
+export async function processPaymentForBill(
+  userId: string,
+  billId: string,
+  paymentMethod: string,
+  paymentReference?: string,
+  razorpayData?: {
+    razorpayOrderId?: string;
+    razorpayPaymentId?: string;
+    razorpaySignature?: string;
+  },
+  paidAmount?: number,
+  totalPvc?: number
+): Promise<{ success: boolean; message: string; transaction?: any }> {
+  try {
+    console.log('🔄 Processing payment for bill:', {
+      userId,
+      billId,
+      paymentMethod,
+      paymentReference,
+      razorpayData,
+      paidAmount
+    });
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { customerAccount: true }
+    });
+
+    if (!user) {
+      console.error('❌ User not found:', userId);
+      return { success: false, message: 'User not found' };
+    }
+
+    // Calculate pricing
+    const currentDate = new Date();
+    
+    // Count today's bills for daily tiered discount
+    const startOfDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
+    const todayBillCount = await prisma.billTransaction.count({
+      where: {
+        userId,
+        createdAt: { gte: startOfDay },
+        status: { in: ['pending', 'paid'] }
+      }
+    });
+
+    // Get billing settings for proper pricing
+    const { getBillingSettings } = await import('./admin-settings');
+    const billingSettings = await getBillingSettings();
+    const baseAmount = billingSettings.billCost || 10;
+    let finalAmount = baseAmount;
+    let discount = 0;
+    let discountType: string | null = null;
+    const discountParts: string[] = [];
+
+    // Daily tiered discount: Bills 1-5 full price, 6-10 get 20% off, 11+ get 40% off
+    const billNumber = todayBillCount + 1; // This bill's position today
+    if (billNumber > 10) {
+      finalAmount = Math.round(baseAmount * 0.6); // 40% off
+      discountParts.push('daily_tier_40');
+    } else if (billNumber > 5) {
+      finalAmount = Math.round(baseAmount * 0.8); // 20% off
+      discountParts.push('daily_tier_20');
+    }
+
+    // Negative PVC discount: 50% off when total PVC is negative
+    if (totalPvc !== undefined && totalPvc < 0) {
+      finalAmount = Math.round(finalAmount * 0.5);
+      discountParts.push('negative_pvc_50');
+    }
+
+    discount = baseAmount - finalAmount;
+    discountType = discountParts.length > 0 ? discountParts.join('+') : null;
+
+    // Check for free account first (highest priority)
+    let isFree = false;
+    let freeReason = '';
+    
+    // Get billing settings for free trial limit
+    const { getBillingSettings: getBillingSettingsForTrial } = await import('./admin-settings');
+    const trialSettings = await getBillingSettingsForTrial();
+    const freeTrialLimit = trialSettings.freeTrialBills || 1;
+    
+    if (user.isFreeAccount) {
+      isFree = true;
+      freeReason = 'free_account';
+    } else if (user.customProcessingFee === 0) {
+      isFree = true;
+      freeReason = 'custom_zero_fee';
+    } else {
+      // Check for free trial
+      const freeTrialRemaining = Math.max(0, freeTrialLimit - user.freeTrialUsed);
+      if (user.isTrialActive && freeTrialRemaining > 0) {
+        isFree = true;
+        freeReason = 'trial';
+      }
+    }
+
+    console.log('💰 Payment calculation:', {
+      isFree,
+      freeReason,
+      isFreeAccount: user.isFreeAccount,
+      customProcessingFee: user.customProcessingFee,
+      finalAmount,
+      paidAmount,
+      paymentMethod
+    });
+
+    if (isFree) {
+      // Create free transaction
+      const transaction = await prisma.billTransaction.create({
+        data: {
+          userId,
+          billId,
+          amount: 0,
+          originalAmount: baseAmount,
+          discount: baseAmount,
+          discountType: freeReason,
+          status: 'paid',
+          isFree: true,
+          paymentMethod: freeReason === 'trial' ? 'free_trial' : 'free_account',
+          paidAt: new Date()
+        }
+      });
+
+      // Update user's free trial usage only if it's a trial bill
+      if (freeReason === 'trial') {
+        const freeTrialRemaining = Math.max(0, freeTrialLimit - user.freeTrialUsed);
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            freeTrialUsed: { increment: 1 },
+            totalBillsProcessed: { increment: 1 },
+            isTrialActive: user.freeTrialUsed + 1 < freeTrialLimit
+          }
+        });
+        
+        return {
+          success: true,
+          message: `Free trial bill processed (${freeTrialRemaining - 1} remaining)`,
+          transaction
+        };
+      } else {
+        // Just update total bills processed for free accounts
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            totalBillsProcessed: { increment: 1 }
+          }
+        });
+        
+        return {
+          success: true,
+          message: freeReason === 'free_account' ? 'Free account - no processing fee charged' : 'Custom zero fee - no processing fee charged',
+          transaction
+        };
+      }
+    }
+
+    // Verify Razorpay payment if provided
+    if (razorpayData?.razorpayPaymentId && razorpayData?.razorpayOrderId && razorpayData?.razorpaySignature) {
+      
+      const { verifyPaymentSignature, fetchPaymentDetails } = require('@/lib/razorpay');
+      
+      // Verify signature
+      const isSignatureValid = verifyPaymentSignature(
+        razorpayData.razorpayOrderId,
+        razorpayData.razorpayPaymentId,
+        razorpayData.razorpaySignature
+      );
+
+      if (!isSignatureValid) {
+        console.error('❌ Invalid Razorpay signature');
+        return { success: false, message: 'Invalid payment signature' };
+      }
+
+      // Fetch payment details
+      try {
+        const paymentDetails = await fetchPaymentDetails(razorpayData.razorpayPaymentId);
+        if (paymentDetails.status !== 'captured') {
+          console.error('❌ Payment not captured:', paymentDetails.status);
+          return { success: false, message: 'Payment not successful' };
+        }
+      } catch (error) {
+        console.error('❌ Error fetching payment details:', error);
+        return { success: false, message: 'Payment verification failed' };
+      }
+    }
+
+    // Paid transaction
+    const transaction = await prisma.billTransaction.create({
+      data: {
+        userId,
+        billId,
+        amount: paidAmount || finalAmount,
+        originalAmount: baseAmount,
+        discount,
+        discountType,
+        status: 'paid',
+        isFree: false,
+        paymentMethod,
+        transactionRef: paymentReference,
+        paidAt: new Date(),
+        // Store Razorpay specific data in metadata
+        ...(razorpayData ? {
+          metadata: {
+            razorpayOrderId: razorpayData.razorpayOrderId,
+            razorpayPaymentId: razorpayData.razorpayPaymentId,
+            razorpaySignature: razorpayData.razorpaySignature,
+            paymentMethod: 'razorpay'
+          }
+        } : {})
+      }
+    });
+
+    // Update user stats
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        totalBillsProcessed: { increment: 1 }
+      }
+    });
+
+    // Update customer account - deduct credit balance and increment monthly bill count
+    const chargedAmount = paidAmount || finalAmount;
+    if (user.customerAccount) {
+      await prisma.customerAccount.update({
+        where: { userId },
+        data: {
+          currentMonthBills: { increment: 1 },
+          creditBalance: { decrement: chargedAmount }
+        }
+      });
+      console.log(`💳 Deducted ₹${chargedAmount} from credit balance (base: ₹${baseAmount}, discount: ₹${discount}, type: ${discountType || 'none'})`);
+    }
+
+    return {
+      success: true,
+      message: `Payment processed successfully - ₹${transaction.amount}`,
+      transaction
+    };
+
+  } catch (error) {
+    console.error('❌ Payment processing error:', error);
+    return { 
+      success: false, 
+      message: `Payment processing failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+    };
+  }
+}
+
+/**
+ * Validate and authorize API access
+ */
+export async function validateApiAccess(request: Request): Promise<{
+  authorized: boolean;
+  user?: any;
+  message?: string;
+}> {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.email) {
+      return {
+        authorized: false,
+        message: 'Authentication required'
+      };
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        customerAccount: true
+      }
+    });
+
+    if (!user) {
+      return {
+        authorized: false,
+        message: 'User not found'
+      };
+    }
+
+    return {
+      authorized: true,
+      user
+    };
+
+  } catch (error) {
+    console.error('API access validation error:', error);
+    return {
+      authorized: false,
+      message: 'Authorization failed'
+    };
+  }
+}
+
+/**
+ * Check if user has pending payments
+ */
+export async function checkPendingPayments(userId: string): Promise<{
+  hasPending: boolean;
+  pendingAmount: number;
+  pendingTransactions: any[];
+}> {
+  try {
+    const pendingTransactions = await prisma.billTransaction.findMany({
+      where: {
+        userId,
+        status: 'pending'
+      },
+      include: {
+        bill: {
+          include: {
+            contract: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const pendingAmount = pendingTransactions.reduce((sum, t) => sum + t.amount, 0);
+
+    return {
+      hasPending: pendingTransactions.length > 0,
+      pendingAmount,
+      pendingTransactions
+    };
+
+  } catch (error) {
+    console.error('Error checking pending payments:', error);
+    return {
+      hasPending: false,
+      pendingAmount: 0,
+      pendingTransactions: []
+    };
+  }
+}

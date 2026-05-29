@@ -1,0 +1,136 @@
+
+'use client';
+
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Mail, ArrowRight, RefreshCw } from 'lucide-react';
+
+function VerifyNoticeContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const email = searchParams.get('email');
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
+
+  const handleResendEmail = async () => {
+    if (!email) return;
+
+    setResending(true);
+    setResendMessage('');
+
+    try {
+      const response = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setResendMessage('Verification email sent! Please check your inbox.');
+      } else {
+        setResendMessage(data.error || 'Failed to resend email. Please try again.');
+      }
+    } catch (error) {
+      setResendMessage('An error occurred. Please try again later.');
+    } finally {
+      setResending(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <div className="flex justify-center mb-4">
+            <div className="bg-blue-100 p-4 rounded-full">
+              <Mail className="h-12 w-12 text-blue-600" />
+            </div>
+          </div>
+          <CardTitle className="text-2xl">Check Your Email</CardTitle>
+          <CardDescription className="text-base mt-2">
+            We've sent a verification link to your email address
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {email && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+              <p className="text-sm text-blue-800 font-medium">{email}</p>
+            </div>
+          )}
+
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <h4 className="font-medium text-amber-900 mb-2">Next Steps:</h4>
+            <ol className="list-decimal list-inside text-sm text-amber-800 space-y-1">
+              <li>Check your email inbox (and spam folder)</li>
+              <li>Click the verification link in the email</li>
+              <li>Return here to sign in to your account</li>
+            </ol>
+          </div>
+
+          {resendMessage && (
+            <div className={`border rounded-lg p-4 text-sm ${
+              resendMessage.includes('sent') 
+                ? 'bg-green-50 border-green-200 text-green-800'
+                : 'bg-red-50 border-red-200 text-red-800'
+            }`}>
+              {resendMessage}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2">
+            <Button
+              onClick={handleResendEmail}
+              variant="outline"
+              className="w-full"
+              disabled={resending || !email}
+            >
+              {resending ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Resend Verification Email
+                </>
+              )}
+            </Button>
+
+            <Button
+              onClick={() => router.push('/auth/signin')}
+              className="w-full"
+              size="lg"
+            >
+              Go to Sign In
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          </div>
+
+          <div className="text-center text-sm text-muted-foreground">
+            <p>The verification link will expire in 24 hours.</p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export default function VerifyNoticePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <VerifyNoticeContent />
+    </Suspense>
+  );
+}
