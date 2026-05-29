@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +17,19 @@ import {
   Download,
   Edit,
   FileType,
-  MessageCircle
+  MessageCircle,
+  TrendingUp,
+  FileSpreadsheet,
+  CheckCircle,
+  AlertTriangle,
+  Clock,
+  ChevronRight,
+  ShieldCheck,
+  Briefcase,
+  Layers,
+  MapPin,
+  Flame,
+  Info
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
@@ -149,23 +160,18 @@ function DetailedMonthlyIndicesTable({
 
   // Check if bill has dedicated cement/steel amounts
   const hasDedicatedCement = bill?.cementAmount && bill.cementAmount > 0;
-  const hasDedicatedSteel = (bill?.steelTmtBarsAmount > 0) || (bill?.steelAngleChannelAmount > 0) ||
-    (bill?.steelPlatesAmount > 0) || (bill?.steelOtherSectionsAmount > 0);
 
   // Determine which components are actually used (have non-zero percentages in classifications or dedicated amounts)
   const usedComponents = allComponents.filter(({ key, indexName }) => {
     // For individual steel types: check bill's steelTypes selection or dedicated amounts
     const steelIndexNames = ['Steel TMT Bars', 'Steel Angle/Channel', 'Steel Plates', 'Steel Other Sections'];
     if (steelIndexNames.includes(indexName)) {
-      // Show if this steel type is in the bill's steelTypes
       if (usedSteelIndexNames.has(indexName)) return true;
-      // Show if steel is used in classifications and no specific types selected (show all)
       const steelUsedInClassification = classificationEntries.some((entry) => {
         const classification = entry.subClassification || entry.classification;
         return classification && classification['steel'] != null && classification['steel'] > 0;
       });
       if (steelUsedInClassification && usedSteelIndexNames.size === 0) return true;
-      // Show if there's a dedicated steel amount for this type
       if (indexName === 'Steel TMT Bars' && bill?.steelTmtBarsAmount > 0) return true;
       if (indexName === 'Steel Angle/Channel' && bill?.steelAngleChannelAmount > 0) return true;
       if (indexName === 'Steel Plates' && bill?.steelPlatesAmount > 0) return true;
@@ -173,10 +179,8 @@ function DetailedMonthlyIndicesTable({
       return false;
     }
 
-    // For cement: also check dedicated amount
     if (key === 'cement' && hasDedicatedCement) return true;
 
-    // Check if used in any classification entry
     const usedInClassification = classificationEntries.some((entry) => {
       const classification = entry.subClassification || entry.classification;
       return classification && classification[key] != null && classification[key] > 0;
@@ -189,7 +193,6 @@ function DetailedMonthlyIndicesTable({
     return null;
   }
 
-  // Separate steel components for grouping
   const steelComponents = ['Steel TMT Bars', 'Steel Angle/Channel', 'Steel Plates', 'Steel Other Sections'];
   const steelColumnsCount = usedComponents.filter(comp => 
     steelComponents.includes(comp.indexName)
@@ -197,96 +200,86 @@ function DetailedMonthlyIndicesTable({
 
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto border rounded-lg">
+      <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm bg-white dark:bg-slate-900">
         <table className="w-full border-collapse text-sm">
           <thead>
-            {/* Steel zone header row */}
             {steelColumnsCount > 0 && (
-              <tr className="bg-gradient-to-r from-purple-600 to-purple-700 text-white">
-                <th className="border border-gray-300 px-4 py-2 text-left font-bold sticky left-0 bg-purple-600 z-10">
-                  {/* Empty for Period column */}
-                </th>
-                {usedComponents.map(({ name, indexName }) => {
+              <tr className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white">
+                <th className="border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 text-left font-bold sticky left-0 bg-slate-900 z-10"></th>
+                {usedComponents.map(({ indexName }) => {
                   if (steelComponents.includes(indexName)) {
                     return (
-                      <th key={`zone-${indexName}`} className="border border-gray-300 px-3 py-2 text-center font-bold">
-                        STEEL
+                      <th key={`zone-${indexName}`} className="border-b border-slate-200 dark:border-slate-800 px-3 py-2 text-center text-xs font-bold uppercase tracking-wider text-indigo-200">
+                        Steel Component
                       </th>
                     );
                   }
                   return (
-                    <th key={`zone-${indexName}`} className="border border-gray-300 px-3 py-2">
-                      {/* Empty for non-steel columns */}
-                    </th>
+                    <th key={`zone-${indexName}`} className="border-b border-slate-200 dark:border-slate-800 px-3 py-2"></th>
                   );
                 })}
               </tr>
             )}
-            {/* Component names header row */}
-            <tr className="bg-gradient-to-r from-teal-500 to-teal-600 text-white">
-              <th className="border border-gray-300 px-4 py-3 text-left font-bold sticky left-0 bg-teal-500 z-10">
+            <tr className="bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-800">
+              <th className="px-4 py-3 text-left font-semibold sticky left-0 bg-slate-100 dark:bg-slate-800 z-10">
                 Period
               </th>
-              {usedComponents.map(({ name, indexName, key }) => {
+              {usedComponents.map(({ name, indexName }) => {
                 return (
-                  <th key={indexName} className="border border-gray-300 px-3 py-3 text-center font-bold whitespace-pre-wrap" style={{ minWidth: '120px' }}>
+                  <th key={indexName} className="px-3 py-3 text-center font-semibold whitespace-pre-wrap" style={{ minWidth: '120px' }}>
                     {name}
                   </th>
                 );
               })}
             </tr>
           </thead>
-          <tbody>
-            {detailedMonthlyData.map((row, index) => {
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {detailedMonthlyData.map((row, idx) => {
               if (row.type === 'quarter_header') {
-                // Quarter header row
                 return (
-                  <tr key={`quarter-${index}`} className="bg-gray-100 dark:bg-gray-800">
+                  <tr key={`quarter-${idx}`} className="bg-slate-50/80 dark:bg-slate-800/30">
                     <td 
                       colSpan={usedComponents.length + 1} 
-                      className="border border-gray-300 px-4 py-2 font-bold text-sm"
+                      className="px-4 py-2.5 font-bold text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400"
                     >
                       {row.label}
                     </td>
                   </tr>
                 );
               } else if (row.type === 'base') {
-                // Base month row
                 return (
-                  <tr key="base" className="bg-gray-50 dark:bg-gray-900">
-                    <td className="border border-gray-300 px-4 py-2 font-medium sticky left-0 bg-gray-50 dark:bg-gray-900">
+                  <tr key="base" className="bg-indigo-50/30 dark:bg-indigo-950/10 font-medium">
+                    <td className="px-4 py-3 font-semibold text-indigo-700 dark:text-indigo-400 sticky left-0 bg-indigo-50/30 dark:bg-indigo-950/10 backdrop-blur-sm">
                       {row.label}
                     </td>
                     {usedComponents.map(({ indexName }) => (
-                      <td key={indexName} className="border border-gray-300 px-3 py-2 text-center">
+                      <td key={indexName} className="px-3 py-3 text-center font-semibold text-indigo-600 dark:text-indigo-400">
                         {row.values[indexName] != null ? row.values[indexName].toFixed(2) : '-'}
                       </td>
                     ))}
                   </tr>
                 );
               } else if (row.type === 'quarter_avg') {
-                // Quarterly average row
                 return (
-                  <tr key={`avg-${index}`} className={`${row.isMeasurementQuarter ? 'bg-blue-50 dark:bg-blue-950/20 font-semibold' : 'bg-amber-50 dark:bg-amber-950/20 font-medium'}`}>
-                    <td className={`border border-gray-300 px-4 py-2 sticky left-0 ${row.isMeasurementQuarter ? 'bg-blue-50 dark:bg-blue-950/20' : 'bg-amber-50 dark:bg-amber-950/20'}`}>
+                  <tr key={`avg-${idx}`} className={`${row.isMeasurementQuarter ? 'bg-emerald-500/10 dark:bg-emerald-500/10 font-bold text-emerald-800 dark:text-emerald-400' : 'bg-amber-500/5 dark:bg-amber-500/5 font-semibold text-amber-800 dark:text-amber-400'}`}>
+                    <td className={`px-4 py-3 sticky left-0 ${row.isMeasurementQuarter ? 'bg-emerald-500/10 dark:bg-emerald-950/20' : 'bg-amber-500/5 dark:bg-amber-950/20'}`}>
                       {row.label}
                     </td>
                     {usedComponents.map(({ indexName }) => (
-                      <td key={indexName} className="border border-gray-300 px-3 py-2 text-center">
+                      <td key={indexName} className="px-3 py-3 text-center">
                         {row.values[indexName] != null ? row.values[indexName].toFixed(2) : '-'}
                       </td>
                     ))}
                   </tr>
                 );
               } else if (row.type === 'month') {
-                // Monthly data row
                 return (
-                  <tr key={`month-${index}`} className={`hover:bg-muted/50 ${row.isMeasurementQuarter ? 'bg-blue-50/30 dark:bg-blue-950/10' : ''}`}>
-                    <td className={`border border-gray-300 px-4 py-2 sticky left-0 bg-background ${row.isMeasurementQuarter ? 'font-medium' : ''}`}>
-                      {row.label}{row.isMeasurementQuarter ? ' [Measurement Quarter]' : ''}
+                  <tr key={`month-${idx}`} className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${row.isMeasurementQuarter ? 'bg-blue-500/5 dark:bg-blue-500/5' : ''}`}>
+                    <td className={`px-4 py-3 sticky left-0 bg-white dark:bg-slate-900 ${row.isMeasurementQuarter ? 'font-medium text-blue-700 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                      {row.label}{row.isMeasurementQuarter ? ' [Meas. Month]' : ''}
                     </td>
                     {usedComponents.map(({ indexName }) => (
-                      <td key={indexName} className="border border-gray-300 px-3 py-2 text-center">
+                      <td key={indexName} className="px-3 py-3 text-center text-slate-700 dark:text-slate-300">
                         {row.values[indexName] != null ? row.values[indexName].toFixed(2) : '-'}
                       </td>
                     ))}
@@ -315,7 +308,6 @@ function calculateTotalPvc(
 
   const fuelIdx = bill ? resolveFuelIndexName(bill) : 'MPNG Fuel';
 
-  // Steel type mapping (same as ComponentPvcTable)
   const steelTypeMap: { [key: string]: string } = {
     'TMT': 'Steel TMT Bars',
     'ANGLE_CHANNEL': 'Steel Angle/Channel',
@@ -323,7 +315,6 @@ function calculateTotalPvc(
     'OTHER_SECTIONS': 'Steel Other Sections'
   };
 
-  // Component to index name mapping
   const componentIndexMap: { [key: string]: string | null } = {
     fixed: null,
     labour: 'Labour',
@@ -335,8 +326,7 @@ function calculateTotalPvc(
     explosives: 'RBI Explosives'
   };
 
-  // Helper to get indices with steel type averaging
-  const getIndices = (indexName: string | null, steelTypes?: string[]) => {
+  const getInMemoryIndices = (indexName: string | null, steelTypes?: string[]) => {
     if (!indexName || !indicesData) return { base: 0, current: 0 };
     
     if (indexName === 'Steel' && steelTypes && steelTypes.length > 0) {
@@ -357,13 +347,16 @@ function calculateTotalPvc(
       }
     }
     
+    if (indexName.startsWith('MPNG Fuel')) {
+      return resolveFuelFromIndices(indicesData, indexName);
+    }
+    
     return {
       base: indicesData.base[indexName] || 0,
       current: indicesData.current[indexName] || 0
     };
   };
 
-  // Recalculate classification PVC from indices (same logic as ComponentPvcTable)
   let classificationPvcTotal = 0;
   
   if (classificationEntries && classificationEntries.length > 0 && indicesData) {
@@ -382,8 +375,8 @@ function calculateTotalPvc(
         if (!percentage || percentage <= 0) continue;
 
         const indices = key === 'steel'
-          ? getIndices(indexName, entrySteelTypes)
-          : getIndices(indexName);
+          ? getInMemoryIndices(indexName, entrySteelTypes)
+          : getInMemoryIndices(indexName);
           
         const baseIndex = Math.round(indices.base * 100) / 100;
         const currentIndex = Math.round(indices.current * 100) / 100;
@@ -393,7 +386,6 @@ function calculateTotalPvc(
       }
     }
   } else if (classificationEntries && classificationEntries.length > 0) {
-    // Fallback to DB entry-level PVC when no indices available
     classificationPvcTotal = classificationEntries.reduce((sum: number, entry: any) => {
       return sum + (entry.totalPvc || 0);
     }, 0);
@@ -409,7 +401,6 @@ function calculateTotalPvc(
     }
   }
   
-  // Add dedicated cement and steel PVC components
   const dedicatedCementPvc = pvcCalculation.dedicatedCementPvc || 0;
   const dedicatedSteelPvc = 
     (pvcCalculation.dedicatedSteelTmtBarsPvc || 0) +
@@ -437,7 +428,6 @@ function ComponentPvcTable({
   const fuelIdx = bill ? resolveFuelIndexName(bill) : 'MPNG Fuel';
   const fuelDisplayLabel = fuelIdx === 'MPNG Fuel' ? 'Fuel & Lubricants' : `Fuel & Lubricants (${fuelIdx.replace('MPNG Fuel - ', '')})`;
 
-  // Component mapping for display
   const componentMap = {
     fixed: { name: 'Fixed Component', indexName: null as string | null },
     labour: { name: 'Labour', indexName: 'Labour' },
@@ -449,7 +439,6 @@ function ComponentPvcTable({
     explosives: { name: 'Explosives Component', indexName: 'RBI Explosives' }
   };
 
-  // Steel type mapping
   const steelTypeMap: { [key: string]: string } = {
     'TMT': 'Steel TMT Bars',
     'ANGLE_CHANNEL': 'Steel Angle/Channel',
@@ -457,11 +446,9 @@ function ComponentPvcTable({
     'OTHER_SECTIONS': 'Steel Other Sections'
   };
 
-  // Get indices for calculation - with proper steel type handling
   const getIndices = (indexName: string | null, steelTypes?: string[]) => {
     if (!indexName || !indicesData) return { base: 0, current: 0 };
     
-    // For steel component, calculate average of selected steel types
     if (indexName === 'Steel' && steelTypes && steelTypes.length > 0) {
       const selectedSteelIndices = steelTypes
         .map(type => {
@@ -477,11 +464,14 @@ function ComponentPvcTable({
         .filter(idx => idx !== null) as { base: number; current: number }[];
 
       if (selectedSteelIndices.length > 0) {
-        // Calculate average of selected steel types
         const avgBase = selectedSteelIndices.reduce((sum, idx) => sum + idx.base, 0) / selectedSteelIndices.length;
         const avgCurrent = selectedSteelIndices.reduce((sum, idx) => sum + idx.current, 0) / selectedSteelIndices.length;
         return { base: avgBase, current: avgCurrent };
       }
+    }
+    
+    if (indexName.startsWith('MPNG Fuel')) {
+      return resolveFuelFromIndices(indicesData, indexName);
     }
     
     return {
@@ -491,10 +481,9 @@ function ComponentPvcTable({
   };
 
   if (!classificationEntries || classificationEntries.length === 0) {
-    return <p className="text-sm text-muted-foreground">No classification entries available</p>;
+    return <p className="text-sm text-muted-foreground p-4 bg-slate-50 rounded-xl">No classification entries available</p>;
   }
 
-  // Calculate PVC for a component
   const calculateComponentPvc = (
     amount: number,
     percentage: number,
@@ -509,13 +498,15 @@ function ComponentPvcTable({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <h4 className="text-sm font-semibold text-primary">
-          Per-Classification PVC Breakdown
-        </h4>
-        <p className="text-xs text-muted-foreground">
-          Detailed breakdown showing component percentages and PVC for each work classification
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 gap-2">
+        <div>
+          <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+            Per-Classification Breakdown
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            Formulas, indices and calculation paths for every scheduled item classification
+          </p>
+        </div>
       </div>
 
       {classificationEntries.map((entry, entryIndex) => {
@@ -528,7 +519,6 @@ function ComponentPvcTable({
         const classCode = classification.code;
         const className = classification.name;
         
-        // Build component rows for this classification
         const componentRows: Array<{
           componentName: string;
           percentage: number;
@@ -538,29 +528,24 @@ function ComponentPvcTable({
         }> = [];
 
         let classificationTotal = 0;
-
-        // Get steel types for this classification entry
         const entrySteelTypes = entry.steelTypes && Array.isArray(entry.steelTypes) ? entry.steelTypes : [];
 
-        // Process each component
         Object.entries(componentMap).forEach(([key, { name: componentName, indexName }]) => {
           const percentage = classification[key];
           
           if (!percentage || percentage <= 0) return;
 
-          // Fixed component doesn't contribute to PVC
           if (key === 'fixed') {
             componentRows.push({
               componentName,
               percentage,
-              formula: 'Not subject to price variation',
+              formula: 'Non-escalable Fixed base proportion',
               pvcAmount: 0,
               isFixed: true
             });
             return;
           }
 
-          // Get indices - pass steel types for steel component
           const indices = key === 'steel' 
             ? getIndices(indexName, entrySteelTypes)
             : getIndices(indexName);
@@ -589,46 +574,52 @@ function ComponentPvcTable({
         if (componentRows.length === 0) return null;
 
         return (
-          <div key={entry.id || entryIndex} className="border rounded-lg p-4 bg-muted/20">
-            <div className="mb-3">
-              <h5 className="text-sm font-semibold text-primary">
-                Classification {entryIndex + 1}: {classCode} - {className}
-              </h5>
-              <p className="text-xs text-muted-foreground mt-1">
-                Amount: ₹ {entryAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-              </p>
+          <div key={entry.id || entryIndex} className="border border-slate-150 dark:border-slate-800 rounded-2xl p-5 bg-slate-50/50 dark:bg-slate-900/40 backdrop-blur-sm shadow-sm transition-all duration-300 hover:shadow-md">
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 pb-3 border-b border-slate-200/60 dark:border-slate-800 gap-3">
+              <div className="flex items-center gap-3">
+                <div className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 p-2 rounded-xl text-xs font-bold">
+                  #{entryIndex + 1}
+                </div>
+                <div>
+                  <h5 className="font-bold text-slate-800 dark:text-slate-200">
+                    {classCode} — {className}
+                  </h5>
+                  <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+                    Allocated Amount: ₹ {entryAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse border border-border">
+            <div className="overflow-x-auto border border-slate-200/80 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900">
+              <table className="w-full border-collapse">
                 <thead>
-                  <tr className="bg-primary/5">
-                    <th className="border border-border px-3 py-2 text-left text-xs font-semibold">Component</th>
-                    <th className="border border-border px-3 py-2 text-left text-xs font-semibold">Formula</th>
-                    <th className="border border-border px-3 py-2 text-right text-xs font-semibold">PVC Amount</th>
+                  <tr className="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-b border-slate-200/80 dark:border-slate-800">
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider">Component</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider">Formula / Factors</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider">PVC Contribution</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {componentRows.map((row, rowIndex) => (
-                    <tr key={rowIndex} className={row.isFixed ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-muted/50'}>
-                      <td className="border border-border px-3 py-2 text-xs font-medium">
-                        {row.componentName}
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                  {componentRows.map((row, rIdx) => (
+                    <tr key={rIdx} className={row.isFixed ? 'bg-slate-50/55 dark:bg-slate-800/10 text-slate-400' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/20'}>
+                      <td className="px-4 py-3 font-semibold">
+                        {row.componentName} <span className="font-mono text-slate-400 font-normal">({row.percentage}%)</span>
                       </td>
-                      <td className="border border-border px-3 py-2 text-xs font-mono">
+                      <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 break-all max-w-[400px]">
                         {row.formula}
                       </td>
-                      <td className="border border-border px-3 py-2 text-right text-xs font-semibold">
-                        {row.pvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                      <td className={`px-4 py-3 text-right font-mono font-semibold ${row.isFixed ? 'text-slate-400' : row.pvcAmount < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                        {row.pvcAmount < 0 ? '-' : ''}₹{Math.abs(row.pvcAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                   ))}
-                  {/* Classification subtotal */}
-                  <tr className="bg-amber-50 dark:bg-amber-950/20 font-semibold">
-                    <td colSpan={2} className="border border-border px-3 py-2 text-xs text-right">
-                      Classification Total:
+                  <tr className="bg-slate-100/70 dark:bg-slate-800/60 font-bold text-slate-800 dark:text-slate-200 border-t border-slate-200/80 dark:border-slate-800">
+                    <td colSpan={2} className="px-4 py-3 text-right text-xs uppercase tracking-wider">
+                      Classification {classCode} Subtotal:
                     </td>
-                    <td className="border border-border px-3 py-2 text-right text-xs font-bold">
-                      ₹ {classificationTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                    <td className={`px-4 py-3 text-right font-mono text-sm ${classificationTotal < 0 ? 'text-rose-700 dark:text-rose-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
+                      {classificationTotal < 0 ? '-' : ''}₹{Math.abs(classificationTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                 </tbody>
@@ -638,15 +629,12 @@ function ComponentPvcTable({
         );
       })}
 
-      {/* Grand Total */}
       {classificationEntries.length > 1 && (
-        <div className="border-t-2 border-primary pt-3">
-          <div className="flex justify-between items-center bg-primary/10 rounded-lg p-3">
-            <span className="text-sm font-bold">TOTAL PVC (All Classifications):</span>
-            <span className="text-sm font-bold">
-              ₹ {grandTotalPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-            </span>
-          </div>
+        <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl p-4 shadow-md flex justify-between items-center mt-6">
+          <span className="text-xs uppercase tracking-widest text-indigo-300 font-bold">Sum of Classifications:</span>
+          <span className="font-mono font-bold text-lg text-emerald-400">
+            {grandTotalPvc < 0 ? '-' : ''}₹{Math.abs(grandTotalPvc).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
         </div>
       )}
     </div>
@@ -689,23 +677,18 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
     try {
       setIsDownloading(true);
       
-      // Build URL with optional template parameter
       let url = `/api/bills/${bill.id}/pdf-report`;
       if (selectedTemplateId && selectedTemplateId !== defaultTemplate?.id) {
         url += `?templateId=${selectedTemplateId}`;
       }
       
-      // Call the PDF report endpoint
       const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error('Failed to generate PDF');
       }
       
-      // Get the PDF blob
       const blob = await response.blob();
-      
-      // Create a download link
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
@@ -713,7 +696,6 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
       document.body.appendChild(a);
       a.click();
       
-      // Cleanup
       window.URL.revokeObjectURL(downloadUrl);
       document.body.removeChild(a);
       
@@ -733,42 +715,60 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
     }
   };
 
+  const grandTotalCalculated = calculateTotalPvc(bill.classificationEntries, bill.pvcCalculation, indicesData, bill);
+  const isPvcNegative = grandTotalCalculated < 0;
+
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="outline" size="icon" onClick={() => router.back()}>
-          <ArrowLeft size={20} />
-        </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-3xl font-bold">{bill.billNo}</h1>
-            <BillStatusBadge status={bill.status} size="lg" />
+    <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-7xl">
+      {/* 1. Header with glassmorphism */}
+      <div className="backdrop-blur-md bg-white/70 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800/80 shadow-lg rounded-3xl p-5 md:p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 transition-all duration-300">
+        <div className="flex items-center gap-4 flex-1 min-w-0">
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={() => router.back()}
+            className="h-11 w-11 rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-850 border-slate-200 dark:border-slate-800 transition-transform active:scale-95 flex-shrink-0"
+          >
+            <ArrowLeft size={18} className="text-slate-600 dark:text-slate-300" />
+          </Button>
+          <div className="space-y-1 min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight truncate">
+                {bill.billNo}
+              </h1>
+              <BillStatusBadge status={bill.status} size="lg" />
+            </div>
+            <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 font-medium flex items-center gap-2 flex-wrap min-w-0">
+              <Briefcase size={14} className="text-indigo-500 flex-shrink-0" />
+              <span className="font-semibold text-slate-700 dark:text-slate-300 flex-shrink-0">{bill.contract.agreementNo}</span>
+              <span className="text-slate-300 dark:text-slate-700 flex-shrink-0">•</span>
+              <span className="truncate max-w-[200px] md:max-w-md">{bill.contract.workDescription}</span>
+            </p>
           </div>
-          <p className="text-muted-foreground mt-1">
-            {bill.contract.agreementNo} · {bill.contract.workDescription?.substring(0, 100)}{bill.contract.workDescription && bill.contract.workDescription.length > 100 ? '...' : ''}
-          </p>
         </div>
-        <div className="flex gap-2">
+
+        {/* Action Controls */}
+        <div className="flex flex-wrap md:flex-nowrap items-center gap-2.5 pt-3 md:pt-0 border-t border-slate-100 dark:border-slate-800 md:border-none flex-shrink-0 w-full md:w-auto justify-start md:justify-end">
           {(user.role === 'user' || user.role === 'contractor' || user.role === 'admin') && 
            (bill.status === 'draft' || bill.status === 'revision_requested') && (
             <>
-              {/* Show disabled button with tooltip for contractors who have already edited once */}
               {(user.role === 'user' || user.role === 'contractor') && bill.hasBeenEditedOnce ? (
                 <div className="relative group">
-                  <Button variant="outline" className="gap-2 opacity-50 cursor-not-allowed" disabled>
+                  <Button variant="outline" className="gap-2 opacity-50 cursor-not-allowed rounded-xl h-11" disabled>
                     <Edit size={16} />
                     Edit Bill
                   </Button>
-                  <div className="absolute hidden group-hover:block bottom-full mb-2 right-0 w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-50">
-                    <p className="font-medium mb-1">Edit Limit Reached</p>
-                    <p>You have already edited this bill once. Contractors can only edit a bill one time. Please contact support if you need further changes.</p>
+                  <div className="absolute hidden group-hover:block bottom-full mb-2 right-0 w-72 p-3 bg-slate-950 text-white text-xs rounded-xl shadow-xl z-50 border border-slate-800/80">
+                    <p className="font-bold text-amber-400 flex items-center gap-1.5 mb-1">
+                      <AlertTriangle size={14} /> Limit Reached
+                    </p>
+                    <p className="text-slate-300">Contractors are limited to a single edit session per bill. Please contact Support to authorize additional edits.</p>
                   </div>
                 </div>
               ) : (
                 <Link href={`/bills/edit/${bill.id}`}>
-                  <Button variant="outline" className="gap-2">
-                    <Edit size={16} />
+                  <Button variant="outline" className="gap-2 rounded-xl h-11 border-slate-200 hover:bg-slate-50 dark:hover:bg-slate-850 dark:border-slate-800 shadow-sm">
+                    <Edit size={16} className="text-slate-500" />
                     Edit Bill
                   </Button>
                 </Link>
@@ -776,130 +776,199 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
             </>
           )}
 
-          {/* Template selector and download button */}
-          <div className="flex gap-2 items-center">
-            {templates.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Select value={selectedTemplateId || 'default'} onValueChange={setSelectedTemplateId}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Select template" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {templates.map((template) => (
-                      <SelectItem key={template.id} value={template.id}>
-                        {template.name} {template.isDefault && '(Default)'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <Button 
-              variant="outline" 
-              className="gap-2"
-              onClick={handleDownloadPDF}
-              disabled={isDownloading}
-            >
-              <Download size={16} />
-              {isDownloading ? 'Generating...' : 'Download PDF'}
-            </Button>
-            <Button 
-              variant="outline" 
-              className="gap-2"
-              onClick={() => setWhatsAppDialogOpen(true)}
-            >
-              <MessageCircle size={16} />
-              Send via WhatsApp
-            </Button>
+          {templates.length > 0 && (
+            <Select value={selectedTemplateId || 'default'} onValueChange={setSelectedTemplateId}>
+              <SelectTrigger className="w-[180px] h-11 rounded-xl shadow-sm border-slate-200 dark:border-slate-800">
+                <SelectValue placeholder="Report Template" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                {templates.map((tpl) => (
+                  <SelectItem key={tpl.id} value={tpl.id} className="text-xs">
+                    {tpl.name} {tpl.isDefault && '(Default)'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          <Button 
+            variant="outline" 
+            className="gap-2 rounded-xl h-11 border-slate-200 dark:border-slate-800 hover:bg-slate-50 shadow-sm"
+            onClick={handleDownloadPDF}
+            disabled={isDownloading}
+          >
+            <Download size={16} className={isDownloading ? 'animate-bounce' : 'text-slate-500'} />
+            {isDownloading ? 'Building...' : 'Download PDF'}
+          </Button>
+
+          <Button 
+            onClick={() => setWhatsAppDialogOpen(true)}
+            className="gap-2 rounded-xl h-11 shadow-md bg-emerald-600 hover:bg-emerald-700 text-white transition-all active:scale-95 duration-200"
+          >
+            <MessageCircle size={16} />
+            Share via WhatsApp
+          </Button>
+        </div>
+      </div>
+
+      {/* 2. Premium Hero Overview Cards (Visual Centerpiece) */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* Total PVC Hero Card - Dark Glowing Gradient */}
+        <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 text-white rounded-3xl p-6 shadow-2xl relative overflow-hidden group hover:scale-[1.02] transition-all duration-300">
+          {/* Ambient Glow */}
+          <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full blur-3xl opacity-25 group-hover:opacity-40 transition-opacity duration-300"></div>
+          
+          <div className="flex justify-between items-start relative z-10">
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest">
+                Net Price Variation (PVC)
+              </span>
+              <h2 className={`text-3xl md:text-4xl font-extrabold font-mono tracking-tight flex items-baseline gap-1 mt-2 ${isPvcNegative ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {isPvcNegative ? '-' : ''}₹{Math.abs(grandTotalCalculated).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </h2>
+            </div>
+            <div className={`p-3.5 rounded-2xl ${isPvcNegative ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+              <TrendingUp size={22} className={isPvcNegative ? 'rotate-180' : ''} />
+            </div>
+          </div>
+
+          <div className="mt-8 flex items-center justify-between text-xs text-slate-400 border-t border-white/5 pt-4 relative z-10">
+            <span className="font-semibold flex items-center gap-1">
+              <Clock size={12} className="text-indigo-400" />
+              Escalation Rate:
+            </span>
+            <span className="font-mono text-white font-bold">
+              {bill.billAmount > 0 
+                ? `${((grandTotalCalculated / bill.billAmount) * 100).toFixed(2)}%`
+                : '0.00%'}
+            </span>
+          </div>
+        </div>
+
+        {/* Bill Amount Card */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-[1.01]">
+          <div className="flex justify-between items-start">
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                Agreement Bill Amount
+              </span>
+              <h2 className="text-3xl font-extrabold font-mono text-slate-800 dark:text-white tracking-tight flex items-baseline gap-1 mt-2">
+                ₹{bill.billAmount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+              </h2>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-400">
+              <IndianRupee size={22} />
+            </div>
+          </div>
+
+          <div className="mt-8 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 dark:border-slate-800 pt-4">
+            <span className="font-semibold flex items-center gap-1">
+              <Layers size={12} className="text-indigo-500" />
+              Agreement Value:
+            </span>
+            <span className="font-mono text-slate-800 dark:text-slate-200 font-bold">
+              ₹{bill.contract.agreementValue?.toLocaleString('en-IN', { maximumFractionDigits: 0 }) || '0'}
+            </span>
+          </div>
+        </div>
+
+        {/* Pricing Factors / Details Card */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 shadow-md hover:shadow-lg transition-all duration-300 md:col-span-2 lg:col-span-1">
+          <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4 block">
+            Pricing Configuration
+          </span>
+          <div className="space-y-3.5">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                <MapPin size={14} className="text-slate-400" /> Railway Zone
+              </span>
+              <span className="font-bold text-slate-800 dark:text-slate-200">
+                {bill.zone || 'N/A'} {bill.zone && `(${getSteelCityForZone(bill.zone)})`}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                <Flame size={14} className="text-slate-400" /> Fuel Basis
+              </span>
+              <Badge variant="secondary" className="font-bold text-xs">
+                {bill.fuelPriceType === 'zone_city' && bill.zone
+                  ? `Diesel: ${getSteelCityForZone(bill.zone)}`
+                  : 'Diesel: 4-City Avg'}
+              </Badge>
+            </div>
+
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                <Calendar size={14} className="text-slate-400" /> Meas. Quarter
+              </span>
+              <span className="font-bold text-slate-800 dark:text-slate-200 font-mono">
+                {bill.quarter}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* WhatsApp Send Dialog */}
-      <WhatsAppSendDialog
-        open={whatsAppDialogOpen}
-        onOpenChange={setWhatsAppDialogOpen}
-        billId={bill.id}
-        billNumber={bill.billNo || 'N/A'}
-        contractorName={bill.contract?.contractorName}
-        contractorPhone={bill.contract?.contractorPhone}
-      />
-
-      {/* Template info banner */}
-      {defaultTemplate && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <FileType className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-blue-900 mb-1">
-                Using Default Report Template
-              </h3>
-              <p className="text-sm text-blue-800">
-                PDFs will be generated using the <strong>{defaultTemplate.name}</strong> template. 
-                {templates.length > 1 && ' You can select a different template from the dropdown above.'}
-              </p>
-              {defaultTemplate.description && (
-                <p className="text-xs text-blue-700 mt-1">
-                  {defaultTemplate.description}
+      {/* Templates & edit warnings */}
+      <div className="space-y-4">
+        {defaultTemplate && (
+          <div className="bg-gradient-to-r from-blue-500/10 to-indigo-500/5 border border-blue-500/20 rounded-2xl p-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex-shrink-0">
+                <FileType className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300">
+                  Using Report Template: {defaultTemplate.name}
+                </h3>
+                <p className="text-xs text-blue-700 dark:text-blue-400/80 mt-0.5">
+                  PDF exports are structured according to this template setting. 
+                  {templates.length > 1 && ' Select another template structure above if needed.'}
                 </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {!defaultTemplate && templates.length === 0 && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <FileType className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-gray-900 mb-1">
-                Using Default Settings
-              </h3>
-              <p className="text-sm text-gray-700">
-                No custom report template is set. PDFs will include all sections and fields. 
-                <Link href="/report-templates" className="text-primary hover:underline ml-1">
-                  Create a template
-                </Link> to customize what appears in your reports.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit History Notification - Show for contractors who have edited */}
-      {(user.role === 'user' || user.role === 'contractor') && bill.hasBeenEditedOnce && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0">
-              <Edit className="h-5 w-5 text-yellow-600" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-yellow-900 mb-1">
-                Bill Edit Limit Reached
-              </h3>
-              <p className="text-sm text-yellow-800">
-                You have already edited this bill once. Contractors can only edit a bill one time. 
-                {bill.lastEditedAt && (
-                  <span className="block mt-1 text-xs">
-                    Last edited on {format(new Date(bill.lastEditedAt), 'dd MMM yyyy, HH:mm')}
-                  </span>
+                {defaultTemplate.description && (
+                  <p className="text-xs text-blue-600/70 dark:text-blue-400/60 mt-1 font-medium italic">
+                    &ldquo;{defaultTemplate.description}&rdquo;
+                  </p>
                 )}
-              </p>
-              <p className="text-xs text-yellow-700 mt-2">
-                If you need to make additional changes, please contact support for assistance.
-              </p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Approval Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Approval Actions</CardTitle>
+        {(user.role === 'user' || user.role === 'contractor') && bill.hasBeenEditedOnce && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex-shrink-0">
+                <Edit className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-amber-900 dark:text-amber-300">
+                  Bill Edit Limit Active
+                </h3>
+                <p className="text-xs text-amber-700 dark:text-amber-400/80 mt-0.5">
+                  You have already edited this bill once. Direct contractor edits are now capped. 
+                  {bill.lastEditedAt && (
+                    <span className="block mt-1 font-mono font-semibold">
+                      Last Edit Session: {format(new Date(bill.lastEditedAt), 'dd MMM yyyy, HH:mm')}
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Approval Actions card */}
+      <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
+        <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800/80 px-6 py-4">
+          <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <ShieldCheck size={18} className="text-indigo-500" />
+            Verification & Approval Pipeline
+          </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           <ApprovalActions 
             billId={bill.id}
             billStatus={bill.status}
@@ -907,128 +976,123 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
             onActionComplete={handleActionComplete}
           />
           
-          {/* Show rejection reason or approval comments if exists */}
           {bill.rejectionReason && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm font-medium text-red-900 mb-1">Rejection Reason:</p>
-              <p className="text-sm text-red-800">{bill.rejectionReason}</p>
+            <div className="mt-5 p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 rounded-2xl flex gap-3">
+              <div className="p-1 rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 flex-shrink-0 h-fit">
+                <AlertTriangle size={16} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-rose-900 dark:text-rose-300 uppercase tracking-wider">Rejection Reason Given:</p>
+                <p className="text-sm text-rose-800 dark:text-rose-400 mt-1">{bill.rejectionReason}</p>
+              </div>
             </div>
           )}
           
           {bill.approvalComments && bill.status === 'revision_requested' && (
-            <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-md">
-              <p className="text-sm font-medium text-orange-900 mb-1">Revision Requirements:</p>
-              <p className="text-sm text-orange-800">{bill.approvalComments}</p>
+            <div className="mt-5 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl flex gap-3">
+              <div className="p-1 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex-shrink-0 h-fit">
+                <Info size={16} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wider">Revision Requirements:</p>
+                <p className="text-sm text-amber-800 dark:text-amber-400 mt-1">{bill.approvalComments}</p>
+              </div>
             </div>
           )}
           
           {bill.approvalComments && bill.status === 'approved' && (
-            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
-              <p className="text-sm font-medium text-green-900 mb-1">Approval Comments:</p>
-              <p className="text-sm text-green-800">{bill.approvalComments}</p>
+            <div className="mt-5 p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl flex gap-3">
+              <div className="p-1 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex-shrink-0 h-fit">
+                <CheckCircle size={16} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">Approval Comments:</p>
+                <p className="text-sm text-emerald-800 dark:text-emerald-400 mt-1">{bill.approvalComments}</p>
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
 
+      {/* 4. Side-by-Side Details Grid */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Bill Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Bill Information</CardTitle>
+        {/* Bill & Contractor Information Panel */}
+        <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden flex flex-col justify-between">
+          <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800/80 px-6 py-4">
+            <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <FileText size={18} className="text-indigo-500" />
+              Bill Record Specifications
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Bill Number:</span>
-                <span className="font-medium">{bill.billNo}</span>
+          <CardContent className="p-6 flex-1 flex flex-col justify-between">
+            <div className="divide-y divide-slate-100 dark:divide-slate-850 text-sm space-y-4">
+              <div className="flex justify-between py-2">
+                <span className="text-muted-foreground font-medium">Bill Number</span>
+                <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{bill.billNo}</span>
               </div>
               
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Agreement Number:</span>
-                <span className="font-medium">{bill.contract.agreementNo}</span>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Measurement Date:</span>
-                <span className="font-medium">
+              <div className="flex justify-between py-2 pt-4">
+                <span className="text-muted-foreground font-medium">Measurement Date</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
                   {format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy')}
                 </span>
               </div>
-              
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Quarter:</span>
-                <Badge variant="outline">{bill.quarter}</Badge>
-              </div>
-
-              {bill.zone && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Railway Zone:</span>
-                  <span className="font-medium">{bill.zone} ({getSteelCityForZone(bill.zone)})</span>
-                </div>
-              )}
-
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Fuel (Diesel) Basis:</span>
-                <Badge variant={bill.fuelPriceType === 'zone_city' ? 'default' : 'outline'}>
-                  {bill.fuelPriceType === 'zone_city' && bill.zone
-                    ? `Zone City (${getSteelCityForZone(bill.zone)})`
-                    : 'Average of 4 Cities'}
-                </Badge>
-              </div>
 
               {bill.isExtension && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Extension Status:</span>
-                  <Badge variant="default">Extension Period</Badge>
+                <div className="flex justify-between py-2 pt-4">
+                  <span className="text-muted-foreground font-medium">Extension Mode</span>
+                  <Badge variant="destructive" className="font-bold">Escalation Restriction Active</Badge>
                 </div>
               )}
 
-              <div className="flex justify-between pt-2 border-t">
-                <span className="text-muted-foreground">Bill Amount:</span>
-                <span className="font-semibold flex items-center gap-1">
-                  <IndianRupee size={14} />
-                  {bill.billAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || '0.00'}
+              <div className="flex justify-between py-2 pt-4">
+                <span className="text-muted-foreground font-medium">Base Month</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {format(new Date(bill.contract.baseMonth), 'MMMM yyyy')}
                 </span>
               </div>
 
-              {bill.pvcCalculation && (
-                <div className="flex justify-between pt-2 border-t">
-                  <span className="text-muted-foreground font-medium">Total PVC Amount:</span>
-                  <span className="text-lg font-bold text-blue-600 flex items-center gap-1">
-                    <IndianRupee size={16} />
-                    {calculateTotalPvc(bill.classificationEntries, bill.pvcCalculation, indicesData, bill).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-              )}
+              <div className="flex justify-between py-2 pt-4">
+                <span className="text-muted-foreground font-medium">Net Subject PVC Sum</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200 font-mono">
+                  {grandTotalCalculated < 0 ? '-' : ''}₹{Math.abs(grandTotalCalculated).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Contractor & Approval Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Contractor & Approval Details</CardTitle>
+        {/* Firm / Contractor Details Card */}
+        <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden flex flex-col justify-between">
+          <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800/80 px-6 py-4">
+            <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <Building size={18} className="text-indigo-500" />
+              Executing Agency Details
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 text-sm">
-              <div className="flex items-start gap-2">
-                <Building size={16} className="mt-0.5 text-muted-foreground" />
-                <div className="flex-1">
-                  <p className="text-muted-foreground text-xs mb-1">Contractor Name</p>
-                  <p className="font-medium">
+          <CardContent className="p-6 flex-1 flex flex-col justify-between">
+            <div className="space-y-5">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500">
+                  <Building size={16} />
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs font-bold uppercase tracking-wide">Contractor/Firm Name</p>
+                  <p className="font-bold text-slate-900 dark:text-white mt-0.5">
                     {bill.contract.user.companyName || bill.contract.user.name || 'N/A'}
                   </p>
-                  <p className="text-xs text-muted-foreground">{bill.contract.user.email}</p>
+                  <p className="text-xs text-slate-500 mt-0.5 font-mono">{bill.contract.user.email}</p>
                 </div>
               </div>
 
               {bill.submittedAt && (
-                <div className="flex items-start gap-2 pt-2 border-t">
-                  <Calendar size={16} className="mt-0.5 text-muted-foreground" />
-                  <div className="flex-1">
-                    <p className="text-muted-foreground text-xs mb-1">Submitted At</p>
-                    <p className="font-medium">
+                <div className="flex items-start gap-3 pt-3 border-t border-slate-100 dark:border-slate-850">
+                  <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500">
+                    <Calendar size={16} />
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs font-bold uppercase tracking-wide">Submission Timestamp</p>
+                    <p className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5 font-mono">
                       {format(toISTDate(new Date(bill.submittedAt)), 'dd MMM yyyy, hh:mm a')}
                     </p>
                   </div>
@@ -1036,37 +1100,27 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
               )}
 
               {bill.approvedAt && bill.approvedByUser && (
-                <>
-                  <div className="flex items-start gap-2 pt-2 border-t">
-                    <Calendar size={16} className="mt-0.5 text-muted-foreground" />
-                    <div className="flex-1">
-                      <p className="text-muted-foreground text-xs mb-1">Approved At</p>
-                      <p className="font-medium">
-                        {format(toISTDate(new Date(bill.approvedAt)), 'dd MMM yyyy, hh:mm a')}
-                      </p>
+                <div className="flex items-start gap-3 pt-3 border-t border-slate-100 dark:border-slate-850">
+                  <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500">
+                    <User size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-muted-foreground text-xs font-bold uppercase tracking-wide">Approved Authority</p>
+                    <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{bill.approvedByUser.name}</p>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {bill.approvedByUser.designation && (
+                        <Badge variant="secondary" className="text-[10px] font-bold py-0.5">
+                          {bill.approvedByUser.designation}
+                        </Badge>
+                      )}
+                      {bill.approvedByUser.department && (
+                        <Badge variant="secondary" className="text-[10px] font-bold py-0.5">
+                          {bill.approvedByUser.department}
+                        </Badge>
+                      )}
                     </div>
                   </div>
-
-                  <div className="flex items-start gap-2">
-                    <User size={16} className="mt-0.5 text-muted-foreground" />
-                    <div className="flex-1">
-                      <p className="text-muted-foreground text-xs mb-1">Approved By</p>
-                      <p className="font-medium">{bill.approvedByUser.name}</p>
-                      <div className="flex gap-2 mt-1">
-                        {bill.approvedByUser.designation && (
-                          <Badge variant="secondary" className="text-xs">
-                            {bill.approvedByUser.designation}
-                          </Badge>
-                        )}
-                        {bill.approvedByUser.department && (
-                          <Badge variant="secondary" className="text-xs">
-                            {bill.approvedByUser.department}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </>
+                </div>
               )}
             </div>
           </CardContent>
@@ -1074,114 +1128,132 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
       </div>
 
       {/* Contract Details */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Contract Details</CardTitle>
+      <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
+        <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800/80 px-6 py-4">
+          <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <Briefcase size={18} className="text-indigo-500" />
+            Underlying Agreement Parameters
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Work Description</p>
-              <p className="text-sm font-medium">{bill.contract.workDescription || 'N/A'}</p>
+        <CardContent className="p-6">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="lg:col-span-3 pb-3 border-b border-slate-100 dark:border-slate-850">
+              <p className="text-xs text-muted-foreground font-bold uppercase tracking-wide">Work Scope Description</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 mt-1">{bill.contract.workDescription || 'N/A'}</p>
             </div>
             
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Tender Advertised Value</p>
-              <p className="text-sm font-semibold flex items-center gap-1">
-                <IndianRupee size={14} />
-                {bill.contract.tenderAdvertisedValue?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || 'N/A'}
+            <div className="bg-slate-50 dark:bg-slate-800/20 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <p className="text-xs text-muted-foreground font-bold uppercase tracking-wide">Advertised Value</p>
+              <p className="text-lg font-extrabold text-slate-800 dark:text-white mt-1.5 font-mono flex items-center gap-0.5">
+                ₹{bill.contract.tenderAdvertisedValue?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || 'N/A'}
               </p>
             </div>
 
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Agreement Value</p>
-              <p className="text-sm font-semibold flex items-center gap-1">
-                <IndianRupee size={14} />
-                {bill.contract.agreementValue?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || 'N/A'}
+            <div className="bg-slate-50 dark:bg-slate-800/20 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <p className="text-xs text-muted-foreground font-bold uppercase tracking-wide">Final Agreement Value</p>
+              <p className="text-lg font-extrabold text-slate-800 dark:text-white mt-1.5 font-mono flex items-center gap-0.5">
+                ₹{bill.contract.agreementValue?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || 'N/A'}
               </p>
             </div>
 
-            {bill.contract.contractorName && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Firm Name</p>
-                <p className="text-sm font-medium">{bill.contract.contractorName}</p>
-              </div>
-            )}
+            <div className="bg-slate-50 dark:bg-slate-800/20 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <p className="text-xs text-muted-foreground font-bold uppercase tracking-wide">Executing Firm</p>
+              <p className="text-base font-extrabold text-indigo-600 dark:text-indigo-400 mt-1.5 truncate">
+                {bill.contract.contractorName || 'N/A'}
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Classifications */}
       {bill.classificationEntries && bill.classificationEntries.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Work Classifications</CardTitle>
+        <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
+          <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800/80 px-6 py-4">
+            <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <Layers size={18} className="text-indigo-500" />
+              Bill Schedule Items
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {bill.classificationEntries.map((entry: any, index: number) => {
+          <CardContent className="p-6">
+            <div className="space-y-4">
+              {bill.classificationEntries.map((entry: any, idx: number) => {
                 const classComp = entry.subClassification || entry.classification;
                 return (
-                <div key={entry.id} className="p-3 bg-muted rounded-md">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">
-                        {entry.itemNumber && (
-                          <span className="text-blue-700 mr-2">[{entry.itemNumber}]</span>
+                  <div key={entry.id} className="p-4 border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 bg-slate-50/40 dark:bg-slate-900/30 rounded-2xl transition-all duration-200">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div className="flex-1 space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap text-sm font-bold text-slate-800 dark:text-slate-200">
+                          {entry.itemNumber && (
+                            <span className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-lg text-xs font-mono font-bold">
+                              Item {entry.itemNumber}
+                            </span>
+                          )}
+                          <span>{classComp?.code} — {classComp?.name}</span>
+                        </div>
+                        
+                        {entry.scheduleItem && (
+                          <p className="text-xs text-violet-600 dark:text-violet-400 font-semibold flex items-center gap-1">
+                            <span>📋 Schedule:</span>
+                            <span className="font-mono bg-violet-500/5 px-1.5 py-0.5 rounded">{entry.scheduleItem}</span>
+                          </p>
                         )}
-                        {classComp?.code} - {classComp?.name}
-                      </p>
-                      {entry.scheduleItem && (
-                        <p className="text-xs text-violet-600 mt-1 font-medium">📋 {entry.scheduleItem}</p>
-                      )}
-                      {entry.description && (
-                        <p className="text-xs text-muted-foreground mt-1">{entry.description}</p>
-                      )}
-                      {/* Show item rows if available, else show legacy single qty/rate */}
-                      {entry.itemRows && Array.isArray(entry.itemRows) && entry.itemRows.length > 0 ? (
-                        <div className="mt-1.5 space-y-0.5">
-                          {entry.itemRows.map((row: any, ri: number) => {
-                            const rQty = parseFloat(String(row.quantity)) || 0;
-                            const rRate = parseFloat(String(row.agreementRate)) || 0;
-                            const rAmt = rQty > 0 && rRate > 0 ? rQty * rRate : 0;
-                            return (
-                              <div key={ri} className="flex items-center gap-3 text-xs text-muted-foreground">
-                                {row.itemNumber && <span className="text-blue-600">[{row.itemNumber}]</span>}
-                                {rQty > 0 && <span>Qty: <span className="font-medium text-foreground">{rQty.toLocaleString('en-IN', { maximumFractionDigits: 4 })}</span></span>}
-                                {rRate > 0 && <span>Rate: <span className="font-medium text-foreground">₹{rRate.toLocaleString('en-IN', { maximumFractionDigits: 5 })}</span></span>}
-                                {rAmt > 0 && <span className="text-green-700">= ₹{rAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                              </div>
-                            );
-                          })}
+                        
+                        {entry.description && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 p-2.5 rounded-xl">
+                            {entry.description}
+                          </p>
+                        )}
+                        
+                        {entry.itemRows && Array.isArray(entry.itemRows) && entry.itemRows.length > 0 ? (
+                          <div className="mt-2 space-y-1 bg-white/70 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-200/30">
+                            {entry.itemRows.map((row: any, rIdx: number) => {
+                              const rQty = parseFloat(String(row.quantity)) || 0;
+                              const rRate = parseFloat(String(row.agreementRate)) || 0;
+                              const rAmt = rQty > 0 && rRate > 0 ? rQty * rRate : 0;
+                              return (
+                                <div key={rIdx} className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 py-1 px-2 hover:bg-slate-50/50 rounded-lg">
+                                  <div className="flex items-center gap-2">
+                                    {row.itemNumber && <span className="font-mono text-blue-600 bg-blue-500/5 px-1 rounded">[{row.itemNumber}]</span>}
+                                    <span>Qty: <strong className="text-slate-700 dark:text-slate-300 font-mono">{rQty.toLocaleString('en-IN', { maximumFractionDigits: 4 })}</strong></span>
+                                    <span className="text-slate-300">•</span>
+                                    <span>Rate: <strong className="text-slate-700 dark:text-slate-300 font-mono">₹{rRate.toLocaleString('en-IN', { maximumFractionDigits: 5 })}</strong></span>
+                                  </div>
+                                  {rAmt > 0 && <span className="font-mono font-bold text-emerald-600">= ₹{rAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (entry.quantity || entry.agreementRate) ? (
+                          <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 font-mono pt-1">
+                            {entry.quantity != null && entry.quantity !== 0 && (
+                              <span>Qty: <strong className="text-slate-700 dark:text-slate-300">{Number(entry.quantity).toLocaleString('en-IN', { maximumFractionDigits: 4 })}</strong></span>
+                            )}
+                            {entry.quantity != null && entry.quantity !== 0 && entry.agreementRate != null && entry.agreementRate !== 0 && <span className="text-slate-300">•</span>}
+                            {entry.agreementRate != null && entry.agreementRate !== 0 && (
+                              <span>Rate: <strong className="text-slate-700 dark:text-slate-300">₹{Number(entry.agreementRate).toLocaleString('en-IN', { maximumFractionDigits: 5 })}</strong></span>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="flex items-center gap-2.5 self-end md:self-center">
+                        {classComp && (
+                          <ClassificationComparisonDialog
+                            currentClassification={classComp}
+                            entryAmount={parseFloat(String(entry.amount)) || 0}
+                            indicesData={indicesData}
+                          />
+                        )}
+                        <div className="text-right bg-white dark:bg-slate-900 px-4 py-2 border border-slate-100 dark:border-slate-800 rounded-xl shadow-sm">
+                          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Allocated Value</p>
+                          <p className="font-mono font-bold text-slate-800 dark:text-white mt-0.5 text-sm flex items-center gap-0.5">
+                            ₹{entry.amount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
                         </div>
-                      ) : (entry.quantity || entry.agreementRate) ? (
-                        <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                          {entry.quantity != null && entry.quantity !== 0 && (
-                            <span>Qty: <span className="font-medium text-foreground">{Number(entry.quantity).toLocaleString('en-IN', { maximumFractionDigits: 4 })}</span></span>
-                          )}
-                          {entry.agreementRate != null && entry.agreementRate !== 0 && (
-                            <span>Rate: <span className="font-medium text-foreground">₹{Number(entry.agreementRate).toLocaleString('en-IN', { maximumFractionDigits: 5 })}</span></span>
-                          )}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {classComp && (
-                        <ClassificationComparisonDialog
-                          currentClassification={classComp}
-                          entryAmount={parseFloat(String(entry.amount)) || 0}
-                          indicesData={indicesData}
-                        />
-                      )}
-                      <div className="text-right">
-                        <p className="font-semibold flex items-center gap-1">
-                          <IndianRupee size={14} />
-                          {entry.amount?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || '0.00'}
-                        </p>
                       </div>
                     </div>
                   </div>
-                </div>
                 );
               })}
             </div>
@@ -1189,63 +1261,59 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
         </Card>
       )}
 
-      {/* PVC Calculation Details */}
+      {/* 5. PVC Calculation details */}
       {bill.pvcCalculation && (
-        <Card>
-          <CardHeader>
-            <CardTitle>PVC Calculation Breakdown</CardTitle>
+        <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
+          <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800/80 px-6 py-4">
+            <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <TrendingUp size={18} className="text-indigo-500" />
+              Statutory Escalate Framework & Calculations
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* 1. Extension Compliance Info */}
+          <CardContent className="p-6">
+            <div className="space-y-6">
+              
+              {/* Capped Period restriction */}
               {bill.pvcCalculation?.isExtensionPeriod && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                    Extension Compliance (GCC Clause {bill.pvcCalculation.extensionType})
+                <div className="bg-amber-500/5 border border-amber-500/25 p-4 rounded-2xl">
+                  <p className="text-xs font-bold text-amber-800 dark:text-amber-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                    <AlertTriangle size={14} /> Extension compliance restriction active
                   </p>
-                  <div className="grid gap-2 text-sm">
-                    <div className="flex justify-between items-center p-2 bg-muted rounded-md">
-                      <span className="text-muted-foreground">Extension Type:</span>
-                      <Badge variant="outline">{bill.pvcCalculation.extensionType || 'N/A'}</Badge>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 text-sm">
+                    <div className="bg-white dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 p-3.5 rounded-xl">
+                      <span className="text-xs text-muted-foreground font-semibold block">Clause Basis</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200 mt-1 block">GCC Clause {bill.pvcCalculation.extensionType || 'N/A'}</span>
                     </div>
-                    
-                    {bill.pvcCalculation?.isIndexCapped && (
-                      <>
-                        <div className="flex justify-between items-center p-2 bg-muted rounded-md">
-                          <span className="text-muted-foreground">Index Status:</span>
-                          <Badge variant="destructive">Capped</Badge>
-                        </div>
-                        
-                        {bill.pvcCalculation?.indexCapDate && (
-                          <div className="flex justify-between items-center p-2 bg-muted rounded-md">
-                            <span className="text-muted-foreground">Cap Date:</span>
-                            <span className="font-medium">
-                              {format(new Date(bill.pvcCalculation.indexCapDate), 'MMM yyyy')}
-                            </span>
-                          </div>
-                        )}
 
-                        {bill.pvcCalculation?.pvcSavingsDueToRestriction != null && 
-                         bill.pvcCalculation.pvcSavingsDueToRestriction > 0 && (
-                          <div className="flex justify-between items-center p-2 bg-orange-50 dark:bg-orange-950/20 rounded-md">
-                            <span className="text-muted-foreground">PVC Savings (Due to Cap):</span>
-                            <span className="font-semibold text-orange-600 flex items-center gap-1">
-                              <IndianRupee size={14} />
-                              {bill.pvcCalculation.pvcSavingsDueToRestriction.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        )}
-                      </>
+                    <div className="bg-white dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 p-3.5 rounded-xl">
+                      <span className="text-xs text-muted-foreground font-semibold block">Restriction Mode</span>
+                      <Badge variant="destructive" className="font-bold mt-1">Capped Indices</Badge>
+                    </div>
+
+                    {bill.pvcCalculation?.indexCapDate && (
+                      <div className="bg-white dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 p-3.5 rounded-xl">
+                        <span className="text-xs text-muted-foreground font-semibold block">Indices Cap Date</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200 font-mono mt-1 block">
+                          {format(new Date(bill.pvcCalculation.indexCapDate), 'MMMM yyyy')}
+                        </span>
+                      </div>
+                    )}
+
+                    {bill.pvcCalculation?.pvcSavingsDueToRestriction != null && 
+                     bill.pvcCalculation.pvcSavingsDueToRestriction > 0 && (
+                      <div className="bg-emerald-500/10 dark:bg-emerald-950/20 border border-emerald-500/20 p-3.5 rounded-xl">
+                        <span className="text-xs text-emerald-800 dark:text-emerald-400 font-bold block">Restriction Savings</span>
+                        <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400 mt-1 block flex items-center gap-0.5">
+                          ₹{bill.pvcCalculation.pvcSavingsDueToRestriction.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* 2. Component-wise PVC Table - matches PDF report format */}
-              <div className={`space-y-3 ${bill.pvcCalculation?.isExtensionPeriod ? 'pt-3 border-t' : ''}`}>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Component-wise PVC (from Work Classifications)
-                </p>
+              {/* Master Breakdown Table component */}
+              <div className="pt-2">
                 <ComponentPvcTable 
                   classificationEntries={bill.classificationEntries}
                   billAmount={bill.billAmount}
@@ -1255,96 +1323,31 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                 />
               </div>
 
-              {/* 3. Dedicated Components (85% calculations) */}
-              {(bill.pvcCalculation?.dedicatedCementPvc != null && bill.pvcCalculation.dedicatedCementPvc !== 0) ||
-               (bill.pvcCalculation?.dedicatedSteelTmtBarsPvc != null && bill.pvcCalculation.dedicatedSteelTmtBarsPvc !== 0) ||
-               (bill.pvcCalculation?.dedicatedSteelAngleChannelPvc != null && bill.pvcCalculation.dedicatedSteelAngleChannelPvc !== 0) ||
-               (bill.pvcCalculation?.dedicatedSteelPlatesPvc != null && bill.pvcCalculation.dedicatedSteelPlatesPvc !== 0) ||
-               (bill.pvcCalculation?.dedicatedSteelOtherSectionsPvc != null && bill.pvcCalculation.dedicatedSteelOtherSectionsPvc !== 0) ? (
-                <div className="space-y-2 pt-3 border-t">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                    Dedicated Components (85% Calculations)
-                  </p>
-                  <div className="grid gap-2">
-                    {bill.pvcCalculation?.dedicatedCementPvc != null && bill.pvcCalculation.dedicatedCementPvc !== 0 && (
-                      <div className="flex justify-between items-center p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-md">
-                        <span className="text-sm font-medium">Dedicated Cement (85%)</span>
-                        <span className="text-sm font-semibold flex items-center gap-1">
-                          <IndianRupee size={14} />
-                          {bill.pvcCalculation.dedicatedCementPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    )}
-
-                    {bill.pvcCalculation?.dedicatedSteelTmtBarsPvc != null && bill.pvcCalculation.dedicatedSteelTmtBarsPvc !== 0 && (
-                      <div className="flex justify-between items-center p-3 bg-violet-50 dark:bg-violet-950/20 rounded-md">
-                        <span className="text-sm font-medium">Dedicated Steel TMT Bars (85%)</span>
-                        <span className="text-sm font-semibold flex items-center gap-1">
-                          <IndianRupee size={14} />
-                          {bill.pvcCalculation.dedicatedSteelTmtBarsPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    )}
-
-                    {bill.pvcCalculation?.dedicatedSteelAngleChannelPvc != null && bill.pvcCalculation.dedicatedSteelAngleChannelPvc !== 0 && (
-                      <div className="flex justify-between items-center p-3 bg-violet-50 dark:bg-violet-950/20 rounded-md">
-                        <span className="text-sm font-medium">Dedicated Steel Angle/Channel (85%)</span>
-                        <span className="text-sm font-semibold flex items-center gap-1">
-                          <IndianRupee size={14} />
-                          {bill.pvcCalculation.dedicatedSteelAngleChannelPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    )}
-
-                    {bill.pvcCalculation?.dedicatedSteelPlatesPvc != null && bill.pvcCalculation.dedicatedSteelPlatesPvc !== 0 && (
-                      <div className="flex justify-between items-center p-3 bg-violet-50 dark:bg-violet-950/20 rounded-md">
-                        <span className="text-sm font-medium">Dedicated Steel Plates (85%)</span>
-                        <span className="text-sm font-semibold flex items-center gap-1">
-                          <IndianRupee size={14} />
-                          {bill.pvcCalculation.dedicatedSteelPlatesPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    )}
-
-                    {bill.pvcCalculation?.dedicatedSteelOtherSectionsPvc != null && bill.pvcCalculation.dedicatedSteelOtherSectionsPvc !== 0 && (
-                      <div className="flex justify-between items-center p-3 bg-violet-50 dark:bg-violet-950/20 rounded-md">
-                        <span className="text-sm font-medium">Dedicated Steel Other Sections (85%)</span>
-                        <span className="text-sm font-semibold flex items-center gap-1">
-                          <IndianRupee size={14} />
-                          {bill.pvcCalculation.dedicatedSteelOtherSectionsPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-
-              {/* 4. Cement Formula Table */}
-              {(bill.pvcCalculation?.dedicatedCementPvc != null && bill.pvcCalculation.dedicatedCementPvc !== 0) && indicesData && (
-                <div className="space-y-2 pt-3 border-t">
-                  <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-                    Cement Component Formula
+              {/* Dedicated cement table */}
+              {bill.pvcCalculation?.dedicatedCementPvc != null && bill.pvcCalculation.dedicatedCementPvc !== 0 && indicesData && (
+                <div className="border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/10 dark:bg-emerald-950/5 p-5 rounded-2xl space-y-3">
+                  <h4 className="text-sm font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <CheckCircle size={16} /> Dedicated Cement Formula (GCC Clause 46A)
                   </h4>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse border border-border">
+                  <div className="overflow-x-auto border border-emerald-250 dark:border-emerald-850 rounded-xl bg-white dark:bg-slate-900">
+                    <table className="w-full border-collapse">
                       <thead>
-                        <tr className="bg-emerald-50 dark:bg-emerald-950/20">
-                          <th className="border border-border px-4 py-2.5 text-left text-sm font-semibold">Component</th>
-                          <th className="border border-border px-4 py-2.5 text-left text-sm font-semibold">Formula</th>
-                          <th className="border border-border px-4 py-2.5 text-right text-sm font-semibold">PVC Amount</th>
+                        <tr className="bg-emerald-500/5 text-slate-800 dark:text-slate-200 text-xs border-b border-emerald-100 dark:border-emerald-900 font-semibold">
+                          <th className="px-4 py-2.5 text-left">Description</th>
+                          <th className="px-4 py-2.5 text-left">Statutory Escalate Formula</th>
+                          <th className="px-4 py-2.5 text-right">Escalation Amount</th>
                         </tr>
                       </thead>
-                      <tbody>
-                        <tr className="hover:bg-muted/50">
-                          <td className="border border-border px-4 py-2.5 text-sm font-medium">
-                            Dedicated Cement (85%)
+                      <tbody className="text-xs">
+                        <tr>
+                          <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">
+                            Dedicated Cement Allocation (85% escalation factor)
                           </td>
-                          <td className="border border-border px-4 py-2.5 text-sm font-mono text-xs">
-                            {bill.cementAmount?.toLocaleString('en-IN')} × [(
-                            {indicesData.current['RBI Cement']?.toFixed(2)} - {indicesData.base['RBI Cement']?.toFixed(2)}) ÷ {indicesData.base['RBI Cement']?.toFixed(2)}] × 85%
+                          <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 max-w-[400px] break-all">
+                            {bill.cementAmount?.toLocaleString('en-IN')} × [({indicesData.current['RBI Cement']?.toFixed(2)} - {indicesData.base['RBI Cement']?.toFixed(2)}) ÷ {indicesData.base['RBI Cement']?.toFixed(2)}] × 85%
                           </td>
-                          <td className="border border-border px-4 py-2.5 text-sm text-right font-semibold">
-                            {bill.pvcCalculation.dedicatedCementPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                          <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            ₹{bill.pvcCalculation.dedicatedCementPvc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                         </tr>
                       </tbody>
@@ -1353,83 +1356,79 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                 </div>
               )}
 
-              {/* 5. Steel Formula Table */}
+              {/* Dedicated Steel Table */}
               {(
                 (bill.pvcCalculation?.dedicatedSteelTmtBarsPvc != null && bill.pvcCalculation.dedicatedSteelTmtBarsPvc !== 0) ||
                 (bill.pvcCalculation?.dedicatedSteelAngleChannelPvc != null && bill.pvcCalculation.dedicatedSteelAngleChannelPvc !== 0) ||
                 (bill.pvcCalculation?.dedicatedSteelPlatesPvc != null && bill.pvcCalculation.dedicatedSteelPlatesPvc !== 0) ||
                 (bill.pvcCalculation?.dedicatedSteelOtherSectionsPvc != null && bill.pvcCalculation.dedicatedSteelOtherSectionsPvc !== 0)
               ) && indicesData && (
-                <div className="space-y-2 pt-3 border-t">
-                  <h4 className="text-sm font-semibold text-violet-700 dark:text-violet-400">
-                    Steel Components Formula
+                <div className="border border-violet-200 dark:border-violet-800/40 bg-violet-50/10 dark:bg-violet-950/5 p-5 rounded-2xl space-y-3">
+                  <h4 className="text-sm font-bold text-violet-700 dark:text-violet-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <CheckCircle size={16} /> Dedicated Steel Formula (85% escalation factor)
                   </h4>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse border border-border">
+                  <div className="overflow-x-auto border border-violet-250 dark:border-violet-850 rounded-xl bg-white dark:bg-slate-900">
+                    <table className="w-full border-collapse">
                       <thead>
-                        <tr className="bg-violet-50 dark:bg-violet-950/20">
-                          <th className="border border-border px-4 py-2.5 text-left text-sm font-semibold">Component</th>
-                          <th className="border border-border px-4 py-2.5 text-left text-sm font-semibold">Formula</th>
-                          <th className="border border-border px-4 py-2.5 text-right text-sm font-semibold">PVC Amount</th>
+                        <tr className="bg-violet-500/5 text-slate-800 dark:text-slate-200 text-xs border-b border-violet-100 dark:border-violet-900 font-semibold">
+                          <th className="px-4 py-2.5 text-left">Steel Component Type</th>
+                          <th className="px-4 py-2.5 text-left">Statutory Escalate Formula</th>
+                          <th className="px-4 py-2.5 text-right">Escalation Amount</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
                         {bill.pvcCalculation?.dedicatedSteelTmtBarsPvc != null && bill.pvcCalculation.dedicatedSteelTmtBarsPvc !== 0 && (
-                          <tr className="hover:bg-muted/50">
-                            <td className="border border-border px-4 py-2.5 text-sm font-medium">
+                          <tr>
+                            <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">
                               Dedicated Steel TMT Bars (85%)
                             </td>
-                            <td className="border border-border px-4 py-2.5 text-sm font-mono text-xs">
-                              {bill.steelTmtBarsAmount?.toLocaleString('en-IN')} × [(
-                              {indicesData.current['Steel TMT Bars']?.toFixed(2)} - {indicesData.base['Steel TMT Bars']?.toFixed(2)}) ÷ {indicesData.base['Steel TMT Bars']?.toFixed(2)}] × 85%
+                            <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 break-all max-w-[400px]">
+                              {bill.steelTmtBarsAmount?.toLocaleString('en-IN')} × [({indicesData.current['Steel TMT Bars']?.toFixed(2)} - {indicesData.base['Steel TMT Bars']?.toFixed(2)}) ÷ {indicesData.base['Steel TMT Bars']?.toFixed(2)}] × 85%
                             </td>
-                            <td className="border border-border px-4 py-2.5 text-sm text-right font-semibold">
-                              {bill.pvcCalculation.dedicatedSteelTmtBarsPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                            <td className="px-4 py-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                              ₹{bill.pvcCalculation.dedicatedSteelTmtBarsPvc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>
                         )}
 
                         {bill.pvcCalculation?.dedicatedSteelAngleChannelPvc != null && bill.pvcCalculation.dedicatedSteelAngleChannelPvc !== 0 && (
-                          <tr className="hover:bg-muted/50">
-                            <td className="border border-border px-4 py-2.5 text-sm font-medium">
+                          <tr>
+                            <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">
                               Dedicated Steel Angle/Channel (85%)
                             </td>
-                            <td className="border border-border px-4 py-2.5 text-sm font-mono text-xs">
-                              {bill.steelAngleChannelAmount?.toLocaleString('en-IN')} × [(
-                              {indicesData.current['Steel Angle/Channel']?.toFixed(2)} - {indicesData.base['Steel Angle/Channel']?.toFixed(2)}) ÷ {indicesData.base['Steel Angle/Channel']?.toFixed(2)}] × 85%
+                            <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 break-all max-w-[400px]">
+                              {bill.steelAngleChannelAmount?.toLocaleString('en-IN')} × [({indicesData.current['Steel Angle/Channel']?.toFixed(2)} - {indicesData.base['Steel Angle/Channel']?.toFixed(2)}) ÷ {indicesData.base['Steel Angle/Channel']?.toFixed(2)}] × 85%
                             </td>
-                            <td className="border border-border px-4 py-2.5 text-sm text-right font-semibold">
-                              {bill.pvcCalculation.dedicatedSteelAngleChannelPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                            <td className="px-4 py-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                              ₹{bill.pvcCalculation.dedicatedSteelAngleChannelPvc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>
                         )}
 
                         {bill.pvcCalculation?.dedicatedSteelPlatesPvc != null && bill.pvcCalculation.dedicatedSteelPlatesPvc !== 0 && (
-                          <tr className="hover:bg-muted/50">
-                            <td className="border border-border px-4 py-2.5 text-sm font-medium">
+                          <tr>
+                            <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">
                               Dedicated Steel Plates (85%)
                             </td>
-                            <td className="border border-border px-4 py-2.5 text-sm font-mono text-xs">
-                              {bill.steelPlatesAmount?.toLocaleString('en-IN')} × [(
-                              {indicesData.current['Steel Plates']?.toFixed(2)} - {indicesData.base['Steel Plates']?.toFixed(2)}) ÷ {indicesData.base['Steel Plates']?.toFixed(2)}] × 85%
+                            <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 break-all max-w-[400px]">
+                              {bill.steelPlatesAmount?.toLocaleString('en-IN')} × [({indicesData.current['Steel Plates']?.toFixed(2)} - {indicesData.base['Steel Plates']?.toFixed(2)}) ÷ {indicesData.base['Steel Plates']?.toFixed(2)}] × 85%
                             </td>
-                            <td className="border border-border px-4 py-2.5 text-sm text-right font-semibold">
-                              {bill.pvcCalculation.dedicatedSteelPlatesPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                            <td className="px-4 py-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                              ₹{bill.pvcCalculation.dedicatedSteelPlatesPvc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>
                         )}
 
                         {bill.pvcCalculation?.dedicatedSteelOtherSectionsPvc != null && bill.pvcCalculation.dedicatedSteelOtherSectionsPvc !== 0 && (
-                          <tr className="hover:bg-muted/50">
-                            <td className="border border-border px-4 py-2.5 text-sm font-medium">
+                          <tr>
+                            <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">
                               Dedicated Steel Other Sections (85%)
                             </td>
-                            <td className="border border-border px-4 py-2.5 text-sm font-mono text-xs">
-                              {bill.steelOtherSectionsAmount?.toLocaleString('en-IN')} × [(
-                              {indicesData.current['Steel Other Sections']?.toFixed(2)} - {indicesData.base['Steel Other Sections']?.toFixed(2)}) ÷ {indicesData.base['Steel Other Sections']?.toFixed(2)}] × 85%
+                            <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 break-all max-w-[400px]">
+                              {bill.steelOtherSectionsAmount?.toLocaleString('en-IN')} × [({indicesData.current['Steel Other Sections']?.toFixed(2)} - {indicesData.base['Steel Other Sections']?.toFixed(2)}) ÷ {indicesData.base['Steel Other Sections']?.toFixed(2)}] × 85%
                             </td>
-                            <td className="border border-border px-4 py-2.5 text-sm text-right font-semibold">
-                              {bill.pvcCalculation.dedicatedSteelOtherSectionsPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                            <td className="px-4 py-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                              ₹{bill.pvcCalculation.dedicatedSteelOtherSectionsPvc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>
                         )}
@@ -1439,12 +1438,17 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                 </div>
               )}
 
-              {/* 6. Detailed Monthly Indices Table */}
+              {/* Master detailed monthly index table */}
               {detailedMonthlyData && (
-                <div className="space-y-3 pt-3 border-t">
-                  <h3 className="text-base font-bold uppercase tracking-wide">
-                    DETAILED MONTHLY PRICE INDICES
-                  </h3>
+                <div className="space-y-4 pt-5 border-t border-slate-100 dark:border-slate-850">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                      <FileSpreadsheet size={16} />
+                    </div>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                      Detailed Monthly Price Indices Table
+                    </h3>
+                  </div>
                   <DetailedMonthlyIndicesTable 
                     classificationEntries={bill.classificationEntries}
                     detailedMonthlyData={detailedMonthlyData}
@@ -1454,12 +1458,14 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                 </div>
               )}
 
-              {/* 7. Total PVC */}
-              <div className="flex justify-between items-center p-4 bg-primary/10 rounded-md border-2 border-primary/20 mt-4">
-                <span className="text-base font-bold">Total PVC Amount</span>
-                <span className="text-lg font-bold text-primary flex items-center gap-1">
-                  <IndianRupee size={18} />
-                  {calculateTotalPvc(bill.classificationEntries, bill.pvcCalculation, indicesData, bill).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+              {/* Grand summary box */}
+              <div className="flex justify-between items-center p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-950 text-white rounded-2xl border-2 border-indigo-500/20 shadow-md">
+                <div className="space-y-0.5">
+                  <span className="text-xs uppercase tracking-widest text-indigo-300 font-bold">Grand Escalation Total:</span>
+                  <p className="text-[10px] text-slate-400">Aggregate of schedule subclassifications and dedicated 85% materials</p>
+                </div>
+                <span className={`font-mono font-extrabold text-xl ${isPvcNegative ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  {isPvcNegative ? '-' : ''}₹{Math.abs(grandTotalCalculated).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -1467,7 +1473,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
         </Card>
       )}
 
-      {/* Approval History */}
+      {/* Approval history timeline */}
       <ApprovalHistory billId={bill.id} />
     </div>
   );

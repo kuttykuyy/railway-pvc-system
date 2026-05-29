@@ -335,45 +335,23 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
       )}
 
       <Accordion type="multiple" defaultValue={['basic', 'financial', 'timeline', 'materials', 'covering-letter']} className="space-y-4">
-        {/* Document Scanner - Only show for new contracts */}
-        {!isEdit && (
-          <AccordionItem value="scanner" className="border rounded-lg px-4 bg-gradient-to-r from-amber-50 to-orange-50">
-            <AccordionTrigger className="hover:no-underline">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-600 rounded-lg">
-                  <Sparkles className="h-5 w-5 text-white" />
-                </div>
-                <div className="text-left">
-                  <h3 className="font-semibold text-gray-900">AI Document Scanner</h3>
-                  <p className="text-sm text-gray-600">Auto-fill form by scanning contract documents</p>
-                </div>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="pt-4">
-              <DocumentScanner
-                documentType="contract"
-                onDataExtracted={handleDocumentDataExtracted}
-              />
-            </AccordionContent>
-          </AccordionItem>
-        )}
         {/* Basic Information Section */}
-        <AccordionItem value="basic" className="border rounded-lg px-4 bg-gradient-to-r from-blue-50 to-indigo-50">
-          <AccordionTrigger className="hover:no-underline">
+        <AccordionItem value="basic" className="border border-slate-200 bg-white rounded-xl shadow-sm hover:shadow transition-all duration-200 px-5">
+          <AccordionTrigger className="hover:no-underline py-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-600 rounded-lg">
-                <FileText className="h-5 w-5 text-white" />
+              <div className="p-2 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg">
+                <FileText className="h-5 w-5" />
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-gray-900">Basic Information</h3>
-                <p className="text-sm text-gray-600">Agreement details and work description</p>
+                <h3 className="font-semibold text-slate-800 text-base">Basic Information</h3>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">Agreement details and work description</p>
               </div>
             </div>
           </AccordionTrigger>
-          <AccordionContent className="pt-4 space-y-4">
+          <AccordionContent className="pt-2 pb-5 space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="agreementNo" className="text-sm font-medium">
+                <Label htmlFor="agreementNo" className="text-sm font-semibold text-slate-700">
                   Agreement Number <span className="text-red-500">*</span>
                 </Label>
                 <Input
@@ -383,16 +361,19 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   onChange={handleInputChange}
                   placeholder="e.g., SR/MAS/Civil/2023/0019"
                   required
-                  className={`border-gray-300 focus:border-blue-500 ${fieldErrors.agreementNo ? 'border-red-500 focus:border-red-500' : ''}`}
+                  className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${fieldErrors.agreementNo ? 'border-red-500 focus:border-red-500' : ''}`}
                 />
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  The unique reference ID assigned to the final signed contract agreement. This is used for all billing and official communications.
+                </p>
                 {fieldErrors.agreementNo && (
-                  <p className="text-sm text-red-600">{fieldErrors.agreementNo}</p>
+                  <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.agreementNo}</p>
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="loaNo" className="text-sm font-medium">
-                  LOA Number <span className="text-xs text-gray-500">(Optional)</span>
+                <Label htmlFor="loaNo" className="text-sm font-semibold text-slate-700">
+                  LOA Number <span className="text-xs font-normal text-slate-500">(Optional)</span>
                 </Label>
                 <Input
                   id="loaNo"
@@ -400,13 +381,16 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   value={formData.loaNo}
                   onChange={handleInputChange}
                   placeholder="e.g., LOA/2023/Civil/019"
-                  className="border-gray-300 focus:border-blue-500"
+                  className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
                 />
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Letter of Acceptance reference number, issued to the contractor upon bid approval and prior to the signed agreement.
+                </p>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="contractorName" className="text-sm font-medium">
+              <Label htmlFor="contractorName" className="text-sm font-semibold text-slate-700">
                 Contractor Name <span className="text-red-500">*</span>
               </Label>
               <Input
@@ -416,16 +400,19 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 onChange={handleInputChange}
                 placeholder="e.g., V R RADHAKRISHNAN"
                 required
-                className={`border-gray-300 focus:border-blue-500 ${fieldErrors.contractorName ? 'border-red-500 focus:border-red-500' : ''}`}
+                className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${fieldErrors.contractorName ? 'border-red-500 focus:border-red-500' : ''}`}
               />
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                The official name of the executing firm, individual, or joint venture (JV) exactly as it appears in the contract documents.
+              </p>
               {fieldErrors.contractorName && (
-                <p className="text-sm text-red-600">{fieldErrors.contractorName}</p>
+                <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.contractorName}</p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="contractorPhone" className="text-sm font-medium">
-                Contractor Phone (for WhatsApp notifications)
+              <Label htmlFor="contractorPhone" className="text-sm font-semibold text-slate-700">
+                Contractor Phone (for WhatsApp notifications) <span className="text-xs font-normal text-slate-500">(Optional)</span>
               </Label>
               <Input
                 id="contractorPhone"
@@ -435,15 +422,15 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 placeholder="e.g., 9876543210"
                 type="tel"
                 maxLength={10}
-                className="border-gray-300 focus:border-blue-500"
+                className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
               />
-              <p className="text-xs text-gray-500">
-                📱 Bill PDFs will be automatically sent to this number via WhatsApp when bills are created
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                📱 Enter the contractor's 10-digit mobile number to automatically send generated bill PDFs and PVC calculation worksheets directly to them via WhatsApp.
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="workDescription" className="text-sm font-medium">
+              <Label htmlFor="workDescription" className="text-sm font-semibold text-slate-700">
                 Work Description <span className="text-red-500">*</span>
               </Label>
               <Textarea
@@ -454,35 +441,38 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 placeholder="e.g., MS-VM section (CTR(P)) - 9.065 km"
                 rows={3}
                 required
-                className={`border-gray-300 focus:border-blue-500 resize-none ${fieldErrors.workDescription ? 'border-red-500 focus:border-red-500' : ''}`}
+                className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-none ${fieldErrors.workDescription ? 'border-red-500 focus:border-red-500' : ''}`}
               />
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                A brief description of the scope of work (e.g. sections, lines, track distance, or bridge numbers) for record keeping.
+              </p>
               {fieldErrors.workDescription && (
-                <p className="text-sm text-red-600">{fieldErrors.workDescription}</p>
+                <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.workDescription}</p>
               )}
             </div>
           </AccordionContent>
         </AccordionItem>
 
         {/* Financial Details Section */}
-        <AccordionItem value="financial" className="border rounded-lg px-4 bg-gradient-to-r from-green-50 to-emerald-50">
-          <AccordionTrigger className="hover:no-underline">
+        <AccordionItem value="financial" className="border border-slate-200 bg-white rounded-xl shadow-sm hover:shadow transition-all duration-200 px-5">
+          <AccordionTrigger className="hover:no-underline py-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-600 rounded-lg">
-                <IndianRupee className="h-5 w-5 text-white" />
+              <div className="p-2 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg">
+                <IndianRupee className="h-5 w-5" />
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-gray-900">Financial Details</h3>
-                <p className="text-sm text-gray-600">Contract values and PVC eligibility</p>
+                <h3 className="font-semibold text-slate-800 text-base">Financial Details</h3>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">Contract values and PVC eligibility</p>
               </div>
             </div>
           </AccordionTrigger>
-          <AccordionContent className="pt-4 space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <div className="flex items-start gap-2">
+          <AccordionContent className="pt-2 pb-5 space-y-5">
+            <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4">
+              <div className="flex items-start gap-2.5">
                 <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-blue-900">
-                  <p className="font-semibold mb-1">GCC 46A.1 - PVC Applicability Criteria</p>
-                  <p className="text-blue-700">PVC applies if tender value exceeds ₹2 Crores and completion period is above 12 months</p>
+                <div className="text-xs text-slate-600 space-y-1">
+                  <p className="font-semibold text-slate-800 text-sm">GCC Clause 46A.1 - PVC Applicability Criteria</p>
+                  <p className="leading-relaxed">Price Variation Clause (PVC) is applicable only if the tender advertised value exceeds <strong>₹2 Crores</strong> and the contract completion period is greater than <strong>12 months</strong>.</p>
                 </div>
               </div>
             </div>
@@ -490,8 +480,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="tenderAdvertisedValue" className="text-sm font-medium">
-                    Tender Advertised Value (₹) <span className="text-xs text-gray-500">(Optional)</span>
+                  <Label htmlFor="tenderAdvertisedValue" className="text-sm font-semibold text-slate-700">
+                    Tender Advertised Value (₹) <span className="text-xs font-normal text-slate-500">(Optional)</span>
                   </Label>
                   <BillAmountCalculator
                     onInsertTotal={(total) => {
@@ -515,20 +505,20 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   value={formData.tenderAdvertisedValue}
                   onChange={handleInputChange}
                   placeholder="e.g., 25000000 (2.5 Crores)"
-                  className={`border-gray-300 focus:border-green-500 ${fieldErrors.tenderAdvertisedValue ? 'border-red-500 focus:border-red-500' : ''}`}
+                  className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-green-500 focus:ring-1 focus:ring-green-500 transition-all ${fieldErrors.tenderAdvertisedValue ? 'border-red-500 focus:border-red-500' : ''}`}
                 />
-                {fieldErrors.tenderAdvertisedValue && (
-                  <p className="text-sm text-red-600">{fieldErrors.tenderAdvertisedValue}</p>
-                )}
-                <p className="text-xs text-gray-600">
-                  PVC applies if tender value exceeds ₹2 Crores
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  The estimated project value listed in the tender notice. Under GCC Clause 46A.1, this value must exceed ₹2 Crores for PVC to be applicable.
                 </p>
+                {fieldErrors.tenderAdvertisedValue && (
+                  <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.tenderAdvertisedValue}</p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="contractValue" className="text-sm font-medium">
-                    AGREEMENT VALUE (₹) <span className="text-xs text-gray-500">(Optional)</span>
+                  <Label htmlFor="contractValue" className="text-sm font-semibold text-slate-700">
+                    Agreement Value (₹) <span className="text-xs font-normal text-slate-500">(Optional)</span>
                   </Label>
                   <BillAmountCalculator
                     onInsertTotal={(total) => {
@@ -552,48 +542,48 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   value={formData.contractValue}
                   onChange={handleInputChange}
                   placeholder="e.g., 24500000 (2.45 Crores)"
-                  className={`border-gray-300 focus:border-green-500 ${fieldErrors.contractValue ? 'border-red-500 focus:border-red-500' : ''}`}
+                  className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-green-500 focus:ring-1 focus:ring-green-500 transition-all ${fieldErrors.contractValue ? 'border-red-500 focus:border-red-500' : ''}`}
                 />
-                {fieldErrors.contractValue && (
-                  <p className="text-sm text-red-600">{fieldErrors.contractValue}</p>
-                )}
-                <p className="text-xs text-gray-600">
-                  Actual agreement value after tender evaluation
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  The final accepted agreement value after bid evaluation. Used as the baseline for all subsequent bills and percentage variations.
                 </p>
+                {fieldErrors.contractValue && (
+                  <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.contractValue}</p>
+                )}
               </div>
             </div>
 
             {/* PVC Eligibility Status */}
             {pvcEligibility && (
-              <div className={`p-4 rounded-lg border ${
+              <div className={`p-4 rounded-xl border transition-all ${
                 pvcEligibility.isEligible 
-                  ? 'bg-green-50 border-green-300' 
-                  : 'bg-amber-50 border-amber-300'
+                  ? 'bg-emerald-50/40 border-emerald-250' 
+                  : 'bg-amber-50/40 border-amber-250'
               }`}>
                 <div className="flex items-start gap-3">
                   {pvcEligibility.isEligible ? (
-                    <CheckCircle2 className="h-6 w-6 text-green-600 mt-0.5 flex-shrink-0" />
+                    <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
                   ) : (
-                    <AlertTriangle className="h-6 w-6 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
                   )}
                   <div className="flex-1">
-                    <p className={`font-semibold text-base ${
-                      pvcEligibility.isEligible ? 'text-green-900' : 'text-amber-900'
+                    <p className={`font-semibold text-sm ${
+                      pvcEligibility.isEligible ? 'text-emerald-900' : 'text-amber-905'
                     }`}>
                       {pvcEligibility.isEligible 
-                        ? 'PVC Applicable' 
+                        ? 'Price Variation Clause (PVC) is Applicable' 
                         : 'PVC May Not Be Applicable'}
                     </p>
-                    <p className={`text-sm mt-1 ${
-                      pvcEligibility.isEligible ? 'text-green-700' : 'text-amber-700'
+                    <p className={`text-xs mt-1 leading-relaxed ${
+                      pvcEligibility.isEligible ? 'text-emerald-700' : 'text-amber-700'
                     }`}>
                       {pvcEligibility.reason}
                     </p>
                     {pvcEligibility.warnings.length > 0 && (
-                      <ul className="text-sm mt-2 space-y-1">
+                      <ul className="text-xs mt-2 space-y-1">
                         {pvcEligibility.warnings.map((warning: string, idx: number) => (
-                          <li key={idx} className="text-amber-700 flex items-start gap-1">
-                            <span className="mt-1">•</span>
+                          <li key={idx} className="text-amber-800 flex items-start gap-1">
+                            <span className="mt-0.5">•</span>
                             <span>{warning}</span>
                           </li>
                         ))}
@@ -607,22 +597,22 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
         </AccordionItem>
 
         {/* Project Timeline Section */}
-        <AccordionItem value="timeline" className="border rounded-lg px-4 bg-gradient-to-r from-purple-50 to-pink-50">
-          <AccordionTrigger className="hover:no-underline">
+        <AccordionItem value="timeline" className="border border-slate-200 bg-white rounded-xl shadow-sm hover:shadow transition-all duration-200 px-5">
+          <AccordionTrigger className="hover:no-underline py-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-600 rounded-lg">
-                <Clock className="h-5 w-5 text-white" />
+              <div className="p-2 bg-purple-50 text-purple-600 border border-purple-100 rounded-lg">
+                <Clock className="h-5 w-5" />
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-gray-900">Project Timeline</h3>
-                <p className="text-sm text-gray-600">Duration and key dates</p>
+                <h3 className="font-semibold text-slate-800 text-base">Project Timeline</h3>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">Duration and key dates</p>
               </div>
             </div>
           </AccordionTrigger>
-          <AccordionContent className="pt-4 space-y-4">
+          <AccordionContent className="pt-2 pb-5 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="completionPeriodMonths" className="text-sm font-medium">
-                Completion Period (Months) <span className="text-xs text-gray-500">(Optional)</span>
+              <Label htmlFor="completionPeriodMonths" className="text-sm font-semibold text-slate-700">
+                Completion Period (Months) <span className="text-xs font-normal text-slate-500">(Optional)</span>
               </Label>
               <Input
                 id="completionPeriodMonths"
@@ -632,18 +622,18 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 value={formData.completionPeriodMonths}
                 onChange={handleInputChange}
                 placeholder="e.g., 18"
-                className={`max-w-sm border-gray-300 focus:border-purple-500 ${fieldErrors.completionPeriodMonths ? 'border-red-500 focus:border-red-500' : ''}`}
+                className={`max-w-sm bg-slate-50/50 border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${fieldErrors.completionPeriodMonths ? 'border-red-500 focus:border-red-500' : ''}`}
               />
-              {fieldErrors.completionPeriodMonths && (
-                <p className="text-sm text-red-600">{fieldErrors.completionPeriodMonths}</p>
-              )}
-              <p className="text-xs text-gray-600">
-                PVC applies to contracts above 12 months
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                The total period allowed for contract execution. Under GCC Clause 46A.1, PVC applies only to contracts with a completion period greater than 12 months.
               </p>
+              {fieldErrors.completionPeriodMonths && (
+                <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.completionPeriodMonths}</p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="dateOfOpening" className="text-sm font-medium flex items-center gap-2">
+              <Label htmlFor="dateOfOpening" className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
                 Date of Opening <span className="text-red-500">*</span>
               </Label>
@@ -654,103 +644,48 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 value={formData.dateOfOpening}
                 onChange={handleInputChange}
                 required
-                className={`max-w-sm border-gray-300 focus:border-purple-500 ${fieldErrors.dateOfOpening ? 'border-red-500 focus:border-red-500' : ''}`}
+                className={`max-w-sm bg-slate-50/50 border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${fieldErrors.dateOfOpening ? 'border-red-500 focus:border-red-500' : ''}`}
               />
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                The tender opening date (or bid submission deadline date). This is required.
+              </p>
               {fieldErrors.dateOfOpening && (
-                <p className="text-sm text-red-600">{fieldErrors.dateOfOpening}</p>
+                <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.dateOfOpening}</p>
               )}
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                <p className="text-sm text-purple-900">
-                  <span className="font-semibold">Auto-calculation:</span> The base month will be automatically set to one month prior to this date (GCC 46A.2).
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mt-2">
+                <p className="text-xs text-slate-650 leading-relaxed">
+                  <span className="font-semibold text-slate-700">Auto-calculation:</span> The base month for PVC index calculations will be set automatically to <strong>one month prior</strong> to this opening month (as per GCC Clause 46A.2).
                 </p>
               </div>
             </div>
           </AccordionContent>
         </AccordionItem>
 
-        {/* Railway Materials & Compliance Section */}
-        <AccordionItem value="materials" className="border rounded-lg px-4 bg-gradient-to-r from-orange-50 to-amber-50">
-          <AccordionTrigger className="hover:no-underline">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-600 rounded-lg">
-                <Package className="h-5 w-5 text-white" />
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-gray-900">Railway Materials & Compliance</h3>
-                <p className="text-sm text-gray-600">Materials supplied by Railway</p>
-              </div>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="pt-4 space-y-4">
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
-              <div className="flex items-start gap-2">
-                <Info className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-orange-900">
-                  <p className="font-semibold mb-1">GCC 46A.1 Compliance</p>
-                  <p className="text-orange-700">Materials supplied by Railway are excluded from PVC calculations</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="hasRailwaySuppliedMaterials"
-                  checked={formData.hasRailwaySuppliedMaterials}
-                  onCheckedChange={handleCheckboxChange}
-                />
-                <Label 
-                  htmlFor="hasRailwaySuppliedMaterials"
-                  className="text-sm font-medium cursor-pointer"
-                >
-                  Materials supplied by Railway (excluded from PVC as per GCC 46A.1)
-                </Label>
-              </div>
-
-              {formData.hasRailwaySuppliedMaterials && (
-                <div className="space-y-2 ml-6 p-4 bg-white rounded-lg border border-orange-200">
-                  <Label htmlFor="railwaySuppliedMaterialsNote" className="text-sm font-medium">
-                    Details of Railway-Supplied Materials
-                  </Label>
-                  <Textarea
-                    id="railwaySuppliedMaterialsNote"
-                    name="railwaySuppliedMaterialsNote"
-                    value={formData.railwaySuppliedMaterialsNote}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Steel rails supplied free of cost, Cement at fixed rate"
-                    rows={3}
-                    className="text-sm border-gray-300 focus:border-orange-500 resize-none"
-                  />
-                </div>
-              )}
-            </div>
-          </AccordionContent>
-        </AccordionItem>
 
         {/* Schedules Section */}
-        <AccordionItem value="schedules" className="border rounded-lg px-4 bg-gradient-to-r from-violet-50 to-purple-50">
-          <AccordionTrigger className="hover:no-underline">
+        <AccordionItem value="schedules" className="border border-slate-200 bg-white rounded-xl shadow-sm hover:shadow transition-all duration-200 px-5">
+          <AccordionTrigger className="hover:no-underline py-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-violet-600 rounded-lg">
-                <ListOrdered className="h-5 w-5 text-white" />
+              <div className="p-2 bg-violet-50 text-violet-600 border border-violet-100 rounded-lg">
+                <ListOrdered className="h-5 w-5" />
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-gray-900">Schedules</h3>
-                <p className="text-sm text-gray-600">Add schedule items for this contract</p>
+                <h3 className="font-semibold text-slate-800 text-base">Schedules</h3>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">Add schedule items for this contract</p>
               </div>
               {schedules.length > 0 && (
-                <span className="ml-auto mr-2 text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">
+                <span className="ml-auto mr-2 text-xs bg-violet-50 text-violet-750 px-2.5 py-0.5 rounded-full font-semibold border border-violet-100">
                   {schedules.length} items
                 </span>
               )}
             </div>
           </AccordionTrigger>
-          <AccordionContent className="pt-4 space-y-6">
-            <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 mb-2">
-              <div className="flex items-start gap-2">
+          <AccordionContent className="pt-2 pb-5 space-y-6">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mb-2">
+              <div className="flex items-start gap-2.5">
                 <Info className="h-5 w-5 text-violet-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-violet-900">
-                  <p className="text-violet-700">Add contract schedules here. These will appear as a dropdown when creating bills, so you can link each bill classification entry to a specific schedule.</p>
+                <div className="text-xs text-slate-650">
+                  <p className="leading-relaxed">Add contract schedules (e.g. Schedule A, Schedule B) here. These will appear as selection dropdowns during bill creation, making it simple to link individual billing items to the correct schedule.</p>
                 </div>
               </div>
             </div>
@@ -758,13 +693,13 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
             {/* Schedules */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-sm font-semibold text-gray-900">Schedules</Label>
+                <Label className="text-sm font-semibold text-slate-700">Schedules</Label>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setSchedules([...schedules, ''])}
-                  className="h-8 text-xs bg-white hover:bg-violet-100"
+                  className="h-8 text-xs bg-white border-slate-200 text-slate-700 hover:bg-violet-50 hover:text-violet-750 transition-colors"
                 >
                   <Plus className="h-3 w-3 mr-1" />
                   Add Schedule
@@ -772,7 +707,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
               </div>
               {schedules.map((schedule, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 w-6 text-right flex-shrink-0">{index + 1}.</span>
+                  <span className="text-xs text-slate-550 w-6 text-right flex-shrink-0">{index + 1}.</span>
                   <Input
                     value={schedule}
                     onChange={(e) => {
@@ -781,7 +716,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                       setSchedules(newSchedules);
                     }}
                     placeholder={`e.g., Schedule ${String.fromCharCode(65 + index)} - Earthwork`}
-                    className="border-gray-300 focus:border-violet-500 flex-1"
+                    className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all flex-1"
                   />
                   <Button
                     type="button"
@@ -795,42 +730,40 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 </div>
               ))}
               {schedules.length === 0 && (
-                <p className="text-xs text-gray-500 italic text-center py-2">No schedules added yet</p>
+                <p className="text-xs text-slate-400 italic text-center py-2">No schedules added yet</p>
               )}
             </div>
-
-
           </AccordionContent>
         </AccordionItem>
 
         {/* Covering Letter Details Section */}
-        <AccordionItem value="covering-letter" className="border rounded-lg px-4 bg-gradient-to-r from-teal-50 to-cyan-50">
-          <AccordionTrigger className="hover:no-underline">
+        <AccordionItem value="covering-letter" className="border border-slate-200 bg-white rounded-xl shadow-sm hover:shadow transition-all duration-200 px-5">
+          <AccordionTrigger className="hover:no-underline py-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-teal-600 rounded-lg">
-                <Mail className="h-5 w-5 text-white" />
+              <div className="p-2 bg-teal-50 text-teal-600 border border-teal-100 rounded-lg">
+                <Mail className="h-5 w-5" />
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-gray-900">Covering Letter Details</h3>
-                <p className="text-sm text-gray-600">Information for covering letter generation</p>
+                <h3 className="font-semibold text-slate-800 text-base">Covering Letter Details</h3>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">Information for covering letter generation</p>
               </div>
             </div>
           </AccordionTrigger>
-          <AccordionContent className="pt-4 space-y-4">
-            <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 mb-4">
-              <div className="flex items-start gap-2">
+          <AccordionContent className="pt-2 pb-5 space-y-4">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mb-4">
+              <div className="flex items-start gap-2.5">
                 <Info className="h-5 w-5 text-teal-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-teal-900">
-                  <p className="font-semibold mb-1">Covering Letter Information</p>
-                  <p className="text-teal-700">Organization and division details will be automatically extracted from the agreement number</p>
+                <div className="text-xs text-slate-650">
+                  <p className="font-semibold text-slate-800 mb-0.5">Automated Bill Submission Letters</p>
+                  <p className="leading-relaxed">Organization and division details will be automatically extracted from the agreement number to generate printable PDF covering letters for bill submissions.</p>
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="coveringLetterDesignation" className="text-sm font-medium">
-                  Designation <span className="text-xs text-gray-500">(Optional)</span>
+                <Label htmlFor="coveringLetterDesignation" className="text-sm font-semibold text-slate-700">
+                  Designation <span className="text-xs font-normal text-slate-500">(Optional)</span>
                 </Label>
                 <Input
                   id="coveringLetterDesignation"
@@ -838,17 +771,17 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   value={formData.coveringLetterDesignation}
                   onChange={handleInputChange}
                   placeholder="e.g., Sr. Divisional Engineer/Con/MAS"
-                  className="border-gray-300 focus:border-teal-500"
+                  className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all"
                 />
-                <p className="text-xs text-gray-600">
-                  Designation of the official for covering letter
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  The formal designation of the railway official to whom the bill covering letter is addressed (e.g., Sr. Divisional Engineer/Con/MAS).
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="loaDate" className="text-sm font-medium flex items-center gap-2">
+                <Label htmlFor="loaDate" className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
-                  LOA Date <span className="text-xs text-gray-500">(Optional)</span>
+                  LOA Date <span className="text-xs font-normal text-slate-500">(Optional)</span>
                 </Label>
                 <Input
                   id="loaDate"
@@ -856,32 +789,95 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   type="date"
                   value={formData.loaDate}
                   onChange={handleInputChange}
-                  className="border-gray-300 focus:border-teal-500"
+                  className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all"
                 />
-                <p className="text-xs text-gray-600">
-                  Date of Letter of Acceptance (LOA)
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  The date when the Letter of Acceptance (LOA) was officially signed or issued.
                 </p>
               </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Railway Materials & Compliance Section */}
+        <AccordionItem value="materials" className="border border-slate-200 bg-white rounded-xl shadow-sm hover:shadow transition-all duration-200 px-5">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-50 text-orange-600 border border-orange-100 rounded-lg">
+                <Package className="h-5 w-5" />
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold text-slate-800 text-base">Railway Materials & Compliance</h3>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">Materials supplied by Railway</p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pt-2 pb-5 space-y-4">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mb-4">
+              <div className="flex items-start gap-2.5">
+                <Info className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-slate-600">
+                  <p className="font-semibold text-slate-800 mb-0.5">GCC Clause 46A.1 Material Exclusion Rule</p>
+                  <p className="leading-relaxed">The cost of materials supplied by the Railway (either free-of-cost or at fixed rates) must be deducted/excluded from billing values for PVC calculation purposes.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="hasRailwaySuppliedMaterials"
+                  checked={formData.hasRailwaySuppliedMaterials}
+                  onCheckedChange={handleCheckboxChange}
+                  className="border-slate-300 data-[state=checked]:bg-orange-600 data-[state=checked]:border-orange-600"
+                />
+                <Label 
+                  htmlFor="hasRailwaySuppliedMaterials"
+                  className="text-sm font-semibold text-slate-700 cursor-pointer"
+                >
+                  Materials supplied by Railway (excluded from PVC as per GCC 46A.1)
+                </Label>
+              </div>
+
+              {formData.hasRailwaySuppliedMaterials && (
+                <div className="space-y-2 ml-6 p-4 bg-slate-50/50 rounded-xl border border-slate-150">
+                  <Label htmlFor="railwaySuppliedMaterialsNote" className="text-sm font-semibold text-slate-700">
+                    Details of Railway-Supplied Materials
+                  </Label>
+                  <Textarea
+                    id="railwaySuppliedMaterialsNote"
+                    name="railwaySuppliedMaterialsNote"
+                    value={formData.railwaySuppliedMaterialsNote}
+                    onChange={handleInputChange}
+                    placeholder="e.g., Steel rails supplied free of cost, Cement at fixed rate"
+                    rows={3}
+                    className="text-xs bg-white border-slate-200 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all resize-none"
+                  />
+                  <p className="text-xs text-slate-500 leading-relaxed mt-1">
+                    Describe the materials, quantities, or conditions under which Railway supplies these items to ensure accurate auditing.
+                  </p>
+                </div>
+              )}
             </div>
           </AccordionContent>
         </AccordionItem>
       </Accordion>
 
       {/* Submit Buttons */}
-      <div className="flex justify-end space-x-4 pt-6 border-t">
+      <div className="flex justify-end space-x-4 pt-6 border-t border-slate-100">
         <Button
           type="button"
           variant="outline"
           onClick={() => router.back()}
           disabled={isLoading}
-          className="px-6"
+          className="border-slate-250 text-slate-600 hover:bg-slate-50 rounded-xl px-6"
         >
           Cancel
         </Button>
         <Button
           type="submit"
           disabled={isLoading}
-          className="bg-gradient-to-r from-blue-600 to-orange-600 hover:from-blue-700 hover:to-orange-700 px-6"
+          className="bg-blue-600 hover:bg-blue-750 text-white font-semibold shadow-md shadow-blue-500/10 rounded-xl px-6"
         >
           {isLoading ? (
             <LoadingSpinner size="sm" text={isEdit ? "Updating..." : "Creating..."} />

@@ -3,11 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { notifyNewUserSignup } from '@/lib/slack-webhook';
-import { resend } from '@/lib/resend';
-import { VerificationEmail } from '@/emails/verification-email';
+import { resend, getVerificationEmailHtml } from '@/lib/resend';
 import { randomBytes } from 'crypto';
 import { validatePhoneNumber, sendUserSignupWelcome, sendWelcomeMessageToUser, getAdminWhatsAppNumber } from '@/lib/whatsapp-mydreams';
 import { isEmailVerificationRequired } from '@/lib/admin-settings';
+import { validatePassword } from '@/lib/password-strength';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,9 +21,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (password.length < 6) {
+    // Validate password strength and requirements
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
       return NextResponse.json(
-        { error: 'Password must be at least 6 characters long' },
+        { error: passwordValidation.errors.join('. ') },
+        { status: 400 }
+      );
+    }
+
+    if (passwordValidation.strength < 2) {
+      return NextResponse.json(
+        { error: 'Password is too weak. Please use a stronger password.' },
         { status: 400 }
       );
     }
@@ -36,22 +45,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify that phone OTP was completed
-    const verifiedOtp = await prisma.phoneOtp.findFirst({
-      where: {
-        phone: whatsappNumber,
-        verified: true,
-        expiresAt: { gte: new Date(Date.now() - 10 * 60 * 1000) }, // verified within last 10 min
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!verifiedOtp) {
-      return NextResponse.json(
-        { error: 'WhatsApp number not verified. Please verify your number with OTP first.' },
-        { status: 400 }
-      );
-    }
+    // Verify that phone OTP was completed - REMOVED
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -147,10 +141,7 @@ export async function POST(request: NextRequest) {
           from: 'Railway PVC System <noreply@irpvc.in>',
           to: result.user.email,
           subject: 'Verify your email address',
-          react: VerificationEmail({
-            verificationUrl,
-            userEmail: result.user.email,
-          }),
+          html: getVerificationEmailHtml(verificationUrl, result.user.email),
         });
 
         console.log('✅ Verification email sent to:', result.user.email);

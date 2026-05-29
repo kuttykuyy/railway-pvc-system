@@ -2,8 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { randomBytes } from 'crypto';
-import { resend } from '@/lib/resend';
-import { VerificationEmail } from '@/emails/verification-email';
+import { resend, getVerificationEmailHtml } from '@/lib/resend';
 
 export async function POST(request: NextRequest) {
   try {
@@ -79,10 +78,7 @@ export async function POST(request: NextRequest) {
       from: 'Railway PVC System <noreply@irpvc.in>',
       to: user.email,
       subject: 'Verify your email address — IR-PVC',
-      react: VerificationEmail({
-        verificationUrl,
-        userEmail: user.email,
-      }),
+      html: getVerificationEmailHtml(verificationUrl, user.email),
     });
 
     console.log('✅ Verification email resent to:', user.email);

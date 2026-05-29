@@ -1060,341 +1060,301 @@ export default function BillsPage() {
   const finalBillsCount = filteredBills.filter(bill => !bill.indicesStatus?.isProvisional).length;
 
   return (
-    <div className="space-y-3 sm:space-y-4 px-2 sm:px-0">
-      {/* Header Section - Optimized for mobile */}
-      <div className="flex flex-col gap-2 sm:gap-3">
-        <div>
-          <h1 className="text-xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <FileText className="h-5 w-5 sm:h-8 sm:w-8 text-purple-600" />
+    <div className="space-y-6 sm:space-y-8 px-4 sm:px-0">
+      {/* Premium, Clean Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-slate-100 p-6 rounded-2xl shadow-sm">
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
+            <div className="bg-purple-50 p-2 rounded-xl text-purple-600">
+              <FileText className="h-7 w-7" />
+            </div>
             Bill Processing
           </h1>
-          <p className="text-xs sm:text-base text-gray-600 mt-0.5 sm:mt-2">
-            Process running account bills with automatic PVC calculations
+          <p className="text-sm sm:text-base text-slate-500 max-w-2xl">
+            Process running account bills with automatic PVC calculations.
           </p>
         </div>
-
-        {/* View Toggle and Action Buttons - Optimized layout */}
-        <div className="flex flex-col gap-2">
-          {/* View Toggle - Compact on mobile */}
-          <div className="flex justify-between items-center gap-2">
-            <div className="flex bg-gray-100 rounded-lg p-0.5 sm:p-1">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-                className="h-7 sm:h-8 px-2 sm:px-3 text-xs sm:text-sm"
-              >
-                <Grid3X3 className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-1" />
-                <span className="hidden sm:inline">Grid</span>
-              </Button>
-              <Button
-                variant={viewMode === 'table' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('table')}
-                className="h-7 sm:h-8 px-2 sm:px-3 text-xs sm:text-sm"
-              >
-                <List className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-1" />
-                <span className="hidden sm:inline">Table</span>
-              </Button>
-            </div>
-          </div>
-
-          {/* Bulk Action Buttons - Shown prominently when bills are selected */}
-          {selectedBills.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-3 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg shadow-sm">
-              <div className="flex items-center gap-2">
-                <div className="bg-blue-600 text-white px-3 py-1.5 rounded-full text-sm font-semibold shadow-sm">
-                  {selectedBills.length} Selected
-                </div>
-                <Button 
-                  onClick={() => setSelectedBills([])} 
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 text-xs text-gray-600 hover:text-gray-900 hover:bg-white/50"
-                >
-                  Clear All
-                </Button>
-              </div>
-              
-              <div className="flex flex-wrap gap-2 sm:ml-auto">
-                <Button 
-                  onClick={generateBulkReport} 
-                  disabled={generatingBulkReport || selectedBills.length < 2}
-                  variant="outline"
-                  size="sm"
-                  className="border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white h-9 px-4 font-medium shadow-sm transition-all"
-                >
-                  {generatingBulkReport ? (
-                    <>
-                      <LoadingSpinner size="sm" className="mr-2" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="h-4 w-4 mr-2" />
-                      Bulk Report Download
-                    </>
-                  )}
-                </Button>
-                <Button 
-                  onClick={bulkSubmitForApproval} 
-                  disabled={submittingForApproval}
-                  variant="outline"
-                  size="sm"
-                  className="border-green-600 text-green-600 hover:bg-green-600 hover:text-white h-9 px-4 font-medium shadow-sm transition-all"
-                >
-                  {submittingForApproval ? (
-                    <>
-                      <LoadingSpinner size="sm" className="mr-2" />
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-2" />
-                      Submit for Approval
-                    </>
-                  )}
-                </Button>
-                <Button 
-                  onClick={bulkDeleteBills} 
-                  disabled={deleting || !canDeleteSelected}
-                  variant="destructive"
-                  size="sm"
-                  className="bg-red-600 hover:bg-red-700 h-9 px-4 font-medium shadow-sm"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Selected
-                </Button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          {creditBalance && creditBalance.trialInfo.isActive && creditBalance.trialInfo.billsRemaining > 0 && userRole !== 'admin' && userRole !== 'railway_official' && (
+            <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-1.5 flex items-center gap-2">
+              <Gift className="h-4 w-4 text-green-600" />
+              <div className="text-left">
+                <p className="text-green-800 font-bold text-xs leading-none">
+                  {creditBalance.trialInfo.billsRemaining} Free {creditBalance.trialInfo.billsRemaining === 1 ? 'Bill' : 'Bills'}
+                </p>
               </div>
             </div>
           )}
-
-          {/* Create Bill Buttons - Mobile optimized */}
-          <div className="flex flex-col lg:flex-row gap-2 sm:gap-3">
-            {/* Buttons Section - Side by side on mobile */}
-            <div className="flex gap-2 sm:gap-3 flex-1 min-w-0">
-              {/* Single Bill Button */}
-              <div className="flex-1 min-w-0">
-                {canCreateSingleBill() ? (
-                  <Link href="/bills/new" className="block">
-                    <Button 
-                      size="lg"
-                      className="w-full h-16 sm:h-14 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-300 group relative overflow-hidden"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <div className="relative flex items-center justify-center gap-1.5 sm:gap-2">
-                        <div className="p-1 sm:p-1.5 bg-white/20 rounded-lg group-hover:scale-110 transition-transform duration-300">
-                          <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
-                        </div>
-                        <div className="flex flex-col items-start">
-                          <span className="text-xs sm:text-sm font-semibold leading-tight">Create Single Bill</span>
-                          <span className="text-[10px] sm:text-xs opacity-90 leading-tight">Individual bill entry</span>
-                        </div>
-                      </div>
-                    </Button>
-                  </Link>
-                ) : (
-                  <div className="relative group">
-                    <Button 
-                      size="lg"
-                      disabled
-                      className="w-full h-16 sm:h-14 bg-gradient-to-r from-gray-400 to-gray-500 text-white shadow-lg cursor-not-allowed opacity-60"
-                    >
-                      <div className="relative flex items-center justify-center gap-1.5 sm:gap-2">
-                        <div className="p-1 sm:p-1.5 bg-white/20 rounded-lg">
-                          <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
-                        </div>
-                        <div className="flex flex-col items-start">
-                          <span className="text-xs sm:text-sm font-semibold leading-tight">Create Single Bill</span>
-                          <span className="text-[10px] sm:text-xs opacity-90 leading-tight">
-                            {maintenanceStatus.singleBillMaintenance 
-                              ? 'Under Maintenance' 
-                              : 'Insufficient Credits'}
-                          </span>
-                        </div>
-                      </div>
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Trial Info Card - Show when trial is active */}
-            {creditBalance && creditBalance.trialInfo.isActive && creditBalance.trialInfo.billsRemaining > 0 && userRole !== 'admin' && userRole !== 'railway_official' && (
-              <div className="lg:w-80 lg:flex-shrink-0">
-                <div className="bg-green-50 border border-green-200 rounded-lg p-2.5 sm:p-3 h-16 sm:h-14 flex items-center">
-                  <div className="flex items-center gap-1.5 sm:gap-2 w-full">
-                    <div className="p-1.5 bg-green-600 rounded-lg">
-                      <Gift className="h-3.5 w-3.5 text-white" />
-                    </div>
-                    <div className="flex flex-col flex-1">
-                      <p className="text-green-800 font-bold text-xs leading-tight">
-                        {creditBalance.trialInfo.billsRemaining} Free {creditBalance.trialInfo.billsRemaining === 1 ? 'Bill' : 'Bills'}
-                      </p>
-                      <p className="text-green-700 text-[10px] leading-tight">
-                        Trial active
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          {canCreateSingleBill() ? (
+            <Button asChild className="bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-md shadow-purple-500/10 rounded-xl w-full sm:w-auto" size="lg">
+              <Link href="/bills/new">
+                <Plus className="h-5 w-5 mr-2" />
+                New Bill
+              </Link>
+            </Button>
+          ) : (
+            <Button disabled className="bg-gray-400 text-white font-semibold rounded-xl w-full sm:w-auto cursor-not-allowed opacity-60" size="lg">
+              <Plus className="h-5 w-5 mr-2" />
+              New Bill ({maintenanceStatus.singleBillMaintenance ? 'Maintenance' : 'No Credits'})
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Indices Availability Indicator - Prominent display */}
       <IndicesAvailabilityIndicator />
 
-      {/* Bill Type Tabs - Mobile optimized */}
-      <Tabs value={billTypeFilter} onValueChange={(val) => setBillTypeFilter(val as 'all' | 'single' | 'bulk')} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 h-9 sm:h-11 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200">
-          <TabsTrigger value="all" className="data-[state=active]:bg-white data-[state=active]:text-purple-700 font-medium text-xs sm:text-sm px-1 sm:px-3">
-            All Bills
-          </TabsTrigger>
-          <TabsTrigger value="single" className="data-[state=active]:bg-white data-[state=active]:text-purple-700 font-medium text-xs sm:text-sm px-1 sm:px-3">
-            Single Bills
-          </TabsTrigger>
-          <TabsTrigger value="bulk" className="data-[state=active]:bg-white data-[state=active]:text-purple-700 font-medium text-xs sm:text-sm px-1 sm:px-3">
-            Bulk Bills
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {/* Bulk Action Buttons - Shown prominently when bills are selected */}
+      {selectedBills.length > 0 && (
+        <div className="border border-slate-200 bg-slate-50 p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-sm">
+              {selectedBills.length} Selected
+            </div>
+            <Button 
+              onClick={() => setSelectedBills([])} 
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-slate-500 hover:text-slate-900"
+            >
+              Clear All
+            </Button>
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            <Button 
+              onClick={generateBulkReport} 
+              disabled={generatingBulkReport || selectedBills.length < 2}
+              variant="outline"
+              size="sm"
+              className="border-slate-200 hover:bg-slate-100 text-slate-700 h-10 rounded-xl px-4 font-medium transition-all shadow-sm"
+            >
+              {generatingBulkReport ? (
+                <>
+                  <LoadingSpinner size="sm" className="mr-2" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  Bulk Report Download
+                </>
+              )}
+            </Button>
+            <Button 
+              onClick={bulkSubmitForApproval} 
+              disabled={submittingForApproval}
+              variant="outline"
+              size="sm"
+              className="border-green-200 text-green-700 bg-green-50/50 hover:bg-green-600 hover:text-white h-10 rounded-xl px-4 font-medium transition-all shadow-sm"
+            >
+              {submittingForApproval ? (
+                <>
+                  <LoadingSpinner size="sm" className="mr-2" />
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Submit for Approval
+                </>
+              )}
+            </Button>
+            <Button 
+              onClick={bulkDeleteBills} 
+              disabled={deleting || !canDeleteSelected}
+              variant="destructive"
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 h-10 rounded-xl px-4 font-medium transition-all shadow-sm"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Selected
+            </Button>
+          </div>
+        </div>
+      )}
 
-      {/* Filters Section - Mobile optimized */}
-      <Card className="border-0 shadow-md">
-        <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
+      {/* Search & Filters Panel - Clean Layout */}
+      <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl">
+        <CardHeader className="p-5 sm:p-6 pb-2">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <Filter className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-gray-600" />
-              <CardTitle className="text-sm sm:text-lg">Filters</CardTitle>
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2 text-lg font-bold text-slate-900">
+                <Filter className="h-5 w-5 text-slate-500" />
+                Search & Filters
+              </CardTitle>
+              <CardDescription className="text-sm text-slate-500">
+                Locate bills, filter by contracts or quarters, and switch view modes.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowFilters(!showFilters)}
-                className="text-gray-600 hover:text-gray-800 h-6 sm:h-8 px-1.5 sm:px-3 text-xs"
+                className="text-slate-600 hover:text-slate-800 h-9 px-3 rounded-xl border border-slate-200"
               >
                 {showFilters ? (
-                  <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
+                  <ChevronUp className="h-4 w-4 mr-1.5 text-slate-500" />
                 ) : (
-                  <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
+                  <ChevronDown className="h-4 w-4 mr-1.5 text-slate-500" />
                 )}
-                <span className="text-xs sm:text-sm">{showFilters ? 'Hide' : 'Show'}</span>
+                <span>{showFilters ? 'Collapse Filters' : 'Expand Filters'}</span>
               </Button>
+              {showFilters && (searchTerm || selectedContract !== 'all' || selectedQuarter !== 'all' || indicesTypeFilter !== 'all' || dateFrom || dateTo || minAmount || maxAmount) && (
+                <Button onClick={clearFilters} variant="outline" size="sm" className="rounded-xl h-9">
+                  Clear All
+                </Button>
+              )}
             </div>
-            {showFilters && (
-              <Button onClick={clearFilters} variant="outline" size="sm" className="h-6 sm:h-8 px-2 sm:px-4 text-xs sm:text-sm">
-                Clear All
-              </Button>
-            )}
           </div>
         </CardHeader>
         {showFilters && (
-        <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
-          {/* Primary Filters Row */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 sm:gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search by bill no, agreement no, or contractor..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select value={selectedContract} onValueChange={setSelectedContract}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Contracts" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Contracts</SelectItem>
-                {contracts.map((contract) => (
-                  <SelectItem key={contract.id} value={contract.id}>
-                    {contract.agreementNo} - {contract.contractorName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Quarters" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Quarters</SelectItem>
-                {uniqueQuarters.map((quarter) => (
-                  <SelectItem key={quarter} value={quarter}>
-                    {quarter}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={indicesTypeFilter} onValueChange={setIndicesTypeFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Indices Types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Indices Types</SelectItem>
-                <SelectItem value="provisional">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-orange-600" />
-                    <span>Provisional Indices</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="final">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    <span>Final Indices</span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <CardContent className="p-5 sm:p-6 pt-2 space-y-4">
+          {/* Bill Type Tabs - Styled as slate switcher inside filters card */}
+          <Tabs value={billTypeFilter} onValueChange={(val) => setBillTypeFilter(val as 'all' | 'single' | 'bulk')} className="w-full">
+            <TabsList className="grid w-full grid-cols-3 h-11 bg-slate-100/80 border border-slate-200/50 p-1 rounded-xl">
+              <TabsTrigger value="all" className="data-[state=active]:bg-white data-[state=active]:text-purple-600 data-[state=active]:shadow-sm font-semibold text-xs sm:text-sm px-1 sm:px-3 text-slate-500 hover:text-slate-800 rounded-lg">
+                All Bills
+              </TabsTrigger>
+              <TabsTrigger value="single" className="data-[state=active]:bg-white data-[state=active]:text-purple-600 data-[state=active]:shadow-sm font-semibold text-xs sm:text-sm px-1 sm:px-3 text-slate-500 hover:text-slate-800 rounded-lg">
+                Single Bills
+              </TabsTrigger>
+              <TabsTrigger value="bulk" className="data-[state=active]:bg-white data-[state=active]:text-purple-600 data-[state=active]:shadow-sm font-semibold text-xs sm:text-sm px-1 sm:px-3 text-slate-500 hover:text-slate-800 rounded-lg">
+                Bulk Bills
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
 
-          {/* Date Range Filter */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">From Date</label>
+          {/* Primary and Advanced Filters Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {/* Search */}
+            <div className="space-y-1.5 col-span-1 sm:col-span-2">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">Search Bills</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Bill no, agreement no, or contractor..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 h-11 border-slate-200 rounded-xl"
+                />
+              </div>
+            </div>
+
+            {/* Contract Selector */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">Contract</label>
+              <Select value={selectedContract} onValueChange={setSelectedContract}>
+                <SelectTrigger className="h-11 border-slate-200 rounded-xl">
+                  <SelectValue placeholder="All Contracts" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Contracts</SelectItem>
+                  {contracts.map((contract) => (
+                    <SelectItem key={contract.id} value={contract.id}>
+                      {contract.agreementNo} - {contract.contractorName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Quarter Selector */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">Quarter</label>
+              <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
+                <SelectTrigger className="h-11 border-slate-200 rounded-xl">
+                  <SelectValue placeholder="All Quarters" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Quarters</SelectItem>
+                  {uniqueQuarters.map((quarter) => (
+                    <SelectItem key={quarter} value={quarter}>
+                      {quarter}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Indices Type Filter */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">Indices Type</label>
+              <Select value={indicesTypeFilter} onValueChange={setIndicesTypeFilter}>
+                <SelectTrigger className="h-11 border-slate-200 rounded-xl">
+                  <SelectValue placeholder="All Indices Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Indices Types</SelectItem>
+                  <SelectItem value="provisional">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-orange-600" />
+                      <span>Provisional Indices</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="final">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span>Final Indices</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Date From */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">From Date</label>
               <Input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
+                className="h-11 border-slate-200 rounded-xl"
               />
             </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">To Date</label>
+
+            {/* Date To */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">To Date</label>
               <Input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
+                className="h-11 border-slate-200 rounded-xl"
               />
             </div>
-          </div>
 
-          {/* Amount Range & Sorting */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Min Amount (₹)</label>
+            {/* Min Amount */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">Min Amount (₹)</label>
               <Input
                 type="number"
-                placeholder="0"
+                placeholder="Min"
                 value={minAmount}
                 onChange={(e) => setMinAmount(e.target.value)}
+                className="h-11 border-slate-200 rounded-xl"
               />
             </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Max Amount (₹)</label>
+
+            {/* Max Amount */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">Max Amount (₹)</label>
               <Input
                 type="number"
-                placeholder="No limit"
+                placeholder="Max"
                 value={maxAmount}
                 onChange={(e) => setMaxAmount(e.target.value)}
+                className="h-11 border-slate-200 rounded-xl"
               />
             </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Sort By</label>
+
+            {/* Sort By */}
+            <div className="space-y-1.5 col-span-1 sm:col-span-2">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">Sort By</label>
               <div className="flex gap-2">
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="flex-1">
+                  <SelectTrigger className="h-11 border-slate-200 rounded-xl flex-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1409,27 +1369,49 @@ export default function BillsPage() {
                 </Select>
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  className="px-2"
+                  className="h-11 px-3 border-slate-200 rounded-xl"
                 >
-                  {sortOrder === 'asc' ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
+                  {sortOrder === 'asc' ? <SortAsc className="h-4 w-4 text-slate-600" /> : <SortDesc className="h-4 w-4 text-slate-600" />}
                 </Button>
+              </div>
+            </div>
+
+            {/* View Mode */}
+            <div className="space-y-1.5 col-span-1 sm:col-span-2">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">View Mode</label>
+              <div className="flex gap-2 h-11 bg-slate-50 p-1 rounded-xl border border-slate-150">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  className={`flex-grow flex items-center justify-center gap-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'grid' ? 'bg-white text-purple-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  <Grid3X3 className="h-3.5 w-3.5" />
+                  Grid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  className={`flex-grow flex items-center justify-center gap-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'table' ? 'bg-white text-purple-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  <List className="h-3.5 w-3.5" />
+                  Table
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Filter Summary */}
-          <div className="text-sm text-gray-600 bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border border-blue-200">
+          {/* Filter Summary Banner - Clean slate style */}
+          <div className="text-xs font-medium text-slate-500 bg-slate-50 border border-slate-150 p-4 rounded-xl">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <span>
-                Showing <span className="font-semibold text-blue-700">{filteredBills.length}</span> of{' '}
-                <span className="font-semibold">{bills.length}</span> bills
+                Showing <span className="font-bold text-slate-900">{filteredBills.length}</span> of{' '}
+                <span className="font-bold text-slate-900">{bills.length}</span> bills
                 {(searchTerm || selectedContract !== 'all' || selectedQuarter !== 'all' || indicesTypeFilter !== 'all' || dateFrom || dateTo || minAmount || maxAmount) && 
                   ' (filtered)'
                 }
               </span>
-              <span className="text-xs">
+              <span>
                 Sorted by {sortBy.replace(/([A-Z])/g, ' $1').toLowerCase()} ({sortOrder})
               </span>
             </div>
@@ -1438,86 +1420,82 @@ export default function BillsPage() {
         )}
       </Card>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-        <Card className="border-0 shadow-md bg-gradient-to-r from-purple-50 to-purple-100">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" />
-              <div className="space-y-0.5">
-                <p className="text-xl sm:text-2xl font-bold text-purple-900">{filteredBills.length}</p>
-                <p className="text-xs sm:text-sm text-purple-700">Bills {bills.length !== filteredBills.length ? `(${bills.length})` : ''}</p>
-              </div>
+      {/* Summary Stats - High Contrast, Clean White Theme */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        {/* Total Bills */}
+        <Card className="border border-slate-100 shadow-sm bg-white hover:shadow-md transition-all duration-200 rounded-2xl overflow-hidden">
+          <CardContent className="p-4 sm:p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Bills</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-900">{filteredBills.length}</p>
+            </div>
+            <div className="bg-purple-50 p-2.5 sm:p-3 rounded-2xl text-purple-600 flex-shrink-0">
+              <FileText className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md bg-gradient-to-r from-blue-50 to-blue-100">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <Calculator className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
-              <div className="space-y-0.5">
-                <p className="text-sm sm:text-lg font-bold text-blue-900">
-                  ₹{(totalBillAmount / 1000).toFixed(0)}K
-                </p>
-                <p className="text-xs sm:text-sm text-blue-700">Bill Amount</p>
-              </div>
+        {/* Bill Amount */}
+        <Card className="border border-slate-100 shadow-sm bg-white hover:shadow-md transition-all duration-200 rounded-2xl overflow-hidden">
+          <CardContent className="p-4 sm:p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Bill Amount</p>
+              <p className="text-xl sm:text-2xl font-bold text-blue-600">₹{(totalBillAmount / 1000).toFixed(0)}K</p>
+            </div>
+            <div className="bg-blue-50 p-2.5 sm:p-3 rounded-2xl text-blue-600 flex-shrink-0">
+              <Calculator className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md bg-gradient-to-r from-green-50 to-green-100">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <Calculator className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
-              <div className="space-y-0.5">
-                <p className="text-sm sm:text-lg font-bold text-green-900">
-                  ₹{(totalPvcAmount / 1000).toFixed(0)}K
-                </p>
-                <p className="text-xs sm:text-sm text-green-700">Total PVC</p>
-              </div>
+        {/* Total PVC */}
+        <Card className="border border-slate-100 shadow-sm bg-white hover:shadow-md transition-all duration-200 rounded-2xl overflow-hidden">
+          <CardContent className="p-4 sm:p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Total PVC</p>
+              <p className="text-xl sm:text-2xl font-bold text-green-600">₹{(totalPvcAmount / 1000).toFixed(0)}K</p>
+            </div>
+            <div className="bg-green-50 p-2.5 sm:p-3 rounded-2xl text-green-600 flex-shrink-0">
+              <Calculator className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md bg-gradient-to-r from-orange-50 to-orange-100">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <Building2 className="h-5 w-5 sm:h-6 sm:w-6 text-orange-600" />
-              <div className="space-y-0.5">
-                <p className="text-xl sm:text-2xl font-bold text-orange-900">
-                  {new Set(filteredBills.map(b => b.contractId)).size}
-                </p>
-                <p className="text-xs sm:text-sm text-orange-700">Contracts</p>
-              </div>
+        {/* Contracts */}
+        <Card className="border border-slate-100 shadow-sm bg-white hover:shadow-md transition-all duration-200 rounded-2xl overflow-hidden">
+          <CardContent className="p-4 sm:p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Contracts</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-900">{new Set(filteredBills.map(b => b.contractId)).size}</p>
+            </div>
+            <div className="bg-orange-50 p-2.5 sm:p-3 rounded-2xl text-orange-600 flex-shrink-0">
+              <Building2 className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md bg-gradient-to-r from-amber-50 to-amber-100">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <AlertCircle className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
-              <div className="space-y-0.5">
-                <p className="text-xl sm:text-2xl font-bold text-amber-900">
-                  {provisionalBillsCount}
-                </p>
-                <p className="text-xs sm:text-sm text-amber-700">Provisional</p>
-              </div>
+        {/* Provisional */}
+        <Card className="border border-slate-100 shadow-sm bg-white hover:shadow-md transition-all duration-200 rounded-2xl overflow-hidden">
+          <CardContent className="p-4 sm:p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Provisional</p>
+              <p className="text-xl sm:text-2xl font-bold text-amber-600">{provisionalBillsCount}</p>
+            </div>
+            <div className="bg-amber-50 p-2.5 sm:p-3 rounded-2xl text-amber-600 flex-shrink-0">
+              <AlertCircle className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md bg-gradient-to-r from-emerald-50 to-emerald-100">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-600" />
-              <div className="space-y-0.5">
-                <p className="text-xl sm:text-2xl font-bold text-emerald-900">
-                  {finalBillsCount}
-                </p>
-                <p className="text-xs sm:text-sm text-emerald-700">Final</p>
-              </div>
+        {/* Final */}
+        <Card className="border border-slate-100 shadow-sm bg-white hover:shadow-md transition-all duration-200 rounded-2xl overflow-hidden">
+          <CardContent className="p-4 sm:p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Final</p>
+              <p className="text-xl sm:text-2xl font-bold text-emerald-600">{finalBillsCount}</p>
+            </div>
+            <div className="bg-emerald-50 p-2.5 sm:p-3 rounded-2xl text-emerald-600 flex-shrink-0">
+              <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
           </CardContent>
         </Card>
@@ -1525,37 +1503,37 @@ export default function BillsPage() {
 
       {/* Bills Display */}
       {bills.length === 0 ? (
-        <Card className="border-0 shadow-lg">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <FileText className="h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No bills yet</h3>
-            <p className="text-gray-600 text-center mb-6">
+        <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <FileText className="h-16 w-16 text-slate-300 mb-6" />
+            <h3 className="text-xl font-bold text-slate-900 mb-2">No bills yet</h3>
+            <p className="text-slate-500 text-center mb-8 max-w-sm">
               Start processing your first running account bill to see PVC calculations.
             </p>
-            <Button asChild>
+            <Button asChild size="lg" className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl">
               <Link href="/bills/new">
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="h-5 w-5 mr-2" />
                 Process First Bill
               </Link>
             </Button>
           </CardContent>
         </Card>
       ) : filteredBills.length === 0 ? (
-        <Card className="border-0 shadow-lg">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Filter className="h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No bills match filters</h3>
-            <p className="text-gray-600 text-center mb-6">
+        <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <Filter className="h-16 w-16 text-slate-300 mb-6" />
+            <h3 className="text-xl font-bold text-slate-900 mb-2">No bills match filters</h3>
+            <p className="text-slate-500 text-center mb-8 max-w-sm">
               Try adjusting your filters to see more results.
             </p>
-            <Button onClick={clearFilters} variant="outline">
+            <Button onClick={clearFilters} variant="outline" size="lg" className="rounded-xl border-slate-200">
               Clear Filters
             </Button>
           </CardContent>
         </Card>
       ) : viewMode === 'table' ? (
         /* Table View */
-        <Card className="border-0 shadow-lg">
+        <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -1904,21 +1882,21 @@ export default function BillsPage() {
         </Card>
       ) : (
         /* Grid View */
-        <div className="space-y-4">
+        <div className="space-y-6">
           {/* Select All Header */}
           {filteredBills.length > 0 && (
-            <Card className="border-0 shadow-sm bg-gray-50">
+            <Card className="border border-slate-100 shadow-sm bg-slate-50/50 rounded-2xl overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <Checkbox
                     checked={selectedBills.length === filteredBills.length && filteredBills.length > 0}
                     onCheckedChange={handleSelectAll}
                   />
-                  <span className="text-sm font-medium text-gray-700">
+                  <span className="text-sm font-medium text-slate-700">
                     Select All ({filteredBills.length} bills)
                   </span>
                   {selectedBills.length > 0 && (
-                    <Badge variant="secondary">
+                    <Badge variant="secondary" className="bg-purple-100 text-purple-700 hover:bg-purple-200">
                       {selectedBills.length} selected
                     </Badge>
                   )}
@@ -1931,38 +1909,44 @@ export default function BillsPage() {
             if (group.type === 'single') {
               const bill = group.bills[0];
               return [(
-            <Card key={bill.id} className={`border-0 shadow-lg hover:shadow-xl transition-shadow ${selectedBills.includes(bill.id) ? 'ring-2 ring-purple-500' : ''}`}>
+            <Card key={bill.id} className={`group relative overflow-hidden rounded-2xl border border-slate-150 bg-white/80 backdrop-blur-md shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:border-slate-300/80 dark:border-slate-800 dark:bg-slate-950/70 dark:hover:border-slate-700/80 ${selectedBills.includes(bill.id) ? 'ring-2 ring-violet-500 ring-offset-2 dark:ring-offset-slate-900 border-violet-200 dark:border-violet-800' : ''}`}>
               <CardContent className="p-6">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  <div className="flex items-start gap-4">
-                    <Checkbox
-                      checked={selectedBills.includes(bill.id)}
-                      onCheckedChange={() => handleSelectBill(bill.id)}
-                      className="mt-1"
-                    />
-                    <div className="space-y-2">
+                <div className="flex flex-col lg:flex-row lg:items-stretch justify-between gap-6">
+                  <div className="flex items-start gap-4 flex-1">
+                    <div className="pt-1.5">
+                      <Checkbox
+                        checked={selectedBills.includes(bill.id)}
+                        onCheckedChange={() => handleSelectBill(bill.id)}
+                        className="rounded border-slate-350 text-violet-600 focus:ring-violet-500 w-4 h-4"
+                      />
+                    </div>
+                    
+                    <div className="flex-1 space-y-4">
+                      {/* Top Header Row with Title and Badges */}
                       <div className="flex items-center gap-3 flex-wrap">
-                        <h3 className="text-lg font-semibold text-gray-900">
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">
                           {bill.billNo}
                         </h3>
-                        <Badge variant="outline">{bill.quarter}</Badge>
+                        <Badge variant="secondary" className="px-2.5 py-0.5 rounded-full font-medium text-xs bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                          {bill.quarter}
+                        </Badge>
                         {bill.indicesStatus?.isProvisional ? (
-                          <Badge className="text-xs bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-300">
-                            <AlertCircle className="h-3 w-3 mr-1" />
+                          <Badge className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200/50 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30">
+                            <AlertCircle className="h-3 w-3 mr-1 text-amber-500" />
                             Provisional Indices
                           </Badge>
                         ) : (
-                          <Badge className="text-xs bg-green-100 text-green-700 hover:bg-green-200 border-green-300">
-                            <CheckCircle className="h-3 w-3 mr-1" />
+                          <Badge className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30">
+                            <CheckCircle className="h-3 w-3 mr-1 text-emerald-500" />
                             Final Indices
                           </Badge>
                         )}
                         {/* Extension Marker */}
                         {bill.contract?.isExtended && bill.contract?.extensionType && (
-                          <Badge className={`text-xs ${
+                          <Badge className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${
                             bill.contract.extensionType === '17B' 
-                              ? 'bg-red-100 text-red-700 hover:bg-red-200 border-red-300' 
-                              : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border-yellow-300'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200/50 hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/30' 
+                              : 'bg-amber-50 text-amber-700 border-amber-200/50 hover:bg-amber-100 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30'
                           }`}>
                             <Clock className="h-3 w-3 mr-1" />
                             GCC {bill.contract.extensionType} Extension
@@ -1971,176 +1955,186 @@ export default function BillsPage() {
                         {/* Approval Status */}
                         <BillStatusBadge status={bill.status || 'draft'} size="sm" />
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Building2 className="h-4 w-4" />
-                        <span>{bill.contract?.agreementNo}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <User className="h-4 w-4" />
-                        <span className="font-medium">{bill.contract?.contractorName}</span>
-                      </div>
-                      <div className="flex items-start gap-2 text-sm text-gray-600">
-                        <FileText className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                        <span className="line-clamp-2">{bill.contract?.workDescription}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Calendar className="h-4 w-4" />
-                        <span suppressHydrationWarning>Measurement: {format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy')}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Clock className="h-4 w-4" />
-                        <span suppressHydrationWarning>Created: {format(toISTDate(new Date(bill.createdAt)), 'dd MMM yyyy, HH:mm')}</span>
-                      </div>
-                      
-                      {/* Financial Summary */}
-                      <div className="pt-3 mt-3 border-t border-gray-200 space-y-2">
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                          <div>
-                            <p className="text-xs text-gray-500 mb-0.5">Bill Amount</p>
-                            <p className="text-sm font-bold text-blue-600" suppressHydrationWarning>
-                              ₹{bill.billAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                            </p>
+
+                      {/* General Info Panel - Grid style */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-600 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-900/30 p-4 rounded-xl border border-slate-100/80 dark:border-slate-800/40">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                            <span className="font-medium text-slate-700 dark:text-slate-200">{bill.contract?.agreementNo}</span>
                           </div>
-                          
-                          {bill.pvcCalculation && (
-                            <>
-                              <div>
-                                <p className="text-xs text-gray-500 mb-0.5">PVC Amount</p>
-                                {/* Show dual amounts for 17B extension bills */}
-                                {bill.contract?.isExtended && bill.contract?.extensionType === '17B' && bill.pvcCalculation.isIndexCapped && bill.pvcCalculation.originalPvcAmount && bill.pvcCalculation.restrictedPvcAmount ? (
-                                  <div className="flex flex-col gap-1">
-                                    <div className="text-sm font-bold text-green-600" suppressHydrationWarning>
-                                      <span className="text-xs text-gray-500 font-normal">Actual PVC (With 17B):</span>
-                                      <span className="ml-1">₹{bill.pvcCalculation.restrictedPvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-                                    </div>
-                                    <div className="text-xs text-gray-500" suppressHydrationWarning>
-                                      <span className="font-medium">If Without 17B:</span>
-                                      <span className="ml-1 text-gray-700">₹{bill.pvcCalculation.originalPvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <p className="text-sm font-bold text-green-600" suppressHydrationWarning>
-                                    ₹{bill.pvcCalculation.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                                  </p>
-                                )}
-                              </div>
-                              
-                              <div>
-                                <p className="text-xs text-gray-500 mb-0.5">Cumulative PVC</p>
-                                <p className="text-sm font-bold text-purple-600">
-                                  ₹{bill.pvcCalculation.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                            <span className="font-semibold text-slate-800 dark:text-slate-100">{bill.contract?.contractorName}</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <FileText className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                            <span className="line-clamp-2 leading-relaxed">{bill.contract?.workDescription}</span>
+                          </div>
+                        </div>
+                        <div className="space-y-2 border-t md:border-t-0 md:border-l border-slate-150 dark:border-slate-800/60 pt-2 md:pt-0 md:pl-4 flex flex-col justify-center">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                            <span suppressHydrationWarning className="font-medium">
+                              Measurement: <span className="text-slate-800 dark:text-slate-100">{format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy')}</span>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Clock className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                            <span suppressHydrationWarning className="text-xs text-slate-500">
+                              Created: {format(toISTDate(new Date(bill.createdAt)), 'dd MMM yyyy, HH:mm')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Financial Summary Grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                        {/* Bill Amount */}
+                        <div className="bg-gradient-to-br from-blue-50/40 to-blue-100/10 dark:from-blue-950/20 dark:to-blue-900/5 border border-blue-100/50 dark:border-blue-900/30 rounded-xl p-3 hover:bg-blue-50/20 transition-all duration-200">
+                          <p className="text-[10px] font-semibold text-blue-600/80 dark:text-blue-400 uppercase tracking-wider mb-1">Bill Amount</p>
+                          <p className="text-base font-bold text-blue-700 dark:text-blue-300" suppressHydrationWarning>
+                            ₹{bill.billAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                          </p>
+                        </div>
+
+                        {/* PVC Amount */}
+                        <div className="bg-gradient-to-br from-emerald-50/40 to-emerald-100/10 dark:from-emerald-950/20 dark:to-emerald-900/5 border border-emerald-100/50 dark:border-emerald-900/30 rounded-xl p-3 hover:bg-emerald-50/20 transition-all duration-200">
+                          <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-1">PVC Amount</p>
+                          {bill.pvcCalculation ? (
+                            bill.contract?.isExtended && bill.contract?.extensionType === '17B' && bill.pvcCalculation.isIndexCapped && bill.pvcCalculation.originalPvcAmount && bill.pvcCalculation.restrictedPvcAmount ? (
+                              <div className="flex flex-col gap-0.5">
+                                <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300" suppressHydrationWarning>
+                                  ₹{bill.pvcCalculation.restrictedPvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                                 </p>
-                              </div>
-                            </>
-                          )}
-                          
-                          <div>
-                            <p className="text-xs text-gray-500 mb-0.5">Processing Fee</p>
-                            {bill.billTransaction ? (
-                              <div>
-                                {bill.billTransaction.isFree ? (
-                                  <div className="flex items-center gap-1">
-                                    <Gift className="h-3 w-3 text-green-600" />
-                                    <span className="text-sm font-bold text-green-600">FREE</span>
-                                  </div>
-                                ) : (
-                                  <p className="text-sm font-bold text-purple-600">
-                                    ₹{bill.billTransaction.amount.toLocaleString('en-IN')}
-                                  </p>
-                                )}
+                                <span className="text-[9px] text-slate-500 font-medium leading-none" suppressHydrationWarning>
+                                  Uncapped: ₹{bill.pvcCalculation.originalPvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                </span>
                               </div>
                             ) : (
-                              <p className="text-xs text-gray-500">Not processed</p>
-                            )}
-                          </div>
+                              <p className="text-base font-bold text-emerald-700 dark:text-emerald-300" suppressHydrationWarning>
+                                ₹{bill.pvcCalculation.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                              </p>
+                            )
+                          ) : (
+                            <p className="text-xs text-slate-400 font-medium">Pending</p>
+                          )}
+                        </div>
+
+                        {/* Cumulative PVC */}
+                        <div className="bg-gradient-to-br from-violet-50/40 to-violet-100/10 dark:from-violet-950/20 dark:to-violet-900/5 border border-violet-100/50 dark:border-violet-900/30 rounded-xl p-3 hover:bg-violet-50/20 transition-all duration-200">
+                          <p className="text-[10px] font-semibold text-violet-600/80 dark:text-violet-400 uppercase tracking-wider mb-1">Cumulative PVC</p>
+                          {bill.pvcCalculation ? (
+                            <p className="text-base font-bold text-violet-700 dark:text-violet-300" suppressHydrationWarning>
+                              ₹{bill.pvcCalculation.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-slate-400 font-medium">Pending</p>
+                          )}
+                        </div>
+
+                        {/* Processing Fee */}
+                        <div className="bg-gradient-to-br from-teal-50/40 to-teal-100/10 dark:from-teal-950/20 dark:to-teal-900/5 border border-teal-100/50 dark:border-teal-900/30 rounded-xl p-3 hover:bg-teal-50/20 transition-all duration-200">
+                          <p className="text-[10px] font-semibold text-teal-600/80 dark:text-teal-400 uppercase tracking-wider mb-1">Processing Fee</p>
+                          {bill.billTransaction ? (
+                            bill.billTransaction.isFree ? (
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <Gift className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                                <span className="text-xs font-bold text-teal-600 dark:text-teal-400">FREE</span>
+                              </div>
+                            ) : (
+                              <p className="text-base font-bold text-teal-700 dark:text-teal-300" suppressHydrationWarning>
+                                ₹{bill.billTransaction.amount.toLocaleString('en-IN')}
+                              </p>
+                            )
+                          ) : (
+                            <p className="text-xs text-slate-400 font-medium">Not processed</p>
+                          )}
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                    <div className="flex gap-2 flex-wrap">
-                      {/* Recalculate button - hidden as per user request */}
-                      {/* {bill.contract?.isExtended && bill.contract?.extensionType === '17B' && (
-                        <Button
-                          onClick={() => recalculateBill(bill.id)}
-                          disabled={recalculating === bill.id}
-                          variant="outline"
-                          size="sm"
-                          className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                        >
-                          {recalculating === bill.id ? (
-                            <>
-                              <LoadingSpinner />
-                              <span className="ml-1">Recalculating...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Calculator className="h-3 w-3 mr-1" />
-                              Recalculate PVC
-                            </>
-                          )}
-                        </Button>
-                      )} */}
-                      <Button asChild variant="outline" size="sm" className="text-purple-600 hover:text-purple-700">
-                        <Link href={`/bills/${bill.id}`}>
-                          <Eye className="h-3 w-3 mr-1" />
-                          View Details
-                        </Link>
-                      </Button>
-                      <Button
+                  {/* Actions Console */}
+                  <div className="flex flex-wrap lg:flex-col items-stretch justify-center gap-3 min-w-[200px] w-full lg:w-[220px] mt-4 lg:mt-0 border-t lg:border-t-0 lg:border-l border-slate-150 dark:border-slate-800/80 pt-4 lg:pt-0 lg:pl-5">
+                    {/* View Details - Highlighted Primary CTA */}
+                    <Button asChild variant="default" size="default" className="w-full bg-violet-600 hover:bg-violet-750 text-white shadow-sm hover:shadow transition-all duration-300 font-semibold rounded-xl h-10 gap-2">
+                      <Link href={`/bills/${bill.id}`}>
+                        <Eye className="h-4 w-4" />
+                        <span>View Details</span>
+                      </Link>
+                    </Button>
+
+                    {/* Export Actions Grid (PDF, Excel, Covering Letter) */}
+                    <div className="grid grid-cols-3 gap-2 w-full">
+                      {/* PDF */}
+                      <button
                         onClick={() => openTemplateDialog(bill.id, bill.billNo)}
-                        variant="outline"
-                        size="sm"
-                        className="text-blue-600 hover:text-blue-700"
+                        className="flex flex-col items-center justify-center p-2 rounded-xl border border-slate-200/50 hover:border-blue-200 dark:border-slate-800 dark:hover:border-blue-900/50 bg-slate-50/50 hover:bg-blue-50/30 text-blue-700 dark:text-blue-400 dark:bg-slate-900/20 transition-all duration-200 group/btn"
+                        title="Download PDF"
                       >
-                        <Download className="h-3 w-3 mr-1" />
-                        PDF
-                      </Button>
-                      <Button
+                        <Download className="h-4 w-4 mb-1 group-hover/btn:scale-110 transition-transform duration-200" />
+                        <span className="text-[10px] font-bold">PDF</span>
+                      </button>
+
+                      {/* Excel */}
+                      <button
                         onClick={() => downloadBillExcel(bill.id, bill.billNo)}
-                        variant="outline"
-                        size="sm"
-                        className="text-green-600 hover:text-green-700"
+                        className="flex flex-col items-center justify-center p-2 rounded-xl border border-slate-200/50 hover:border-emerald-200 dark:border-slate-800 dark:hover:border-emerald-900/50 bg-slate-50/50 hover:bg-emerald-50/30 text-emerald-700 dark:text-emerald-400 dark:bg-slate-900/20 transition-all duration-200 group/btn"
+                        title="Download Excel"
                       >
-                        <FileSpreadsheet className="h-3 w-3 mr-1" />
-                        Excel
-                      </Button>
-                      <Button
+                        <FileSpreadsheet className="h-4 w-4 mb-1 group-hover/btn:scale-110 transition-transform duration-200" />
+                        <span className="text-[10px] font-bold">Excel</span>
+                      </button>
+
+                      {/* Covering Letter */}
+                      <button
                         onClick={() => downloadCoveringLetter(bill.id, bill.billNo, bill.contract)}
-                        variant="outline"
-                        size="sm"
-                        className="text-indigo-600 hover:text-indigo-700"
+                        className="flex flex-col items-center justify-center p-2 rounded-xl border border-slate-200/50 hover:border-indigo-200 dark:border-slate-800 dark:hover:border-indigo-900/50 bg-slate-50/50 hover:bg-indigo-50/30 text-indigo-700 dark:text-indigo-400 dark:bg-slate-900/20 transition-all duration-200 group/btn"
+                        title="Download Covering Letter"
                       >
-                        <Send className="h-3 w-3 mr-1" />
-                        Covering Letter
-                      </Button>
-                      <Button
-                        onClick={() => openWhatsAppDialog(bill.id, bill.billNo, bill.contract.contractorName, bill.contract.contractorPhone)}
-                        variant="outline"
-                        size="sm"
-                        className="text-emerald-600 hover:text-emerald-700"
-                      >
-                        <Phone className="h-3 w-3 mr-1" />
-                        WhatsApp
-                      </Button>
-                      <Button asChild variant="outline" size="sm">
+                        <Send className="h-4 w-4 mb-1 group-hover/btn:scale-110 transition-transform duration-200" />
+                        <span className="text-[10px] font-bold">Letter</span>
+                      </button>
+                    </div>
+
+                    {/* WhatsApp notification action */}
+                    <Button
+                      onClick={() => openWhatsAppDialog(bill.id, bill.billNo, bill.contract.contractorName, bill.contract.contractorPhone)}
+                      variant="outline"
+                      size="default"
+                      className="w-full border-emerald-100 hover:border-emerald-250 dark:border-emerald-950 dark:hover:border-emerald-900/50 bg-emerald-50/30 hover:bg-emerald-50/60 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-semibold rounded-xl h-10 gap-2 transition-all duration-200"
+                    >
+                      <Phone className="h-4 w-4 text-emerald-600" />
+                      <span>WhatsApp</span>
+                    </Button>
+
+                    {/* Edit & Delete Action Grid */}
+                    <div className="grid grid-cols-2 gap-2 w-full">
+                      {/* Edit */}
+                      <Button asChild variant="outline" size="default" className="w-full border-slate-200 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-300 font-semibold rounded-xl h-10 gap-1.5 transition-all duration-200">
                         <Link href={`/bills/edit/${bill.id}`}>
-                          <Edit className="h-3 w-3 mr-1" />
-                          Edit
+                          <Edit className="h-3.5 w-3.5" />
+                          <span>Edit</span>
                         </Link>
                       </Button>
-                      {deletableBillIds.has(bill.id) && (
+
+                      {/* Delete */}
+                      {deletableBillIds.has(bill.id) ? (
                         <Button
                           onClick={() => deleteBill(bill.id)}
                           disabled={deleting}
                           variant="outline"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          size="default"
+                          className="w-full border-rose-100 hover:border-rose-200 dark:border-rose-950/50 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-600 dark:text-rose-400 font-semibold rounded-xl h-10 gap-1.5 transition-all duration-200"
                         >
-                          <Trash2 className="h-3 w-3 mr-1" />
-                          Delete
+                          <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                          <span>Delete</span>
                         </Button>
+                      ) : (
+                        <div className="w-full h-10 border border-dashed border-slate-200 dark:border-slate-850 rounded-xl flex items-center justify-center text-[10px] text-slate-400 font-semibold bg-slate-50/30 dark:bg-slate-900/10">
+                          System Lock
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2148,61 +2142,72 @@ export default function BillsPage() {
 
                 {/* Component breakdown for latest bills */}
                 {bill.pvcCalculation && (
-                  <div className="mt-4 pt-4 border-t border-gray-100">
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                      {bill.pvcCalculation.labourPvc > 0 && (
-                        <div className="text-center">
-                          <span className="text-gray-600">Labour:</span>
-                          <span className="ml-1 font-medium">
-                            ₹{bill.pvcCalculation.labourPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-850">
+                    <div className="flex flex-wrap gap-2.5 justify-center lg:justify-start">
+                      {bill.pvcCalculation.labourPvc !== 0 && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50/60 border border-blue-100/50 text-blue-700 dark:bg-blue-950/20 dark:border-blue-900/30 dark:text-blue-400 text-xs font-semibold shadow-sm hover:bg-blue-100/30 transition-colors duration-150">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                          <span>Labour:</span>
+                          <span className={`font-bold ${bill.pvcCalculation.labourPvc < 0 ? 'text-rose-600' : 'text-blue-800 dark:text-blue-300'}`}>
+                            {bill.pvcCalculation.labourPvc < 0 ? '-' : ''}₹{Math.abs(bill.pvcCalculation.labourPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </span>
                         </div>
                       )}
-                      {bill.pvcCalculation.plantMachineryPvc > 0 && (
-                        <div className="text-center">
-                          <span className="text-gray-600">Plant:</span>
-                          <span className="ml-1 font-medium">
-                            ₹{bill.pvcCalculation.plantMachineryPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      {bill.pvcCalculation.plantMachineryPvc !== 0 && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50/60 border border-amber-100/50 text-amber-700 dark:bg-amber-950/20 dark:border-amber-900/30 dark:text-amber-400 text-xs font-semibold shadow-sm hover:bg-amber-100/30 transition-colors duration-150">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                          <span>Plant:</span>
+                          <span className={`font-bold ${bill.pvcCalculation.plantMachineryPvc < 0 ? 'text-rose-600' : 'text-amber-800 dark:text-amber-300'}`}>
+                            {bill.pvcCalculation.plantMachineryPvc < 0 ? '-' : ''}₹{Math.abs(bill.pvcCalculation.plantMachineryPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </span>
                         </div>
                       )}
-                      {bill.pvcCalculation.fuelPowerPvc > 0 && (
-                        <div className="text-center">
-                          <span className="text-gray-600">Fuel:</span>
-                          <span className="ml-1 font-medium">
-                            ₹{bill.pvcCalculation.fuelPowerPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      {bill.pvcCalculation.fuelPowerPvc !== 0 && (
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm transition-colors duration-150 border ${
+                          bill.pvcCalculation.fuelPowerPvc < 0
+                            ? 'bg-rose-50/60 border-rose-100/50 text-rose-700 dark:bg-rose-950/20 dark:border-rose-900/30 dark:text-rose-400 hover:bg-rose-100/30'
+                            : 'bg-orange-50/60 border-orange-100/50 text-orange-700 dark:bg-orange-950/20 dark:border-orange-900/30 dark:text-orange-400 hover:bg-orange-100/30'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${bill.pvcCalculation.fuelPowerPvc < 0 ? 'bg-rose-500' : 'bg-orange-500'}`}></span>
+                          <span>Fuel:</span>
+                          <span className={`font-bold ${bill.pvcCalculation.fuelPowerPvc < 0 ? 'text-rose-750 dark:text-rose-400' : 'text-orange-800 dark:text-orange-300'}`}>
+                            {bill.pvcCalculation.fuelPowerPvc < 0 ? '-' : ''}₹{Math.abs(bill.pvcCalculation.fuelPowerPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </span>
                         </div>
                       )}
-                      {bill.pvcCalculation.otherMaterialsPvc > 0 && (
-                        <div className="text-center">
-                          <span className="text-gray-600">Materials:</span>
-                          <span className="ml-1 font-medium">
-                            ₹{bill.pvcCalculation.otherMaterialsPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      {bill.pvcCalculation.otherMaterialsPvc !== 0 && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50/60 border border-indigo-100/50 text-indigo-700 dark:bg-indigo-950/20 dark:border-indigo-900/30 dark:text-indigo-400 text-xs font-semibold shadow-sm hover:bg-indigo-100/30 transition-colors duration-150">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                          <span>Materials:</span>
+                          <span className={`font-bold ${bill.pvcCalculation.otherMaterialsPvc < 0 ? 'text-rose-600' : 'text-indigo-800 dark:text-indigo-300'}`}>
+                            {bill.pvcCalculation.otherMaterialsPvc < 0 ? '-' : ''}₹{Math.abs(bill.pvcCalculation.otherMaterialsPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </span>
                         </div>
                       )}
-                      {(bill.pvcCalculation.cementPvc > 0 || bill.pvcCalculation.dedicatedCementPvc > 0) && (
-                        <div className="text-center">
-                          <span className="text-gray-600">Cement:</span>
-                          <span className="ml-1 font-medium">
-                            ₹{(bill.pvcCalculation.cementPvc + bill.pvcCalculation.dedicatedCementPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      {(bill.pvcCalculation.cementPvc !== 0 || bill.pvcCalculation.dedicatedCementPvc !== 0) && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-50/60 border border-teal-100/50 text-teal-700 dark:bg-teal-950/20 dark:border-teal-900/30 dark:text-teal-400 text-xs font-semibold shadow-sm hover:bg-teal-100/30 transition-colors duration-150">
+                          <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
+                          <span>Cement:</span>
+                          <span className={`font-bold ${(bill.pvcCalculation.cementPvc + bill.pvcCalculation.dedicatedCementPvc) < 0 ? 'text-rose-600' : 'text-teal-800 dark:text-teal-300'}`}>
+                            {(bill.pvcCalculation.cementPvc + bill.pvcCalculation.dedicatedCementPvc) < 0 ? '-' : ''}₹{Math.abs(bill.pvcCalculation.cementPvc + bill.pvcCalculation.dedicatedCementPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </span>
                         </div>
                       )}
-                      {bill.pvcCalculation.explosivesPvc > 0 && (
-                        <div className="text-center">
-                          <span className="text-gray-600">Explosives:</span>
-                          <span className="ml-1 font-medium">
-                            ₹{bill.pvcCalculation.explosivesPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      {bill.pvcCalculation.explosivesPvc !== 0 && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-pink-50/60 border border-pink-100/50 text-pink-700 dark:bg-pink-950/20 dark:border-pink-900/30 dark:text-pink-400 text-xs font-semibold shadow-sm hover:bg-pink-100/30 transition-colors duration-150">
+                          <span className="w-1.5 h-1.5 rounded-full bg-pink-500"></span>
+                          <span>Explosives:</span>
+                          <span className={`font-bold ${bill.pvcCalculation.explosivesPvc < 0 ? 'text-rose-600' : 'text-pink-800 dark:text-pink-300'}`}>
+                            {bill.pvcCalculation.explosivesPvc < 0 ? '-' : ''}₹{Math.abs(bill.pvcCalculation.explosivesPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </span>
                         </div>
                       )}
-                      {(bill.pvcCalculation.steelPvc > 0 || bill.pvcCalculation.dedicatedSteelPvc > 0) && (
-                        <div className="text-center">
-                          <span className="text-gray-600">Steel:</span>
-                          <span className="ml-1 font-medium">
-                            ₹{(bill.pvcCalculation.steelPvc + bill.pvcCalculation.dedicatedSteelPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      {(bill.pvcCalculation.steelPvc !== 0 || bill.pvcCalculation.dedicatedSteelPvc !== 0) && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-slate-700 dark:bg-slate-900/30 dark:border-slate-800 dark:text-slate-300 text-xs font-semibold shadow-sm hover:bg-slate-100 dark:hover:bg-slate-900/50 transition-colors duration-150">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                          <span>Steel:</span>
+                          <span className={`font-bold ${(bill.pvcCalculation.steelPvc + bill.pvcCalculation.dedicatedSteelPvc) < 0 ? 'text-rose-600' : 'text-slate-800 dark:text-slate-255'}`}>
+                            {(bill.pvcCalculation.steelPvc + bill.pvcCalculation.dedicatedSteelPvc) < 0 ? '-' : ''}₹{Math.abs(bill.pvcCalculation.steelPvc + bill.pvcCalculation.dedicatedSteelPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </span>
                         </div>
                       )}
@@ -2217,7 +2222,7 @@ export default function BillsPage() {
               const batchId = group.batchId!;
               const isExpanded = expandedBatches.has(batchId);
               return [(
-            <Card key={`batch-${batchId}`} className="border-0 shadow-lg hover:shadow-xl transition-shadow bg-purple-50">
+            <Card key={`batch-${batchId}`} className="group relative overflow-hidden rounded-2xl border border-purple-100/70 bg-gradient-to-br from-purple-50/20 to-indigo-50/10 dark:border-purple-900/30 dark:from-purple-950/20 dark:to-indigo-950/10 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg">
               <CardContent className="p-6">
                 <div className="flex flex-col gap-4">
                   <div className="flex items-start gap-4">
@@ -2230,47 +2235,51 @@ export default function BillsPage() {
                           setSelectedBills(prev => prev.filter(id => !group.bills.some(b => b.id === id)));
                         }
                       }}
-                      className="mt-1"
+                      className="mt-1.5 border-purple-300 text-purple-600 focus:ring-purple-500 w-4 h-4"
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-3 flex-wrap mb-3">
-                        <Layers className="h-5 w-5 text-purple-600" />
-                        <h3 className="text-lg font-semibold text-purple-900">
+                        <Layers className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                        <h3 className="text-xl font-bold text-purple-950 dark:text-purple-300 tracking-tight">
                           {group.batchName}
                         </h3>
-                        <Badge className="bg-purple-200 text-purple-800">{group.bills.length} Bills</Badge>
+                        <Badge className="bg-purple-100 text-purple-800 border-purple-200/50 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-900/30 font-semibold px-2.5 py-0.5 rounded-full text-xs">
+                          {group.bills.length} Bills
+                        </Badge>
                       </div>
-                      <div className="space-y-3 mb-4">
+                      
+                      <div className="space-y-3 mb-4 bg-purple-50/30 dark:bg-purple-950/10 p-4 rounded-xl border border-purple-100/50 dark:border-purple-900/20">
                         {/* Work Description */}
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">Work Description</p>
-                          <p className="text-sm font-medium text-gray-900 line-clamp-2">
+                          <p className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-1">Work Description</p>
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-200 line-clamp-2 leading-relaxed">
                             {group.bills[0]?.contract?.workDescription || 'N/A'}
                           </p>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-600">Total Bill Amount</p>
-                            <p className="text-lg font-semibold text-blue-600">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-purple-100/30 dark:border-purple-900/10 shadow-sm">
+                            <p className="text-[10px] font-semibold text-purple-600/80 dark:text-purple-400 uppercase tracking-wider mb-0.5">Total Bill Amount</p>
+                            <p className="text-base font-bold text-blue-600 dark:text-blue-400">
                               ₹{group.totalAmount.toLocaleString('en-IN')}
                             </p>
                           </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Total PVC</p>
-                            <p className="text-lg font-semibold text-green-600">
+                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-purple-100/30 dark:border-purple-900/10 shadow-sm">
+                            <p className="text-[10px] font-semibold text-purple-600/80 dark:text-purple-400 uppercase tracking-wider mb-0.5">Total PVC</p>
+                            <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">
                               ₹{group.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                             </p>
                           </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Contract</p>
-                            <p className="text-sm font-medium text-gray-900 truncate">
+                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-purple-100/30 dark:border-purple-900/10 shadow-sm">
+                            <p className="text-[10px] font-semibold text-purple-600/80 dark:text-purple-400 uppercase tracking-wider mb-0.5">Contract</p>
+                            <p className="text-sm font-semibold text-slate-850 dark:text-slate-200 truncate mt-0.5" title={group.bills[0]?.contract?.agreementNo}>
                               {group.bills[0]?.contract?.agreementNo}
                             </p>
                           </div>
                         </div>
                       </div>
-                      <div className="flex gap-2 mb-3">
+
+                      <div className="flex gap-2 flex-wrap mb-1">
                         <Button 
                           variant="default" 
                           size="sm"
@@ -2279,88 +2288,90 @@ export default function BillsPage() {
                             generateBatchCombinedPDF(group.bills, group.batchName || 'Batch');
                           }}
                           disabled={generatingBulkReport}
-                          className="bg-purple-600 hover:bg-purple-700"
+                          className="bg-purple-600 hover:bg-purple-750 text-white font-semibold rounded-xl px-4 py-2 h-9 shadow-sm hover:shadow transition-all duration-200 gap-1.5"
                         >
-                          <Download className="h-4 w-4 mr-2" />
-                          Combined PDF
+                          <Download className="h-4 w-4" />
+                          <span>Combined PDF</span>
                         </Button>
                         <Button 
                           variant="outline"
                           size="sm"
                           onClick={() => toggleBatchExpansion(batchId)}
+                          className="border-purple-200 hover:border-purple-300 hover:bg-purple-50/50 dark:border-purple-900 dark:hover:bg-purple-950/30 text-purple-700 dark:text-purple-400 font-semibold rounded-xl px-4 py-2 h-9 transition-all duration-200 gap-1.5"
                         >
                           {isExpanded ? (
-                            <><ChevronUp className="h-4 w-4 mr-2" />Hide Bills</>
+                            <><ChevronUp className="h-4 w-4" /><span>Hide Bills</span></>
                           ) : (
-                            <><ChevronDown className="h-4 w-4 mr-2" />Show {group.bills.length} Bills</>
+                            <><ChevronDown className="h-4 w-4" /><span>Show {group.bills.length} Bills</span></>
                           )}
                         </Button>
                       </div>
+
                       {isExpanded && (
-                        <div className="space-y-2 pl-4 border-l-2 border-purple-200">
+                        <div className="space-y-3 pl-4 border-l-2 border-purple-200 dark:border-purple-800/60 mt-4">
                           {group.bills.map((bill) => (
-                            <div key={bill.id} className="p-3 bg-white rounded-lg shadow-sm">
-                              <div className="flex items-center justify-between mb-2">
+                            <div key={bill.id} className="p-4 bg-white/90 dark:bg-slate-900/80 rounded-xl border border-slate-150 dark:border-slate-800 shadow-sm transition-all duration-200 hover:shadow-md">
+                              <div className="flex items-center justify-between mb-3">
                                 <div>
-                                  <p className="font-medium text-gray-900">{bill.billNo}</p>
-                                  <p className="text-xs text-gray-500">
-                                    {format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy')}
+                                  <p className="font-bold text-slate-850 dark:text-white text-sm">{bill.billNo}</p>
+                                  <p className="text-[11px] text-slate-450 font-medium">
+                                    Measurement: {format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy')}
                                   </p>
                                 </div>
                                 <div className="text-right">
-                                  <p className="text-sm font-medium text-blue-600">
+                                  <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
                                     ₹{bill.billAmount.toLocaleString('en-IN')}
                                   </p>
                                   {bill.pvcCalculation && (
-                                    <p className="text-xs text-green-600">
+                                    <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
                                       PVC: ₹{bill.pvcCalculation.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                                     </p>
                                   )}
                                 </div>
                               </div>
-                              <div className="flex gap-1">
+                              <div className="flex gap-1.5 flex-wrap border-t border-slate-50 dark:border-slate-800/40 pt-3">
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   asChild
-                                  className="h-7 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                  className="h-8 px-3 text-xs text-purple-600 hover:text-purple-750 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/30 font-semibold rounded-lg"
                                 >
                                   <Link href={`/bills/${bill.id}`}>
-                                    <Eye className="h-3 w-3 mr-1" />View Details
+                                    <Eye className="h-3.5 w-3.5 mr-1" />View Details
                                   </Link>
                                 </Button>
                                 <Button
                                   onClick={() => openTemplateDialog(bill.id, bill.billNo)}
                                   variant="ghost"
                                   size="sm"
-                                  className="h-7 px-2 text-xs"
+                                  className="h-8 px-3 text-xs text-blue-600 hover:text-blue-750 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30 font-semibold rounded-lg"
                                 >
-                                  <Download className="h-3 w-3 mr-1" />PDF
+                                  <Download className="h-3.5 w-3.5 mr-1" />PDF
                                 </Button>
                                 <Button
                                   onClick={() => downloadBillExcel(bill.id, bill.billNo)}
                                   variant="ghost"
                                   size="sm"
-                                  className="h-7 px-2 text-xs"
+                                  className="h-8 px-3 text-xs text-emerald-600 hover:text-emerald-750 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30 font-semibold rounded-lg"
                                 >
-                                  <FileSpreadsheet className="h-3 w-3 mr-1" />Excel
+                                  <FileSpreadsheet className="h-3.5 w-3.5 mr-1" />Excel
                                 </Button>
                                 <Button
                                   onClick={() => downloadCoveringLetter(bill.id, bill.billNo, bill.contract)}
                                   variant="ghost"
                                   size="sm"
-                                  className="h-7 px-2 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                                  className="h-8 px-3 text-xs text-indigo-600 hover:text-indigo-750 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/30 font-semibold rounded-lg"
                                 >
-                                  <Send className="h-3 w-3 mr-1" />Letter
+                                  <Send className="h-3.5 w-3.5 mr-1" />Letter
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   asChild
-                                  className="h-7 px-2 text-xs"
+                                  className="h-8 px-3 text-xs text-slate-650 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-350 dark:hover:bg-slate-800 font-semibold rounded-lg"
                                 >
                                   <Link href={`/bills/edit/${bill.id}`}>
-                                    <Edit className="h-3 w-3 mr-1" />Edit
+                                    <Edit className="h-3.5 w-3.5 mr-1" />Edit
                                   </Link>
                                 </Button>
                                 <Button
@@ -2368,9 +2379,9 @@ export default function BillsPage() {
                                   variant="ghost"
                                   size="sm"
                                   disabled={deleting}
-                                  className="h-7 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  className="h-8 px-3 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30 font-semibold rounded-lg"
                                 >
-                                  <Trash2 className="h-3 w-3 mr-1" />Delete
+                                  <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
                                 </Button>
                               </div>
                             </div>

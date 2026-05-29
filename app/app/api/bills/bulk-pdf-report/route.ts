@@ -472,48 +472,171 @@ export async function POST(request: NextRequest) {
     pdf.line(marginLeft, yPosition + 2, marginLeft + contractInfoWidth, yPosition + 2);
     yPosition += 14;
     
-    // Two-column layout for contract information
-    const col1X = marginLeft + 10;
-    const col2X = marginLeft + (contentWidth / 2) + 10;
+    // Two-column layout for contract information with proper spacing
+    const columnGap = 20; // Gap between two columns
+    const singleColumnWidth = (contentWidth - columnGap) / 2; // ~188mm per column
     
-    pdf.setFontSize(11);
+    // Column 1 measurements
+    const col1LabelWidth = singleColumnWidth * 0.40; // 40% for label
+    const col1ValueWidth = singleColumnWidth * 0.60; // 60% for value
+    const col1LabelX = marginLeft; // Start of column 1
+    const col1ValueX = col1LabelX + col1LabelWidth; // Start of column 1 values
+    
+    // Column 2 measurements
+    const col2LabelX = marginLeft + singleColumnWidth + columnGap; // Start of column 2
+    const col2LabelWidth = singleColumnWidth * 0.40; // 40% for label
+    const col2ValueWidth = singleColumnWidth * 0.60; // 60% for value
+    const col2ValueX = col2LabelX + col2LabelWidth; // Start of column 2 values
+    
+    // First row: Agreement No & Date of Opening
     pdf.setFont("helvetica", "bold");
-    pdf.text("Agreement No:", col1X, yPosition);
+    pdf.text("Agreement No:", col1LabelX, yPosition);
     pdf.setFont("helvetica", "normal");
-    pdf.text(firstContract.agreementNo, col1X + 70, yPosition);
+    const agreementText = pdf.splitTextToSize(firstContract.agreementNo, col1ValueWidth);
+    pdf.text(agreementText, col1ValueX, yPosition);
     
     pdf.setFont("helvetica", "bold");
-    pdf.text("Date of Opening:", col2X, yPosition);
+    pdf.text("Date of Opening:", col2LabelX, yPosition);
     pdf.setFont("helvetica", "normal");
-    pdf.text(format(new Date(firstContract.dateOfOpening), 'dd MMM yyyy'), col2X + 70, yPosition);
+    const dateOfOpeningText = pdf.splitTextToSize(format(new Date(firstContract.dateOfOpening), 'dd MMM yyyy'), col2ValueWidth);
+    pdf.text(dateOfOpeningText, col2ValueX, yPosition);
+    
+    yPosition += Math.max(8, agreementText.length * 6, dateOfOpeningText.length * 6);
+    
+    // Second row: Contractor & Base Month
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Contractor:", col1LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const contractorText = pdf.splitTextToSize(firstContract.contractorName, col1ValueWidth);
+    pdf.text(contractorText, col1ValueX, yPosition);
+    
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Base Month:", col2LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const baseMonthText = pdf.splitTextToSize(format(firstBaseMonth, 'MMM yyyy'), col2ValueWidth);
+    pdf.text(baseMonthText, col2ValueX, yPosition);
+    
+    yPosition += Math.max(8, contractorText.length * 6, baseMonthText.length * 6);
+    
+    // Third row: Railway Zone & Fuel Pricing Type
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Railway Zone:", col1LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const firstBill = bills[0];
+    const zoneTextVal = firstBill?.zone || 'N/A';
+    pdf.text(zoneTextVal, col1ValueX, yPosition);
+    
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Fuel Pricing Type:", col2LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const fuelPricingText = firstBill?.fuelPriceType === 'zone_city'
+      ? 'Zone-Specific City Price'
+      : 'Four-City Average';
+    pdf.text(fuelPricingText, col2ValueX, yPosition);
+    
     yPosition += 8;
     
-    // LOA Number (if available)
+    // Fourth row: Contract Value & Completion Period
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Contract Value:", col1LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const contractValueText = firstContract.contractValue 
+      ? `${firstContract.contractValue.toLocaleString('en-IN')}` 
+      : 'N/A';
+    pdf.text(contractValueText, col1ValueX, yPosition);
+    
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Completion Period:", col2LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const periodText = firstContract.completionPeriodMonths 
+      ? `${firstContract.completionPeriodMonths} Months` 
+      : 'N/A';
+    pdf.text(periodText, col2ValueX, yPosition);
+    
+    yPosition += 8;
+    
+    // Fifth row: Railway Supplied Materials & Tender Value
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Railway Materials:", col1LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const materialsText = firstContract.hasRailwaySuppliedMaterials ? 'Yes (Excluded from PVC)' : 'No (Supplied by Contractor)';
+    pdf.text(materialsText, col1ValueX, yPosition);
+    
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Tender Value:", col2LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const tenderValText = firstContract.tenderAdvertisedValue 
+      ? `${firstContract.tenderAdvertisedValue.toLocaleString('en-IN')}` 
+      : 'N/A';
+    pdf.text(tenderValText, col2ValueX, yPosition);
+    
+    yPosition += 8;
+    
+    // LOA details (if LOA exists)
     if (firstContract.loaNo) {
       pdf.setFont("helvetica", "bold");
-      pdf.text("LOA Number:", col1X, yPosition);
+      pdf.text("LOA Details:", col1LabelX, yPosition);
       pdf.setFont("helvetica", "normal");
-      pdf.text(firstContract.loaNo, col1X + 70, yPosition);
-      yPosition += 8;
+      
+      const loaDateFormatted = firstContract.loaDate 
+        ? ` dated ${format(new Date(firstContract.loaDate), 'dd MMM yyyy')}` 
+        : '';
+      const loaFullText = `${firstContract.loaNo}${loaDateFormatted}`;
+      const loaText = pdf.splitTextToSize(loaFullText, contentWidth - col1LabelWidth - 5);
+      pdf.text(loaText, col1ValueX, yPosition);
+      yPosition += Math.max(8, loaText.length * 6);
     }
     
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Contractor:", col1X, yPosition);
-    pdf.setFont("helvetica", "normal");
-    const contractorText = pdf.splitTextToSize(firstContract.contractorName, (contentWidth / 2) - 90);
-    pdf.text(contractorText, col1X + 70, yPosition);
+    // Extension Details (if contract is extended)
+    if (firstContract.isExtended) {
+      // Original Completion Date and Extended Completion Date on same row
+      if (firstContract.originalCompletionDate) {
+        pdf.setFont("helvetica", "bold");
+        pdf.text("Original Completion:", col1LabelX, yPosition);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(format(new Date(firstContract.originalCompletionDate), 'dd MMM yyyy'), col1ValueX, yPosition);
+      }
+      
+      if (firstContract.currentCompletionDate) {
+        pdf.setFont("helvetica", "bold");
+        pdf.text("Extended Completion:", col2LabelX, yPosition);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(format(new Date(firstContract.currentCompletionDate), 'dd MMM yyyy'), col2ValueX, yPosition);
+      }
+      
+      yPosition += 8;
+      
+      // Extension Type
+      if (firstContract.extensionType) {
+        pdf.setFont("helvetica", "bold");
+        pdf.text("Extension Type:", col1LabelX, yPosition);
+        pdf.setFont("helvetica", "normal");
+        const extensionTypeText = firstContract.extensionType === '17A' 
+          ? 'GCC 17A (Without LD)' 
+          : firstContract.extensionType === '17B'
+          ? 'GCC 17B (With LD)'
+          : firstContract.extensionType;
+        pdf.text(extensionTypeText, col1ValueX, yPosition);
+        yPosition += 8;
+      }
+      
+      // Extension Reason
+      if (firstContract.extensionReason) {
+        pdf.setFont("helvetica", "bold");
+        pdf.text("Extension Reason:", col1LabelX, yPosition);
+        pdf.setFont("helvetica", "normal");
+        const reasonLines = pdf.splitTextToSize(firstContract.extensionReason, contentWidth - col1LabelWidth - 10);
+        pdf.text(reasonLines, col1ValueX, yPosition);
+        yPosition += reasonLines.length * 6 + 3;
+      }
+    }
     
+    // Work Description
     pdf.setFont("helvetica", "bold");
-    pdf.text("Base Month:", col2X, yPosition);
+    pdf.text("Work Description:", col1LabelX, yPosition);
     pdf.setFont("helvetica", "normal");
-    pdf.text(format(firstBaseMonth, 'MMM yyyy'), col2X + 70, yPosition);
-    yPosition += Math.max(8, contractorText.length * 6);
-    
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Work Description:", col1X, yPosition);
-    pdf.setFont("helvetica", "normal");
-    const workDescLines = pdf.splitTextToSize(firstContract.workDescription, contentWidth - 100);
-    pdf.text(workDescLines, col1X + 70, yPosition);
+    const workDescLines = pdf.splitTextToSize(firstContract.workDescription, contentWidth - col1LabelWidth - 10);
+    pdf.text(workDescLines, col1ValueX, yPosition);
     yPosition += workDescLines.length * 6 + 12;
     
     // Extension Information (if any)
@@ -613,7 +736,7 @@ export async function POST(request: NextRequest) {
     
     pdf.autoTable({
       startY: yPosition,
-      head: [['S.No.', 'Bill Number', 'PVC Number', 'Measurement Date', 'Quarter', 'Total PVC Amount (₹)']],
+      head: [['S.No.', 'Bill Number', 'PVC Number', 'Measurement Date', 'Quarter', 'Total PVC Amount']],
       body: billsPvcTableData,
       theme: 'grid',
       headStyles: { 
@@ -2424,7 +2547,7 @@ export async function POST(request: NextRequest) {
       
       // Generation date
       pdf.setFontSize(8);
-      const istNow = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000));
+      const istNow = toISTDate(new Date());
       const genDateText = `Generated: ${format(istNow, 'dd MMM yyyy, HH:mm')} IST`;
       pdf.text(genDateText, marginLeft + (contentWidth / 2) - (pdf.getTextWidth(genDateText) / 2), pageHeight - 6);
       

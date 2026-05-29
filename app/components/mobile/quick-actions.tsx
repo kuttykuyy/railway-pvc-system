@@ -48,11 +48,11 @@ export default function QuickActions({ stats }: QuickActionsProps) {
       description: 'Process new bill'
     },
     {
-      name: 'View Reports',
-      href: '/reports',
+      name: 'Bill Abstracts',
+      href: '/reports/abstract',
       icon: Calculator,
       color: 'bg-purple-500 hover:bg-purple-600',
-      description: 'Generate reports'
+      description: 'Generate abstracts'
     },
     {
       name: 'Billing',

@@ -65,6 +65,7 @@ interface BillCardProps {
       otherMaterialsPvc?: number;
       cementPvc?: number;
       steelPvc?: number;
+      explosivesPvc?: number;
       dedicatedCementPvc?: number;
       dedicatedSteelPvc?: number;
       isIndexCapped?: boolean;
@@ -391,6 +392,16 @@ export function BillCard({
                   <span className="text-gray-600">Steel:</span>
                   <span className={`font-medium ${bill.pvcCalculation.steelPvc < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                     ₹{bill.pvcCalculation.steelPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+              
+              {/* Explosives */}
+              {bill.pvcCalculation.explosivesPvc != null && bill.pvcCalculation.explosivesPvc !== 0 && (
+                <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                  <span className="text-gray-600">Explosives:</span>
+                  <span className={`font-medium ${bill.pvcCalculation.explosivesPvc < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                    ₹{bill.pvcCalculation.explosivesPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                   </span>
                 </div>
               )}

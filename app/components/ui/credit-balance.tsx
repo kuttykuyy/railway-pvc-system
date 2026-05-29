@@ -138,8 +138,8 @@ export default function CreditBalance() {
               <div className="bg-amber-50 border border-amber-200 p-3 rounded space-y-2">
                 <div className="text-xs text-amber-800 font-medium">
                   {trialInfo.billsRemaining === 1 
-                    ? "⚠️ Last free bill. Next: ₹1000"
-                    : "⚠️ Trial ended. Next: ₹1000"
+                    ? `⚠️ Last free bill. Next: ₹${nextBillCost}`
+                    : `⚠️ Trial ended. Next: ₹${nextBillCost}`
                   }
                 </div>
                 <Button size="sm" className="w-full" variant="default" onClick={() => setShowTopupDialog(true)}>

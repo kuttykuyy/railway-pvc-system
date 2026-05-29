@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import crypto from 'crypto';
-import { resend } from '@/lib/resend';
-import ResetPasswordEmail from '@/emails/reset-password-email';
+import { resend, getResetPasswordEmailHtml } from '@/lib/resend';
 
 export async function POST(request: NextRequest) {
   try {
@@ -82,10 +81,7 @@ export async function POST(request: NextRequest) {
         from: 'Railway PVC System <noreply@irpvc.in>',
         to: user.email,
         subject: 'Reset Your Password - Railway PVC System',
-        react: ResetPasswordEmail({
-          resetUrl,
-          userEmail: user.email,
-        }),
+        html: getResetPasswordEmailHtml(resetUrl, user.email),
       });
 
       console.log(`Password reset email sent successfully to: ${user.email}`);

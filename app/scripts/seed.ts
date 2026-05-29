@@ -15,12 +15,15 @@ async function main() {
   const adminPassword = await bcrypt.hash('admin123', 12);
   await prisma.user.upsert({
     where: { email: 'admin@railway.gov.in' },
-    update: {},
+    update: {
+      emailVerified: new Date(),
+    },
     create: {
       email: 'admin@railway.gov.in',
       password: adminPassword,
       name: 'Railway Admin',
-      role: 'admin' // Set as admin
+      role: 'admin', // Set as admin
+      emailVerified: new Date(),
     }
   });
 

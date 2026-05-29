@@ -460,3 +460,43 @@ export function formatValidationErrors(result: ValidationResult): {
     warningMessage: result.warnings.join('\n\n')
   };
 }
+
+/**
+ * Validate standard Indian GSTIN format
+ * 15 characters: 2 state digits, 10 PAN characters (5 letters, 4 digits, 1 letter), 1 entity code, 1 'Z' default, 1 check character
+ */
+export function validateGstinFormat(gstin: string): boolean {
+  if (!gstin) return false;
+  const regex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+  return regex.test(gstin.trim().toUpperCase());
+}
+
+/**
+ * Validate standard Indian PAN format
+ * 10 characters: 5 letters, 4 digits, 1 letter
+ */
+export function validatePanFormat(pan: string): boolean {
+  if (!pan) return false;
+  const regex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+  return regex.test(pan.trim().toUpperCase());
+}
+
+/**
+ * Validate international phone format: +[country code][number]
+ * Matches standard format: +919876543210
+ */
+export function validatePhoneFormat(phone: string): boolean {
+  if (!phone) return false;
+  const regex = /^\+[1-9]\d{9,14}$/;
+  return regex.test(phone.trim());
+}
+
+/**
+ * Validate standard email format
+ */
+export function validateEmailFormat(email: string): boolean {
+  if (!email) return false;
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return regex.test(email.trim());
+}
+

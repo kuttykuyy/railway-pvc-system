@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { createGstInvoice } from '@/lib/gst-invoice';
 import { sendBillPDFNotification, isMyDreamsWhatsAppConfigured } from '@/lib/whatsapp-mydreams';
+import { validateGstinFormat, validateEmailFormat } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +50,22 @@ export async function POST(request: NextRequest) {
     if (!transactionId || !customerName || !customerEmail) {
       return NextResponse.json(
         { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Validate email format
+    if (!validateEmailFormat(customerEmail)) {
+      return NextResponse.json(
+        { error: 'Please enter a valid email address' },
+        { status: 400 }
+      );
+    }
+
+    // Validate GSTIN format if provided
+    if (customerGstin && customerGstin.trim() && !validateGstinFormat(customerGstin)) {
+      return NextResponse.json(
+        { error: 'Please enter a valid 15-character GSTIN (e.g., 22AAAAA0000A1Z5)' },
         { status: 400 }
       );
     }

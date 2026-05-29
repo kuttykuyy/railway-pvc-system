@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
@@ -18,6 +17,14 @@ export async function POST(request: NextRequest) {
       for (const item of monthlyData) {
         const { priceIndexId, month, value, isProvisional = false } = item;
         
+        const parsedValue = parseFloat(value);
+        if (isNaN(parsedValue) || parsedValue <= 0) {
+          return NextResponse.json(
+            { error: `Invalid index value for index ID ${priceIndexId}. Value must be a valid positive number.` },
+            { status: 400 }
+          );
+        }
+        
         const monthDate = new Date(month);
         monthDate.setDate(1);
         monthDate.setHours(0, 0, 0, 0);
@@ -30,13 +37,13 @@ export async function POST(request: NextRequest) {
             }
           },
           update: { 
-            value: parseFloat(value),
+            value: parsedValue,
             isProvisional: Boolean(isProvisional)
           },
           create: {
             priceIndexId,
             month: monthDate,
-            value: parseFloat(value),
+            value: parsedValue,
             isProvisional: Boolean(isProvisional)
           }
         });
@@ -60,6 +67,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const parsedValue = parseFloat(value);
+      if (isNaN(parsedValue) || parsedValue <= 0) {
+        return NextResponse.json(
+          { error: 'Invalid index value. Value must be a valid positive number.' },
+          { status: 400 }
+        );
+      }
+
       const monthDate = new Date(month);
       monthDate.setDate(1); // Set to first day of month
       monthDate.setHours(0, 0, 0, 0);
@@ -72,13 +87,13 @@ export async function POST(request: NextRequest) {
           }
         },
         update: { 
-          value: parseFloat(value),
+          value: parsedValue,
           isProvisional: Boolean(isProvisional)
         },
         create: {
           priceIndexId,
           month: monthDate,
-          value: parseFloat(value),
+          value: parsedValue,
           isProvisional: Boolean(isProvisional)
         }
       });
@@ -111,6 +126,14 @@ export async function PUT(request: NextRequest) {
     for (const item of values) {
       const { priceIndexId, month, value, isProvisional = false } = item;
       
+      const parsedValue = parseFloat(value);
+      if (isNaN(parsedValue) || parsedValue <= 0) {
+        return NextResponse.json(
+          { error: `Invalid index value for index ID ${priceIndexId}. Value must be a valid positive number.` },
+          { status: 400 }
+        );
+      }
+      
       const monthDate = new Date(month);
       monthDate.setDate(1);
       monthDate.setHours(0, 0, 0, 0);
@@ -123,13 +146,13 @@ export async function PUT(request: NextRequest) {
           }
         },
         update: { 
-          value: parseFloat(value),
+          value: parsedValue,
           isProvisional: Boolean(isProvisional)
         },
         create: {
           priceIndexId,
           month: monthDate,
-          value: parseFloat(value),
+          value: parsedValue,
           isProvisional: Boolean(isProvisional)
         }
       });

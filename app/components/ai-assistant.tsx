@@ -46,7 +46,7 @@ const PAGE_HINTS: Record<string, string> = {
   '/contracts/new': 'Setting up a new contract? Let me walk you through it.',
   '/indices/view': 'These are the current price indices. Ask me what any index means!',
   '/class-analyzer': 'The Classification Analyzer helps find the right work classification. Tell me your work type and I\'ll help.',
-  '/reports': 'Need help generating or understanding PVC reports?',
+  '/reports/abstract': 'Need help generating or understanding Bill Abstract reports?',
 };
 
 export function AIAssistant() {

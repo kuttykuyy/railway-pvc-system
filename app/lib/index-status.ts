@@ -65,12 +65,12 @@ function getQuarterMonthsFromQuarter(quarter: string, baseMonth: Date): Date[] {
     // Calculate starting month for this quarter
     const startMonthNum = (baseMonthNum + (quarterNum - 1) * 3) % 12;
     
-    // Generate 3 months for the quarter
+    // Generate 3 months for the quarter using UTC to avoid timezone mismatches
     const months: Date[] = [];
     for (let i = 0; i < 3; i++) {
       const monthNum = (startMonthNum + i) % 12;
       const monthYear = monthNum < startMonthNum ? year + 1 : year;
-      months.push(new Date(monthYear, monthNum, 1));
+      months.push(new Date(Date.UTC(monthYear, monthNum, 1)));
     }
     
     return months;
@@ -105,9 +105,9 @@ export async function areFinalIndicesAvailableForBill(
     // Get the 3 months needed for this quarter's calculation
     const quarterMonths = getQuarterMonths(quarter, baseMonth);
     
-    // Normalize to first day of month for database queries
+    // Normalize to first day of month for database queries using UTC representation
     const normalizedMonths = quarterMonths.map(date => 
-      new Date(date.getFullYear(), date.getMonth(), 1)
+      new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1))
     );
     
     // Get CORE price indices only (exclude city-specific variants like "Steel TMT Bars - Delhi", "MPNG Fuel - Mumbai")

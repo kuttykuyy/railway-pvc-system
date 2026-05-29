@@ -55,6 +55,7 @@ interface Contract {
   dateOfOpening: Date;
   baseMonth: Date;
   loaNo: string | null;
+  loaDate: string | Date | null;
   user?: {
     name: string | null;
     email: string;
@@ -65,6 +66,9 @@ interface Contract {
   };
   createdAt: Date;
   updatedAt: Date;
+  contractValue: number | null;
+  tenderAdvertisedValue: number | null;
+  pvcApplicable: boolean;
 }
 
 interface Bill {
@@ -382,25 +386,35 @@ export default function ContractsPage() {
     }
   };
 
+  const formatIndianCurrency = (num: number) => {
+    if (num >= 10000000) { // 1 Crore = 10,000,000
+      return `₹${(num / 10000000).toFixed(2)} Cr`;
+    }
+    if (num >= 100000) { // 1 Lakh = 100,000
+      return `₹${(num / 100000).toFixed(2)} L`;
+    }
+    return `₹${num.toLocaleString('en-IN')}`;
+  };
+
   const getStatusBadge = (contract: Contract) => {
     if (contract._count.pvcCalculations > 0) {
       return (
-        <Badge className="bg-green-100 text-green-700 border-green-200">
-          <CheckCircle className="h-3 w-3 mr-1" />
+        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200/50 hover:bg-emerald-50">
+          <CheckCircle className="h-3.5 w-3.5 mr-1" />
           Active with PVC
         </Badge>
       );
     } else if (contract._count.bills > 0) {
       return (
-        <Badge className="bg-blue-100 text-blue-700 border-blue-200">
-          <BarChart3 className="h-3 w-3 mr-1" />
+        <Badge className="bg-blue-50 text-blue-700 border-blue-200/50 hover:bg-blue-50">
+          <BarChart3 className="h-3.5 w-3.5 mr-1" />
           Active
         </Badge>
       );
     } else {
       return (
-        <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-300">
-          <AlertTriangle className="h-3 w-3 mr-1" />
+        <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200/80">
+          <AlertTriangle className="h-3.5 w-3.5 mr-1 text-slate-500" />
           No Bills
         </Badge>
       );
@@ -419,138 +433,136 @@ export default function ContractsPage() {
     total: contracts.length,
     active: contracts.filter(c => c._count.bills > 0).length,
     withPvc: contracts.filter(c => c._count.pvcCalculations > 0).length,
-    totalBills: contracts.reduce((sum, c) => sum + c._count.bills, 0)
+    totalBills: contracts.reduce((sum, c) => sum + c._count.bills, 0),
+    totalValue: contracts.reduce((sum, c) => sum + (c.contractValue || 0), 0),
+    pvcEligible: contracts.filter(c => c.pvcApplicable).length
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-0">
+    <div className="space-y-6 sm:space-y-8 px-4 sm:px-0">
       {/* Posting Details Notice for Railway Officials */}
       <PostingDetailsNotice />
       
-      {/* Enhanced Header */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl shadow-2xl">
-        <div className="flex flex-col gap-4 sm:gap-6">
-          <div className="flex-1">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold flex items-center gap-3 sm:gap-4">
-              <div className="bg-white/20 p-2 sm:p-3 rounded-lg sm:rounded-xl">
-                <Building2 className="h-6 w-6 sm:h-8 sm:w-8" />
-              </div>
-              <span className="leading-tight">Contract Management</span>
-            </h1>
-            <p className="text-sm sm:text-base md:text-lg text-white/90 mt-2 sm:mt-3 max-w-2xl">
-              Comprehensive management of railway contracts with automatic PVC calculations, 
-              bill tracking, and performance analytics
-            </p>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-            <Button asChild className="bg-white text-blue-600 hover:bg-white/90 font-semibold shadow-lg w-full sm:w-auto" size="default">
-              <Link href="/contracts/new">
-                <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                New Contract
-              </Link>
-            </Button>
-          </div>
+      {/* Premium, Clean Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-slate-100 p-6 rounded-2xl shadow-sm">
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
+            <div className="bg-blue-50 p-2 rounded-xl text-blue-600">
+              <Building2 className="h-7 w-7" />
+            </div>
+            Contracts
+          </h1>
+          <p className="text-sm sm:text-base text-slate-500 max-w-2xl">
+            Manage your railway contracts, track bills, and run automatic Price Variation Clause calculations.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md shadow-blue-500/10 rounded-xl w-full sm:w-auto" size="lg">
+            <Link href="/contracts/new">
+              <Plus className="h-5 w-5 mr-2" />
+              New Contract
+            </Link>
+          </Button>
         </div>
       </div>
 
-      {/* Statistics Dashboard */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-        <Card className="border-0 shadow-xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 hover:shadow-2xl transition-all duration-300">
-          <CardContent className="p-4 sm:p-5 md:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-3">
-              <div className="space-y-1 sm:space-y-2 w-full">
-                <p className="text-xs sm:text-sm font-medium text-blue-600 uppercase tracking-wide">Total Contracts</p>
-                <p className="text-2xl sm:text-3xl font-bold text-blue-900">{stats.total}</p>
-                <p className="text-xs text-blue-700">All registered</p>
+      {/* Simplified, High-Contrast Statistics Dashboard */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <Card className="border border-slate-100 shadow-sm bg-white hover:shadow-md transition-all duration-200 rounded-2xl overflow-hidden">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Contracts</p>
+                <p className="text-3xl font-bold text-slate-900">{stats.total}</p>
+                <p className="text-xs text-slate-500">All registered contracts</p>
               </div>
-              <div className="bg-blue-500/20 p-2 sm:p-3 rounded-xl sm:rounded-2xl">
-                <Building2 className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
+              <div className="bg-blue-50 p-3 rounded-2xl text-blue-600">
+                <Building2 className="h-6 w-6" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-xl bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 hover:shadow-2xl transition-all duration-300">
+        <Card className="border border-slate-100 shadow-sm bg-white hover:shadow-md transition-all duration-200 rounded-2xl overflow-hidden">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-green-600 uppercase tracking-wide">Active Contracts</p>
-                <p className="text-3xl font-bold text-green-900">{stats.active}</p>
-                <p className="text-xs text-green-700">With bills</p>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Portfolio Value</p>
+                <p className="text-3xl font-bold text-emerald-600">{formatIndianCurrency(stats.totalValue)}</p>
+                <p className="text-xs text-slate-500">Combined value of works</p>
               </div>
-              <div className="bg-green-500/20 p-3 rounded-2xl">
-                <CheckCircle className="h-8 w-8 text-green-600" />
+              <div className="bg-emerald-50 p-3 rounded-2xl text-emerald-600">
+                <IndianRupee className="h-6 w-6" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-xl bg-gradient-to-br from-purple-50 via-violet-50 to-fuchsia-50 hover:shadow-2xl transition-all duration-300">
+        <Card className="border border-slate-100 shadow-sm bg-white hover:shadow-md transition-all duration-200 rounded-2xl overflow-hidden">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-purple-600 uppercase tracking-wide">PVC Enabled</p>
-                <p className="text-3xl font-bold text-purple-900">{stats.withPvc}</p>
-                <p className="text-xs text-purple-700">With calculations</p>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">PVC Eligible</p>
+                <p className="text-3xl font-bold text-violet-600">{stats.pvcEligible}</p>
+                <p className="text-xs text-slate-500">Contracts under GCC 46A</p>
               </div>
-              <div className="bg-purple-500/20 p-3 rounded-2xl">
-                <TrendingUp className="h-8 w-8 text-purple-600" />
+              <div className="bg-violet-50 p-3 rounded-2xl text-violet-600">
+                <TrendingUp className="h-6 w-6" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-xl bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 hover:shadow-2xl transition-all duration-300">
+        <Card className="border border-slate-100 shadow-sm bg-white hover:shadow-md transition-all duration-200 rounded-2xl overflow-hidden">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-orange-600 uppercase tracking-wide">Total Bills</p>
-                <p className="text-3xl font-bold text-orange-900">{stats.totalBills}</p>
-                <p className="text-xs text-orange-700">All contracts</p>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Bills Processed</p>
+                <p className="text-3xl font-bold text-amber-600">{stats.totalBills}</p>
+                <p className="text-xs text-slate-500">Across all active contracts</p>
               </div>
-              <div className="bg-orange-500/20 p-3 rounded-2xl">
-                <Receipt className="h-8 w-8 text-orange-600" />
+              <div className="bg-amber-50 p-3 rounded-2xl text-amber-600">
+                <Receipt className="h-6 w-6" />
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters and Search */}
-      <Card className="border-0 shadow-lg">
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <Filter className="h-4 w-4 sm:h-5 sm:w-5" />
-            Search & Filter Contracts
+      {/* Filters and Search - Clean Layout */}
+      <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl">
+        <CardHeader className="p-5 sm:p-6 pb-2">
+          <CardTitle className="flex items-center gap-2 text-lg font-bold text-slate-900">
+            <Filter className="h-5 w-5 text-slate-500" />
+            Search & Filter
           </CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Find and organize contracts using advanced filters
+          <CardDescription className="text-sm">
+            Quickly locate contracts and switch view modes
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 sm:p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Search</label>
+        <CardContent className="p-5 sm:p-6 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="space-y-1.5 col-span-1 sm:col-span-2">
+              <label className="text-xs font-semibold text-slate-500 uppercase">Search Contracts</label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Agreement, contractor, or work..."
+                  placeholder="Agreement No, contractor, work..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 h-11 border-slate-200 rounded-xl"
                 />
               </div>
             </div>
             
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Status</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase">Status</label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="h-11 border-slate-200 rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Contracts</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="active">Active (with bills)</SelectItem>
                   <SelectItem value="inactive">No Bills</SelectItem>
                   <SelectItem value="with-pvc">With PVC Calculations</SelectItem>
@@ -558,15 +570,15 @@ export default function ContractsPage() {
               </Select>
             </div>
             
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Sort By</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase">Sort By</label>
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger>
+                <SelectTrigger className="h-11 border-slate-200 rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="newest">Newest First</SelectItem>
-                  <SelectItem value="oldest">Oldest First</SelectItem>
+                  <SelectItem value="newest">Newest Created</SelectItem>
+                  <SelectItem value="oldest">Oldest Created</SelectItem>
                   <SelectItem value="name">Agreement Number</SelectItem>
                   <SelectItem value="contractor">Contractor Name</SelectItem>
                   <SelectItem value="bills">Most Bills First</SelectItem>
@@ -574,34 +586,23 @@ export default function ContractsPage() {
               </Select>
             </div>
             
-            <div className="space-y-2">
-              <label className="text-sm font-medium">View Mode</label>
-              <div className="flex gap-2">
-                <Button
-                  variant={viewMode === 'grid' ? 'default' : 'outline'}
-                  size="sm"
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase">View Mode</label>
+              <div className="flex gap-2 h-11 bg-slate-50 p-1 rounded-xl">
+                <button
                   onClick={() => handleViewModeChange('grid')}
-                  className="flex-1"
+                  className={`flex-grow flex items-center justify-center gap-1 rounded-lg text-xs font-bold transition-all ${viewMode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                 >
-                  <LayoutGrid className="h-4 w-4 mr-1" />
+                  <LayoutGrid className="h-3.5 w-3.5" />
                   Grid
-                </Button>
-                <Button
-                  variant={viewMode === 'table' ? 'default' : 'outline'}
-                  size="sm"
+                </button>
+                <button
                   onClick={() => handleViewModeChange('table')}
-                  className="flex-1"
+                  className={`flex-grow flex items-center justify-center gap-1 rounded-lg text-xs font-bold transition-all ${viewMode === 'table' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                 >
-                  <LayoutList className="h-4 w-4 mr-1" />
+                  <LayoutList className="h-3.5 w-3.5" />
                   Table
-                </Button>
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Results</label>
-              <div className="bg-gray-100 px-3 py-2 rounded-lg text-sm">
-                Showing {filteredContracts.length} of {contracts.length} contracts
+                </button>
               </div>
             </div>
           </div>
@@ -614,27 +615,27 @@ export default function ContractsPage() {
 
       {/* Contracts Display */}
       {filteredContracts.length === 0 ? (
-        <Card className="border-0 shadow-lg">
+        <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl">
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <Building2 className="h-16 w-16 text-gray-400 mb-6" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-3">
+            <Building2 className="h-16 w-16 text-slate-300 mb-6" />
+            <h3 className="text-xl font-bold text-slate-900 mb-2">
               {contracts.length === 0 ? 'No contracts yet' : 'No contracts match your filters'}
             </h3>
-            <p className="text-gray-600 text-center mb-8 max-w-md">
+            <p className="text-slate-500 text-center mb-8 max-w-sm">
               {contracts.length === 0 
                 ? 'Get started by adding your first railway contract to begin PVC calculations.'
                 : 'Try adjusting your search terms or filters to find the contracts you\'re looking for.'
               }
             </p>
             {contracts.length === 0 ? (
-              <Button asChild size="lg">
+              <Button asChild size="lg" className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
                 <Link href="/contracts/new">
                   <Plus className="h-5 w-5 mr-2" />
                   Create First Contract
                 </Link>
               </Button>
             ) : (
-              <Button variant="outline" onClick={() => {
+              <Button variant="outline" className="rounded-xl" onClick={() => {
                 setSearchTerm('');
                 setStatusFilter('all');
                 setSortBy('newest');
@@ -647,208 +648,192 @@ export default function ContractsPage() {
       ) : viewMode === 'grid' ? (
         // Grid View
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {filteredContracts.map((contract) => (
-            <Card key={contract.id} className="border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-[1.02] bg-gradient-to-br from-white to-gray-50">
-              <CardHeader className="pb-4">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between mb-3">
-                      <CardTitle className="text-xl text-blue-900">
-                        {contract.agreementNo}
-                      </CardTitle>
-                      {getStatusBadge(contract)}
+          {filteredContracts.map((contract) => {
+            const hasPvc = contract._count.pvcCalculations > 0;
+            const hasBills = contract._count.bills > 0;
+            let cardBorder = "border-l-4 border-l-slate-200 border-y border-r border-slate-100 bg-white";
+            if (hasPvc) {
+              cardBorder = "border-l-4 border-l-emerald-500 border-y border-r border-slate-100 bg-white";
+            } else if (hasBills) {
+              cardBorder = "border-l-4 border-l-blue-500 border-y border-r border-slate-100 bg-white";
+            }
+            
+            return (
+              <Card key={contract.id} className={`${cardBorder} shadow-sm hover:shadow-md transition-all duration-200 rounded-2xl overflow-hidden`}>
+                <CardHeader className="pb-3 p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h3 className="text-xl font-bold text-slate-900 tracking-tight">
+                          {contract.agreementNo}
+                        </h3>
+                        {getStatusBadge(contract)}
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        LOA: {contract.loaNo || 'Not Specified'} {contract.loaDate ? `(${format(new Date(contract.loaDate), 'dd MMM yyyy')})` : ''}
+                      </p>
                     </div>
-                    <CardDescription className="text-sm leading-relaxed line-clamp-2">
-                      {contract.workDescription}
-                    </CardDescription>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl">
-                    <div className="flex items-center gap-2 mb-2">
-                      <User className="h-4 w-4 text-blue-600" />
-                      <span className="text-sm font-medium text-blue-600">Contractor</span>
+                </CardHeader>
+                <CardContent className="px-6 pb-6 space-y-5">
+                  <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">
+                    {contract.workDescription}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contractor</span>
+                      <span className="text-sm font-semibold text-slate-800 line-clamp-1">{contract.contractorName}</span>
                     </div>
-                    <p className="font-semibold text-gray-900">{contract.contractorName}</p>
-                  </div>
-                  
-                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-xl">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Calendar className="h-4 w-4 text-green-600" />
-                      <span className="text-sm font-medium text-green-600">Opening Date</span>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contract Value</span>
+                      <span className="text-sm font-bold text-emerald-600 block">
+                        {contract.contractValue ? formatIndianCurrency(contract.contractValue) : 'Not Specified'}
+                      </span>
                     </div>
-                    <p className="font-semibold text-gray-900">
-                      {format(new Date(contract.dateOfOpening), 'dd MMM yyyy')}
-                    </p>
-                  </div>
-                </div>
-                
-                {/* Creator Information */}
-                {contract.user && (
-                  <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-xl">
-                    <div className="flex items-center gap-2 mb-2">
-                      <User className="h-4 w-4 text-amber-600" />
-                      <span className="text-sm font-medium text-amber-600">Created By</span>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Opening Date</span>
+                      <span className="text-sm font-semibold text-slate-800 block">
+                        {format(new Date(contract.dateOfOpening), 'dd MMM yyyy')}
+                      </span>
                     </div>
-                    <p className="font-semibold text-gray-900">{contract.user.name || contract.user.email}</p>
-                  </div>
-                )}
-                
-                {contract.loaNo && (
-                  <div className="bg-gradient-to-br from-purple-50 to-violet-50 p-4 rounded-xl">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileText className="h-4 w-4 text-purple-600" />
-                      <span className="text-sm font-medium text-purple-600">LOA Number</span>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Base Month</span>
+                      <span className="text-sm font-semibold text-slate-800 block">
+                        {format(new Date(contract.baseMonth), 'MMM yyyy')}
+                      </span>
                     </div>
-                    <p className="font-semibold text-gray-900">{contract.loaNo}</p>
                   </div>
-                )}
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center bg-blue-50 p-3 rounded-lg">
-                    <p className="text-2xl font-bold text-blue-700">{contract._count.bills}</p>
-                    <p className="text-xs text-blue-600">Bills</p>
+
+                  <div className="flex items-center justify-between py-2 border-t border-slate-100 text-xs text-slate-400">
+                    <span className="font-medium">
+                      Processed: <strong className="text-slate-700">{contract._count.bills} bills</strong> • PVC: <strong className="text-slate-700">{contract._count.pvcCalculations} calcs</strong>
+                    </span>
+                    {contract.user && (
+                      <span className="italic">
+                        By: {contract.user.name || contract.user.email}
+                      </span>
+                    )}
                   </div>
-                  <div className="text-center bg-green-50 p-3 rounded-lg">
-                    <p className="text-2xl font-bold text-green-700">{contract._count.pvcCalculations}</p>
-                    <p className="text-xs text-green-600">PVC Calcs</p>
-                  </div>
-                  <div className="text-center bg-orange-50 p-3 rounded-lg">
-                    <p className="text-xs text-orange-600 font-medium">Base Month</p>
-                    <p className="text-sm font-bold text-orange-700">
-                      {format(new Date(contract.baseMonth), 'MMM yyyy')}
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-100">
-                  <RecentBillsDialog contract={contract} />
-                  
-                  <Button asChild variant="outline" size="sm" className="hover:bg-blue-50">
-                    <Link href={`/contracts/${contract.id}`}>
-                      <Eye className="h-4 w-4 mr-1" />
-                      View Details
-                    </Link>
-                  </Button>
-                  
-                  <Button asChild size="sm" className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white">
-                    <Link href={`/bills/new?contractId=${contract.id}`}>
-                      <Plus className="h-4 w-4 mr-1" />
-                      Create Bill
-                    </Link>
-                  </Button>
-                  
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        disabled={deleteLoading === contract.id}
-                      >
-                        {deleteLoading === contract.id ? (
-                          <LoadingSpinner size="sm" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
+
+                  <div className="flex items-center justify-between gap-3 pt-2">
+                    <div className="flex gap-2">
+                      <RecentBillsDialog contract={contract} />
+                      <Button asChild variant="outline" size="sm" className="rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50">
+                        <Link href={`/contracts/${contract.id}`}>
+                          <Eye className="h-4 w-4 mr-1.5" />
+                          Details
+                        </Link>
                       </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent className="max-w-md">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Contract</AlertDialogTitle>
-                        <AlertDialogDescription className="text-sm">
-                          Are you sure you want to delete contract "{contract.agreementNo}"? 
-                          This action cannot be undone and will permanently delete all associated bills and PVC calculations.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                        <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
-                        <AlertDialogAction 
-                          onClick={() => handleDeleteContract(contract.id)}
-                          className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-                        >
-                          Delete Contract
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-                
-                <div className="text-xs text-gray-500 border-t border-gray-100 pt-3">
-                  Created: {format(toISTDate(new Date(contract.createdAt)), 'dd MMM yyyy')} • 
-                  Updated: {format(toISTDate(new Date(contract.updatedAt)), 'dd MMM yyyy')}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-sm">
+                        <Link href={`/bills/new?contractId=${contract.id}`}>
+                          <Plus className="h-4 w-4 mr-1.5" />
+                          Create Bill
+                        </Link>
+                      </Button>
+
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50/50 border-slate-200 rounded-xl"
+                            disabled={deleteLoading === contract.id}
+                          >
+                            {deleteLoading === contract.id ? (
+                              <LoadingSpinner size="sm" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="max-w-md rounded-2xl border-slate-100">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="text-xl font-bold">Delete Contract</AlertDialogTitle>
+                            <AlertDialogDescription className="text-sm text-slate-500">
+                              Are you sure you want to delete contract "{contract.agreementNo}"? 
+                              This will permanently delete all associated bills and PVC calculations. This action is irreversible.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter className="flex-col sm:flex-row gap-2 pt-4">
+                            <AlertDialogCancel className="w-full sm:w-auto rounded-xl">Cancel</AlertDialogCancel>
+                            <AlertDialogAction 
+                              onClick={() => handleDeleteContract(contract.id)}
+                              className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto rounded-xl"
+                            >
+                              Delete Contract
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         // Table View
-        <Card className="border-0 shadow-lg overflow-hidden">
+        <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-gradient-to-r from-blue-50 to-indigo-50">
-                  <TableHead className="font-bold">Agreement No.</TableHead>
-                  <TableHead className="font-bold">Contractor</TableHead>
-                  <TableHead className="font-bold">Work Description</TableHead>
-                  <TableHead className="font-bold">Opening Date</TableHead>
-                  <TableHead className="font-bold">Created By</TableHead>
-                  <TableHead className="font-bold text-center">Bills</TableHead>
-                  <TableHead className="font-bold text-center">PVC</TableHead>
-                  <TableHead className="font-bold">Status</TableHead>
-                  <TableHead className="font-bold text-right">Actions</TableHead>
+                <TableRow className="bg-slate-50 border-b border-slate-100">
+                  <TableHead className="font-bold text-slate-800 h-12">Agreement No.</TableHead>
+                  <TableHead className="font-bold text-slate-800 h-12">Contractor</TableHead>
+                  <TableHead className="font-bold text-slate-800 h-12">Contract Value</TableHead>
+                  <TableHead className="font-bold text-slate-800 h-12">Opening Date</TableHead>
+                  <TableHead className="font-bold text-slate-800 h-12">Base Month</TableHead>
+                  <TableHead className="font-bold text-slate-800 text-center h-12">Bills</TableHead>
+                  <TableHead className="font-bold text-slate-800 text-center h-12">PVC</TableHead>
+                  <TableHead className="font-bold text-slate-800 h-12">Status</TableHead>
+                  <TableHead className="font-bold text-slate-800 text-right h-12 pr-6">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredContracts.map((contract) => (
-                  <TableRow key={contract.id} className="hover:bg-blue-50/50 transition-colors">
-                    <TableCell className="font-semibold text-blue-900">
+                  <TableRow key={contract.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100">
+                    <TableCell className="font-bold text-slate-900 pl-6">
                       {contract.agreementNo}
                     </TableCell>
-                    <TableCell className="font-medium">
+                    <TableCell className="font-semibold text-slate-700">
                       {contract.contractorName}
                     </TableCell>
-                    <TableCell className="max-w-xs">
-                      <div className="line-clamp-2 text-sm text-gray-600">
-                        {contract.workDescription}
-                      </div>
+                    <TableCell className="font-bold text-emerald-600">
+                      {contract.contractValue ? formatIndianCurrency(contract.contractValue) : 'Not Specified'}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-slate-600 text-sm">
                       {format(new Date(contract.dateOfOpening), 'dd MMM yyyy')}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <User className="h-3.5 w-3.5 text-gray-500" />
-                        <span className="text-sm text-gray-700">
-                          {contract.user?.name || contract.user?.email || 'Unknown'}
-                        </span>
-                      </div>
+                    <TableCell className="text-slate-600 text-sm">
+                      {format(new Date(contract.baseMonth), 'MMM yyyy')}
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="outline" className="bg-blue-50">
+                      <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
                         {contract._count.bills}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant="outline" className="bg-green-50">
+                      <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
                         {contract._count.pvcCalculations}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       {getStatusBadge(contract)}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right pr-6">
                       <div className="flex justify-end gap-2">
                         <RecentBillsDialog contract={contract} />
-                        <Button asChild variant="outline" size="sm" className="hover:bg-blue-50">
+                        <Button asChild variant="outline" size="sm" className="rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50">
                           <Link href={`/contracts/${contract.id}`}>
                             <Eye className="h-4 w-4" />
                           </Link>
                         </Button>
-                        <Button asChild size="sm" className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white">
+                        <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
                           <Link href={`/bills/new?contractId=${contract.id}`}>
                             <Plus className="h-4 w-4" />
                           </Link>
@@ -858,7 +843,7 @@ export default function ContractsPage() {
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="text-red-500 hover:text-red-600 hover:bg-red-50/50 border-slate-200 rounded-xl"
                               disabled={deleteLoading === contract.id}
                             >
                               {deleteLoading === contract.id ? (
@@ -868,19 +853,19 @@ export default function ContractsPage() {
                               )}
                             </Button>
                           </AlertDialogTrigger>
-                          <AlertDialogContent className="max-w-md">
+                          <AlertDialogContent className="max-w-md rounded-2xl border-slate-100">
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Contract</AlertDialogTitle>
-                              <AlertDialogDescription className="text-sm">
+                              <AlertDialogTitle className="text-xl font-bold">Delete Contract</AlertDialogTitle>
+                              <AlertDialogDescription className="text-sm text-slate-500">
                                 Are you sure you want to delete contract "{contract.agreementNo}"? 
-                                This action cannot be undone and will permanently delete all associated bills and PVC calculations.
+                                This will permanently delete all associated bills and PVC calculations. This action is irreversible.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
-                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                              <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                            <AlertDialogFooter className="flex-col sm:flex-row gap-2 pt-4">
+                              <AlertDialogCancel className="w-full sm:w-auto rounded-xl">Cancel</AlertDialogCancel>
                               <AlertDialogAction 
                                 onClick={() => handleDeleteContract(contract.id)}
-                                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                                className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto rounded-xl"
                               >
                                 Delete Contract
                               </AlertDialogAction>

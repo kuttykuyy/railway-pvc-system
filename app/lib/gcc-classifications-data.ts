@@ -1,5 +1,4 @@
-
-// Complete GCC 46A Classification Structure with Component Percentages
+// Complete GCC 46A Classification Structure with Component Percentages (Custom Statutory Values)
 
 export interface GCCClassification {
   code: string;
@@ -31,10 +30,10 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'General earthwork activities including excavation, filling, and compaction',
     components: {
       fixed: 15,
-      labour: 15,
+      labour: 20,
       steel: 0,
       cement: 0,
-      plantMachinery: 35,
+      plantMachinery: 30,
       fuel: 25,
       otherMaterials: 10,
       explosives: 0
@@ -56,11 +55,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Earthwork items where steel supply is the primary component',
     components: {
       fixed: 15,
-      labour: 5,
-      steel: 75,
+      labour: 0,
+      steel: 85,
       cement: 0,
       plantMachinery: 0,
-      fuel: 5,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -82,9 +81,9 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
       fixed: 15,
       labour: 0,
       steel: 0,
-      cement: 75,
+      cement: 85,
       plantMachinery: 0,
-      fuel: 10,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -105,11 +104,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Supply of ballast material for railway track',
     components: {
       fixed: 15,
-      labour: 15,
+      labour: 20,
       steel: 0,
       cement: 0,
-      plantMachinery: 20,
-      fuel: 40,
+      plantMachinery: 30,
+      fuel: 25,
       otherMaterials: 10,
       explosives: 0
     },
@@ -131,11 +130,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'General tunneling work without use of explosives',
     components: {
       fixed: 15,
-      labour: 25,
+      labour: 20,
       steel: 0,
       cement: 0,
       plantMachinery: 30,
-      fuel: 20,
+      fuel: 25,
       otherMaterials: 10,
       explosives: 0
     },
@@ -155,11 +154,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Steel supply for tunneling work',
     components: {
       fixed: 15,
-      labour: 5,
-      steel: 75,
+      labour: 0,
+      steel: 85,
       cement: 0,
       plantMachinery: 0,
-      fuel: 5,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -178,11 +177,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Cement/grout supply for tunneling',
     components: {
       fixed: 15,
-      labour: 5,
+      labour: 0,
       steel: 0,
-      cement: 75,
+      cement: 85,
       plantMachinery: 0,
-      fuel: 5,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -201,12 +200,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Fabrication and erection work with steel supply',
     components: {
       fixed: 15,
-      labour: 20,
+      labour: 10,
       steel: 50,
       cement: 0,
       plantMachinery: 10,
-      fuel: 5,
-      otherMaterials: 0,
+      fuel: 10,
+      otherMaterials: 5,
       explosives: 0
     },
     keywords: ['fabrication', 'erection', 'steel structure', 'assembly'],
@@ -224,12 +223,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Fabrication and erection without steel supply',
     components: {
       fixed: 15,
-      labour: 70,
+      labour: 25,
       steel: 0,
       cement: 0,
-      plantMachinery: 10,
-      fuel: 5,
-      otherMaterials: 0,
+      plantMachinery: 30,
+      fuel: 20,
+      otherMaterials: 10,
       explosives: 0
     },
     keywords: ['fabrication', 'erection', 'labour only', 'installation'],
@@ -249,12 +248,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'General tunneling work using explosives',
     components: {
       fixed: 15,
-      labour: 20,
+      labour: 25,
       steel: 0,
       cement: 0,
-      plantMachinery: 25,
+      plantMachinery: 15,
       fuel: 15,
-      otherMaterials: 10,
+      otherMaterials: 15,
       explosives: 15
     },
     keywords: ['blasting', 'explosives', 'drill and blast', 'rock excavation'],
@@ -272,11 +271,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Steel supply for explosive-based tunneling',
     components: {
       fixed: 15,
-      labour: 5,
-      steel: 75,
+      labour: 0,
+      steel: 85,
       cement: 0,
       plantMachinery: 0,
-      fuel: 5,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -294,11 +293,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Cement/grout supply for explosive-based tunneling',
     components: {
       fixed: 15,
-      labour: 5,
+      labour: 0,
       steel: 0,
-      cement: 75,
+      cement: 85,
       plantMachinery: 0,
-      fuel: 5,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -316,12 +315,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Fabrication and erection with steel supply in blasting tunnels',
     components: {
       fixed: 15,
-      labour: 20,
+      labour: 10,
       steel: 50,
       cement: 0,
       plantMachinery: 10,
-      fuel: 5,
-      otherMaterials: 0,
+      fuel: 10,
+      otherMaterials: 5,
       explosives: 0
     },
     keywords: ['fabrication', 'erection', 'steel structure'],
@@ -338,12 +337,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Fabrication and erection without steel supply in blasting tunnels',
     components: {
       fixed: 15,
-      labour: 70,
+      labour: 25,
       steel: 0,
       cement: 0,
-      plantMachinery: 10,
-      fuel: 5,
-      otherMaterials: 0,
+      plantMachinery: 30,
+      fuel: 20,
+      otherMaterials: 10,
       explosives: 0
     },
     keywords: ['fabrication', 'erection', 'labour only'],
@@ -362,12 +361,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'General building construction work',
     components: {
       fixed: 15,
-      labour: 25,
+      labour: 30,
       steel: 0,
-      cement: 0,
-      plantMachinery: 20,
-      fuel: 15,
-      otherMaterials: 25,
+      cement: 15,
+      plantMachinery: 5,
+      fuel: 5,
+      otherMaterials: 30,
       explosives: 0
     },
     keywords: ['building', 'construction', 'masonry', 'plastering', 'finishing'],
@@ -386,11 +385,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Steel supply for building construction',
     components: {
       fixed: 15,
-      labour: 5,
-      steel: 75,
+      labour: 0,
+      steel: 85,
       cement: 0,
       plantMachinery: 0,
-      fuel: 5,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -409,11 +408,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Cement supply for building construction',
     components: {
       fixed: 15,
-      labour: 5,
+      labour: 0,
       steel: 0,
-      cement: 75,
+      cement: 85,
       plantMachinery: 0,
-      fuel: 5,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -432,12 +431,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Steel structure fabrication with supply for buildings',
     components: {
       fixed: 15,
-      labour: 20,
+      labour: 10,
       steel: 50,
       cement: 0,
       plantMachinery: 10,
-      fuel: 5,
-      otherMaterials: 0,
+      fuel: 10,
+      otherMaterials: 5,
       explosives: 0
     },
     keywords: ['fabrication', 'steel structure', 'erection', 'assembly'],
@@ -455,12 +454,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Steel structure fabrication without supply for buildings',
     components: {
       fixed: 15,
-      labour: 70,
+      labour: 25,
       steel: 0,
       cement: 0,
-      plantMachinery: 10,
-      fuel: 5,
-      otherMaterials: 0,
+      plantMachinery: 30,
+      fuel: 20,
+      otherMaterials: 10,
       explosives: 0
     },
     keywords: ['fabrication', 'erection', 'labour only', 'installation'],
@@ -483,9 +482,9 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
       labour: 20,
       steel: 0,
       cement: 0,
-      plantMachinery: 25,
-      fuel: 20,
-      otherMaterials: 20,
+      plantMachinery: 20,
+      fuel: 15,
+      otherMaterials: 30,
       explosives: 0
     },
     keywords: ['bridge', 'culvert', 'protection work', 'ROB', 'RUB'],
@@ -504,11 +503,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Steel supply for bridge work',
     components: {
       fixed: 15,
-      labour: 5,
-      steel: 75,
+      labour: 0,
+      steel: 85,
       cement: 0,
       plantMachinery: 0,
-      fuel: 5,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -527,11 +526,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Cement supply for bridge work',
     components: {
       fixed: 15,
-      labour: 5,
+      labour: 0,
       steel: 0,
-      cement: 75,
+      cement: 85,
       plantMachinery: 0,
-      fuel: 5,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -550,12 +549,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Complete girder work with steel supply',
     components: {
       fixed: 15,
-      labour: 20,
+      labour: 10,
       steel: 50,
       cement: 0,
       plantMachinery: 10,
-      fuel: 5,
-      otherMaterials: 0,
+      fuel: 10,
+      otherMaterials: 5,
       explosives: 0
     },
     keywords: ['girder fabrication', 'launching', 'erection', 'steel supply'],
@@ -573,12 +572,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Complete girder work without steel supply',
     components: {
       fixed: 15,
-      labour: 70,
+      labour: 25,
       steel: 0,
       cement: 0,
-      plantMachinery: 10,
-      fuel: 5,
-      otherMaterials: 0,
+      plantMachinery: 30,
+      fuel: 20,
+      otherMaterials: 10,
       explosives: 0
     },
     keywords: ['girder erection', 'launching', 'labour only'],
@@ -598,12 +597,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Track laying and linking work',
     components: {
       fixed: 15,
-      labour: 40,
+      labour: 50,
       steel: 0,
       cement: 0,
-      plantMachinery: 20,
+      plantMachinery: 15,
       fuel: 15,
-      otherMaterials: 10,
+      otherMaterials: 5,
       explosives: 0
     },
     keywords: ['track laying', 'permanent way', 'linking', 'railway track', 'sleepers'],
@@ -624,11 +623,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'General platform and passenger amenity work',
     components: {
       fixed: 15,
-      labour: 25,
+      labour: 20,
       steel: 0,
       cement: 0,
       plantMachinery: 20,
-      fuel: 15,
+      fuel: 20,
       otherMaterials: 25,
       explosives: 0
     },
@@ -648,11 +647,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Steel items and fittings supply for platforms',
     components: {
       fixed: 15,
-      labour: 5,
-      steel: 75,
+      labour: 0,
+      steel: 85,
       cement: 0,
       plantMachinery: 0,
-      fuel: 5,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -671,11 +670,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Cement supply for platform work',
     components: {
       fixed: 15,
-      labour: 5,
+      labour: 0,
       steel: 0,
-      cement: 75,
+      cement: 85,
       plantMachinery: 0,
-      fuel: 5,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -694,12 +693,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Fabrication and erection with steel supply for platforms',
     components: {
       fixed: 15,
-      labour: 20,
+      labour: 10,
       steel: 50,
       cement: 0,
       plantMachinery: 10,
-      fuel: 5,
-      otherMaterials: 0,
+      fuel: 10,
+      otherMaterials: 5,
       explosives: 0
     },
     keywords: ['fabrication', 'steel structure', 'shelter', 'canopy'],
@@ -717,12 +716,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Fabrication and erection without steel supply for platforms',
     components: {
       fixed: 15,
-      labour: 70,
+      labour: 25,
       steel: 0,
       cement: 0,
-      plantMachinery: 10,
-      fuel: 5,
-      otherMaterials: 0,
+      plantMachinery: 30,
+      fuel: 20,
+      otherMaterials: 10,
       explosives: 0
     },
     keywords: ['fabrication', 'erection', 'labour only', 'installation'],
@@ -745,8 +744,8 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
       labour: 20,
       steel: 0,
       cement: 0,
-      plantMachinery: 25,
-      fuel: 20,
+      plantMachinery: 30,
+      fuel: 15,
       otherMaterials: 20,
       explosives: 0
     },
@@ -765,11 +764,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Steel supply for other works',
     components: {
       fixed: 15,
-      labour: 5,
-      steel: 75,
+      labour: 0,
+      steel: 85,
       cement: 0,
       plantMachinery: 0,
-      fuel: 5,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -787,11 +786,11 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Cement/grout supply for other works',
     components: {
       fixed: 15,
-      labour: 5,
+      labour: 0,
       steel: 0,
-      cement: 75,
+      cement: 85,
       plantMachinery: 0,
-      fuel: 5,
+      fuel: 0,
       otherMaterials: 0,
       explosives: 0
     },
@@ -809,12 +808,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Fabrication with steel supply for other works',
     components: {
       fixed: 15,
-      labour: 20,
+      labour: 10,
       steel: 50,
       cement: 0,
       plantMachinery: 10,
-      fuel: 5,
-      otherMaterials: 0,
+      fuel: 10,
+      otherMaterials: 5,
       explosives: 0
     },
     keywords: ['fabrication', 'steel structure', 'miscellaneous'],
@@ -831,12 +830,12 @@ export const GCC_CLASSIFICATIONS: GCCClassification[] = [
     description: 'Fabrication without steel supply for other works',
     components: {
       fixed: 15,
-      labour: 70,
+      labour: 25,
       steel: 0,
       cement: 0,
-      plantMachinery: 10,
-      fuel: 5,
-      otherMaterials: 0,
+      plantMachinery: 30,
+      fuel: 20,
+      otherMaterials: 10,
       explosives: 0
     },
     keywords: ['fabrication', 'erection', 'labour only'],

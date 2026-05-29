@@ -6,17 +6,11 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Providers } from '@/components/providers';
-import Navigation from '@/components/navigation';
-import MobileNavigation from '@/components/mobile/mobile-navigation';
-import InstallPrompt from '@/components/pwa/install-prompt';
-import PushNotifications from '@/components/pwa/push-notifications';
-import OfflineIndicator from '@/components/mobile/offline-indicator';
 import ErrorBoundary from '@/components/error-boundary';
 import ChunkErrorHandler from '@/components/chunk-error-handler';
 import { SessionTimeoutWarning } from '@/components/session-timeout-warning';
-import ServiceWorkerUpdate from '@/components/service-worker-update';
 import StructuredData from '@/components/structured-data';
-import { AIAssistant } from '@/components/ai-assistant';
+import LayoutWrapper from '@/components/layout-wrapper';
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -162,36 +156,9 @@ export default function RootLayout({
             >
               <ChunkErrorHandler />
               <SessionTimeoutWarning />
-              <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-blue-50 to-cyan-50 flex flex-col">
-                {/* Desktop Navigation */}
-                <div className="hidden lg:block">
-                  <Navigation />
-                </div>
-                
-                {/* Mobile Navigation */}
-                <div className="lg:hidden">
-                  <MobileNavigation />
-                </div>
-                
-                {/* Main Content */}
-                <main className={`
-                  container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-7xl
-                  lg:pt-4
-                  pt-2 pb-6
-                  flex-grow
-                `}>
-                  {children}
-                </main>
-                
-                {/* AI Assistant */}
-                <AIAssistant />
-                
-                {/* PWA Components */}
-                <InstallPrompt />
-                <PushNotifications />
-                <OfflineIndicator />
-                <ServiceWorkerUpdate />
-              </div>
+              <LayoutWrapper>
+                {children}
+              </LayoutWrapper>
               <Toaster />
             </ThemeProvider>
           </Providers>

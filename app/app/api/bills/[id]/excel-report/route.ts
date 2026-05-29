@@ -336,7 +336,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // ========== HEADER SECTION ==========
     reportData.push([reportTitle, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
     reportData.push(['PRICE VARIATION CLAUSE (PVC) VERIFICATION REPORT', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-    const istNowExcel = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000));
+    const istNowExcel = toISTDate(new Date());
     reportData.push([`Bill No: ${bill.billNo}`, '', '', `Generated: ${format(istNowExcel, 'dd-MM-yyyy HH:mm:ss')} IST`, '', '', '', '', '', '', '', '', '', '', '']);
     reportData.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
     

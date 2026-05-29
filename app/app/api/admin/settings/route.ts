@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const DEFAULT_SETTINGS = [
   {
     key: 'BILL_PROCESSING_COST',
-    value: '10',
+    value: '199',
     description: 'Cost in credits per bill processing',
     dataType: 'number'
   },

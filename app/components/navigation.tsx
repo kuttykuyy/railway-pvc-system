@@ -61,9 +61,7 @@ const navigationGroups = [
       { name: 'Contracts', href: '/contracts', icon: Briefcase, adminOnly: false },
       { name: 'PVC Bills', href: '/bills', icon: FileText, adminOnly: false },
       { name: 'Bill Approvals', href: '/approvals', icon: CheckSquare, railwayOfficialOnly: true },
-      { name: 'Find Work Classification', href: '/bills/classification-finder', icon: Tags, adminOnly: true },
       { name: 'Abstract of Bills', href: '/reports/abstract', icon: Calculator, adminOnly: false },
-      { name: 'PVC Reports', href: '/reports', icon: FileBarChart, adminOnly: false },
       { name: 'Steel PVC Forecast', href: '/pvc-forecast', icon: TrendingUp, adminOnly: false },
     ]
   },
@@ -76,6 +74,7 @@ const navigationGroups = [
       { name: 'Work Classifications', href: '/classifications', icon: Tags, adminOnly: true },
       { name: 'Extension Categories', href: '/admin/extension-subcategories', icon: FileBarChart, adminOnly: true },
       { name: 'Price Indices Management', href: '/indices', icon: LineChart, adminOnly: true },
+      { name: 'Component Index Documents', href: '/indices/component-documents', icon: FileText, adminOnly: true },
       { name: 'GST Invoices', href: '/admin/gst-invoices', icon: Receipt, adminOnly: true },
       { name: 'User Management', href: '/admin/users', icon: User, adminOnly: true },
       { name: 'Role & Permissions', href: '/admin/user-permissions', icon: ShieldCheck, adminOnly: true },
@@ -430,7 +429,7 @@ export default function Navigation() {
                   </DropdownMenu>
                 </div>
               </>
-            ) : !isOnAuthPage && !isOnLandingPage ? (
+            ) : !isOnAuthPage ? (
               <div className="flex items-center space-x-2">
                 <Button asChild variant="ghost" size="sm" className="text-white hover:bg-white/20">
                   <Link href="/auth/signin">Sign In</Link>
@@ -652,7 +651,7 @@ export default function Navigation() {
                     </Button>
                   </div>
                 </>
-              ) : !isOnAuthPage && !isOnLandingPage ? (
+              ) : !isOnAuthPage ? (
                 <div className="flex flex-col space-y-2">
                   <Button asChild variant="ghost" size="sm" className="text-white hover:bg-white/20" onClick={() => setIsOpen(false)}>
                     <Link href="/auth/signin">Sign In</Link>

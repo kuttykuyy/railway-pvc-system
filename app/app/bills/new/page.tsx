@@ -26,7 +26,6 @@ import {
   CheckCircle2,
   Info,
   ChevronRight,
-  Sparkles,
   ArrowRight
 } from 'lucide-react';
 import Link from 'next/link';
@@ -37,7 +36,6 @@ import { getRailwayZoneOptions, getSteelCityForZone } from '@/lib/zone-steel-cit
 import { ProvisionalDateNotification } from '@/components/ui/provisional-date-notification';
 import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
-import { DocumentScanner } from '@/components/document-scanner';
 import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-dialog';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { ContextualHelp } from '@/components/contextual-help';
@@ -513,189 +511,7 @@ function NewBillPageContent() {
     setAiSuggestions([]);
   };
 
-  /**
-   * Handle data extracted from document scanner.
-   * Supports enhanced bill extraction with line items, steel/non-steel separation,
-   * and auto-classification entry creation.
-   */
-  const handleDocumentDataExtracted = (data: any) => {
-    const updates: any = {};
 
-    // Map extracted header data to form fields
-    if (data.billNo) updates.billNo = data.billNo;
-    if (data.dateOfMeasurement) updates.dateOfMeasurement = data.dateOfMeasurement;
-    
-    // Cement amount: prefer DSR-classified amount over LLM guess
-    if (data.dsrCementSummary?.totalAmount) {
-      updates.cementAmount = data.dsrCementSummary.totalAmount.toString();
-    } else if (data.cementAmount) {
-      updates.cementAmount = data.cementAmount.toString();
-    }
-    
-    // Steel amounts: prefer DSR-classified amounts
-    if (data.dsrSteelSummary?.tmtBarsAmount) {
-      updates.steelTmtBarsAmount = data.dsrSteelSummary.tmtBarsAmount.toString();
-    } else if (data.steelSummary?.tmtBarsAmount) {
-      updates.steelTmtBarsAmount = data.steelSummary.tmtBarsAmount.toString();
-    } else if (data.steelTmtBarsAmount) {
-      updates.steelTmtBarsAmount = data.steelTmtBarsAmount.toString();
-    }
-
-    // Steel Angle/Channel amount from DSR classification
-    if (data.dsrSteelSummary?.angleChannelAmount) {
-      updates.steelAngleChannelAmount = data.dsrSteelSummary.angleChannelAmount.toString();
-    } else if (data.steelAngleChannelAmount) {
-      updates.steelAngleChannelAmount = data.steelAngleChannelAmount.toString();
-    }
-    
-    // Set gross bill amount if available
-    if (data.grossBillAmount) {
-      updates.grossBillAmount = data.grossBillAmount.toString();
-    }
-
-    // Update form data
-    setFormData(prev => ({
-      ...prev,
-      ...updates
-    }));
-
-    // Handle non-schedule items
-    if (data.nonScheduleItems && Array.isArray(data.nonScheduleItems) && data.nonScheduleItems.length > 0) {
-      const formattedItems = data.nonScheduleItems.map((item: any) => ({
-        description: item.description || '',
-        amount: item.amount ? item.amount.toString() : ''
-      }));
-      setNonScheduleItems(formattedItems);
-    }
-
-    // === Enhanced: Auto-populate classification entries from line items (per-item with qty/rate) ===
-    if (data.lineItems && Array.isArray(data.lineItems) && data.lineItems.length > 0) {
-      const newEntries: ClassificationEntry[] = [];
-      
-      // Helper to find matching sub-classification
-      const findSubClass = (gccCode: string) => {
-        for (const group of classificationGroups) {
-          const exactMatch = group.subClassifications.find(s => s.code === gccCode);
-          if (exactMatch) return { subClass: exactMatch, group };
-          const prefixMatch = group.subClassifications.find(s => 
-            s.code.replace(/[A-Z]$/, '') === gccCode.replace(/[A-Z]$/, '') && 
-            s.code.slice(-1) === gccCode.slice(-1)
-          );
-          if (prefixMatch) return { subClass: prefixMatch, group };
-        }
-        return null;
-      };
-
-      for (const item of data.lineItems) {
-        if (!item.amount || item.amount <= 0) continue;
-        
-        const gccCode = item.suggestedGccCode || '';
-        const match = gccCode ? findSubClass(gccCode) : null;
-        
-        // Determine steel types
-        const steelTypes: string[] = [];
-        if (match?.subClass?.steel && match.subClass.steel > 0 && item.category === 'steel') {
-          if (item.steelType === 'TMT Bars') steelTypes.push('TMT Bars');
-          else if (item.steelType === 'Structural Steel (Angle/Channel)' || item.steelType === 'Structural Steel' || item.steelType === 'Angles') steelTypes.push('Structural Steel (Angle/Channel)');
-          else if (item.steelType === 'Steel Plates' || item.steelType === 'Plates') steelTypes.push('Steel Plates');
-          else if (item.steelType === 'Other Steel Sections' || item.steelType === 'Other') steelTypes.push('Other Steel Sections');
-          if (steelTypes.length === 0) steelTypes.push('TMT Bars');
-        }
-        
-        newEntries.push({
-          subClassificationId: match?.subClass?.id || '',
-          subClassification: match?.subClass || undefined,
-          amount: Math.round(item.amount * 100) / 100,
-          description: item.description || '',
-          steelTypes: steelTypes.length > 0 ? steelTypes : undefined,
-          itemNumber: item.itemNo || '',
-          quantity: item.quantity || '',
-          agreementRate: item.rate || '',
-          scheduleItem: item.schedule || '',
-        });
-        
-        // Set primary classification from first matched entry
-        if (newEntries.length === 1 && match) {
-          setSelectedGroup(match.group);
-          setFormData(prev => ({
-            ...prev,
-            workClassification: match.subClass!.id
-          }));
-        }
-      }
-      
-      if (newEntries.length > 0) {
-        setClassificationEntries(newEntries);
-        toast.success(`${newEntries.length} item${newEntries.length === 1 ? '' : 's'} extracted with Qty & Rate from bill scan`);
-      }
-    }
-    // Fallback: use suggestedClassifications if no lineItems
-    else if (data.suggestedClassifications && Array.isArray(data.suggestedClassifications) && data.suggestedClassifications.length > 0) {
-      const newEntries: ClassificationEntry[] = [];
-      
-      for (const suggestion of data.suggestedClassifications) {
-        const gccCode = suggestion.gccCode;
-        if (!gccCode || !suggestion.amount) continue;
-        
-        let matchedSubClass: SubClassification | null = null;
-        let matchedGroup: ClassificationGroup | null = null;
-        
-        for (const group of classificationGroups) {
-          const exactMatch = group.subClassifications.find(s => s.code === gccCode);
-          if (exactMatch) {
-            matchedSubClass = exactMatch;
-            matchedGroup = group;
-            break;
-          }
-          const prefixMatch = group.subClassifications.find(s => 
-            s.code.replace(/[A-Z]$/, '') === gccCode.replace(/[A-Z]$/, '') && 
-            s.code.slice(-1) === gccCode.slice(-1)
-          );
-          if (prefixMatch) {
-            matchedSubClass = prefixMatch;
-            matchedGroup = group;
-            break;
-          }
-        }
-        
-        if (matchedSubClass) {
-          newEntries.push({
-            subClassificationId: matchedSubClass.id,
-            subClassification: matchedSubClass,
-            amount: Math.round(suggestion.amount * 100) / 100,
-            description: suggestion.description || `${gccCode} - AI classified`,
-          });
-          
-          if (newEntries.length === 1 && matchedGroup) {
-            setSelectedGroup(matchedGroup);
-            setFormData(prev => ({
-              ...prev,
-              workClassification: matchedSubClass!.id
-            }));
-          }
-        }
-      }
-      
-      if (newEntries.length > 0) {
-        setClassificationEntries(newEntries);
-        toast.success(`${newEntries.length} classification ${newEntries.length === 1 ? 'entry' : 'entries'} auto-created from bill scan`);
-      }
-    }
-
-    toast.success('Document data extracted and applied!');
-
-    // Show DSR classification summary if available
-    if (data.dsrCementSummary || data.dsrSteelSummary) {
-      const cementAmt = data.dsrCementSummary?.totalAmount || 0;
-      const steelAmt = data.dsrSteelSummary?.totalAmount || 0;
-      if (cementAmt > 0 || steelAmt > 0) {
-        const parts: string[] = [];
-        if (cementAmt > 0) parts.push(`Cement: ₹${cementAmt.toLocaleString('en-IN')}`);
-        if (steelAmt > 0) parts.push(`Steel: ₹${steelAmt.toLocaleString('en-IN')}`);
-        toast.success(`DSR Chapter Classification: ${parts.join(', ')}`, { duration: 6000 });
-      }
-    }
-  };
 
   const getAISuggestions = async () => {
     if (!selectedContract?.workDescription) {
@@ -1022,96 +838,65 @@ function NewBillPageContent() {
         </div>
       )}
 
-      {/* Contextual Help Tips */}
-      <ContextualHelp
-        tips={[
-          { title: 'Contract', content: 'Select the contract this bill belongs to. If you haven\'t added one yet, go to Contracts → New Contract first.' },
-          { title: 'Date of Measurement', content: 'Enter the date when the work was measured. The system will automatically pick the correct quarter.' },
-          { title: 'Work Classification', content: 'This determines the PVC percentage weights. The AI scanner can auto-detect it from your documents.' },
-          { title: 'Amounts', content: 'Enter the gross bill amount. Cement and Steel amounts are optional — only needed if your classification has those components.' },
-        ]}
-      />
-
       {/* Progress indicator */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <div className="flex items-center justify-between text-sm">
-          <div className={`flex items-center gap-2 ${formData.contractId && formData.billNo && formData.zone && formData.dateOfMeasurement ? 'text-green-600' : 'text-gray-400'}`}>
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-6">
+        <div className="flex items-center justify-between text-sm overflow-x-auto gap-4">
+          <div className={`flex items-center gap-2 flex-shrink-0 ${formData.contractId && formData.billNo && formData.zone && formData.dateOfMeasurement ? 'text-green-600 font-semibold' : 'text-slate-400'}`}>
             {formData.contractId && formData.billNo && formData.zone && formData.dateOfMeasurement ? (
               <CheckCircle2 className="h-5 w-5" />
             ) : (
-              <div className="h-5 w-5 rounded-full border-2 border-current flex items-center justify-center text-xs">1</div>
+              <div className="h-5 w-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-bold">1</div>
             )}
-            <span className="font-medium">Basic Info</span>
+            <span>Basic Info</span>
           </div>
-          <ChevronRight className="h-4 w-4 text-gray-300" />
-          <div className={`flex items-center gap-2 ${classificationEntries.length > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+          <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
+          <div className={`flex items-center gap-2 flex-shrink-0 ${classificationEntries.length > 0 ? 'text-green-600 font-semibold' : 'text-slate-400'}`}>
             {classificationEntries.length > 0 ? (
               <CheckCircle2 className="h-5 w-5" />
             ) : (
-              <div className="h-5 w-5 rounded-full border-2 border-current flex items-center justify-center text-xs">2</div>
+              <div className="h-5 w-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-bold">2</div>
             )}
-            <span className="font-medium">Classifications</span>
+            <span>Classifications</span>
           </div>
-          <ChevronRight className="h-4 w-4 text-gray-300" />
-          <div className="flex items-center gap-2 text-gray-400">
-            <div className="h-5 w-5 rounded-full border-2 border-current flex items-center justify-center text-xs">3</div>
-            <span className="font-medium">Optional Details</span>
+          <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
+          <div className="flex items-center gap-2 text-slate-400 flex-shrink-0">
+            <div className="h-5 w-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-bold">3</div>
+            <span>Optional Details</span>
           </div>
-          <ChevronRight className="h-4 w-4 text-gray-300" />
-          <div className="flex items-center gap-2 text-gray-400">
-            <div className="h-5 w-5 rounded-full border-2 border-current flex items-center justify-center text-xs">4</div>
-            <span className="font-medium">Review & Submit</span>
+          <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
+          <div className="flex items-center gap-2 text-slate-400 flex-shrink-0">
+            <div className="h-5 w-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-bold">4</div>
+            <span>Review & Submit</span>
           </div>
         </div>
       </div>
 
-      {/* AI Document Scanner - Collapsible */}
-      <Accordion type="multiple" className="mb-6">
-        <AccordionItem value="scanner" className="border rounded-lg px-4 bg-gradient-to-r from-amber-50 to-orange-50">
-          <AccordionTrigger className="hover:no-underline">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-600 rounded-lg">
-                <Sparkles className="h-5 w-5 text-white" />
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-gray-900">AI Document Scanner</h3>
-                <p className="text-sm text-gray-600">Auto-fill bill details by scanning documents</p>
-              </div>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="pt-4">
-            <DocumentScanner
-              documentType="bill"
-              onDataExtracted={handleDocumentDataExtracted}
-            />
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+
 
       {/* Contract and Quarter Info Cards - Displayed at top when selected */}
       {(selectedContract || formData.dateOfMeasurement) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           {/* Contract Info */}
           {selectedContract && (
-            <Card className="border-0 shadow-md bg-gradient-to-r from-purple-50 to-white">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
+            <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
+              <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-5">
+                <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-purple-600" />
                   Selected Contract
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Agreement No:</span>
-                  <span className="font-semibold text-gray-900">{selectedContract.agreementNo}</span>
+              <CardContent className="p-5 space-y-3 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Agreement No:</span>
+                  <span className="font-semibold text-slate-800">{selectedContract.agreementNo}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Contractor:</span>
-                  <span className="font-semibold text-gray-900">{selectedContract.contractorName}</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Contractor:</span>
+                  <span className="font-semibold text-slate-800">{selectedContract.contractorName}</span>
                 </div>
-                <div>
-                  <span className="text-gray-600">Work Description:</span>
-                  <p className="text-gray-900 font-medium mt-1">{selectedContract.workDescription}</p>
+                <div className="pt-2 border-t border-slate-100">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Work Description</span>
+                  <p className="text-slate-700 font-medium text-xs leading-relaxed">{selectedContract.workDescription}</p>
                 </div>
               </CardContent>
             </Card>
@@ -1119,28 +904,24 @@ function NewBillPageContent() {
 
           {/* Quarter Info */}
           {formData.dateOfMeasurement && (
-            <Card className="border-0 shadow-md bg-gradient-to-r from-green-50 to-blue-50">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
+            <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
+              <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-5">
+                <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-green-600" />
                   Quarter Information
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-center">
-                  <p className="text-sm text-gray-600">Measurement Date</p>
-                  <p className="font-bold text-green-600 text-lg">
-                    {new Date(formData.dateOfMeasurement).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric'
-                    })}
-                  </p>
-                  <p className="text-sm text-gray-600 mt-2">
-                    Quarter: <span className="font-medium text-base">
-                      Q{Math.floor((new Date(formData.dateOfMeasurement).getMonth()) / 3) + 1}-{new Date(formData.dateOfMeasurement).getFullYear()}
-                    </span>
-                  </p>
+              <CardContent className="p-5 flex flex-col justify-center items-center text-center min-h-[160px]">
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Measurement Date</p>
+                <p className="font-bold text-slate-800 text-lg">
+                  {new Date(formData.dateOfMeasurement).toLocaleDateString('en-IN', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })}
+                </p>
+                <div className="mt-4 px-4 py-2 bg-green-50 text-green-700 rounded-xl border border-green-100 font-semibold text-sm">
+                  Active PVC Quarter: Q{Math.floor((new Date(formData.dateOfMeasurement).getMonth()) / 3) + 1}-{new Date(formData.dateOfMeasurement).getFullYear()}
                 </div>
               </CardContent>
             </Card>
@@ -1151,17 +932,19 @@ function NewBillPageContent() {
       {/* Bill Form - Full Width */}
       <div className="grid grid-cols-1 gap-6">
         <div className="w-full">
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-6 w-6 text-purple-600" />
+          <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
+            <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-6">
+              <CardTitle className="flex items-center gap-3 text-lg font-bold text-slate-900">
+                <div className="bg-purple-50 p-2 rounded-xl text-purple-600">
+                  <FileText className="h-6 w-6" />
+                </div>
                 Bill Details
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-sm text-slate-500 mt-1">
                 Enter the bill information. PVC will be calculated automatically based on the quarter.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               <form onSubmit={handleSubmit} className="space-y-4" noValidate>
                 {error && (
                   <div ref={errorRef}>
@@ -1173,13 +956,15 @@ function NewBillPageContent() {
                 <Accordion type="multiple" value={openAccordion} onValueChange={setOpenAccordion} className="space-y-4">
                   
                   {/* SECTION 1: Basic Information */}
-                  <AccordionItem value="basic" className="border rounded-lg bg-gradient-to-r from-purple-50 to-blue-50">
-                    <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                      <div className="flex items-center gap-3">
-                        <Building2 className="h-5 w-5 text-purple-600" />
+                  <AccordionItem value="basic" className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
+                    <AccordionTrigger className="px-5 py-4 hover:no-underline bg-slate-50/50 hover:bg-slate-50/80 transition-all">
+                      <div className="flex items-center gap-3 w-full">
+                        <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+                          <Building2 className="h-5 w-5" />
+                        </div>
                         <div className="text-left">
-                          <div className="font-semibold">Basic Information</div>
-                          <div className="text-xs text-gray-600">Contract, Bill Number, and Zone</div>
+                          <div className="font-semibold text-slate-900">Basic Information</div>
+                          <div className="text-xs text-slate-500">Contract, Bill Number, and Zone</div>
                         </div>
                         {formData.contractId && formData.billNo && formData.zone && (
                           <CheckCircle2 className="h-5 w-5 text-green-600 ml-auto" />
@@ -1203,6 +988,9 @@ function NewBillPageContent() {
                             ))}
                           </SelectContent>
                         </Select>
+                        <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                          Select the contract this bill belongs to. If you haven&apos;t added one yet, go to Contracts &rarr; New Contract first.
+                        </p>
                       </div>
 
                       <div className="space-y-2">
@@ -1218,6 +1006,9 @@ function NewBillPageContent() {
                           required
                           className="bg-white"
                         />
+                        <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                          Enter the unique bill number for this running account (e.g., RA/001/2023).
+                        </p>
                         
                         {/* Previous Bills Display */}
                         {formData.contractId && (
@@ -1286,9 +1077,8 @@ function NewBillPageContent() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-gray-600 flex items-center gap-1">
-                          <Info className="h-3 w-3" />
-                          Steel prices for PVC will be based on the zone&apos;s nearest city ({formData.zone ? getSteelCityForZone(formData.zone) : '...'})
+                        <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                          Steel prices for PVC will be based on the zone&apos;s nearest city. (Select zone to preview active Steel City: <span className="font-semibold text-slate-700">{formData.zone ? getSteelCityForZone(formData.zone) : 'None'}</span>)
                         </p>
                       </div>
 
@@ -1331,6 +1121,9 @@ function NewBillPageContent() {
                           disabled={isLoadingDateRange}
                           className="bg-white cursor-pointer"
                         />
+                        <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                          Enter the date when work was measured. The system automatically detects the correct PVC quarter based on this date.
+                        </p>
                         {availableDateRange && availableDateRange.minDate && availableDateRange.maxDate ? (
                           <p className="text-xs text-gray-600 flex items-center gap-1">
                             <Info className="h-3 w-3" />
@@ -1392,13 +1185,15 @@ function NewBillPageContent() {
                   </AccordionItem>
 
                   {/* SECTION 2: Work Classifications */}
-                  <AccordionItem value="classification" className="border rounded-lg bg-gradient-to-r from-green-50 to-teal-50">
-                    <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                      <div className="flex items-center gap-3">
-                        <ClipboardList className="h-5 w-5 text-green-600" />
+                  <AccordionItem value="classification" className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
+                    <AccordionTrigger className="px-5 py-4 hover:no-underline bg-slate-50/50 hover:bg-slate-50/80 transition-all">
+                      <div className="flex items-center gap-3 w-full">
+                        <div className="p-2 bg-green-50 rounded-lg text-green-600">
+                          <ClipboardList className="h-5 w-5" />
+                        </div>
                         <div className="text-left">
-                          <div className="font-semibold">Work Classifications</div>
-                          <div className="text-xs text-gray-600">Add multiple classifications with amounts</div>
+                          <div className="font-semibold text-slate-900">Work Classifications</div>
+                          <div className="text-xs text-slate-500">Add multiple classifications with amounts</div>
                         </div>
                         {classificationEntries.length > 0 && (
                           <CheckCircle2 className="h-5 w-5 text-green-600 ml-auto" />
@@ -1406,6 +1201,9 @@ function NewBillPageContent() {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="px-4 pb-4 space-y-4">
+                      <p className="text-xs text-slate-500 leading-relaxed mb-2">
+                        Add multiple schedule codes and amounts. (Weights are auto-assigned as per GCC 46A rules)
+                      </p>
                       {/* Fetch Previous Classification Button */}
                       {formData.contractId && previousBills.length > 0 && (
                         <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200 mb-4">
@@ -1448,167 +1246,19 @@ function NewBillPageContent() {
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* SECTION 3: Dedicated Components (Optional) */}
-                  <AccordionItem value="amounts" className="border rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50">
-                    <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                      <div className="flex items-center gap-3">
-                        <TrendingUp className="h-5 w-5 text-blue-600" />
+                  {/* SECTION 3: Non-Schedule Items (Optional) */}
+                  <AccordionItem value="optional" className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
+                    <AccordionTrigger className="px-5 py-4 hover:no-underline bg-slate-50/50 hover:bg-slate-50/80 transition-all">
+                      <div className="flex items-center gap-3 w-full">
+                        <div className="p-2 bg-orange-50 rounded-lg text-orange-600">
+                          <Layers className="h-5 w-5" />
+                        </div>
                         <div className="text-left">
-                          <div className="font-semibold">Dedicated Component Allocations (Optional)</div>
-                          <div className="text-xs text-gray-600">Special components calculated separately at 85%</div>
-                        </div>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4 space-y-4">
-                      {/* Bill Amount Summary from Classification Entries */}
-                      {classificationEntries.length > 0 && (() => {
-                        const totalClassificationAmount = classificationEntries.reduce((sum, entry) => {
-                          const amount = entry.amount === '' || entry.amount === null || entry.amount === undefined 
-                            ? 0 
-                            : typeof entry.amount === 'string' 
-                              ? parseFloat(entry.amount) || 0 
-                              : entry.amount;
-                          return sum + amount;
-                        }, 0);
-                        const totalNonScheduleItems = nonScheduleItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-                        
-                        // Calculate total dedicated component allocations
-                        const totalDedicatedComponents = 
-                          (parseFloat(formData.cementAmount) || 0) +
-                          (parseFloat(formData.steelTmtBarsAmount) || 0);
-                        
-                        // Calculate net bill amount
-                        const netBillAmount = totalClassificationAmount + totalDedicatedComponents - totalNonScheduleItems;
-                        
-                        return (
-                          <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200 mb-4">
-                            <div className="space-y-2">
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-gray-700">Total Classification Amount:</span>
-                                <span className="text-base font-semibold text-gray-900">
-                                  ₹{totalClassificationAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                                </span>
-                              </div>
-                              
-                              {totalDedicatedComponents > 0 && (
-                                <div className="flex justify-between items-center">
-                                  <span className="text-sm font-medium text-gray-700">Add: Dedicated Components:</span>
-                                  <span className="text-base font-semibold text-green-700">
-                                    +₹{totalDedicatedComponents.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                                  </span>
-                                </div>
-                              )}
-                              
-                              {nonScheduleItems.length > 0 && nonScheduleItems.some(item => parseFloat(item.amount) > 0) && (
-                                <div className="flex justify-between items-center text-red-600">
-                                  <span className="text-sm font-medium">Less: Non-Schedule Items:</span>
-                                  <span className="text-base font-semibold">
-                                    -₹{totalNonScheduleItems.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                                  </span>
-                                </div>
-                              )}
-                              
-                              <div className="pt-2 border-t border-blue-300">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-base font-bold text-blue-900">Total Bill Amount:</span>
-                                  <span className="text-xl font-bold text-blue-700">
-                                    ₹{netBillAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-gray-600 mt-1">
-                                  This is the total amount including all classifications and dedicated components
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      <div className="border-t pt-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Package className="h-4 w-4 text-blue-600" />
-                          <Label className="text-base font-semibold text-blue-900">
-                            Dedicated Component Allocations
-                          </Label>
-                          <Badge variant="outline" className="ml-auto">85% PVC</Badge>
-                        </div>
-                        <p className="text-xs text-gray-600 mb-4">
-                          Allocate amounts for specific components (optional, calculated at 85%)
-                        </p>
-
-                        {/* Cement Amount */}
-                        <div className="space-y-2 mb-4">
-                          <Label htmlFor="cementAmount" className="text-sm">
-                            Cement Work Amount (₹)
-                          </Label>
-                          <div className="flex gap-2 items-center">
-                            <Input
-                              id="cementAmount"
-                              name="cementAmount"
-                              type="number"
-                              step="0.01"
-                              value={formData.cementAmount}
-                              onChange={handleInputChange}
-                              placeholder="0.00"
-                              className="bg-white"
-                            />
-                            <BillAmountCalculator
-                              onInsertTotal={(total) => {
-                                setFormData(prev => ({ ...prev, cementAmount: total.toString() }));
-                              }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Steel Components Section */}
-                        <div className="space-y-3 p-3 border border-gray-200 rounded-lg bg-white">
-                          <Label className="text-sm font-semibold text-gray-900">
-                            Steel Work Amounts
-                          </Label>
-                          <div className="grid grid-cols-1 gap-3">
-                            {/* TMT Bars */}
-                            <div className="space-y-1.5">
-                              <Label htmlFor="steelTmtBarsAmount" className="text-xs font-medium">
-                                TMT Bars (₹)
-                              </Label>
-                              <div className="flex gap-2 items-center">
-                                <Input
-                                  id="steelTmtBarsAmount"
-                                  name="steelTmtBarsAmount"
-                                  type="number"
-                                  step="0.01"
-                                  value={formData.steelTmtBarsAmount}
-                                  onChange={handleInputChange}
-                                  placeholder="0.00"
-                                  className="h-9"
-                                />
-                                <BillAmountCalculator
-                                  onInsertTotal={(total) => {
-                                    setFormData(prev => ({ ...prev, steelTmtBarsAmount: total.toString() }));
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                          <p className="text-xs text-gray-600 mt-2">
-                            Joint Plant Committee rates will be used for calculation
-                          </p>
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* SECTION 4: Non-Schedule Items */}
-                  <AccordionItem value="optional" className="border rounded-lg bg-gradient-to-r from-orange-50 to-yellow-50">
-                    <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                      <div className="flex items-center gap-3">
-                        <Layers className="h-5 w-5 text-orange-600" />
-                        <div className="text-left">
-                          <div className="font-semibold">Non-Schedule Items (Optional)</div>
-                          <div className="text-xs text-gray-600">Items not covered under standard schedule</div>
+                          <div className="font-semibold text-slate-900">Non-Schedule Items (Optional)</div>
+                          <div className="text-xs text-slate-500">Items not covered under standard schedule</div>
                         </div>
                         {nonScheduleItems.length > 0 && (
-                          <Badge variant="secondary" className="ml-auto">
+                          <Badge variant="secondary" className="ml-auto bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-200">
                             {nonScheduleItems.length} items
                           </Badge>
                         )}
@@ -1708,20 +1358,20 @@ function NewBillPageContent() {
 
 
                 {/* Submit Section */}
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 mt-6 border-t border-gray-200">
-                  <div className="text-sm text-gray-600">
-                    <p className="flex items-center gap-1">
-                      <Info className="h-4 w-4" />
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 mt-6 border-t border-slate-200">
+                  <div className="text-sm text-slate-500">
+                    <p className="flex items-center gap-1.5">
+                      <Info className="h-4 w-4 text-slate-400" />
                       All fields marked with <span className="text-red-500 font-medium">*</span> are required
                     </p>
                   </div>
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap items-start gap-3">
                     <Button
                       type="button"
                       variant="outline"
                       onClick={() => router.back()}
                       disabled={isSaving}
-                      className="min-w-[100px]"
+                      className="min-w-[100px] rounded-xl h-10 border-slate-200 text-slate-600 hover:bg-slate-50"
                     >
                       Cancel
                     </Button>
@@ -1730,7 +1380,7 @@ function NewBillPageContent() {
                         type="button"
                         onClick={handlePvcCheck}
                         disabled={isPvcChecking || isSaving || !formData.contractId || !formData.zone || !formData.dateOfMeasurement || classificationEntries.length === 0}
-                        className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 min-w-[160px] text-white"
+                        className="bg-orange-600 hover:bg-orange-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-orange-500/10 font-semibold h-10"
                       >
                         {isPvcChecking ? (
                           <LoadingSpinner size="sm" text="Checking..." />
@@ -1741,14 +1391,14 @@ function NewBillPageContent() {
                           </>
                         )}
                       </Button>
-                      <p className="text-xs text-gray-500 text-center max-w-[200px]">
-                        Quick check if PVC is positive or negative — without creating a bill
+                      <p className="text-[10px] text-slate-400 text-center max-w-[200px]">
+                        Quick check if PVC is positive/negative without creating a bill
                       </p>
                     </div>
                     <Button
                       type="submit"
                       disabled={isSaving || !formData.contractId || !formData.billNo || !formData.zone || !formData.dateOfMeasurement}
-                      className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 min-w-[160px]"
+                      className="bg-purple-600 hover:bg-purple-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-purple-500/10 font-semibold h-10"
                     >
                       {isSaving ? (
                         <LoadingSpinner size="sm" text="Processing..." />

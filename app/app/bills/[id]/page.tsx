@@ -96,25 +96,39 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
     // Get all price indices
     const allIndices = await prisma.priceIndex.findMany();
 
-    // Fetch base month indices
     const normalizedBaseMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1);
-    const baseIndices: { [key: string]: number } = {};
-    
-    for (const index of allIndices) {
-      const baseMonthValue = await prisma.monthlyIndexValue.findFirst({
-        where: {
-          priceIndexId: index.id,
-          month: {
-            gte: normalizedBaseMonth,
-            lt: new Date(normalizedBaseMonth.getFullYear(), normalizedBaseMonth.getMonth() + 1, 1)
-          }
-        },
-        orderBy: {
-          month: 'desc'
+    const measurementQuarterMonths = getQuarterMonths(measurementQuarter, baseMonth);
+    const lastMonthOfQuarter = measurementQuarterMonths[2]; // Third month of the quarter
+    const measurementEndDate = new Date(lastMonthOfQuarter.getFullYear(), lastMonthOfQuarter.getMonth() + 1, 0);
+
+    // 1. Fetch all monthly index values in the date range from normalizedBaseMonth to measurementEndDate in ONE single query!
+    const monthlyValuesAll = await prisma.monthlyIndexValue.findMany({
+      where: {
+        month: {
+          gte: normalizedBaseMonth,
+          lte: measurementEndDate
         }
-      });
-      
-      baseIndices[index.name] = baseMonthValue?.value || index.baseValue;
+      }
+    });
+
+    // 2. Build index maps in memory for O(1) lookups
+    // Map key: `${priceIndexId}_${yyyy-mm}` -> value
+    const monthlyValueMap = new Map<string, number>();
+    for (const mv of monthlyValuesAll) {
+      const monthKey = `${mv.month.getFullYear()}-${String(mv.month.getMonth() + 1).padStart(2, '0')}`;
+      monthlyValueMap.set(`${mv.priceIndexId}_${monthKey}`, mv.value);
+    }
+
+    // A helper function to look up a value with fallback to static baseValue
+    const getInMemoryIndexValue = (priceIndexId: string, baseValue: number | null, date: Date) => {
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      return monthlyValueMap.get(`${priceIndexId}_${monthKey}`) ?? baseValue;
+    };
+
+    // Fetch base month indices in memory
+    const baseIndices: { [key: string]: number } = {};
+    for (const index of allIndices) {
+      baseIndices[index.name] = getInMemoryIndexValue(index.id, index.baseValue, normalizedBaseMonth) ?? index.baseValue;
     }
 
     // Fetch quarterly averages
@@ -163,14 +177,6 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
       current: currentIndices
     };
 
-    // Fetch detailed monthly indices with quarterly grouping (from base month to end of measurement quarter)
-    const startMonth = new Date(baseMonth);
-    
-    // Calculate the end date as the last day of the measurement quarter's last month
-    const measurementQuarterMonths = getQuarterMonths(measurementQuarter, baseMonth);
-    const lastMonthOfQuarter = measurementQuarterMonths[2]; // Third month of the quarter
-    const measurementEndDate = new Date(lastMonthOfQuarter.getFullYear(), lastMonthOfQuarter.getMonth() + 1, 0);
-    
     const detailedData: any[] = [];
     
     // Add base month row
@@ -182,8 +188,8 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
     };
     detailedData.push(baseRow);
     
-    // Process quarters and months
-    const currentMonth = new Date(startMonth);
+    // Process quarters and months in memory
+    const currentMonth = new Date(baseMonth);
     currentMonth.setMonth(currentMonth.getMonth() + 1); // Start from month after base
     let currentQuarter = '';
     const quarterMonths: Date[] = [];
@@ -204,23 +210,11 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
             values: {}
           };
           
-          // Calculate averages using all 3 months of the quarter
           for (const index of allIndices) {
             let sum = 0;
             for (const month of fullQuarterMonths) {
-              const monthValue = await prisma.monthlyIndexValue.findFirst({
-                where: {
-                  priceIndexId: index.id,
-                  month: {
-                    gte: new Date(month.getFullYear(), month.getMonth(), 1),
-                    lt: new Date(month.getFullYear(), month.getMonth() + 1, 1)
-                  }
-                },
-                orderBy: { month: 'desc' }
-              });
-              sum += monthValue?.value || index.baseValue;
+              sum += getInMemoryIndexValue(index.id, index.baseValue, month) ?? index.baseValue;
             }
-            // Always divide by 3 for a proper quarterly average
             avgRow.values[index.name] = sum / 3;
           }
           
@@ -245,17 +239,7 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
       };
       
       for (const index of allIndices) {
-        const monthValue = await prisma.monthlyIndexValue.findFirst({
-          where: {
-            priceIndexId: index.id,
-            month: {
-              gte: new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1),
-              lt: new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1)
-            }
-          },
-          orderBy: { month: 'desc' }
-        });
-        monthRow.values[index.name] = monthValue?.value || index.baseValue;
+        monthRow.values[index.name] = getInMemoryIndexValue(index.id, index.baseValue, currentMonth) ?? index.baseValue;
       }
       
       detailedData.push(monthRow);
@@ -276,23 +260,11 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
         values: {}
       };
       
-      // Calculate averages using all 3 months of the quarter
       for (const index of allIndices) {
         let sum = 0;
         for (const month of fullQuarterMonths) {
-          const monthValue = await prisma.monthlyIndexValue.findFirst({
-            where: {
-              priceIndexId: index.id,
-              month: {
-                gte: new Date(month.getFullYear(), month.getMonth(), 1),
-                lt: new Date(month.getFullYear(), month.getMonth() + 1, 1)
-              }
-            },
-            orderBy: { month: 'desc' }
-          });
-          sum += monthValue?.value || index.baseValue;
+          sum += getInMemoryIndexValue(index.id, index.baseValue, month) ?? index.baseValue;
         }
-        // Always divide by 3 for a proper quarterly average
         avgRow.values[index.name] = sum / 3;
       }
       
@@ -329,22 +301,12 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
     const allMonthlyValues: { [key: string]: { [monthKey: string]: number } } = {};
     for (const index of allIndices) {
       allMonthlyValues[index.name] = {};
-      const currentMonth = new Date(startMonth);
-      currentMonth.setMonth(currentMonth.getMonth() + 1);
-      while (currentMonth <= measurementEndDate) {
-        const monthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
-        const monthlyValue = await prisma.monthlyIndexValue.findFirst({
-          where: {
-            priceIndexId: index.id,
-            month: {
-              gte: new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1),
-              lt: new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1)
-            }
-          },
-          orderBy: { month: 'desc' }
-        });
-        allMonthlyValues[index.name][monthKey] = monthlyValue?.value || index.baseValue;
-        currentMonth.setMonth(currentMonth.getMonth() + 1);
+      const currentMonthCopy = new Date(baseMonth);
+      currentMonthCopy.setMonth(currentMonthCopy.getMonth() + 1);
+      while (currentMonthCopy <= measurementEndDate) {
+        const monthKey = `${currentMonthCopy.getFullYear()}-${String(currentMonthCopy.getMonth() + 1).padStart(2, '0')}`;
+        allMonthlyValues[index.name][monthKey] = getInMemoryIndexValue(index.id, index.baseValue, currentMonthCopy) ?? index.baseValue;
+        currentMonthCopy.setMonth(currentMonthCopy.getMonth() + 1);
       }
     }
     monthlyIndicesData = allMonthlyValues;

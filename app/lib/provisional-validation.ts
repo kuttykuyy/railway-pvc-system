@@ -139,8 +139,7 @@ function getQuarterMonths(quarterNum: number, year: number, baseMonth: Date): Da
     const adjustedYear = baseYear + Math.floor((monthValue - 1) / 12);
     const adjustedMonth = ((monthValue - 1) % 12) + 1;
     
-    const monthDate = new Date(adjustedYear, adjustedMonth - 1, 1);
-    monthDate.setHours(0, 0, 0, 0);
+    const monthDate = new Date(Date.UTC(adjustedYear, adjustedMonth - 1, 1));
     months.push(monthDate);
   }
   

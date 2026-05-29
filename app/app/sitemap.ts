@@ -23,7 +23,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { route: '/bills', priority: 0.7, changeFrequency: 'daily' as const },
     { route: '/classifications', priority: 0.6, changeFrequency: 'weekly' as const },
     { route: '/indices', priority: 0.6, changeFrequency: 'daily' as const },
-    { route: '/reports', priority: 0.6, changeFrequency: 'weekly' as const },
+    { route: '/reports/abstract', priority: 0.6, changeFrequency: 'weekly' as const },
     { route: '/pvc-forecast', priority: 0.7, changeFrequency: 'daily' as const },
 
     { route: '/profile', priority: 0.5, changeFrequency: 'monthly' as const },

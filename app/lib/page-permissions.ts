@@ -56,13 +56,6 @@ export const AVAILABLE_PAGES: PageDefinition[] = [
   
   // Reports & Data
   {
-    path: '/reports',
-    name: 'Reports',
-    category: 'Reports',
-    description: 'View detailed reports',
-    icon: 'BarChart3'
-  },
-  {
     path: '/reports/abstract',
     name: 'Abstract Report',
     category: 'Reports',

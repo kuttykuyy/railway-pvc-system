@@ -58,6 +58,22 @@ export default function SteelImportPage() {
       router.push("/indices");
       return;
     }
+    
+    // Fetch latest month from DB on mount to pre-populate form
+    const fetchLatestMonth = async () => {
+      try {
+        const response = await fetch('/api/indices/available-date-range');
+        if (response.ok) {
+          const result = await response.json();
+          if (result.maxMonth) {
+            setSteelMonth(result.maxMonth.substring(0, 7));
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching latest month:", error);
+      }
+    };
+    fetchLatestMonth();
   }, [session, status, router, isAdmin]);
 
   // Load existing data when month or city changes

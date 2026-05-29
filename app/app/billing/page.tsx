@@ -1,37 +1,29 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BackButton } from '@/components/ui/back-button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { 
   CheckCircle,
   FileText,
-  ArrowRight,
-  Phone,
   User,
   CreditCard,
   IndianRupee,
   Loader2,
-  Gift,
-  TrendingUp,
-  TrendingDown,
-  Clock,
-  AlertCircle,
   Plus,
   Minus,
   Calendar,
   Activity,
   Download,
   Eye,
-  Receipt
+  Receipt,
+  Phone,
+  Clock
 } from 'lucide-react';
-import Link from 'next/link';
 import { RazorpayTopupDialog } from '@/components/ui/razorpay-topup-dialog';
 
 interface BillingSettings {
@@ -201,7 +193,6 @@ export default function BillingPage() {
   }, []);
 
   const handleTopupSuccess = async () => {
-    // Refresh data after successful top-up
     try {
       const [balanceRes, transactionsRes, invoicesRes] = await Promise.all([
         fetch('/api/credits/balance'),
@@ -241,11 +232,7 @@ export default function BillingPage() {
     ? 0 
     : billingSettings?.customProcessingFee !== null && billingSettings?.customProcessingFee !== undefined
       ? billingSettings.customProcessingFee
-      : billingSettings?.billCost || 10; // Default matches BILL_PROCESSING_COST in admin settings
-
-  const freeTrialText = billingSettings?.freeTrialBills === 1 
-    ? '1 free bill' 
-    : `${billingSettings?.freeTrialBills || 1} free bills`;
+      : billingSettings?.billCost || 10;
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -268,9 +255,9 @@ export default function BillingPage() {
       case 'bill_usage':
         return <Minus className="h-4 w-4 text-red-600" />;
       case 'refund':
-        return <TrendingUp className="h-4 w-4 text-blue-600" />;
+        return <CheckCircle className="h-4 w-4 text-blue-600" />;
       default:
-        return <Activity className="h-4 w-4 text-gray-600" />;
+        return <Activity className="h-4 w-4 text-slate-600" />;
     }
   };
 
@@ -284,459 +271,402 @@ export default function BillingPage() {
       case 'refund':
         return 'text-blue-600 font-semibold';
       default:
-        return 'text-gray-600';
+        return 'text-slate-600';
     }
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-7xl">
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="space-y-6">
         <BackButton href="/contracts" className="mb-4" />
         
         {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center justify-center gap-3">
-            <CreditCard className="h-8 w-8 text-blue-600" />
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3.5">
+            <CreditCard className="h-8 w-8 text-purple-600 animate-pulse" />
             Credit & Billing Management
           </h1>
-          <p className="text-gray-600 text-lg max-w-2xl mx-auto">
-            Manage your account credits and billing information
+          <p className="text-slate-500 mt-1.5 leading-normal">
+            Manage your account credits, view statements, download GST invoices, and track transactions.
           </p>
         </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <span className="ml-3 text-gray-600">Loading billing information...</span>
-        </div>
-      ) : (
-        <>
-          {/* Credit Balance Overview */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Current Balance Card */}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-indigo-50">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center justify-between text-blue-800">
-                  <span className="flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
-                    Current Balance
-                  </span>
-                  {creditBalance && (
-                    <Badge 
-                      variant={creditBalance.accountInfo.status === 'active' ? 'default' : 'destructive'}
-                      className="text-xs"
-                    >
-                      {creditBalance.accountInfo.tier}
-                    </Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {creditBalance?.trialInfo.isActive ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Gift className="h-6 w-6 text-green-600" />
-                      <span className="text-3xl font-bold text-green-600">
-                        {creditBalance.trialInfo.billsRemaining}
+        {loading ? (
+          <div className="flex items-center justify-center py-12 bg-white border border-slate-100 rounded-2xl shadow-sm min-h-[300px]">
+            <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+            <span className="ml-3 text-slate-500 text-sm font-medium">Loading billing registry...</span>
+          </div>
+        ) : (
+          <>
+            {/* Credit Balance Overview */}
+            <div className={`grid grid-cols-1 ${effectiveBillCost === 0 ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-6`}>
+              {/* Current Balance / Unlimited Plan Card */}
+              <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden hover:scale-[1.005] transition-transform duration-200">
+                <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-5">
+                  <CardTitle className="flex items-center justify-between text-slate-900 text-base font-bold">
+                    <span className="flex items-center gap-2">
+                      <CreditCard className="h-5 w-5 text-purple-600" />
+                      {effectiveBillCost === 0 ? 'Account Pricing Tier' : 'Current Balance'}
+                    </span>
+                    {creditBalance && (
+                      <Badge variant="secondary" className="bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-100 text-[10px] rounded-lg font-semibold px-2 py-0.5">
+                        {creditBalance.accountInfo.tier}
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-5">
+                  {effectiveBillCost === 0 ? (
+                    <div className="space-y-3">
+                      <div className="p-4 bg-gradient-to-br from-purple-50 to-indigo-50/50 border border-purple-100 rounded-2xl">
+                        <span className="text-[10px] font-bold text-purple-500 uppercase tracking-wider block mb-1">Active Plan</span>
+                        <span className="text-2xl font-black text-purple-700 block">
+                          Unlimited Free Plan
+                        </span>
+                        <p className="text-xs text-purple-600/90 mt-1 leading-relaxed">
+                          This account is registered on the free Railway tier. All Price Variation Clause (PVC) bills are processed at zero credit cost.
+                        </p>
+                      </div>
+                      
+                      <div className="text-[11px] text-slate-500 space-y-1.5 pt-1">
+                        <div className="flex justify-between items-center">
+                          <span>Next Bill Cost:</span>
+                          <span className="font-semibold text-green-600 flex items-center gap-0.5">
+                            <CheckCircle className="h-3 w-3" /> Free (₹0)
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Total Bills Generated:</span>
+                          <span className="font-semibold text-slate-700">{creditBalance?.accountInfo.monthlyBillCount || 0} bills</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : creditBalance?.trialInfo.isActive ? (
+                    <div className="space-y-2">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Trial Status</span>
+                      <span className="text-3xl font-bold text-green-600 block">
+                        {creditBalance.trialInfo.billsRemaining} Bills
                       </span>
+                      <p className="text-xs text-slate-500">
+                        {creditBalance.trialInfo.billsUsed} of {creditBalance.trialInfo.billsTotal} free trial bills consumed
+                      </p>
                     </div>
-                    <p className="text-sm text-gray-600">
-                      Free {creditBalance.trialInfo.billsTotal === 1 ? 'bill' : 'bills'} remaining
-                    </p>
-                    <div className="text-xs text-gray-500">
-                      {creditBalance.trialInfo.billsUsed} of {creditBalance.trialInfo.billsTotal} used
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="text-4xl font-bold text-blue-600">
-                      ₹{creditBalance?.balance.toFixed(2) || '0.00'}
-                    </div>
-                    <p className="text-sm text-gray-600">Available Credits</p>
-                    <div className="text-xs text-gray-500 space-y-1">
-                      <div className="flex justify-between">
-                        <span>Next bill cost:</span>
-                        <span className="font-medium">₹{creditBalance?.nextBillCost || effectiveBillCost}</span>
+                  ) : (
+                    <div className="space-y-3">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Available Credits</span>
+                      <div className="text-3xl font-bold text-slate-900">
+                        ₹{creditBalance?.balance.toFixed(2) || '0.00'}
                       </div>
-                      <div className="flex justify-between">
-                        <span>Bills this month:</span>
-                        <span className="font-medium">{creditBalance?.accountInfo.monthlyBillCount || 0}</span>
+                      <div className="text-[11px] text-slate-500 space-y-1.5 pt-1.5 border-t border-slate-50">
+                        <div className="flex justify-between">
+                          <span>Next Bill Cost:</span>
+                          <span className="font-semibold text-slate-700">₹{creditBalance?.nextBillCost || effectiveBillCost}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Monthly Bill Count:</span>
+                          <span className="font-semibold text-slate-700">{creditBalance?.accountInfo.monthlyBillCount || 0} bills</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-                
-                {/* Status indicator */}
-                <div className="mt-4 pt-4 border-t flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${
-                      creditBalance?.canAffordNextBill || (creditBalance?.trialInfo.billsRemaining || 0) > 0
+                  )}
+                  
+                  {/* Status indicator */}
+                  <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2">
+                    <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${
+                      effectiveBillCost === 0 || creditBalance?.canAffordNextBill || (creditBalance?.trialInfo.billsRemaining || 0) > 0
                         ? 'bg-green-500' 
                         : 'bg-red-500'
                     }`} />
-                    <span className="text-xs text-gray-600">
-                      {creditBalance?.canAffordNextBill || (creditBalance?.trialInfo.billsRemaining || 0) > 0
-                        ? 'Ready to process bills' 
-                        : 'Cannot process bills'
+                    <span className="text-xs text-slate-600 font-semibold">
+                      {effectiveBillCost === 0 || creditBalance?.canAffordNextBill || (creditBalance?.trialInfo.billsRemaining || 0) > 0
+                        ? 'Unlimited Bill Creation Active' 
+                        : 'Insufficient Credits'
                       }
                     </span>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            {/* Top-up Methods Card */}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-emerald-50">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-green-800">
-                  <CreditCard className="h-5 w-5" />
-                  Credit Top-up Options
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {razorpayEnabled && (
-                  <div className="space-y-2">
-                    <Button
-                      onClick={() => setRazorpayDialogOpen(true)}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                      size="lg"
-                    >
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      Top-up via Razorpay
-                    </Button>
-                    <p className="text-xs text-center text-gray-600">
-                      Instant credit top-up with GST invoice
-                    </p>
-                  </div>
-                )}
-                
-                <div className="bg-white p-4 rounded-lg border border-green-200">
-                  <div className="text-sm font-semibold text-gray-900 mb-2">
-                    Manual Top-up Contact
-                  </div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <User className="h-4 w-4 text-green-600" />
-                    <span className="text-sm font-medium text-gray-900">Prasath Kumar</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Phone className="h-4 w-4 text-green-600" />
-                    <a 
-                      href="tel:+919944776689" 
-                      className="text-sm font-semibold text-green-700 hover:text-green-800 hover:underline transition-colors"
-                    >
-                      +91 9944776689
-                    </a>
-                  </div>
-                </div>
-                
-                <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-xs text-amber-800">
-                      {razorpayEnabled 
-                        ? 'Use Razorpay for instant top-up or contact above for manual credit addition.'
-                        : 'Contact above number to add credits to your account. Credits are added manually after payment confirmation.'
-                      }
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Billing Info Card */}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-pink-50">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-purple-800">
-                  <IndianRupee className="h-5 w-5" />
-                  Billing Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {billingSettings?.isFreeAccount ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-green-700">
-                      <CheckCircle className="h-4 w-4" />
-                      <span className="font-semibold">Free Account</span>
-                    </div>
-                    <p className="text-sm text-gray-600">
-                      All bills are processed at no cost. Unlimited bill processing.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="bg-white p-3 rounded border border-purple-200">
-                      <div className="text-sm text-gray-600 mb-1">Cost per bill</div>
-                      <div className="text-2xl font-bold text-purple-600">
-                        ₹{effectiveBillCost.toLocaleString()}
+              {/* Top-up Methods Card (Paid Only) */}
+              {effectiveBillCost > 0 && (
+                <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden hover:scale-[1.005] transition-transform duration-200">
+                  <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-5">
+                    <CardTitle className="flex items-center gap-2 text-slate-900 text-base font-bold">
+                      <IndianRupee className="h-5 w-5 text-purple-600" />
+                      Credit Top-Up
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-5 space-y-4">
+                    {razorpayEnabled && (
+                      <Button
+                        onClick={() => setRazorpayDialogOpen(true)}
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-10 text-xs font-bold shadow-md shadow-purple-500/10 transition-transform active:scale-[0.98]"
+                      >
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Top-Up via Razorpay
+                      </Button>
+                    )}
+                    
+                    <div className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Manual Addition Contact
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-800 text-xs font-semibold">
+                        <User className="h-3.5 w-3.5 text-purple-500" />
+                        Prasath Kumar (Admin)
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <Phone className="h-3.5 w-3.5 text-purple-500" />
+                        <a href="tel:+919944776689" className="text-purple-600 font-bold hover:underline">
+                          +91 9944776689
+                        </a>
                       </div>
                     </div>
-                    
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Trial status:</span>
-                        <span className="font-medium">
-                          {billingSettings?.isTrialActive && billingSettings.freeTrialRemaining > 0
-                            ? `${billingSettings.freeTrialRemaining} of ${billingSettings.freeTrialBills} remaining`
-                            : 'Completed'
-                          }
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Billing Info Card */}
+              <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden hover:scale-[1.005] transition-transform duration-200">
+                <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-5">
+                  <CardTitle className="flex items-center gap-2 text-slate-900 text-base font-bold">
+                    <FileText className="h-5 w-5 text-purple-600" />
+                    Billing Configuration
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-5">
+                  {effectiveBillCost === 0 ? (
+                    <div className="space-y-3">
+                      <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cost Per PVC Bill</span>
+                        <span className="text-sm font-bold text-green-600 flex items-center gap-0.5">
+                          ✓ Free (₹0)
                         </span>
                       </div>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        Your account is exempted from credit deductions. You can generate unlimited monthly and cumulative bills at zero credit costs.
+                      </p>
                     </div>
-                  </div>
-                )}
-                
-                <div className="pt-3 border-t space-y-2">
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <CheckCircle className="h-3 w-3" />
-                    <span className="text-xs">Accurate PVC calculations</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <CheckCircle className="h-3 w-3" />
-                    <span className="text-xs">Detailed PDF reports</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <CheckCircle className="h-3 w-3" />
-                    <span className="text-xs">GCC compliance verified</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cost Per PVC Bill</span>
+                        <span className="text-xl font-bold text-purple-600">
+                          ₹{effectiveBillCost.toLocaleString()}
+                        </span>
+                      </div>
+                      
+                      {billingSettings?.isTrialActive && (
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-slate-500">Free trial remainder:</span>
+                          <span className="font-semibold text-slate-700">
+                            {billingSettings.freeTrialRemaining} of {billingSettings.freeTrialBills} bills
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
 
-          {/* Credit Statement & GST Invoices */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-blue-600" />
-                  {activeTab === 'transactions' ? 'Credit Statement' : 'GST Invoices'}
-                </span>
-                <div className="flex gap-2">
-                  <Button
-                    variant={activeTab === 'transactions' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setActiveTab('transactions')}
-                    className="text-xs"
-                  >
-                    <Activity className="h-3 w-3 mr-1" />
-                    Transactions
-                  </Button>
-                  <Button
-                    variant={activeTab === 'invoices' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setActiveTab('invoices')}
-                    className="text-xs"
-                  >
-                    <Receipt className="h-3 w-3 mr-1" />
-                    GST Invoices
-                  </Button>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {activeTab === 'transactions' ? (
-                transactionsLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                    <span className="ml-2 text-gray-600">Loading transactions...</span>
-                  </div>
-                ) : transactions.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Clock className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-600">No transactions yet</p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Your credit transactions will appear here
-                    </p>
-                  </div>
-                ) : (
-                <div className="space-y-2">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b text-sm text-gray-600">
-                          <th className="text-left py-2 px-3">Date & Time</th>
-                          <th className="text-left py-2 px-3">Type</th>
-                          <th className="text-left py-2 px-3">Description</th>
-                          <th className="text-right py-2 px-3">Amount</th>
-                          <th className="text-right py-2 px-3">Balance</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {transactions.map((txn) => (
-                          <tr key={txn.id} className="border-b hover:bg-gray-50">
-                            <td className="py-3 px-3 text-sm text-gray-600">
-                              <div className="flex items-center gap-2">
-                                <Calendar className="h-3 w-3" />
-                                {formatDate(txn.createdAt)}
-                              </div>
-                            </td>
-                            <td className="py-3 px-3">
-                              <div className="flex items-center gap-2">
-                                {getTransactionIcon(txn.type)}
-                                <span className="text-xs font-medium capitalize">
-                                  {txn.type.replace('_', ' ')}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="py-3 px-3 text-sm text-gray-700">
-                              {txn.reason}
-                              {txn.adminUserEmail && (
-                                <div className="text-xs text-gray-500 mt-0.5">
-                                  By: {txn.adminUserEmail}
-                                </div>
-                              )}
-                            </td>
-                            <td className={`py-3 px-3 text-right text-sm ${getTransactionColor(txn.type)}`}>
-                              {txn.amount >= 0 ? '+' : ''}₹{txn.amount.toFixed(2)}
-                            </td>
-                            <td className="py-3 px-3 text-right text-sm font-medium text-gray-900">
-                              ₹{txn.balanceAfter.toFixed(2)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                )
-              ) : (
-                // GST Invoices Tab
-                invoicesLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                    <span className="ml-2 text-gray-600">Loading invoices...</span>
-                  </div>
-                ) : gstInvoices.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Receipt className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-600">No GST invoices yet</p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      GST invoices will be generated when you make payments
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b text-sm text-gray-600">
-                            <th className="text-left py-2 px-3">Invoice No.</th>
-                            <th className="text-left py-2 px-3">Date</th>
-                            <th className="text-left py-2 px-3">Description</th>
-                            <th className="text-right py-2 px-3">Amount</th>
-                            <th className="text-right py-2 px-3">GST</th>
-                            <th className="text-right py-2 px-3">Total</th>
-                            <th className="text-center py-2 px-3">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {gstInvoices.map((invoice) => (
-                            <tr key={invoice.id} className="border-b hover:bg-gray-50">
-                              <td className="py-3 px-3">
-                                <div className="flex items-center gap-2">
-                                  <Receipt className="h-3 w-3 text-blue-600" />
-                                  <span className="text-sm font-medium text-blue-600">
-                                    {invoice.invoiceNumber}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="py-3 px-3 text-sm text-gray-600">
-                                {formatDate(invoice.invoiceDate)}
-                              </td>
-                              <td className="py-3 px-3 text-sm text-gray-700">
-                                {invoice.description}
-                                {invoice.isInterstate && (
-                                  <Badge variant="outline" className="ml-2 text-xs">
-                                    Interstate
-                                  </Badge>
-                                )}
-                              </td>
-                              <td className="py-3 px-3 text-right text-sm text-gray-900">
-                                ₹{invoice.subtotal.toFixed(2)}
-                              </td>
-                              <td className="py-3 px-3 text-right text-sm text-gray-600">
-                                ₹{invoice.totalGst.toFixed(2)}
-                                <div className="text-xs text-gray-500">
-                                  {invoice.isInterstate 
-                                    ? `IGST: ₹${invoice.igst.toFixed(2)}`
-                                    : `CGST: ₹${invoice.cgst.toFixed(2)} | SGST: ₹${invoice.sgst.toFixed(2)}`
-                                  }
-                                </div>
-                              </td>
-                              <td className="py-3 px-3 text-right text-sm font-bold text-gray-900">
-                                ₹{invoice.totalAmount.toFixed(2)}
-                              </td>
-                              <td className="py-3 px-3">
-                                <div className="flex items-center justify-center gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleViewInvoice(invoice.id)}
-                                    className="h-8 px-2"
-                                    title="View Invoice"
-                                  >
-                                    <Eye className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="default"
-                                    onClick={() => handleDownloadInvoice(invoice.id)}
-                                    className="h-8 px-2"
-                                    title="Download PDF"
-                                  >
-                                    <Download className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </td>
+            {/* Credit Statement & GST Invoices (Shown only if paid OR if transactions exist) */}
+            {(effectiveBillCost > 0 || transactions.length > 0) && (
+              <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
+                <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-5">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-base font-bold text-slate-900">
+                      <Activity className="h-5 w-5 text-purple-600" />
+                      {effectiveBillCost === 0 || activeTab === 'transactions' ? 'Credit Transactions Statement' : 'GST Billing Invoices'}
+                    </span>
+                    {effectiveBillCost > 0 && (
+                      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                        <Button
+                          variant={activeTab === 'transactions' ? 'default' : 'ghost'}
+                          size="sm"
+                          onClick={() => setActiveTab('transactions')}
+                          className={`text-xs h-8 px-3 rounded-lg ${activeTab === 'transactions' ? 'bg-white text-slate-900 shadow-sm hover:bg-white' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                          <Activity className="h-3.5 w-3.5 mr-1" />
+                          Transactions
+                        </Button>
+                        <Button
+                          variant={activeTab === 'invoices' ? 'default' : 'ghost'}
+                          size="sm"
+                          onClick={() => setActiveTab('invoices')}
+                          className={`text-xs h-8 px-3 rounded-lg ${activeTab === 'invoices' ? 'bg-white text-slate-900 shadow-sm hover:bg-white' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                          <Receipt className="h-3.5 w-3.5 mr-1" />
+                          GST Invoices
+                        </Button>
+                      </div>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {effectiveBillCost === 0 || activeTab === 'transactions' ? (
+                    transactionsLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                        <span className="ml-2 text-slate-500 text-xs font-semibold">Loading credit statements...</span>
+                      </div>
+                    ) : transactions.length === 0 ? (
+                      <div className="text-center py-12">
+                        <Clock className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                        <p className="text-slate-600 font-bold text-sm">No Transactions Found</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Any credit transactions, checks, or bill generation fees will appear here
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-100 bg-slate-50/50 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                              <th className="text-left py-3.5 px-5 font-semibold">Date & Time</th>
+                              <th className="text-left py-3.5 px-5 font-semibold">Type</th>
+                              <th className="text-left py-3.5 px-5 font-semibold">Description</th>
+                              <th className="text-right py-3.5 px-5 font-semibold">Amount</th>
+                              <th className="text-right py-3.5 px-5 font-semibold">Balance</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Quick Actions */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-blue-600" />
-                Quick Actions
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Button asChild className="w-full justify-start" size="lg">
-                  <Link href="/bills/new">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Process New Bill
-                    <ArrowRight className="h-4 w-4 ml-auto" />
-                  </Link>
-                </Button>
-                
-                <Button asChild variant="outline" className="w-full justify-start" size="lg">
-                  <Link href="/contracts">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Manage Contracts
-                    <ArrowRight className="h-4 w-4 ml-auto" />
-                  </Link>
-                </Button>
-                
-                <Button asChild variant="outline" className="w-full justify-start" size="lg">
-                  <Link href="/reports">
-                    <FileText className="h-4 w-4 mr-2" />
-                    View Reports
-                    <ArrowRight className="h-4 w-4 ml-auto" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
+                          </thead>
+                          <tbody>
+                            {transactions.map((txn) => (
+                              <tr key={txn.id} className="border-b border-slate-50 hover:bg-slate-50/30 transition-colors">
+                                <td className="py-3 px-5 text-xs text-slate-500">
+                                  <div className="flex items-center gap-1.5">
+                                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                                    {formatDate(txn.createdAt)}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-5">
+                                  <div className="flex items-center gap-1.5">
+                                    {getTransactionIcon(txn.type)}
+                                    <span className="text-xs font-medium capitalize text-slate-700">
+                                      {txn.type.replace('_', ' ')}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-5 text-slate-700 text-xs">
+                                  {txn.reason}
+                                  {txn.adminUserEmail && (
+                                    <div className="text-[10px] text-slate-400 mt-0.5">
+                                      Authorized by: {txn.adminUserEmail}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className={`py-3 px-5 text-right text-xs ${getTransactionColor(txn.type)}`}>
+                                  {txn.amount >= 0 ? '+' : ''}₹{txn.amount.toFixed(2)}
+                                </td>
+                                <td className="py-3 px-5 text-right text-xs font-bold text-slate-800">
+                                  ₹{txn.balanceAfter.toFixed(2)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+                  ) : (
+                    // GST Invoices Tab
+                    invoicesLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                        <span className="ml-2 text-slate-500 text-xs font-semibold">Loading GST Invoices...</span>
+                      </div>
+                    ) : gstInvoices.length === 0 ? (
+                      <div className="text-center py-12">
+                        <Receipt className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                        <p className="text-slate-600 font-bold text-sm">No GST Invoices Found</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          GST invoices are generated automatically upon successful top-up transactions
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-100 bg-slate-50/50 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                              <th className="text-left py-3.5 px-5 font-semibold">Invoice No.</th>
+                              <th className="text-left py-3.5 px-5 font-semibold">Date</th>
+                              <th className="text-left py-3.5 px-5 font-semibold">Description</th>
+                              <th className="text-right py-3.5 px-5 font-semibold">Amount</th>
+                              <th className="text-right py-3.5 px-5 font-semibold">GST Details</th>
+                              <th className="text-right py-3.5 px-5 font-semibold">Total</th>
+                              <th className="text-center py-3.5 px-5 font-semibold">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {gstInvoices.map((invoice) => (
+                              <tr key={invoice.id} className="border-b border-slate-50 hover:bg-slate-50/30 transition-colors">
+                                <td className="py-3 px-5">
+                                  <div className="flex items-center gap-1.5">
+                                    <Receipt className="h-3.5 w-3.5 text-purple-500" />
+                                    <span className="text-xs font-bold text-purple-600">
+                                      {invoice.invoiceNumber}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-5 text-xs text-slate-500">
+                                  {formatDate(invoice.invoiceDate)}
+                                </td>
+                                <td className="py-3 px-5 text-xs text-slate-700">
+                                  {invoice.description}
+                                  {invoice.isInterstate && (
+                                    <Badge variant="outline" className="ml-2 text-[10px] rounded-md">
+                                      Interstate
+                                    </Badge>
+                                  )}
+                                </td>
+                                <td className="py-3 px-5 text-right text-xs text-slate-900 font-medium">
+                                  ₹{invoice.subtotal.toFixed(2)}
+                                </td>
+                                <td className="py-3 px-5 text-right text-xs text-slate-500">
+                                  ₹{invoice.totalGst.toFixed(2)}
+                                  <div className="text-[10px] text-slate-400">
+                                    {invoice.isInterstate 
+                                      ? `IGST: ₹${invoice.igst.toFixed(2)}`
+                                      : `CGST: ₹${invoice.cgst.toFixed(2)} | SGST: ₹${invoice.sgst.toFixed(2)}`
+                                    }
+                                  </div>
+                                </td>
+                                <td className="py-3 px-5 text-right text-xs font-bold text-slate-800">
+                                  ₹{invoice.totalAmount.toFixed(2)}
+                                </td>
+                                <td className="py-3 px-5">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleViewInvoice(invoice.id)}
+                                      className="h-8 px-2 border-slate-200 text-slate-600 rounded-lg bg-white hover:bg-slate-50"
+                                      title="View Invoice"
+                                    >
+                                      <Eye className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="default"
+                                      onClick={() => handleDownloadInvoice(invoice.id)}
+                                      className="h-8 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
+                                      title="Download PDF"
+                                    >
+                                      <Download className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
       </div>
 
       {/* Razorpay Top-up Dialog */}

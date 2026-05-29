@@ -353,6 +353,34 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Set to the LAST day of the measurement month to ensure it's included in the <= comparison
     const measurementEndDate = new Date(measurementDate.getFullYear(), measurementDate.getMonth() + 1, 0);
     
+    // Performance Optimization: Fetch all monthly index values in bulk to prevent N+1 query loops (360+ queries)
+    const bulkQueryStartMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1);
+    const maxFutureDate = new Date(measurementEndDate);
+    maxFutureDate.setMonth(maxFutureDate.getMonth() + 6); // Add 6 months padding to cover future quarter fallback months
+    
+    const dbMonthlyValues = await prisma.monthlyIndexValue.findMany({
+      where: {
+        priceIndexId: { in: allIndices.map(index => index.id) },
+        month: {
+          gte: bulkQueryStartMonth,
+          lte: maxFutureDate
+        }
+      },
+      orderBy: {
+        month: 'desc'
+      }
+    });
+
+    // Create a fast O(1) in-memory lookup map keyed by `${priceIndexId}_${yyyy-MM}`
+    const dbValuesMap = new Map<string, number>();
+    for (const mv of dbMonthlyValues) {
+      const yyyyMM = format(mv.month, 'yyyy-MM');
+      const mapKey = `${mv.priceIndexId}_${yyyyMM}`;
+      if (!dbValuesMap.has(mapKey)) {
+        dbValuesMap.set(mapKey, mv.value);
+      }
+    }
+
     for (const index of allIndices) {
       allMonthlyValues[index.name] = {};
       
@@ -360,21 +388,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       // Only include months up to and including the measurement month
       while (currentMonth <= measurementEndDate) {
         const monthKey = format(currentMonth, 'yyyy-MM');
-        
-        const monthlyValue = await prisma.monthlyIndexValue.findFirst({
-          where: {
-            priceIndexId: index.id,
-            month: {
-              gte: new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1),
-              lt: new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1)
-            }
-          },
-          orderBy: {
-            month: 'desc'  // Get the most recent value for the month
-          }
-        });
-        
-        const indexValue = monthlyValue ? monthlyValue.value : index.baseValue;
+        const mapKey = `${index.id}_${monthKey}`;
+        const dbValue = dbValuesMap.get(mapKey);
+        const indexValue = dbValue !== undefined ? dbValue : index.baseValue;
         allMonthlyValues[index.name][monthKey] = indexValue;
         currentMonth.setMonth(currentMonth.getMonth() + 1);
       }
@@ -434,21 +450,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             let value = allMonthlyValues[index.name][monthKey];
             
             if (!value) {
-              // Try to fetch this month's value from the database
-              const futureMonthValue = await prisma.monthlyIndexValue.findFirst({
-                where: {
-                  priceIndexId: index.id,
-                  month: {
-                    gte: new Date(qMonth.getFullYear(), qMonth.getMonth(), 1),
-                    lt: new Date(qMonth.getFullYear(), qMonth.getMonth() + 1, 1)
-                  }
-                },
-                orderBy: {
-                  month: 'desc'
-                }
-              });
-              
-              value = futureMonthValue?.value || index.baseValue;
+              const mapKey = `${index.id}_${monthKey}`;
+              const dbValue = dbValuesMap.get(mapKey);
+              value = dbValue !== undefined ? dbValue : index.baseValue;
               allMonthlyValues[index.name][monthKey] = value; // Cache it
             }
             
@@ -530,25 +534,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const baseIndexData: { [key: string]: number } = {};
     
     // Populate baseIndexData for use across sections (needed for PVC calculation)
+    const baseMonthKey = format(baseMonth, 'yyyy-MM');
     for (const index of allIndices) {
-      // Normalize base month to first day of month for database query
-      const normalizedBaseMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1);
-      
-      const baseMonthValue = await prisma.monthlyIndexValue.findFirst({
-        where: {
-          priceIndexId: index.id,
-          month: {
-            gte: normalizedBaseMonth,
-            lt: new Date(normalizedBaseMonth.getFullYear(), normalizedBaseMonth.getMonth() + 1, 1)
-          }
-        },
-        orderBy: {
-          month: 'desc'  // Get the most recent value for the base month
-        }
-      });
-      
+      const mapKey = `${index.id}_${baseMonthKey}`;
+      const dbValue = dbValuesMap.get(mapKey);
       // Use actual base month value if available, fallback to static base value
-      baseIndexData[index.name] = baseMonthValue?.value || index.baseValue;
+      baseIndexData[index.name] = dbValue !== undefined ? dbValue : index.baseValue;
     }
 
     // Alias city-specific fuel index under 'MPNG Fuel' only when bill uses zone_city pricing
@@ -716,7 +707,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     
     yPosition += Math.max(8, contractorText.length * 6, baseMonthText.length * 6);
     
-    // Third row: PVC Number (bold & underlined) & Indices Status
+    // Third row: PVC Number & Indices Status
     pdf.setFont("helvetica", "bold");
     pdf.text("PVC Number:", col1LabelX, yPosition);
     pdf.setFont("helvetica", "bold");
@@ -726,6 +717,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const pvcNumberWidth = pdf.getTextWidth(pvcNumberText);
     pdf.setLineWidth(0.3);
     pdf.line(col1ValueX, yPosition + 0.5, col1ValueX + pvcNumberWidth, yPosition + 0.5);
+    pdf.setFont("helvetica", "normal");
     
     pdf.setFont("helvetica", "bold");
     pdf.text("Indices Status:", col2LabelX, yPosition);
@@ -737,25 +729,84 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     
     yPosition += Math.max(8, indicesStatusWrapped.length * 6);
     
-    // Fourth row: Measurement Date & (FINAL PVC) indicator
+    // Fourth row: Measurement Date & Railway Zone
     pdf.setFont("helvetica", "bold");
     pdf.text("Measurement Date:", col1LabelX, yPosition);
     pdf.setFont("helvetica", "normal");
     pdf.text(format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy'), col1ValueX, yPosition);
 
-    if (bill.isFinalPvc) {
-      pdf.setFont("helvetica", "bold");
-      pdf.text("(FINAL PVC)", col2LabelX, yPosition);
-      pdf.setFont("helvetica", "normal");
-    }
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Railway Zone:", col2LabelX, yPosition);
+    pdf.setFont("helvetica", "bold");
+    const zoneTextVal = `${bill.zone || 'N/A'}${bill.isFinalPvc ? ' (FINAL PVC)' : ''}`;
+    pdf.text(zoneTextVal, col2ValueX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    
+    yPosition += 8;
+
+    // Fifth row: Contract Value & Completion Period
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Contract Value:", col1LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const contractValueText = bill.contract.contractValue 
+      ? `${bill.contract.contractValue.toLocaleString('en-IN')}` 
+      : 'N/A';
+    pdf.text(contractValueText, col1ValueX, yPosition);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Completion Period:", col2LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const periodText = bill.contract.completionPeriodMonths 
+      ? `${bill.contract.completionPeriodMonths} Months` 
+      : 'N/A';
+    pdf.text(periodText, col2ValueX, yPosition);
+
+    yPosition += 8;
+
+    // Sixth row: Gross Bill Amount & Net Bill Amount
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Gross Bill Amount:", col1LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const grossAmountVal = bill.grossBillAmount !== null && bill.grossBillAmount !== undefined
+      ? `${bill.grossBillAmount.toLocaleString('en-IN')}`
+      : `${bill.billAmount.toLocaleString('en-IN')}`;
+    pdf.text(grossAmountVal, col1ValueX, yPosition);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Net Bill Amount:", col2LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(`${bill.billAmount.toLocaleString('en-IN')}`, col2ValueX, yPosition);
+
+    yPosition += 8;
+
+    // Seventh row: Fuel Pricing Type & Railway Materials
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Fuel Pricing Type:", col1LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const fuelPricingText = bill.fuelPriceType === 'zone_city'
+      ? 'Zone-Specific City Price'
+      : 'Four-City Average';
+    pdf.text(fuelPricingText, col1ValueX, yPosition);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Railway Materials:", col2LabelX, yPosition);
+    pdf.setFont("helvetica", "normal");
+    const materialsText = bill.contract.hasRailwaySuppliedMaterials ? 'Yes (Excluded from PVC)' : 'No (Supplied by Contractor)';
+    pdf.text(materialsText, col2ValueX, yPosition);
+
     yPosition += 8;
     
-    // Fifth row (LOA if exists) - Full width with proper wrapping
+    // LOA details (if LOA exists)
     if (bill.contract.loaNo) {
       pdf.setFont("helvetica", "bold");
-      pdf.text("LOA No:", marginLeft, yPosition);
+      pdf.text("LOA Details:", marginLeft, yPosition);
       pdf.setFont("helvetica", "normal");
-      const loaText = pdf.splitTextToSize(bill.contract.loaNo, contentWidth - col1LabelWidth - 5);
+      
+      const loaDateFormatted = bill.contract.loaDate 
+        ? ` dated ${format(new Date(bill.contract.loaDate), 'dd MMM yyyy')}` 
+        : '';
+      const loaFullText = `${bill.contract.loaNo}${loaDateFormatted}`;
+      const loaText = pdf.splitTextToSize(loaFullText, contentWidth - col1LabelWidth - 5);
       pdf.text(loaText, col1ValueX, yPosition);
       yPosition += Math.max(8, loaText.length * 6);
     }
@@ -3654,6 +3705,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       pdf.setLineWidth(2);
       pdf.line(marginLeft, yPosition, marginLeft + contentWidth, yPosition);
       
+      yPosition += 16; // Advance yPosition to prevent overlapping with subsequent sections
+      
       // Add 17B Restriction Comparison if applicable
       // Use the authoritative values from the database instead of recalculating
       if (bill.pvcCalculation.isIndexCapped && bill.pvcCalculation.originalPvcAmount && bill.pvcCalculation.restrictedPvcAmount) {
@@ -3666,7 +3719,6 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         
         // Show warning if validation fails
         if (!isValidRestriction) {
-          yPosition += 12;
           checkNewPage(60);
           
           pdf.setFillColor(255, 240, 240); // Light red background
@@ -3685,7 +3737,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           pdf.setFontSize(13);
           pdf.setFont("helvetica", "normal");
           pdf.setTextColor(139, 0, 0); // Dark red
-          const warningText = `Restricted PVC (₹${dbRestrictedTotal.toLocaleString('en-IN', {maximumFractionDigits: 2})}) is higher than Unrestricted PVC (₹${dbUnrestrictedTotal.toLocaleString('en-IN', {maximumFractionDigits: 2})}). This requires verification of Index_L values and capping logic.`;
+          const warningText = `Restricted PVC (${dbRestrictedTotal.toLocaleString('en-IN', {maximumFractionDigits: 2})}) is higher than Unrestricted PVC (${dbUnrestrictedTotal.toLocaleString('en-IN', {maximumFractionDigits: 2})}). This requires verification of Index_L values and capping logic.`;
           const warningLines = pdf.splitTextToSize(warningText, contentWidth - 10);
           pdf.text(warningLines, marginLeft + 5, yPosition);
           yPosition += 25;
@@ -3695,7 +3747,6 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         
         // Only show if there are actual savings OR if validation failed (to show the discrepancy)
         if (calculatedSavings > 0 || !isValidRestriction) {
-          yPosition += 12;
           checkNewPage(120);
           
           pdf.setFontSize(14);
@@ -3980,7 +4031,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       // Generated timestamp at bottom center
       pdf.setFontSize(8);
       pdf.setFont("helvetica", "normal");
-      const istNowSingle = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000));
+      const istNowSingle = toISTDate(new Date());
       const genDateTextSingle = `Generated: ${format(istNowSingle, 'dd MMM yyyy, HH:mm')} IST`;
       pdf.text(genDateTextSingle, marginLeft + (contentWidth / 2) - (pdf.getTextWidth(genDateTextSingle) / 2), pageHeight - 6);
 

@@ -58,6 +58,21 @@ export async function POST(
     // Calculate extension duration in days
     const originalDate = new Date(data.originalCompletionDate);
     const extendedDate = new Date(data.extendedCompletionDate);
+
+    if (isNaN(originalDate.getTime()) || isNaN(extendedDate.getTime())) {
+      return NextResponse.json(
+        { error: 'Invalid date values provided' },
+        { status: 400 }
+      );
+    }
+
+    if (extendedDate.getTime() < originalDate.getTime()) {
+      return NextResponse.json(
+        { error: 'Extended completion date cannot be before original completion date' },
+        { status: 400 }
+      );
+    }
+
     const extensionDuration = Math.ceil((extendedDate.getTime() - originalDate.getTime()) / (1000 * 60 * 60 * 24));
 
     // For 17B extensions, set PVC restriction date as original completion date

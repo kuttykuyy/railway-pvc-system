@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       freeTrialUsed,
       freeTrialRemaining,
       isTrialActive,
-      isFreeAccount: user.isFreeAccount,
+      isFreeAccount: user.isFreeAccount || user.role === 'superadmin',
       customProcessingFee: user.customProcessingFee,
     });
   } catch (error) {

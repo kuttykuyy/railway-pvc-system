@@ -28,138 +28,134 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
     }
   }
   
+  // 1. Fetch all price indices in a single query
+  const priceIndices = await prisma.priceIndex.findMany({
+    where: { name: { in: priceIndexNames } }
+  });
+  
+  const priceIndexMap = new Map(priceIndices.map(pi => [pi.name, pi]));
+  
+  // 2. Fetch all base month values in a single query
+  const normalizedBaseMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1);
+  const nextBaseMonth = new Date(normalizedBaseMonth.getFullYear(), normalizedBaseMonth.getMonth() + 1, 1);
+  
+  const baseMonthValues = await prisma.monthlyIndexValue.findMany({
+    where: {
+      priceIndexId: { in: priceIndices.map(pi => pi.id) },
+      month: {
+        gte: normalizedBaseMonth,
+        lt: nextBaseMonth
+      }
+    }
+  });
+  
+  const baseValueMap = new Map(baseMonthValues.map(bmv => [bmv.priceIndexId, bmv.value]));
+  
+  // 3. Fetch all quarterly values in a single query
+  const monthlyValuesAll = await prisma.monthlyIndexValue.findMany({
+    where: {
+      priceIndexId: { in: priceIndices.map(pi => pi.id) },
+      month: { in: months }
+    }
+  });
+  
+  // Group quarterly values by priceIndexId
+  const quarterlyValuesByIndex = new Map<string, any[]>();
+  for (const mv of monthlyValuesAll) {
+    if (!quarterlyValuesByIndex.has(mv.priceIndexId)) {
+      quarterlyValuesByIndex.set(mv.priceIndexId, []);
+    }
+    quarterlyValuesByIndex.get(mv.priceIndexId)!.push(mv);
+  }
   
   const results = [];
+  const isBaseQuarter = ['Q0', 'Base'].includes(quarter);
+
+  // Bulk fetch fallbacks for target months if any index is missing
+  const fallbackMaps: { [targetKey: string]: Map<string, number> } = {};
+  if (!isBaseQuarter) {
+    for (const targetMonth of months) {
+      const targetKey = targetMonth.toISOString().slice(0, 7);
+      
+      // Determine if any index is missing a value for this target month
+      let anyMissing = false;
+      for (const priceIndex of priceIndices) {
+        const indexMvs = quarterlyValuesByIndex.get(priceIndex.id) || [];
+        const hasMonth = indexMvs.some((mv: any) => new Date(mv.month).toISOString().slice(0, 7) === targetKey);
+        if (!hasMonth) {
+          anyMissing = true;
+          break;
+        }
+      }
+      
+      if (anyMissing) {
+        const fallbacks = await prisma.monthlyIndexValue.findMany({
+          where: {
+            priceIndexId: { in: priceIndices.map(pi => pi.id) },
+            month: { lt: targetMonth }
+          },
+          orderBy: [
+            { priceIndexId: 'asc' },
+            { month: 'desc' }
+          ],
+          distinct: ['priceIndexId']
+        });
+        
+        fallbackMaps[targetKey] = new Map(fallbacks.map(f => [f.priceIndexId, f.value]));
+      }
+    }
+  }
   
   for (const indexName of priceIndexNames) {
-    const priceIndex = await prisma.priceIndex.findUnique({
-      where: { name: indexName }
-    });
-    
+    const priceIndex = priceIndexMap.get(indexName);
     if (!priceIndex) {
       continue;
     }
     
-    // Get actual base month value for this specific contract
-    // Normalize base month to first day of the month for database query
-    const normalizedBaseMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1);
+    const actualBaseValue = baseValueMap.get(priceIndex.id) || priceIndex.baseValue;
     
-    const baseMonthValue = await prisma.monthlyIndexValue.findFirst({
-      where: {
-        priceIndexId: priceIndex.id,
-        month: {
-          gte: normalizedBaseMonth,
-          lt: new Date(normalizedBaseMonth.getFullYear(), normalizedBaseMonth.getMonth() + 1, 1)
-        }
-      },
-      orderBy: {
-        month: 'desc'  // Get the most recent value for the base month
-      }
-    });
-    
-    // Use actual base month value if available, fallback to static base value
-    const actualBaseValue = baseMonthValue?.value || priceIndex.baseValue;
-    
-    let monthlyValues;
-    
-    try {
-      if (calculationMethod === 'manual') {
-        // For manual calculation, try to get data from any of the quarter months
-        // Prioritize manually entered data but fallback to auto-fetched if needed
-        monthlyValues = await prisma.monthlyIndexValue.findMany({
-          where: {
-            priceIndexId: priceIndex.id,
-            month: {
-              in: months
-            }
-          },
-          orderBy: {
-            month: 'asc'  // Order by ascending to get months in sequence
-          }
-        });
-      } else {
-        // Auto calculation - same as before
-        monthlyValues = await prisma.monthlyIndexValue.findMany({
-          where: {
-            priceIndexId: priceIndex.id,
-            month: {
-              in: months
-            }
-          },
-          orderBy: {
-            month: 'asc'  // Order by ascending to get months in sequence
-          }
-        });
-      }
-    } catch (error: any) {
-      console.error(`Error querying monthly values for index ${indexName}:`, error);
-      throw new Error(`Failed to fetch monthly index values for ${indexName}: ${error.message}`);
-    }
-    
-    // IMPORTANT: For quarterly calculations, we need values for all months in the quarter.
-    // For any month where an index value is missing, we use the PREVIOUS month's value as fallback.
-    // This ensures provisional bills always have a complete 3-month average.
-    // EXCEPTION: For Q0/Base quarters, we only use the base month itself (1 month)
-    const isBaseQuarter = ['Q0', 'Base'].includes(quarter);
+    const monthlyValues = [...(quarterlyValuesByIndex.get(priceIndex.id) || [])];
     
     if (!isBaseQuarter) {
-      // Check which months are missing and fill them with the previous month's value
       const existingMonthSet = new Set(
         monthlyValues.map((mv: any) => new Date(mv.month).toISOString().slice(0, 7))
       );
       
       for (const targetMonth of months) {
-        const targetKey = targetMonth.toISOString().slice(0, 7); // e.g. "2026-02"
+        const targetKey = targetMonth.toISOString().slice(0, 7);
         
         if (!existingMonthSet.has(targetKey)) {
-          // This month is missing — fetch the most recent previous month's value for this index
-          const previousMonthValue = await prisma.monthlyIndexValue.findFirst({
-            where: {
-              priceIndexId: priceIndex.id,
-              month: {
-                lt: targetMonth // strictly before the missing month
-              }
-            },
-            orderBy: {
-              month: 'desc' // get the most recent one
-            }
-          });
-          
-          if (previousMonthValue) {
-            console.log(`[Provisional Fallback] Index "${indexName}" missing for ${targetKey}, using previous month value: ${previousMonthValue.value} from ${new Date(previousMonthValue.month).toISOString().slice(0, 7)}`);
-            // Add a synthetic entry with the previous month's value but mapped to the missing month
+          const fallbackVal = fallbackMaps[targetKey]?.get(priceIndex.id);
+          if (fallbackVal !== undefined) {
             monthlyValues.push({
-              ...previousMonthValue,
-              month: targetMonth, // treat it as if it belongs to the missing month
-              id: `fallback-${previousMonthValue.id}-${targetKey}`, // synthetic ID
+              id: `fallback-${priceIndex.id}-${targetKey}`,
+              priceIndexId: priceIndex.id,
+              month: targetMonth,
+              value: fallbackVal,
+              source: 'provisional-fallback',
+              isProvisional: true,
+              createdAt: new Date(),
+              updatedAt: new Date()
             } as any);
-          } else {
-            console.log(`[Provisional Fallback] Index "${indexName}" missing for ${targetKey} and no previous month data found — skipping`);
           }
         }
       }
       
-      // Re-sort by month after adding fallback values
       monthlyValues.sort((a: any, b: any) => new Date(a.month).getTime() - new Date(b.month).getTime());
     }
     
-    // Calculate average using all available months (should be 3 for a complete quarter)
     if (monthlyValues.length > 0) {
       const average = monthlyValues.reduce((sum: number, val: any) => sum + val.value, 0) / monthlyValues.length;
-      
-      monthlyValues.forEach((mv: any) => {
-      });
       
       results.push({
         quarter,
         indexName,
         average,
-        baseValue: actualBaseValue, // Use actual base month value from database, not static default
-        monthsUsed: monthlyValues.length, // Track how many months were used in the average
+        baseValue: actualBaseValue,
+        monthsUsed: monthlyValues.length,
         includesFutureMonths: false,
         usesPreviousMonthFallback: monthlyValues.some((mv: any) => typeof mv.id === 'string' && mv.id.startsWith('fallback-'))
       });
-    } else {
     }
   }
   

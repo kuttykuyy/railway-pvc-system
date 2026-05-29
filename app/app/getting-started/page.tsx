@@ -672,10 +672,10 @@ export default function GettingStartedPage() {
             </CardContent>
           </Card>
 
-          <Link href="/reports">
+          <Link href="/reports/abstract">
             <Button className="w-full gap-2" size="lg">
               <FileText className="h-5 w-5" />
-              Go to Reports Section
+              Go to Bill Abstracts
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>

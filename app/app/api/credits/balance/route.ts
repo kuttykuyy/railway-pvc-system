@@ -35,13 +35,16 @@ export async function GET(request: NextRequest) {
 
     // Get billing settings
     const billingSettings = await getBillingSettings();
-    const billCost = billingSettings.billCost || 10; // Default matches BILL_PROCESSING_COST in admin settings
+    const isSuperadmin = user.role === 'superadmin';
+    const isFree = user.isFreeAccount || isSuperadmin || user.customProcessingFee === 0;
+    
+    const billCost = isFree ? 0 : (billingSettings.billCost || 10); // ₹0 cost if user is free/superadmin
     const freeTrialLimit = billingSettings.freeTrialBills || 1; // Get from admin settings
     
     // Calculate free trial info
     const freeTrialUsed = user.freeTrialUsed || 0;
     const freeTrialRemaining = Math.max(0, freeTrialLimit - freeTrialUsed);
-    const isTrialActive = user.isTrialActive && freeTrialRemaining > 0;
+    const isTrialActive = user.isTrialActive && freeTrialRemaining > 0 && !isFree;
 
     // Get current account balance
     let currentBalance = 0;
@@ -59,10 +62,10 @@ export async function GET(request: NextRequest) {
     const isPaidUser = creditTopupCount > 0;
     
     // Calculate if user can afford next bill
-    // Free accounts (who have never topped up) can always create bills
-    const canAffordNextBill = !isPaidUser || isTrialActive || currentBalance >= billCost;
-    // Only show warning for users who have actually paid/topped up their account
-    const showLowCreditWarning = !isTrialActive && isPaidUser && currentBalance < (billCost * 2) && currentBalance >= billCost;
+    // Free accounts/superadmins can always afford next bill
+    const canAffordNextBill = isFree || !isPaidUser || isTrialActive || currentBalance >= billCost;
+    // Only show warning for users who have actually paid/topped up their account and are not free
+    const showLowCreditWarning = !isFree && !isTrialActive && isPaidUser && currentBalance < (billCost * 2) && currentBalance >= billCost;
 
     // Get monthly bill count
     const startOfMonth = new Date();
@@ -82,7 +85,13 @@ export async function GET(request: NextRequest) {
 
     // Determine account tier
     let accountTier = 'Free Trial';
-    if (!user.isTrialActive) {
+    if (isSuperadmin) {
+      accountTier = 'Superadmin';
+    } else if (user.isFreeAccount) {
+      accountTier = 'Free Tier';
+    } else if (user.customProcessingFee === 0) {
+      accountTier = 'Unlimited';
+    } else if (!isTrialActive) {
       if (currentBalance >= billCost * 5) {
         accountTier = 'Premium';
       } else if (currentBalance >= billCost) {
@@ -97,7 +106,7 @@ export async function GET(request: NextRequest) {
       nextBillCost: billCost,
       canAffordNextBill,
       showLowCreditWarning,
-      paymentProcessingEnabled: true, // Payment processing is available (not Razorpay specifically)
+      paymentProcessingEnabled: !isFree, // No payment processing flow needed if free
       isPaidUser, // Include whether user has ever topped up credits
       trialInfo: {
         isActive: isTrialActive,

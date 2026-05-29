@@ -79,6 +79,7 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  let agreementNoForError = 'unknown';
   try {
     // Validate API access
     const { authorized, user, message } = await validateApiAccess(request);
@@ -131,6 +132,8 @@ export async function PUT(
       schedules
     } = body;
     
+    agreementNoForError = agreementNo || 'unknown';
+    
     // Parse LOA date if provided
     const loaDateParsed = loaDate ? new Date(loaDate) : undefined;
     if (loaDate && loaDateParsed && isNaN(loaDateParsed.getTime())) {
@@ -178,10 +181,26 @@ export async function PUT(
     });
     
     return NextResponse.json(contract);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating contract:', error);
+    
+    // Handle unique constraint violation for agreementNo
+    if (error.code === 'P2002') {
+      const field = error.meta?.target?.includes('agreementNo') ? 'Agreement Number' : 'field';
+      return NextResponse.json(
+        { 
+          error: `Contract with this ${field} already exists`,
+          details: `A contract with Agreement Number "${agreementNoForError}" is already in the system. Please use a different Agreement Number.`
+        },
+        { status: 409 } // Conflict status code for duplicate resource
+      );
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to update contract' },
+      { 
+        error: 'Failed to update contract',
+        details: process.env.NODE_ENV === 'development' ? error.message : 'An internal server error occurred'
+      },
       { status: 500 }
     );
   }

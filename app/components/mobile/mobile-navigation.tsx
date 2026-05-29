@@ -43,10 +43,10 @@ const mobileNavSections = [
     title: 'Reports & Data',
     items: [
       { name: 'Abstract', href: '/reports/abstract', icon: Calculator, adminOnly: false },
-      { name: 'Reports', href: '/reports', icon: BarChart3, adminOnly: false },
       { name: 'Steel PVC Forecast', href: '/pvc-forecast', icon: TrendingUp, adminOnly: false },
 
       { name: 'Price Indices', href: '/indices', icon: TrendingUp, adminOnly: false },
+      { name: 'Component Index Documents', href: '/indices/component-documents', icon: FileText, adminOnly: true },
       { name: 'Classifications', href: '/classifications', icon: ListChecks, adminOnly: true },
       { name: 'Report Templates', href: '/report-templates', icon: FileText, adminOnly: true },
       { name: 'Extension Subcategories', href: '/admin/extension-subcategories', icon: Calculator, adminOnly: true },
