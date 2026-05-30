@@ -27,32 +27,32 @@ export function UserFilters({
   onAccountTypeFilterChange
 }: UserFiltersProps) {
   return (
-    <div className="p-4 border border-white/5 bg-slate-900/30 backdrop-blur-md rounded-3xl shadow-2xl flex flex-col sm:flex-row gap-4 items-center">
+    <div className="p-4 border border-slate-200/60 bg-white/70 backdrop-blur-md rounded-3xl shadow-[0_15px_35px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row gap-4 items-center">
       {/* Search Input */}
       <div className="flex-1 w-full relative group">
-        <Search className="absolute left-4.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-violet-400 transition-colors" />
+        <Search className="absolute left-4.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-violet-500 transition-colors" />
         <Input
           placeholder="Search directory by name, email, phone..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-11 pr-4 bg-slate-950/40 border-white/5 focus:border-violet-500/50 focus:ring-violet-500/20 text-slate-200 placeholder-slate-500 h-11 rounded-2xl shadow-inner transition-all"
+          className="pl-11 pr-4 bg-slate-50/50 border border-slate-200/80 focus:border-violet-500/50 focus:ring-violet-500/20 text-slate-800 placeholder-slate-400 h-11 rounded-2xl shadow-inner transition-all focus:bg-white"
         />
       </div>
 
       {/* Role Filter */}
       <div className="w-full sm:w-auto flex items-center gap-2">
         <Select value={roleFilter} onValueChange={onRoleFilterChange}>
-          <SelectTrigger className="w-full sm:w-[190px] h-11 bg-slate-950/40 border-white/5 focus:border-violet-500/50 focus:ring-violet-500/20 text-slate-300 rounded-2xl shadow-sm transition-all">
+          <SelectTrigger className="w-full sm:w-[190px] h-11 bg-slate-50/50 border border-slate-200/80 focus:border-violet-500/50 focus:ring-violet-500/20 text-slate-700 hover:bg-slate-50 rounded-2xl shadow-sm transition-all">
             <div className="flex items-center gap-2">
-              <Filter className="h-3.5 w-3.5 text-slate-500" />
+              <Filter className="h-3.5 w-3.5 text-slate-400" />
               <SelectValue placeholder="System Role" />
             </div>
           </SelectTrigger>
-          <SelectContent className="bg-slate-900/95 border-white/10 backdrop-blur-xl text-slate-200 rounded-2xl">
-            <SelectItem value="all" className="focus:bg-violet-600 focus:text-white rounded-xl">All System Roles</SelectItem>
-            <SelectItem value="contractor" className="focus:bg-violet-600 focus:text-white rounded-xl">Contractors</SelectItem>
-            <SelectItem value="railway_official" className="focus:bg-violet-600 focus:text-white rounded-xl">Railway Officials</SelectItem>
-            <SelectItem value="admin" className="focus:bg-violet-600 focus:text-white rounded-xl">Administrators</SelectItem>
+          <SelectContent className="bg-white border border-slate-200 text-slate-700 rounded-2xl shadow-xl">
+            <SelectItem value="all" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">All System Roles</SelectItem>
+            <SelectItem value="contractor" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Contractors</SelectItem>
+            <SelectItem value="railway_official" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Railway Officials</SelectItem>
+            <SelectItem value="admin" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Administrators</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -60,17 +60,17 @@ export function UserFilters({
       {/* Account Type Filter */}
       <div className="w-full sm:w-auto flex items-center gap-2">
         <Select value={accountTypeFilter} onValueChange={onAccountTypeFilterChange}>
-          <SelectTrigger className="w-full sm:w-[190px] h-11 bg-slate-950/40 border-white/5 focus:border-violet-500/50 focus:ring-violet-500/20 text-slate-300 rounded-2xl shadow-sm transition-all">
+          <SelectTrigger className="w-full sm:w-[190px] h-11 bg-slate-50/50 border border-slate-200/80 focus:border-violet-500/50 focus:ring-violet-500/20 text-slate-700 hover:bg-slate-50 rounded-2xl shadow-sm transition-all">
             <div className="flex items-center gap-2">
-              <ShieldAlert className="h-3.5 w-3.5 text-slate-500" />
+              <ShieldAlert className="h-3.5 w-3.5 text-slate-400" />
               <SelectValue placeholder="Account Billing" />
             </div>
           </SelectTrigger>
-          <SelectContent className="bg-slate-900/95 border-white/10 backdrop-blur-xl text-slate-200 rounded-2xl">
-            <SelectItem value="all" className="focus:bg-violet-600 focus:text-white rounded-xl">All Account Types</SelectItem>
-            <SelectItem value="free" className="focus:bg-violet-600 focus:text-white rounded-xl">Free Tiers</SelectItem>
-            <SelectItem value="paid" className="focus:bg-violet-600 focus:text-white rounded-xl">Paid / Active Balances</SelectItem>
-            <SelectItem value="trial" className="focus:bg-violet-600 focus:text-white rounded-xl">Active Sandbox Trials</SelectItem>
+          <SelectContent className="bg-white border border-slate-200 text-slate-700 rounded-2xl shadow-xl">
+            <SelectItem value="all" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">All Account Types</SelectItem>
+            <SelectItem value="free" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Free Tiers</SelectItem>
+            <SelectItem value="paid" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Paid / Active Balances</SelectItem>
+            <SelectItem value="trial" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Active Sandbox Trials</SelectItem>
           </SelectContent>
         </Select>
       </div>

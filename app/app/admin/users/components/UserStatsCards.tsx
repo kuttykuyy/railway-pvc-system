@@ -21,50 +21,50 @@ export function UserStatsCards({ stats }: UserStatsCardsProps) {
       value: stats.totalUsers,
       desc: 'Registered accounts',
       icon: Users,
-      colorClass: 'text-cyan-400',
+      colorClass: 'text-cyan-600',
       bgGlow: 'bg-cyan-500/5',
-      borderGlow: 'hover:border-cyan-500/30 hover:shadow-cyan-500/5',
-      iconBg: 'bg-cyan-500/10 text-cyan-400',
+      borderGlow: 'hover:border-cyan-200 hover:shadow-lg',
+      iconBg: 'bg-cyan-50 text-cyan-600 border border-cyan-100/50',
     },
     {
       title: 'Active Directory',
       value: stats.activeUsers,
       desc: 'Active system users',
       icon: Activity,
-      colorClass: 'text-violet-400',
+      colorClass: 'text-violet-600',
       bgGlow: 'bg-violet-500/5',
-      borderGlow: 'hover:border-violet-500/30 hover:shadow-violet-500/5',
-      iconBg: 'bg-violet-500/10 text-violet-400',
+      borderGlow: 'hover:border-violet-200 hover:shadow-lg',
+      iconBg: 'bg-violet-50 text-violet-600 border border-violet-100/50',
     },
     {
       title: 'System Reserves',
       value: formatCurrency(stats.totalCredits),
       desc: 'Total credit reserves',
       icon: CreditCard,
-      colorClass: 'text-amber-400',
+      colorClass: 'text-amber-600',
       bgGlow: 'bg-amber-500/5',
-      borderGlow: 'hover:border-amber-500/30 hover:shadow-amber-500/5',
-      iconBg: 'bg-amber-500/10 text-amber-400',
+      borderGlow: 'hover:border-amber-200 hover:shadow-lg',
+      iconBg: 'bg-amber-50 text-amber-600 border border-amber-100/50',
     },
     {
       title: 'Exempt Tiers',
       value: stats.freeAccounts,
       desc: 'Free / Official accounts',
       icon: Award,
-      colorClass: 'text-emerald-400',
+      colorClass: 'text-emerald-600',
       bgGlow: 'bg-emerald-500/5',
-      borderGlow: 'hover:border-emerald-500/30 hover:shadow-emerald-500/5',
-      iconBg: 'bg-emerald-500/10 text-emerald-400',
+      borderGlow: 'hover:border-emerald-200 hover:shadow-lg',
+      iconBg: 'bg-emerald-50 text-emerald-600 border border-emerald-100/50',
     },
     {
       title: 'Active Trials',
       value: stats.trialUsers,
       desc: 'Exploring sandbox',
       icon: Flame,
-      colorClass: 'text-rose-400',
+      colorClass: 'text-rose-600',
       bgGlow: 'bg-rose-500/5',
-      borderGlow: 'hover:border-rose-500/30 hover:shadow-rose-500/5',
-      iconBg: 'bg-rose-500/10 text-rose-400',
+      borderGlow: 'hover:border-rose-200 hover:shadow-lg',
+      iconBg: 'bg-rose-50 text-rose-600 border border-rose-100/50',
     },
   ];
 
@@ -75,7 +75,7 @@ export function UserStatsCards({ stats }: UserStatsCardsProps) {
         return (
           <Card 
             key={idx}
-            className={`relative overflow-hidden border border-white/5 bg-slate-900/40 backdrop-blur-md shadow-2xl rounded-3xl transition-all duration-300 transform hover:-translate-y-1 ${card.borderGlow}`}
+            className={`relative overflow-hidden border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl transition-all duration-300 transform hover:-translate-y-1 ${card.borderGlow}`}
           >
             <div className={`absolute top-0 right-0 w-24 h-24 rounded-full blur-[40px] pointer-events-none opacity-40 ${card.bgGlow}`} />
             <CardContent className="p-6 space-y-4">
@@ -91,7 +91,7 @@ export function UserStatsCards({ stats }: UserStatsCardsProps) {
                 <div className={`text-3xl font-black tracking-tight ${card.colorClass}`}>
                   {card.value}
                 </div>
-                <p className="text-[11px] text-slate-400 font-medium leading-none">
+                <p className="text-[11px] text-slate-500 font-medium leading-none">
                   {card.desc}
                 </p>
               </div>
