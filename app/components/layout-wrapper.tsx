@@ -11,7 +11,15 @@ import ServiceWorkerUpdate from '@/components/service-worker-update';
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isPublicPage = pathname === '/' || pathname?.startsWith('/auth/');
+  const isPublicPage = pathname === '/' || 
+    pathname?.startsWith('/auth/') || 
+    pathname === '/about' || 
+    pathname === '/pricing' || 
+    pathname === '/privacy' || 
+    pathname === '/terms' || 
+    pathname === '/refund' ||
+    pathname === '/contact' ||
+    pathname === '/help';
 
   if (isPublicPage) {
     return (
