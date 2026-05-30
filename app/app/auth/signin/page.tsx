@@ -23,13 +23,6 @@ function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Redirect authenticated users to the contracts page
-  useEffect(() => {
-    if (status === 'authenticated') {
-      window.location.href = '/contracts';
-    }
-  }, [status]);
-
   // Handle session errors and success messages from URL parameters
   useEffect(() => {
     const urlError = searchParams.get('error');
