@@ -43,6 +43,16 @@ export async function checkUserContractAccess(
       return null;
     }
 
+    // Owner always gets full access, regardless of role
+    if (contract.userId === userId) {
+      return {
+        canView: true,
+        canEdit: true,
+        canDelete: true,
+        canCreateBills: true
+      };
+    }
+
     if (user?.role === 'railway_official') {
       // Access allowed if contract zone matches official's zone
       const parsed = parseAgreementNumber(contract.agreementNo);
@@ -55,16 +65,6 @@ export async function checkUserContractAccess(
         };
       }
       return null;
-    }
-
-    if (contract.userId === userId) {
-      // Owner has full access
-      return {
-        canView: true,
-        canEdit: true,
-        canDelete: true,
-        canCreateBills: true
-      };
     }
 
     // Check explicit permission
@@ -143,6 +143,16 @@ export async function checkUserBillAccess(
       return null;
     }
 
+    // Contract owner always gets full access, regardless of role
+    if (bill.contract.userId === userId) {
+      return {
+        canView: true,
+        canEdit: true,
+        canDelete: true,
+        canDownloadPdf: true
+      };
+    }
+
     if (user?.role === 'railway_official') {
       // Access allowed if bill's zone matches official's zone
       if (bill.zone && user.railwayZone && bill.zone.toUpperCase() === user.railwayZone.toUpperCase()) {
@@ -154,17 +164,6 @@ export async function checkUserBillAccess(
         };
       }
       return null;
-    }
-
-    // Check if user is the contract owner
-    if (bill.contract.userId === userId) {
-      // Owner has full access to all bills under their contracts
-      return {
-        canView: true,
-        canEdit: true,
-        canDelete: true,
-        canDownloadPdf: true
-      };
     }
 
     // Check explicit bill permission
@@ -235,8 +234,14 @@ export async function getUserAccessibleContracts(userId: string): Promise<string
     }
 
     if (user?.role === 'railway_official') {
+      // Always include contracts owned by this user
+      const ownedContracts = await prisma.contract.findMany({
+        where: { userId },
+        select: { id: true }
+      });
+
       if (!user.railwayZone) {
-        return []; // No zone assigned, no access
+        return ownedContracts.map(c => c.id);
       }
       // Official can access all contracts matching their zone in the agreement number
       const zoneContracts = await prisma.contract.findMany({
@@ -247,7 +252,7 @@ export async function getUserAccessibleContracts(userId: string): Promise<string
         },
         select: { id: true }
       });
-      return zoneContracts.map(c => c.id);
+      return [...new Set([...ownedContracts.map(c => c.id), ...zoneContracts.map(c => c.id)])];
     }
 
     // Get owned contracts
@@ -299,17 +304,22 @@ export async function getUserAccessibleBills(userId: string): Promise<string[]> 
     }
 
     if (user?.role === 'railway_official') {
+      // Always include bills from contracts owned by this user
+      const ownedContractIds = await getUserAccessibleContracts(userId);
+      const ownedContractBills = await prisma.bill.findMany({
+        where: { contractId: { in: ownedContractIds } },
+        select: { id: true }
+      });
+
       if (!user.railwayZone) {
-        return []; // No zone assigned, no access
+        return ownedContractBills.map(b => b.id);
       }
       // Official can access all bills matching their zone
       const zoneBills = await prisma.bill.findMany({
-        where: {
-          zone: user.railwayZone
-        },
+        where: { zone: user.railwayZone },
         select: { id: true }
       });
-      return zoneBills.map(b => b.id);
+      return [...new Set([...ownedContractBills.map(b => b.id), ...zoneBills.map(b => b.id)])];
     }
 
     // Get accessible contracts first
