@@ -68,11 +68,20 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check token for protected routes
-  const token = await getToken({ 
+  // Check token for protected routes (trying secure cookie first, then insecure fallback)
+  let token = await getToken({ 
     req, 
-    secret: process.env.NEXTAUTH_SECRET || 'Fi0MOZYHoOhJbC1I7POU3RgAgLAseMsL'
+    secret: process.env.NEXTAUTH_SECRET || 'Fi0MOZYHoOhJbC1I7POU3RgAgLAseMsL',
+    secureCookie: true
   });
+
+  if (!token) {
+    token = await getToken({ 
+      req, 
+      secret: process.env.NEXTAUTH_SECRET || 'Fi0MOZYHoOhJbC1I7POU3RgAgLAseMsL',
+      secureCookie: false
+    });
+  }
 
   if (!token) {
     const signInUrl = new URL('/auth/signin', req.url);
