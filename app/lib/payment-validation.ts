@@ -42,12 +42,13 @@ export async function validateBillProcessing(
       };
     }
 
-    // Check if user is superadmin or railway_official (always free)
-    if (user.role === 'superadmin' || user.role === 'railway_official') {
+    // Check if user is admin, superadmin or railway_official (always free)
+    if (user.role === 'admin' || user.role === 'superadmin' || user.role === 'railway_official') {
+      const roleLabel = user.role === 'superadmin' ? 'Superadmin' : user.role === 'admin' ? 'Admin' : 'Railway Official';
       return {
         canProcess: true,
         isFree: true,
-        reason: `${user.role === 'superadmin' ? 'Superadmin' : 'Railway Official'} - no processing fee`
+        reason: `${roleLabel} - no processing fee`
       };
     }
 
@@ -225,9 +226,9 @@ export async function processPaymentForBill(
     const trialSettings = await getBillingSettingsForTrial();
     const freeTrialLimit = trialSettings.freeTrialBills || 1;
     
-    if (user.role === 'superadmin') {
+    if (user.role === 'admin' || user.role === 'superadmin') {
       isFree = true;
-      freeReason = 'superadmin';
+      freeReason = user.role === 'superadmin' ? 'superadmin' : 'admin';
     } else if (user.role === 'railway_official') {
       isFree = true;
       freeReason = 'railway_official';
@@ -302,6 +303,8 @@ export async function processPaymentForBill(
         let freeMessage = 'Free account - no processing fee charged';
         if (freeReason === 'superadmin') {
           freeMessage = 'Superadmin - no processing fee charged';
+        } else if (freeReason === 'admin') {
+          freeMessage = 'Admin - no processing fee charged';
         } else if (freeReason === 'railway_official') {
           freeMessage = 'Railway Official - no processing fee charged';
         } else if (freeReason === 'custom_zero_fee') {
