@@ -288,17 +288,6 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="max-w-4xl mx-auto bg-emerald-50/50 rounded-3xl p-8 sm:p-10 border border-emerald-100 flex flex-col sm:flex-row items-center gap-8 shadow-sm">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-100/60 flex items-center justify-center shrink-0">
-              <TrendingDown className="w-8 h-8 text-emerald-600" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">Negative PVC? Extra 50% Off</h3>
-              <p className="text-slate-600 font-light leading-relaxed">
-                When a bill results in a negative PVC value, we automatically apply an additional <strong className="text-emerald-700 font-semibold">50% discount</strong>. This stacks with your daily volume discounts, dropping prices to as low as ₹59 per bill.
-              </p>
-            </div>
-          </div>
         </div>
       </section>
 
