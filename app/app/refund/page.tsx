@@ -165,7 +165,7 @@ export default function RefundPolicyPage() {
                   </div>
                   <div>
                     <p className="text-xs text-slate-400 font-light">Email Address</p>
-                    <a href="mailto:admin@irpvc.in" className="text-sm font-bold text-emerald-600 hover:underline">admin@irpvc.in</a>
+                    <a href="mailto:admin@illall.in" className="text-sm font-bold text-emerald-600 hover:underline">admin@illall.in</a>
                   </div>
                 </div>
               </div>

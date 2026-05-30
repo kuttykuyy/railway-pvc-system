@@ -174,7 +174,7 @@ export default function ContactPage() {
                 </Button>
 
                 <Button asChild size="lg" className="bg-blue-600 hover:bg-blue-700">
-                  <a href="mailto:admin@irpvc.in">
+                  <a href="mailto:admin@illall.in">
                     <Mail className="h-5 w-5 mr-2" />
                     Email Us
                   </a>
