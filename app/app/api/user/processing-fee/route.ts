@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
       select: {
         isFreeAccount: true,
         customProcessingFee: true,
+        role: true,
       },
     });
 
@@ -34,8 +35,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const isFree = userData.isFreeAccount || userData.role === 'superadmin' || userData.role === 'railway_official';
+
     // If user has a free account, processing fee is 0
-    if (userData.isFreeAccount) {
+    if (isFree) {
       return NextResponse.json({
         processingFee: 0,
         isFreeAccount: true,

@@ -8,7 +8,7 @@ import Image from 'next/image';
 import {
   Train, Shield, Calculator, ArrowRight, FileUp, BarChart3,
   CheckCircle, Users, MessageSquare, FileText, LineChart,
-  Bot, IndianRupee, Smartphone, Lock, Sparkles,
+  IndianRupee, Smartphone, Lock,
   TrendingDown, TrendingUp, Percent, Gift, Play,
   ChevronRight
 } from 'lucide-react';
@@ -121,32 +121,16 @@ export default function HomePage() {
             <p className="text-xl text-slate-500 font-light">From contract creation to final bill generation, every step is automated, accurate, and incredibly fast.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             
-            {/* Main Feature - Spans 2 cols on desktop */}
-            <div className="lg:col-span-2 group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-blue-100 hover:shadow-2xl hover:shadow-blue-900/5 transition-all duration-500 flex flex-col justify-between">
+            <div className="group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-blue-100 hover:shadow-2xl hover:shadow-blue-900/5 transition-all duration-500 flex flex-col justify-between">
               <div>
                 <div className="w-14 h-14 rounded-2xl bg-blue-600 text-white flex items-center justify-center mb-6 shadow-lg shadow-blue-600/20">
                   <FileText className="h-7 w-7" />
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900 mb-3 tracking-tight">Automated PVC Bills</h3>
-                <p className="text-slate-600 leading-relaxed text-lg font-light max-w-xl">
-                  Create comprehensive running account bills instantly. The system automatically calculates complex PVC formulas based on GCC 46A classification codes, applying the correct quarterly and monthly price indices without manual spreadsheet entry.
-                </p>
-              </div>
-            </div>
-
-            <div className="group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-orange-100 hover:shadow-2xl hover:shadow-orange-900/5 transition-all duration-500 flex flex-col justify-between">
-              <div>
-                <div className="w-14 h-14 rounded-2xl bg-orange-500 text-white flex items-center justify-center mb-6 shadow-lg shadow-orange-500/20">
-                  <TrendingDown className="h-7 w-7" />
-                </div>
-                <div className="flex items-center gap-3 mb-3">
-                  <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Quick Check</h3>
-                  <span className="px-2.5 py-1 text-xs font-bold bg-orange-100 text-orange-700 rounded-full">POPULAR</span>
-                </div>
                 <p className="text-slate-600 leading-relaxed font-light">
-                  Instantly check if your PVC is positive or negative before creating a full bill for just ₹500. Avoid costly billing mistakes.
+                  Create comprehensive running account bills instantly. The system automatically calculates complex PVC formulas based on GCC 46A codes, applying correct indices without manual spreadsheet entry.
                 </p>
               </div>
             </div>
@@ -161,13 +145,12 @@ export default function HomePage() {
                   <span className="px-2.5 py-1 text-xs font-bold bg-emerald-100 text-emerald-700 rounded-full">NEW</span>
                 </div>
                 <p className="text-slate-600 leading-relaxed font-light">
-                  Plan billing timing with advanced quarterly steel projections. Predict future index values with AI-driven confidence scoring.
+                  Plan billing timing with advanced quarterly steel projections. Predict future index values based on historical JPC rates and market trends.
                 </p>
               </div>
             </div>
 
-            {/* Another Wide Feature */}
-            <div className="lg:col-span-2 group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-cyan-100 hover:shadow-2xl hover:shadow-cyan-900/5 transition-all duration-500 flex flex-col justify-between overflow-hidden relative">
+            <div className="group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-cyan-100 hover:shadow-2xl hover:shadow-cyan-900/5 transition-all duration-500 flex flex-col justify-between overflow-hidden relative">
               <div className="absolute right-0 bottom-0 opacity-5 w-64 h-64 translate-x-1/4 translate-y-1/4 group-hover:scale-110 transition-transform duration-700">
                  <LineChart className="w-full h-full text-cyan-600" />
               </div>
@@ -175,9 +158,9 @@ export default function HomePage() {
                 <div className="w-14 h-14 rounded-2xl bg-cyan-600 text-white flex items-center justify-center mb-6 shadow-lg shadow-cyan-600/20">
                   <LineChart className="h-7 w-7" />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-3 tracking-tight">Real-time Index Tracking</h3>
-                <p className="text-slate-600 leading-relaxed text-lg font-light max-w-xl">
-                  Always stay up to date. We continuously track and aggregate PPAC diesel prices, steel JPC rates, and all 10 component indices required for GCC calculations. Visualize historical trends via interactive charts.
+                <h3 className="text-2xl font-bold text-slate-900 mb-3 tracking-tight">Index Tracking</h3>
+                <p className="text-slate-600 leading-relaxed font-light">
+                  Stay up to date. We track PPAC diesel prices, steel JPC rates, and all 10 component indices required for GCC calculations, with historical trend charts.
                 </p>
               </div>
             </div>
@@ -238,13 +221,13 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MiniFeature icon={<Bot />} title="AI Assistant" desc="Instant answers to PVC rules & classifications" />
+            <MiniFeature icon={<FileUp />} title="LOA Analyzer" desc="Extract and verify agreement details automatically" />
             <MiniFeature icon={<MessageSquare />} title="WhatsApp Integration" desc="Receive bills and critical alerts directly" />
             <MiniFeature icon={<BarChart3 />} title="Deep Analytics" desc="Custom abstract reports and visual summaries" />
             <MiniFeature icon={<Users />} title="Team Access" desc="Role-based permissions for staff and admins" />
             <MiniFeature icon={<IndianRupee />} title="Auto GST" desc="One-click GST invoice generation for payments" />
             <MiniFeature icon={<Lock />} title="Extension Compliance" desc="Strict rule engines for time extension PVCs" />
-            <MiniFeature icon={<Sparkles />} title="Smart Categorization" desc="AI-driven GCC code recommendations" />
+            <MiniFeature icon={<CheckCircle />} title="Instant Validation" desc="Pre-validate all PVC inputs before final submission" />
             <MiniFeature icon={<Smartphone />} title="Mobile First" desc="Fully responsive design for on-site access" />
           </div>
         </div>

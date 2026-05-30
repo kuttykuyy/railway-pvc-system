@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user has a free account or sufficient balance
-    const isFreeAccount = userWithAccount.customProcessingFee === 0 || userWithAccount.isFreeAccount;
+    const isFreeAccount = userWithAccount.customProcessingFee === 0 || userWithAccount.isFreeAccount || userWithAccount.role === 'superadmin' || userWithAccount.role === 'railway_official';
     
     if (!isFreeAccount) {
       const currentBalance = userWithAccount.customerAccount?.creditBalance || 0;

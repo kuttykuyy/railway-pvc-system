@@ -90,13 +90,25 @@ export function UserCard({
                   {user.totalBillsProcessed} bills
                 </Badge>
                 
-                {user.isFreeAccount && (
+                {(user.role === 'railway_official' || user.role === 'RAILWAY_OFFICIAL') && (
+                  <Badge variant="default" className="bg-blue-600 hover:bg-blue-700 text-xs text-white">
+                    Railway Official (Free)
+                  </Badge>
+                )}
+
+                {user.role === 'superadmin' && (
+                  <Badge variant="default" className="bg-purple-600 hover:bg-purple-700 text-xs text-white">
+                    Superadmin (Free)
+                  </Badge>
+                )}
+                
+                {user.isFreeAccount && user.role !== 'superadmin' && user.role !== 'railway_official' && user.role !== 'RAILWAY_OFFICIAL' && (
                   <Badge variant="default" className="bg-green-600 text-xs">
                     Free Account
                   </Badge>
                 )}
                 
-                {!user.isFreeAccount && user.customProcessingFee !== null && (
+                {!user.isFreeAccount && user.role !== 'superadmin' && user.role !== 'railway_official' && user.role !== 'RAILWAY_OFFICIAL' && user.customProcessingFee !== null && (
                   <Badge variant="secondary" className="text-xs">
                     Custom Fee: ₹{user.customProcessingFee}
                   </Badge>

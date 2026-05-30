@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       freeTrialUsed,
       freeTrialRemaining,
       isTrialActive,
-      isFreeAccount: user.isFreeAccount || user.role === 'superadmin',
+      isFreeAccount: user.isFreeAccount || user.role === 'superadmin' || user.role === 'railway_official',
       customProcessingFee: user.customProcessingFee,
     });
   } catch (error) {

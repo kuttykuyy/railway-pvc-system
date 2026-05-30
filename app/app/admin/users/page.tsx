@@ -9,7 +9,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
-import { Users } from 'lucide-react';
+import { Users, ShieldAlert, Sparkles, UserPlus } from 'lucide-react';
 import { getClientRoleInfo } from '@/lib/role-auth';
 
 // Import custom hooks
@@ -121,6 +121,7 @@ export default function AdminUsersPage() {
     const success = await updateProcessingFee(selectedUser.id, formData.isFreeAccount, customFee);
     
     if (success) {
+      await fetchUsers(); // Refresh list to reflect fee updates
       setProcessingFeeDialogOpen(false);
     }
   };
@@ -131,6 +132,7 @@ export default function AdminUsersPage() {
     const success = await updateUserRole(selectedUser.id, formData.role);
     
     if (success) {
+      await fetchUsers(); // Refresh list to reflect role updates
       setRoleDialogOpen(false);
     }
   };
@@ -151,10 +153,15 @@ export default function AdminUsersPage() {
   // Loading state
   if (status === 'loading' || loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4 animate-pulse" />
-          <p className="text-muted-foreground">Loading users...</p>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] relative overflow-hidden bg-slate-950/20 rounded-3xl border border-slate-100/10 backdrop-blur-md p-8">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-violet-600/15 blur-[80px] rounded-full animate-pulse" />
+        <div className="absolute top-1/3 left-1/3 w-48 h-48 bg-cyan-600/10 blur-[100px] rounded-full animate-pulse delay-700" />
+        <div className="relative text-center space-y-4">
+          <div className="relative inline-flex items-center justify-center p-4 bg-gradient-to-tr from-violet-600 to-indigo-600 rounded-2xl shadow-xl shadow-indigo-500/10 animate-bounce">
+            <Users className="h-8 w-8 text-white" />
+          </div>
+          <h2 className="text-xl font-bold bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">Securing Directory...</h2>
+          <p className="text-sm text-slate-400 max-w-xs mx-auto animate-pulse">Loading system user credentials and account balances.</p>
         </div>
       </div>
     );
@@ -166,54 +173,86 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">User Management</h1>
-        <p className="text-muted-foreground">Manage users, credits, and permissions</p>
+    <div className="relative min-h-screen pb-12 space-y-8 overflow-hidden">
+      {/* Dynamic Background Blurs */}
+      <div className="absolute top-0 right-10 w-96 h-96 bg-violet-600/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute top-1/3 -left-20 w-80 h-80 bg-cyan-600/8 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-10 right-20 w-[450px] h-[450px] bg-emerald-600/5 blur-[150px] rounded-full pointer-events-none" />
+
+      {/* Header Container */}
+      <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6 p-8 bg-gradient-to-r from-slate-900/60 to-slate-950/60 backdrop-blur-xl border border-white/5 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] overflow-hidden">
+        <div className="absolute inset-0 bg-grid-white/[0.02] pointer-events-none" />
+        <div className="relative space-y-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold text-violet-400 bg-violet-500/10 border border-violet-500/20 rounded-full shadow-inner">
+            <Sparkles className="h-3 w-3 animate-spin" />
+            Admin Operations Center
+          </div>
+          <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+            User Management
+          </h1>
+          <p className="text-sm text-slate-400 max-w-lg">
+            Configure contractor role tiers, update processing fee frameworks, and manage administrative transaction credit ledgers.
+          </p>
+        </div>
+        
+        <div className="relative flex items-center gap-3">
+          <div className="p-3 bg-slate-800/60 border border-white/5 rounded-2xl text-slate-400">
+            <ShieldAlert className="h-6 w-6 text-amber-500 animate-pulse" />
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 font-medium">Security Clearance</div>
+            <div className="text-sm font-bold text-amber-400 tracking-wide uppercase">System Admin Access</div>
+          </div>
+        </div>
       </div>
 
       {/* Stats Cards */}
       <UserStatsCards stats={stats} />
 
-      {/* Filters */}
-      <UserFilters
-        searchQuery={searchQuery}
-        roleFilter={roleFilter}
-        accountTypeFilter={accountTypeFilter}
-        onSearchChange={setSearchQuery}
-        onRoleFilterChange={setRoleFilter}
-        onAccountTypeFilterChange={setAccountTypeFilter}
-      />
+      {/* Filter and User Grid Backdrop */}
+      <div className="space-y-6">
+        <UserFilters
+          searchQuery={searchQuery}
+          roleFilter={roleFilter}
+          accountTypeFilter={accountTypeFilter}
+          onSearchChange={setSearchQuery}
+          onRoleFilterChange={setRoleFilter}
+          onAccountTypeFilterChange={setAccountTypeFilter}
+        />
 
-      {/* Users List */}
-      {filteredUsers.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Users className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No users found</h3>
-            <p className="text-sm text-muted-foreground text-center">
-              {searchQuery || roleFilter !== 'all' || accountTypeFilter !== 'all'
-                ? 'Try adjusting your search or filters'
-                : 'No users have been registered yet'}
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4">
-          {filteredUsers.map((user) => (
-            <UserCard
-              key={user.id}
-              user={user}
-              onOpenCreditDialog={openCreditDialog}
-              onOpenHistoryDialog={openHistoryDialog}
-              onOpenProcessingFeeDialog={openProcessingFeeDialog}
-              onOpenRoleDialog={openRoleDialog}
-              onOpenDeleteDialog={openDeleteDialog}
-            />
-          ))}
-        </div>
-      )}
+        {/* Users List */}
+        {filteredUsers.length === 0 ? (
+          <Card className="border border-white/5 bg-slate-900/40 backdrop-blur-md shadow-2xl rounded-3xl overflow-hidden">
+            <CardContent className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+              <div className="p-4 bg-slate-800/50 border border-white/5 rounded-2xl text-slate-400">
+                <Users className="h-10 w-10 text-slate-500" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-xl font-bold text-slate-200">No users directory matches</h3>
+                <p className="text-sm text-slate-500 max-w-sm">
+                  {searchQuery || roleFilter !== 'all' || accountTypeFilter !== 'all'
+                    ? 'No contractors or officials match your active system filters.'
+                    : 'The user database directory is currently empty.'}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-5">
+            {filteredUsers.map((user) => (
+              <UserCard
+                key={user.id}
+                user={user}
+                onOpenCreditDialog={openCreditDialog}
+                onOpenHistoryDialog={openHistoryDialog}
+                onOpenProcessingFeeDialog={openProcessingFeeDialog}
+                onOpenRoleDialog={openRoleDialog}
+                onOpenDeleteDialog={openDeleteDialog}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Dialogs */}
       <CreditDialog

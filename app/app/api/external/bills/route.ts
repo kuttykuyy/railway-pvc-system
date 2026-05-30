@@ -275,7 +275,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Check if user has free account
-    let isFreeAccount = user.isFreeAccount || (user.customProcessingFee === 0);
+    let isFreeAccount = user.isFreeAccount || (user.customProcessingFee === 0) || user.role === 'superadmin' || user.role === 'railway_official';
     
     // Check free trial
     const freeTrialLimit = billingSettings.freeTrialBills || 1;

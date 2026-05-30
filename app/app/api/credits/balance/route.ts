@@ -36,9 +36,10 @@ export async function GET(request: NextRequest) {
     // Get billing settings
     const billingSettings = await getBillingSettings();
     const isSuperadmin = user.role === 'superadmin';
-    const isFree = user.isFreeAccount || isSuperadmin || user.customProcessingFee === 0;
+    const isRailwayOfficial = user.role === 'railway_official';
+    const isFree = user.isFreeAccount || isSuperadmin || isRailwayOfficial || user.customProcessingFee === 0;
     
-    const billCost = isFree ? 0 : (billingSettings.billCost || 10); // ₹0 cost if user is free/superadmin
+    const billCost = isFree ? 0 : (billingSettings.billCost || 10); // ₹0 cost if user is free/superadmin/official
     const freeTrialLimit = billingSettings.freeTrialBills || 1; // Get from admin settings
     
     // Calculate free trial info
@@ -87,6 +88,8 @@ export async function GET(request: NextRequest) {
     let accountTier = 'Free Trial';
     if (isSuperadmin) {
       accountTier = 'Superadmin';
+    } else if (isRailwayOfficial) {
+      accountTier = 'Railway Department';
     } else if (user.isFreeAccount) {
       accountTier = 'Free Tier';
     } else if (user.customProcessingFee === 0) {

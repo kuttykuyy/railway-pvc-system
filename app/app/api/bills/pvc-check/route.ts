@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check balance (unless free account)
-    const isFree = user.isFreeAccount || user.customProcessingFee === 0;
+    const isFree = user.isFreeAccount || user.customProcessingFee === 0 || user.role === 'superadmin' || user.role === 'railway_official';
     if (!isFree) {
       const currentBalance = user.customerAccount?.creditBalance || 0;
       if (currentBalance < PVC_CHECK_FEE) {
