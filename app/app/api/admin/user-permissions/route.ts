@@ -111,9 +111,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(userPermissions);
     }
 
-    // Get all users with their permissions summary
+    // Get all users with their permissions summary (contractor + user roles)
     const users = await prisma.user.findMany({
-      where: { role: 'user' },
+      where: { 
+        role: {
+          in: ['contractor', 'user']
+        }
+      },
       select: {
         id: true,
         name: true,
