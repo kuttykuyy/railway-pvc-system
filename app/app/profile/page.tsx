@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BackButton } from '@/components/ui/back-button';
 import { toast } from 'react-hot-toast';
-import { KeyRound, User, Mail, Calendar, Shield, Loader2, Settings, MessageSquare } from 'lucide-react';
+import { KeyRound, User, Mail, Calendar, Shield, Loader2, Settings, MessageSquare, History } from 'lucide-react';
+import { getClientRoleInfo } from '@/lib/role-auth';
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
 import { RailwayPostingForm } from '@/components/railway-posting-form';
@@ -18,6 +19,8 @@ export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [auditSettings, setAuditSettings] = useState<any[]>([]);
+  const { isAdmin } = getClientRoleInfo(session);
   const [changingPassword, setChangingPassword] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   
@@ -36,8 +39,14 @@ export default function ProfilePage() {
       router.push('/auth/signin');
     } else if (status === 'authenticated') {
       fetchUserData();
+      if (isAdmin) {
+        fetch('/api/admin/settings')
+          .then(r => r.json())
+          .then(d => setAuditSettings(Array.isArray(d) ? d : []))
+          .catch(() => {});
+      }
     }
-  }, [status, router]);
+  }, [status, router, isAdmin]);
 
   const fetchUserData = async () => {
     try {
@@ -428,6 +437,39 @@ export default function ProfilePage() {
           </Card>
         </div>
       </div>
+
+      {/* Audit Log — admin only */}
+      {isAdmin && auditSettings.length > 0 && (
+        <div className="mt-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <History className="h-4 w-4 text-gray-500" />
+                Settings Audit Log
+              </CardTitle>
+              <CardDescription>Last known values and who updated each setting</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-gray-100">
+                {auditSettings.map((s: any) => (
+                  <div key={s.key} className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-5 py-3 hover:bg-gray-50 transition-colors">
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-mono font-semibold text-gray-800 uppercase">{s.key}</div>
+                      <div className="text-xs text-gray-500">
+                        Value: <span className="font-mono bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-semibold">{s.value}</span>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-2 sm:mt-0 sm:text-right space-y-0.5">
+                      <div>{new Date(s.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}</div>
+                      {s.updatedByUserEmail && <div className="text-blue-500">{s.updatedByUserEmail}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

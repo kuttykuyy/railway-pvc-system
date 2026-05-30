@@ -60,7 +60,6 @@ const mobileNavSections = [
       { name: 'PVC Check Analytics', href: '/admin/analytics', icon: TrendingUp, adminOnly: true },
       { name: 'User Management', href: '/admin/users', icon: User, adminOnly: true },
       { name: 'User Permissions', href: '/admin/user-permissions', icon: Settings, adminOnly: true },
-      { name: 'System Settings', href: '/admin/settings', icon: Settings, adminOnly: true },
       { name: 'WhatsApp Logs', href: '/admin/whatsapp-logs', icon: MessageSquare, adminOnly: true },
     ]
   }
