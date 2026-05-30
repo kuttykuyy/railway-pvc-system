@@ -36,7 +36,8 @@ function uploadLocalFile(buffer: Buffer, key: string): string {
     return key;
   } catch (error) {
     console.error('❌ Local file upload fallback failed:', error);
-    throw new Error('Failed to upload file to local storage fallback');
+    const innerError = error instanceof Error ? error.message : String(error);
+    throw new Error(`Local storage write failed: ${innerError}`);
   }
 }
 
@@ -65,6 +66,7 @@ export async function uploadFile(buffer: Buffer, fileName: string): Promise<stri
     return key;
   } catch (error) {
     console.warn(`⚠️ S3 upload failed for ${key}, falling back to local file storage:`, error);
+    useLocalFallback = true; // Bypasses S3 for future uploads in this process instance
     return uploadLocalFile(buffer, key);
   }
 }
