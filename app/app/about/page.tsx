@@ -210,11 +210,11 @@ export default function AboutUsPage() {
                   <span className="text-xs font-semibold text-indigo-600 group-hover:text-blue-700">irpvc.in</span>
                 </a>
 
-                <a href="mailto:admin@illall.in" className="flex items-center gap-3 p-3 bg-white/60 border border-slate-100 rounded-xl hover:border-blue-300 hover:bg-white transition-all group">
+                <a href="mailto:admin@irpvc.in" className="flex items-center gap-3 p-3 bg-white/60 border border-slate-100 rounded-xl hover:border-blue-300 hover:bg-white transition-all group">
                   <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
                     <Mail className="h-4 w-4" />
                   </div>
-                  <span className="text-xs font-semibold text-emerald-600 group-hover:text-blue-700">admin@illall.in</span>
+                  <span className="text-xs font-semibold text-emerald-600 group-hover:text-blue-700">admin@irpvc.in</span>
                 </a>
               </div>
             </Card>

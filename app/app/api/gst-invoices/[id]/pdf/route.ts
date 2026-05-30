@@ -400,7 +400,7 @@ function generateGstInvoiceHtml(invoice: any, user: any): string {
       <p class="subtitle">Price Variation Clause Calculation & Management</p>
       <div class="company-details">
         No 1/5 Kamraj Road, Mela Kalkandar Kottai, Tiruchirapalli, Tamil Nadu 620011, India<br>
-        <strong>GSTIN:</strong> 33AAKFI5174P2ZS | <strong>Phone:</strong> 9944776689 | <strong>Email:</strong> admin@illall.in
+        <strong>GSTIN:</strong> 33AAKFI5174P2ZS | <strong>Phone:</strong> 9944776689 | <strong>Email:</strong> admin@irpvc.in
       </div>
     </div>
     
@@ -492,7 +492,7 @@ function generateGstInvoiceHtml(invoice: any, user: any): string {
     <div class="bottom-section">
       <div style="font-size: 9px; color: #64748b; flex: 1;">
         Thank you for using IR-PVC!<br>
-        Support: admin@illall.in
+        Support: admin@irpvc.in
       </div>
       <div class="signature">
         <p><strong>For IR-PVC System</strong></p>
