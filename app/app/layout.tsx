@@ -144,8 +144,7 @@ export default function RootLayout({
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6836761436784639" 
           crossOrigin="anonymous"
         />
-        <script src="https://apps.abacus.ai/chatllm/appllm-lib.js"></script>
-        <script dangerouslySetInnerHTML={{ __html: `(function(){var o=console.error;console.error=function(){var a=[].slice.call(arguments).join(' ');if(a.indexOf('CLIENT_FETCH_ERROR')!==-1||a.indexOf('next-auth')!==-1&&a.indexOf('error')!==-1)return;o.apply(console,arguments)};})();` }} />
+<script dangerouslySetInnerHTML={{ __html: `(function(){var o=console.error;console.error=function(){var a=[].slice.call(arguments).join(' ');if(a.indexOf('CLIENT_FETCH_ERROR')!==-1||a.indexOf('next-auth')!==-1&&a.indexOf('error')!==-1)return;o.apply(console,arguments)};})();` }} />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#7c3aed" />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />

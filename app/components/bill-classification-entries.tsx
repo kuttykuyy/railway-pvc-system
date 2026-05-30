@@ -12,7 +12,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   Plus,
   Trash2,
-  Sparkles,
   AlertCircle,
   CheckCircle2,
   Info,
@@ -92,10 +91,6 @@ export function BillClassificationEntries({
   measurementDate
 }: BillClassificationEntriesProps) {
   const [entries, setEntries] = useState<ClassificationEntry[]>(value);
-  const [isLoadingAI, setIsLoadingAI] = useState(false);
-  const [showAIResults, setShowAIResults] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState<any>(null);
-  const [aiSuggestingEntry, setAiSuggestingEntry] = useState<number | null>(null);
 
   useEffect(() => {
     setEntries(value);
@@ -199,105 +194,6 @@ export function BillClassificationEntries({
     onChange(newEntries);
   };
 
-  const getAISuggestions = async () => {
-    if (!workDescription || workDescription.trim().length < 10) {
-      toast.error('Please enter a detailed work description (at least 10 characters)');
-      return;
-    }
-
-    setIsLoadingAI(true);
-    setShowAIResults(false);
-
-    try {
-      const response = await fetch('/api/ai/suggest-classifications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workDescription }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get AI suggestions');
-      }
-
-      const data = await response.json();
-      setAiSuggestions(data);
-      setShowAIResults(true);
-      toast.success('AI suggestions received!');
-    } catch (error) {
-      console.error('Error getting AI suggestions:', error);
-      toast.error('Failed to get AI suggestions. Please try again.');
-    } finally {
-      setIsLoadingAI(false);
-    }
-  };
-
-  const getAISuggestionForEntry = async (entryIndex: number) => {
-    const entry = entries[entryIndex];
-    const scheduleText = entry.scheduleItem || '';
-    // Use schedule text combined with work description for context
-    const textForAI = scheduleText
-      ? `Schedule: ${scheduleText}${workDescription ? `. Contract work: ${workDescription}` : ''}`
-      : workDescription || '';
-
-    if (!textForAI || textForAI.trim().length < 10) {
-      toast.error('Select a schedule or ensure work description is available');
-      return;
-    }
-
-    setAiSuggestingEntry(entryIndex);
-    try {
-      const response = await fetch('/api/ai/suggest-classifications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workDescription: textForAI }),
-      });
-
-      if (!response.ok) throw new Error('Failed to get AI suggestions');
-      const data = await response.json();
-      const topSuggestion = data.suggestions?.[0];
-
-      if (topSuggestion) {
-        // Find sub-classification by code
-        for (const group of classificationGroups) {
-          const subClass = group.subClassifications.find(s => s.code === topSuggestion.code);
-          if (subClass) {
-            updateEntry(entryIndex, 'subClassificationId', subClass.id);
-            toast.success(`AI suggested: ${subClass.code} - ${subClass.name} (${Math.round(topSuggestion.confidence * 100)}% confidence)`);
-            return;
-          }
-        }
-        toast.error('AI suggestion not found in available classifications');
-      } else {
-        toast.error('No AI suggestions received');
-      }
-    } catch (error) {
-      console.error('Error getting AI suggestion for entry:', error);
-      toast.error('Failed to get AI suggestion');
-    } finally {
-      setAiSuggestingEntry(null);
-    }
-  };
-
-  const applyAISuggestion = (suggestion: any) => {
-    // Find sub-classification by code across all groups
-    for (const group of classificationGroups) {
-      const subClass = group.subClassifications.find(s => s.code === suggestion.code);
-      if (subClass) {
-        const newEntry: ClassificationEntry = {
-          subClassificationId: subClass.id,
-          subClassification: subClass,
-          amount: 0,
-          description: suggestion.reasoning
-        };
-
-        setEntries([...entries, newEntry]);
-        toast.success(`Added ${subClass.name}`);
-        return;
-      }
-    }
-    toast.error('Classification not found');
-  };
-
   // Calculate total amount, treating blank/undefined/null as 0
   const totalAmount = entries.reduce((sum, entry) => {
     const amount = entry.amount === '' || entry.amount === null || entry.amount === undefined 
@@ -325,26 +221,6 @@ export function BillClassificationEntries({
                 Add work classifications with their amounts (optional). If provided, the sum should match the gross bill amount.
               </CardDescription>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={getAISuggestions}
-              disabled={isLoadingAI || !workDescription}
-              className="ml-4"
-            >
-              {isLoadingAI ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Getting AI Suggestions...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  AI Suggest
-                </>
-              )}
-            </Button>
           </div>
         </CardHeader>
 
@@ -389,63 +265,6 @@ export function BillClassificationEntries({
           </div>
         </CardContent>
       </Card>
-
-      {/* AI Suggestions */}
-      {showAIResults && aiSuggestions && (
-        <Card className="border-purple-200 bg-purple-50/50">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-purple-600" />
-              AI Suggestions
-            </CardTitle>
-            {aiSuggestions.notes && (
-              <CardDescription>{aiSuggestions.notes}</CardDescription>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {aiSuggestions.suggestions?.map((suggestion: any, idx: number) => (
-              <Card key={idx} className="border-purple-200">
-                <CardContent className="pt-4">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-semibold text-purple-900">
-                          {suggestion.mainClassification}. {suggestion.mainName}
-                        </span>
-                        <Badge variant="secondary" className="text-xs">
-                          {Math.round(suggestion.confidence * 100)}% confidence
-                        </Badge>
-                      </div>
-                      {suggestion.subClassifications && suggestion.subClassifications.length > 0 && (
-                        <div className="text-sm text-muted-foreground mt-2">
-                          <span className="font-medium">Sub-classifications:</span>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {suggestion.subClassifications.map((sub: any, subIdx: number) => (
-                              <Badge key={subIdx} variant="outline" className="text-xs">
-                                {sub.code}: {sub.name}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      <p className="text-sm text-muted-foreground mt-2">{suggestion.reasoning}</p>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => applyAISuggestion(suggestion)}
-                      className="ml-4"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </CardContent>
-        </Card>
-      )}
 
       {/* Classification Entries */}
       <div className="space-y-4">
@@ -501,28 +320,6 @@ export function BillClassificationEntries({
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label htmlFor={`group-${index}`}>Main Classification</Label>
-                      {(entry.scheduleItem || workDescription) && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => getAISuggestionForEntry(index)}
-                          disabled={aiSuggestingEntry === index}
-                          className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                        >
-                          {aiSuggestingEntry === index ? (
-                            <>
-                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                              Suggesting...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="h-3 w-3 mr-1" />
-                              AI Suggest
-                            </>
-                          )}
-                        </Button>
-                      )}
                     </div>
                     <Select
                       value={selectedGroup?.id || ''}

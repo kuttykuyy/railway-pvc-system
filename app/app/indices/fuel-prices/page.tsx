@@ -38,9 +38,6 @@ export default function FuelPricesPage() {
   );
   const [manualEntries, setManualEntries] = useState<FuelPrice[]>([]);
   const [bulkInput, setBulkInput] = useState("");
-  const [aiImporting, setAiImporting] = useState(false);
-  const [aiFile, setAiFile] = useState<File | null>(null);
-  
   // PPAC Auto-fetch state
   const [ppacFetching, setPpacFetching] = useState(false);
   const [ppacPdfInfo, setPpacPdfInfo] = useState<{url: string; filename: string; date?: string} | null>(null);
@@ -390,50 +387,6 @@ export default function FuelPricesPage() {
     }
   };
 
-  // AI Import from PDF
-  const handleAiImport = async () => {
-    if (!aiFile) {
-      toast.error("Please select a PDF file");
-      return;
-    }
-
-    try {
-      setAiImporting(true);
-      const formData = new FormData();
-      formData.append("file", aiFile);
-      formData.append("fuelType", "diesel");
-
-      const response = await fetch("/api/indices/fuel-prices/import-ai", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        toast.success(data.message);
-        setAiFile(null);
-        fetchFuelPrices();
-        // Auto-sync to MPNG indices
-        handleSyncToMPNG();
-        
-        // Show sample data
-        if (data.sample && data.sample.length > 0) {
-          console.log("Sample imported data:", data.sample);
-        }
-      } else {
-        toast.error(data.error || "AI import failed");
-        if (data.aiResponse) {
-          console.error("AI Response:", data.aiResponse);
-        }
-      }
-    } catch (error) {
-      console.error("AI import error:", error);
-      toast.error("Failed to import with AI");
-    } finally {
-      setAiImporting(false);
-    }
-  };
 
   // Download Excel export
   const handleDownloadExcel = async () => {
@@ -753,57 +706,6 @@ export default function FuelPricesPage() {
               <div className="text-sm text-muted-foreground bg-white/50 rounded p-3">
                 <strong>How it works:</strong> Automatically scrapes the PPAC website for the latest 
                 diesel price PDF, downloads it, extracts prices using AI, and imports to the database.
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* AI Import Card */}
-          <Card className="border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-purple-600" />
-                AI-Powered PDF Import
-              </CardTitle>
-              <CardDescription>
-                Upload a PPAC PDF and let AI automatically extract diesel prices
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <Input
-                    type="file"
-                    accept=".pdf"
-                    onChange={(e) => setAiFile(e.target.files?.[0] || null)}
-                    className="cursor-pointer"
-                  />
-                  {aiFile && (
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Selected: {aiFile.name}
-                    </p>
-                  )}
-                </div>
-                <Button 
-                  onClick={handleAiImport} 
-                  disabled={!aiFile || aiImporting}
-                  className="bg-purple-600 hover:bg-purple-700"
-                >
-                  {aiImporting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Import with AI
-                    </>
-                  )}
-                </Button>
-              </div>
-              <div className="text-sm text-muted-foreground bg-white/50 rounded p-3">
-                <strong>How it works:</strong> AI reads the PPAC PDF, identifies diesel price tables, 
-                and extracts daily prices for Delhi, Mumbai, Chennai, and Kolkata automatically.
               </div>
             </CardContent>
           </Card>

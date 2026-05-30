@@ -3,7 +3,6 @@
 import { usePathname } from 'next/navigation';
 import Navigation from '@/components/navigation';
 import MobileNavigation from '@/components/mobile/mobile-navigation';
-import { AIAssistant } from '@/components/ai-assistant';
 import InstallPrompt from '@/components/pwa/install-prompt';
 import PushNotifications from '@/components/pwa/push-notifications';
 import OfflineIndicator from '@/components/mobile/offline-indicator';
@@ -39,9 +38,6 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           {children}
         </main>
         
-        {/* AI Assistant */}
-        <AIAssistant />
-        
         {/* PWA Components */}
         <InstallPrompt />
         <PushNotifications />
@@ -67,9 +63,6 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
       <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-7xl lg:pt-4 pt-2 pb-6 flex-grow">
         {children}
       </main>
-      
-      {/* AI Assistant */}
-      <AIAssistant />
       
       {/* PWA Components */}
       <InstallPrompt />

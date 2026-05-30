@@ -126,11 +126,6 @@ function NewBillPageContent() {
   } | null>(null);
   const [isLoadingDateRange, setIsLoadingDateRange] = useState(true);
   
-  // AI Suggestions state
-  const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [suggestionError, setSuggestionError] = useState('');
-  
   // Previous bills state
   const [previousBills, setPreviousBills] = useState<any[]>([]);
   const [isLoadingPreviousBills, setIsLoadingPreviousBills] = useState(false);
@@ -507,71 +502,6 @@ function NewBillPageContent() {
       ...prev,
       workClassification: subClassId
     }));
-    // Clear suggestions when manually selecting
-    setAiSuggestions([]);
-  };
-
-
-
-  const getAISuggestions = async () => {
-    if (!selectedContract?.workDescription) {
-      toast.error('Please select a contract first');
-      return;
-    }
-
-    setIsLoadingSuggestions(true);
-    setSuggestionError('');
-    setAiSuggestions([]);
-
-    try {
-      const response = await fetch('/api/ai/suggest-classifications', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          workDescription: selectedContract.workDescription
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to get suggestions');
-      }
-
-      setAiSuggestions(data.suggestions || []);
-      
-      if (data.suggestions?.length > 0) {
-        toast.success(`Found ${data.suggestions.length} AI suggestions`);
-      } else {
-        toast('No suggestions found', { icon: 'ℹ️' });
-      }
-    } catch (error: any) {
-      console.error('Error getting AI suggestions:', error);
-      setSuggestionError(error.message || 'Failed to get suggestions');
-      toast.error('Failed to get AI suggestions');
-    } finally {
-      setIsLoadingSuggestions(false);
-    }
-  };
-
-  const selectAISuggestion = (code: string) => {
-    // Find sub-classification by code across all groups
-    for (const group of classificationGroups) {
-      const subClass = group.subClassifications.find(s => s.code === code);
-      if (subClass) {
-        setSelectedGroup(group);
-        setFormData(prev => ({
-          ...prev,
-          workClassification: subClass.id
-        }));
-        toast.success(`Selected: ${code} - ${subClass.name}`);
-        setAiSuggestions([]);
-        return;
-      }
-    }
-    toast.error(`Classification ${code} not found`);
   };
 
   const handlePvcCheck = async () => {
