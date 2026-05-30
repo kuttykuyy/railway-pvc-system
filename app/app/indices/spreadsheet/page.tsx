@@ -171,8 +171,6 @@ export default function SpreadsheetPage() {
   const [steelCityView, setSteelCityView] = useState<'all' | SteelCity>('Default');
   
   // PDF extraction state
-  const [isExtractingPDF, setIsExtractingPDF] = useState(false);
-  const [extractedPDFMonth, setExtractedPDFMonth] = useState<string>("");
 
   useEffect(() => {
     if (status === "loading") return;
@@ -428,95 +426,6 @@ export default function SpreadsheetPage() {
   };
   
   // JPC PDF extraction handler
-  const handleJPCPDFUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    if (!file.type.includes("pdf")) {
-      toast.error("Please upload a PDF file");
-      return;
-    }
-    
-    setIsExtractingPDF(true);
-    toast.loading("Extracting Chennai steel prices from PDF...", { id: "pdf-extract" });
-    
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      
-      const response = await fetch("/api/indices/extract-jpc-pdf", {
-        method: "POST",
-        body: formData
-      });
-      
-      const result = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to extract data");
-      }
-      
-      if (result.success && result.data) {
-        // Auto-fill the form with extracted data
-        const data = result.data;
-        
-        setSteelExcelData({
-          tmt: {
-            mm10_f1: data.tmt?.mm10_f1?.toString() || "",
-            mm10_f2: data.tmt?.mm10_f2?.toString() || "",
-            mm25_f1: data.tmt?.mm25_f1?.toString() || "",
-            mm25_f2: data.tmt?.mm25_f2?.toString() || ""
-          },
-          angleChannel: {
-            isa75_f1: data.angleChannel?.isa75_f1?.toString() || "",
-            isa75_f2: data.angleChannel?.isa75_f2?.toString() || "",
-            msPlate10_f1: data.angleChannel?.msPlate10_f1?.toString() || "",
-            msPlate10_f2: data.angleChannel?.msPlate10_f2?.toString() || "",
-            ismc150_f1: data.angleChannel?.ismc150_f1?.toString() || "",
-            ismc150_f2: data.angleChannel?.ismc150_f2?.toString() || ""
-          },
-          plates: {
-            msPlate10_f1: data.plates?.msPlate10_f1?.toString() || "",
-            msPlate10_f2: data.plates?.msPlate10_f2?.toString() || "",
-            msPlate25_f1: data.plates?.msPlate25_f1?.toString() || "",
-            msPlate25_f2: data.plates?.msPlate25_f2?.toString() || ""
-          },
-          otherSections: {
-            fortnight1: data.otherSections?.fortnight1?.toString() || "",
-            fortnight2: data.otherSections?.fortnight2?.toString() || ""
-          }
-        });
-        
-        // Parse and set month if available
-        if (result.month) {
-          setExtractedPDFMonth(result.month);
-          // Try to parse month for the date picker (format: "May 2025" -> "2025-05")
-          const monthParts = result.month.match(/(\w+)\s+(\d{4})/);
-          if (monthParts) {
-            const monthNames = ["January", "February", "March", "April", "May", "June", 
-                               "July", "August", "September", "October", "November", "December"];
-            const monthIndex = monthNames.findIndex(m => 
-              m.toLowerCase().startsWith(monthParts[1].toLowerCase())
-            );
-            if (monthIndex !== -1) {
-              const monthStr = String(monthIndex + 1).padStart(2, "0");
-              setSteelMonth(`${monthParts[2]}-${monthStr}`);
-            }
-          }
-        }
-        
-        toast.success(`Extracted Chennai steel prices for ${result.month || "selected month"}`, { id: "pdf-extract" });
-      } else {
-        throw new Error("No data extracted from PDF");
-      }
-    } catch (error: any) {
-      console.error("PDF extraction error:", error);
-      toast.error(error.message || "Failed to extract data from PDF", { id: "pdf-extract" });
-    } finally {
-      setIsExtractingPDF(false);
-      // Reset the file input
-      e.target.value = "";
-    }
-  };
 
   // Calculate average of F1 and F2 for a single item
   const calculateItemAverage = (f1: string, f2: string): number => {
@@ -1070,7 +979,7 @@ export default function SpreadsheetPage() {
                 plates: { msPlate10_f1: "", msPlate10_f2: "", msPlate25_f1: "", msPlate25_f2: "" },
                 otherSections: { fortnight1: "", fortnight2: "" }
               });
-              setExtractedPDFMonth("");
+
             }
           }}>
             <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
@@ -1116,63 +1025,6 @@ export default function SpreadsheetPage() {
                     const avgs = getSteelAverages();
                     return (
                   <div className="space-y-3">
-                    {/* PDF Upload Section */}
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <p className="text-sm text-purple-800 font-medium flex items-center gap-2">
-                            <FileText className="h-4 w-4" />
-                            Auto-Extract from JPC PDF
-                          </p>
-                          <p className="text-xs text-purple-700 mt-1">
-                            Upload JPC bulletin PDF to automatically extract Chennai steel prices
-                          </p>
-                        </div>
-                        <div className="ml-4">
-                          <label className="cursor-pointer">
-                            <input
-                              type="file"
-                              accept=".pdf"
-                              onChange={handleJPCPDFUpload}
-                              disabled={isExtractingPDF}
-                              className="hidden"
-                            />
-                            <div className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                              isExtractingPDF 
-                                ? "bg-purple-300 text-purple-700 cursor-wait" 
-                                : "bg-purple-600 text-white hover:bg-purple-700 cursor-pointer"
-                            }`}>
-                              {isExtractingPDF ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  Extracting...
-                                </>
-                              ) : (
-                                <>
-                                  <Upload className="h-4 w-4" />
-                                  Upload PDF
-                                </>
-                              )}
-                            </div>
-                          </label>
-                        </div>
-                      </div>
-                      {extractedPDFMonth && (
-                        <p className="text-xs text-green-700 mt-2 flex items-center gap-1">
-                          ✓ Data extracted from {extractedPDFMonth} bulletin
-                        </p>
-                      )}
-                    </div>
-                    
-                    <div className="relative">
-                      <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t" />
-                      </div>
-                      <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-white px-2 text-gray-500">or enter manually</span>
-                      </div>
-                    </div>
-                    
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
                       <p className="text-sm text-amber-800 font-medium">
                         ⚠️ Enter Chennai rates only (JPC Retail Market Prices)

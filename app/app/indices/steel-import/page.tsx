@@ -25,9 +25,6 @@ export default function SteelImportPage() {
 
   const [steelMonth, setSteelMonth] = useState<string>("");
   const [selectedCity, setSelectedCity] = useState<string>("Chennai");
-  const [isExtractingPDF, setIsExtractingPDF] = useState(false);
-  const [extractedPDFMonth, setExtractedPDFMonth] = useState<string>("");
-  const [extractedItemCount, setExtractedItemCount] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -231,79 +228,6 @@ export default function SteelImportPage() {
     setSaveSuccess(false);
   };
 
-  // PDF extraction handler
-  const handlePDFUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.includes("pdf")) {
-      toast.error("Please upload a PDF file");
-      return;
-    }
-
-    setIsExtractingPDF(true);
-    setSaveSuccess(false);
-    setSaveResult(null);
-    toast.loading(`Extracting ${selectedCity} steel prices from JPC PDF...`, { id: "pdf-extract" });
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("/api/indices/extract-jpc-pdf", {
-        method: "POST",
-        body: formData
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to extract data");
-      }
-
-      if (result.success && result.items) {
-        // Fill in all extracted items
-        const newItemsData = { ...getInitialItemsData() };
-        Object.entries(result.items).forEach(([itemId, values]: [string, any]) => {
-          if (values && newItemsData[itemId]) {
-            newItemsData[itemId] = {
-              f1: values.f1?.toString() || "",
-              f2: values.f2?.toString() || ""
-            };
-          }
-        });
-        setItemsData(newItemsData);
-        setExtractedItemCount(result.itemCount || 0);
-
-        // Parse month
-        if (result.month) {
-          setExtractedPDFMonth(result.month);
-          const monthParts = result.month.match(/(\w+)\s+(\d{4})/);
-          if (monthParts) {
-            const monthNames = ["January", "February", "March", "April", "May", "June",
-                               "July", "August", "September", "October", "November", "December"];
-            const monthIndex = monthNames.findIndex(m =>
-              m.toLowerCase().startsWith(monthParts[1].toLowerCase())
-            );
-            if (monthIndex !== -1) {
-              const monthStr = String(monthIndex + 1).padStart(2, "0");
-              setSteelMonth(`${monthParts[2]}-${monthStr}`);
-            }
-          }
-        }
-
-        toast.success(`Extracted ${result.itemCount || 0} items for ${result.month || "selected month"}`, { id: "pdf-extract" });
-      } else {
-        throw new Error("No data extracted from PDF");
-      }
-    } catch (error: any) {
-      console.error("PDF extraction error:", error);
-      toast.error(error.message || "Failed to extract data from PDF", { id: "pdf-extract" });
-    } finally {
-      setIsExtractingPDF(false);
-      e.target.value = "";
-    }
-  };
 
   // Save handler
   const handleSave = async () => {
@@ -334,7 +258,7 @@ export default function SteelImportPage() {
           month: steelMonth,
           city: selectedCity,
           items: itemsData,
-          source: extractedPDFMonth ? `JPC ${extractedPDFMonth}` : `JPC ${steelMonth}`,
+          source: `JPC ${steelMonth}`,
           importToIndices,
           isProvisional
         })
@@ -367,8 +291,7 @@ export default function SteelImportPage() {
     setItemsData(getInitialItemsData());
     setSteelMonth("");
     setSelectedCity("Chennai");
-    setExtractedPDFMonth("");
-    setExtractedItemCount(0);
+
     setSaveSuccess(false);
     setSaveResult(null);
     setExistingData(null);
@@ -465,50 +388,7 @@ export default function SteelImportPage() {
         </CardContent>
       </Card>
 
-      {/* Step 2: PDF Upload */}
-      <Card className="mb-6">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <span className="bg-purple-100 text-purple-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">2</span>
-            Upload JPC PDF (Optional)
-          </CardTitle>
-          <CardDescription>Upload JPC bulletin PDF to auto-extract steel prices</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <label className="cursor-pointer block">
-            <input
-              type="file"
-              accept=".pdf"
-              onChange={handlePDFUpload}
-              disabled={isExtractingPDF}
-              className="hidden"
-            />
-            <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-              isExtractingPDF ? "border-purple-300 bg-purple-50" : "border-gray-300 hover:border-purple-400 hover:bg-purple-50"
-            }`}>
-              {isExtractingPDF ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
-                  <span className="text-purple-700 font-medium">Extracting prices...</span>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-2">
-                  <FileText className="h-8 w-8 text-gray-400" />
-                  <span className="text-gray-600">Click to upload JPC PDF</span>
-                </div>
-              )}
-            </div>
-          </label>
-          {extractedPDFMonth && (
-            <p className="text-sm text-green-600 mt-2 flex items-center gap-1">
-              <CheckCircle className="h-4 w-4" />
-              Extracted {extractedItemCount} items from {extractedPDFMonth} bulletin
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Step 3: Enter Steel Prices - Focus on Calculation Items */}
+      {/* Step 2: Enter Steel Prices - Focus on Calculation Items */}
       <Card className="mb-6">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">

@@ -27,7 +27,6 @@ import {
   combineValidationResults,
   type ValidationResult
 } from '@/lib/validation';
-import { DocumentScanner } from '@/components/document-scanner';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 
 interface ContractFormProps {
