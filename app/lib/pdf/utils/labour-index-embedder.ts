@@ -88,10 +88,16 @@ export async function embedComponentIndices(
     // Embed each unique component index document
     for (const doc of deduplicatedDocuments) {
       try {
-        // Get signed URL and download component index PDF from S3
-        const indexUrl = await getFileUrl(doc.cloudStoragePath);
-        const indexResponse = await fetch(indexUrl);
-        const indexBytes = await indexResponse.arrayBuffer();
+        // Get PDF bytes from database (Base64) or fallback to S3/URL download
+        let indexBytes: ArrayBuffer;
+        if (doc.cloudStoragePath.startsWith('db://') && doc.remarks?.startsWith('base64:')) {
+          const base64Data = doc.remarks.substring(7);
+          indexBytes = Buffer.from(base64Data, 'base64').buffer;
+        } else {
+          const indexUrl = await getFileUrl(doc.cloudStoragePath);
+          const indexResponse = await fetch(indexUrl);
+          indexBytes = await indexResponse.arrayBuffer();
+        }
 
         // Load component index PDF
         const indexPdf = await PDFDocument.load(indexBytes);
@@ -209,10 +215,16 @@ export async function embedComponentIndicesRange(
     // Embed unique documents (sorted by component type, then by year)
     for (const doc of sortedDocuments) {
         try {
-          // Get signed URL and download component index PDF from S3
-          const indexUrl = await getFileUrl(doc.cloudStoragePath);
-          const indexResponse = await fetch(indexUrl);
-          const indexBytes = await indexResponse.arrayBuffer();
+          // Get PDF bytes from database (Base64) or fallback to S3/URL download
+          let indexBytes: ArrayBuffer;
+          if (doc.cloudStoragePath.startsWith('db://') && doc.remarks?.startsWith('base64:')) {
+            const base64Data = doc.remarks.substring(7);
+            indexBytes = Buffer.from(base64Data, 'base64').buffer;
+          } else {
+            const indexUrl = await getFileUrl(doc.cloudStoragePath);
+            const indexResponse = await fetch(indexUrl);
+            indexBytes = await indexResponse.arrayBuffer();
+          }
 
           // Load component index PDF
           const indexPdf = await PDFDocument.load(indexBytes);
