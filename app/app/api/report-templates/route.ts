@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
-    const templates = await prisma.reportTemplate.findMany({
+    let templates = await prisma.reportTemplate.findMany({
       where: {
         OR: [
           { userId: user.id },      // User's own templates
@@ -44,6 +44,64 @@ export async function GET(request: NextRequest) {
         }
       }
     });
+
+    if (templates.length === 0) {
+      // Create a default standard report template for the user
+      const defaultTemplate = await prisma.reportTemplate.create({
+        data: {
+          userId: user.id,
+          name: 'Standard GCC Report Template',
+          description: 'Default template containing all sections required for standard Railway GCC Price Variation Clause report submissions.',
+          isDefault: true,
+          isGlobal: false,
+          sections: {
+            contractDetails: true,
+            workClassification: true,
+            allBillsTable: true,
+            monthlyIndices: true,
+            pvcCalculation: true,
+            componentIndexDocuments: true
+          },
+          fields: {
+            contractDetails: {
+              agreementNo: true,
+              loaNo: true,
+              contractorName: true,
+              workDescription: true,
+              dateOfOpening: true,
+              baseMonth: true,
+              pvcNumber: true,
+              isFinalPvc: true,
+              zone: true
+            },
+            workClassification: {
+              code: true,
+              name: true,
+              description: true,
+              componentBreakdown: true,
+              subClassifications: true,
+              nonScheduleItems: true
+            },
+            pvcCalculation: {
+              componentWise: true,
+              dedicatedAmounts: true,
+              summary: true,
+              quarterlyData: true,
+              showCalculationSteps: true
+            }
+          }
+        },
+        include: {
+          user: {
+            select: {
+              name: true,
+              role: true
+            }
+          }
+        }
+      });
+      templates = [defaultTemplate];
+    }
     
     return NextResponse.json(templates);
   } catch (error) {
