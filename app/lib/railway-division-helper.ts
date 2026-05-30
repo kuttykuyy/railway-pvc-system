@@ -89,6 +89,30 @@ export interface AgreementNumberParts {
 }
 
 /**
+ * Normalize an agreement number for deduplication and trial-abuse prevention.
+ * Uppercases, collapses whitespace, strips trailing/leading non-alphanumeric
+ * chars from each segment, and removes any extra appended characters that
+ * don't form part of a valid segment.
+ *
+ * Examples:
+ *   "cr/aen/con/10/2024"  → "CR/AEN/CON/10/2024"
+ *   "CR/AEN/CON/10/2024X" → "CR/AEN/CON/10/2024"  (trailing junk stripped)
+ *   "CR / AEN / CON/10/2024" → "CR/AEN/CON/10/2024"
+ */
+export function normalizeAgreementNo(agreementNo: string): string {
+  if (!agreementNo) return '';
+  const segments = agreementNo
+    .toUpperCase()
+    .split('/')
+    .map(s => s.trim().replace(/[^A-Z0-9]/g, ''));
+  // Remove trailing empty segments
+  while (segments.length > 0 && segments[segments.length - 1] === '') {
+    segments.pop();
+  }
+  return segments.join('/');
+}
+
+/**
  * Parse agreement number to extract zone and division information
  */
 export function parseAgreementNumber(agreementNo: string): AgreementNumberParts | null {

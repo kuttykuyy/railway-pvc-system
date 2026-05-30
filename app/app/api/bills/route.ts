@@ -282,7 +282,26 @@ export async function POST(request: NextRequest) {
     if (!contract) {
       return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
     }
-    
+
+    // ===== STEP 4B: Block trial if this agreement number already claimed globally =====
+    if (paymentValidation.isFree && user.isTrialActive) {
+      const { normalizeAgreementNo } = await import('@/lib/railway-division-helper');
+      const normalizedNo = normalizeAgreementNo(contract.agreementNo);
+      if (normalizedNo) {
+        const alreadyClaimed = await prisma.trialClaimedAgreement.findUnique({
+          where: { normalizedAgreementNo: normalizedNo }
+        });
+        if (alreadyClaimed) {
+          return NextResponse.json({
+            error: 'Payment required',
+            reason: 'A free trial has already been used for this Agreement Number. Please add credits to continue.',
+            requiredPayment: null,
+            isFree: false
+          }, { status: 402 });
+        }
+      }
+    }
+
     // ===== STEP 5: Validate Measurement Date =====
     const measurementDate = new Date(dateOfMeasurement);
     if (isNaN(measurementDate.getTime())) {
@@ -620,7 +639,8 @@ export async function POST(request: NextRequest) {
       undefined, // No payment reference for automatic processing
       undefined, // No Razorpay data
       finalBillAmount,
-      totalPvc
+      totalPvc,
+      contract.agreementNo
     );
     
     if (!paymentResult.success) {

@@ -2,6 +2,7 @@
 import { prisma } from './db';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth';
+import { normalizeAgreementNo } from './railway-division-helper';
 
 export interface PaymentValidationResult {
   canProcess: boolean;
@@ -154,7 +155,8 @@ export async function processPaymentForBill(
     razorpaySignature?: string;
   },
   paidAmount?: number,
-  totalPvc?: number
+  totalPvc?: number,
+  agreementNo?: string
 ): Promise<{ success: boolean; message: string; transaction?: any }> {
   try {
     console.log('🔄 Processing payment for bill:', {
@@ -285,7 +287,19 @@ export async function processPaymentForBill(
             isTrialActive: user.freeTrialUsed + 1 < freeTrialLimit
           }
         });
-        
+
+        // Record this agreement number as having consumed a trial globally
+        if (agreementNo) {
+          const normalized = normalizeAgreementNo(agreementNo);
+          if (normalized) {
+            await prisma.trialClaimedAgreement.upsert({
+              where: { normalizedAgreementNo: normalized },
+              create: { normalizedAgreementNo: normalized, claimedByUserId: userId },
+              update: {} // already claimed, no update needed
+            });
+          }
+        }
+
         return {
           success: true,
           message: `Free trial bill processed (${freeTrialRemaining - 1} remaining)`,
@@ -322,14 +336,14 @@ export async function processPaymentForBill(
     // Verify Razorpay payment if provided
     if (razorpayData?.razorpayPaymentId && razorpayData?.razorpayOrderId && razorpayData?.razorpaySignature) {
       
-      const { verifyPaymentSignature, fetchPaymentDetails } = require('@/lib/razorpay');
-      
+      const { verifyRazorpaySignature, fetchPaymentDetails } = require('@/lib/razorpay');
+
       // Verify signature
-      const isSignatureValid = verifyPaymentSignature(
-        razorpayData.razorpayOrderId,
-        razorpayData.razorpayPaymentId,
-        razorpayData.razorpaySignature
-      );
+      const isSignatureValid = verifyRazorpaySignature({
+        razorpayOrderId: razorpayData.razorpayOrderId,
+        razorpayPaymentId: razorpayData.razorpayPaymentId,
+        razorpaySignature: razorpayData.razorpaySignature,
+      });
 
       if (!isSignatureValid) {
         console.error('❌ Invalid Razorpay signature');

@@ -234,6 +234,18 @@ model Contract {
   @@map("contracts")
 }
 
+// Tracks which normalized agreement numbers have already consumed a free trial
+// globally — prevents multi-account trial abuse on the same contract.
+model TrialClaimedAgreement {
+  id                   String   @id @default(cuid())
+  normalizedAgreementNo String  @unique
+  claimedByUserId      String
+  claimedAt            DateTime @default(now())
+
+  @@index([normalizedAgreementNo])
+  @@map("trial_claimed_agreements")
+}
+
 model ContractExtension {
   id                     String    @id @default(cuid())
   contractId             String

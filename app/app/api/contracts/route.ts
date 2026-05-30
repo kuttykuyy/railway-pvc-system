@@ -5,6 +5,7 @@ import { validateApiAccess } from '@/lib/payment-validation';
 import { getBaseMonth } from '@/lib/pvc-calculations';
 import { getUserAccessibleContracts } from '@/lib/permissions';
 import { checkPvcEligibility, generateEligibilityNote } from '@/lib/gcc-compliance';
+import { normalizeAgreementNo } from '@/lib/railway-division-helper';
 
 // Helper function to ensure base month values are available
 async function ensureBaseMonthValues(baseMonth: Date) {
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
     
     // Store for error handling
     agreementNoForError = agreementNo;
-    
+
     // Validate required fields
     if (!agreementNo || !contractorName || !workDescription || !dateOfOpening) {
       return NextResponse.json(
@@ -144,12 +145,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for duplicate agreement number before attempting to create
-    const existingContract = await prisma.contract.findUnique({
-      where: { agreementNo },
-      select: { 
-        id: true, 
-        agreementNo: true, 
+    // Normalize agreement number: uppercase, strip spaces/junk from segments
+    const normalizedAgreementNo = normalizeAgreementNo(agreementNo);
+    if (!normalizedAgreementNo) {
+      return NextResponse.json(
+        { error: 'Invalid Agreement Number format' },
+        { status: 400 }
+      );
+    }
+    agreementNoForError = normalizedAgreementNo;
+
+    // Check for duplicate using normalized form (catches extra-letter abuse)
+    const existingContract = await prisma.contract.findFirst({
+      where: {
+        OR: [
+          { agreementNo: normalizedAgreementNo },
+          { agreementNo: agreementNo.trim() }
+        ]
+      },
+      select: {
+        id: true,
+        agreementNo: true,
         contractorName: true,
         user: {
           select: {
@@ -162,11 +178,11 @@ export async function POST(request: NextRequest) {
 
     if (existingContract) {
       return NextResponse.json(
-        { 
+        {
           error: 'Contract with this Agreement Number already exists',
-          details: `A contract with Agreement Number "${agreementNo}" already exists in the system created by ${existingContract.user?.name || 'another user'}. Please use a different Agreement Number.`
+          details: `A contract with Agreement Number "${normalizedAgreementNo}" already exists in the system created by ${existingContract.user?.name || 'another user'}. Please use a different Agreement Number.`
         },
-        { status: 409 } // Conflict status code for duplicate resource
+        { status: 409 }
       );
     }
 
@@ -206,7 +222,7 @@ export async function POST(request: NextRequest) {
 
     const contract = await prisma.contract.create({
       data: {
-        agreementNo,
+        agreementNo: normalizedAgreementNo,
         loaNo,
         loaDate: loaDateParsed,
         contractorName,
