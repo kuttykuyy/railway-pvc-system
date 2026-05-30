@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { clearAllCookies } from '@/lib/session-error-handler';
 
 function SignInForm() {
+  const { status } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,6 +22,13 @@ function SignInForm() {
   const [successMessage, setSuccessMessage] = useState('');
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Redirect authenticated users to the contracts page
+  useEffect(() => {
+    if (status === 'authenticated') {
+      router.replace('/contracts');
+    }
+  }, [status, router]);
 
   // Handle session errors and success messages from URL parameters
   useEffect(() => {

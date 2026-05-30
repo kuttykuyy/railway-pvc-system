@@ -10,12 +10,16 @@ import { ArrowRight, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { PasswordStrengthIndicator } from '@/components/password-strength-indicator';
 import { validatePhoneNumber } from '@/lib/whatsapp-mydreams';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 
 export default function SignUpPage() {
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [accountType, setAccountType] = useState<'contractor' | 'railway_official'>('contractor');
+  const [railwayZone, setRailwayZone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -28,6 +32,7 @@ export default function SignUpPage() {
   } | null>(null);
   
   const router = useRouter();
+  const zoneOptions = getRailwayZoneOptions();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +47,11 @@ export default function SignUpPage() {
     }
     if (!validatePhoneNumber(whatsappNumber)) {
       setFieldErrors({ whatsappNumber: 'Invalid format. Use: +[country code][number] (e.g., +919876543210)' });
+      setLoading(false);
+      return;
+    }
+    if (accountType === 'railway_official' && !railwayZone) {
+      setFieldErrors({ railwayZone: 'Railway zone is required for department users' });
       setLoading(false);
       return;
     }
@@ -61,7 +71,7 @@ export default function SignUpPage() {
       const response = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, fullName, whatsappNumber }),
+        body: JSON.stringify({ email, password, fullName, whatsappNumber, accountType, railwayZone }),
       });
       const data = await response.json();
 
@@ -122,6 +132,62 @@ export default function SignUpPage() {
                   autoFocus
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-gray-700">Account Type</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div
+                    onClick={() => {
+                      setAccountType('contractor');
+                      setRailwayZone('');
+                    }}
+                    className={`cursor-pointer p-3 rounded-lg border text-center transition-all ${
+                      accountType === 'contractor'
+                        ? 'border-blue-600 bg-blue-50/50 text-blue-700 font-semibold shadow-sm'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-600 bg-gray-50'
+                    }`}
+                  >
+                    Contractor
+                  </div>
+                  <div
+                    onClick={() => setAccountType('railway_official')}
+                    className={`cursor-pointer p-3 rounded-lg border text-center transition-all ${
+                      accountType === 'railway_official'
+                        ? 'border-blue-600 bg-blue-50/50 text-blue-700 font-semibold shadow-sm'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-600 bg-gray-50'
+                    }`}
+                  >
+                    Department User
+                  </div>
+                </div>
+              </div>
+
+              {accountType === 'railway_official' && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <Label htmlFor="railwayZone" className="text-sm font-semibold text-gray-700">Railway Zone *</Label>
+                  <Select
+                    value={railwayZone}
+                    onValueChange={(value) => {
+                      setRailwayZone(value);
+                      setFieldErrors((prev) => ({ ...prev, railwayZone: '' }));
+                    }}
+                  >
+                    <SelectTrigger id="railwayZone" className="h-11 bg-gray-50 border-gray-200 focus:bg-white text-left">
+                      <SelectValue placeholder="Select your railway zone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {zoneOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {fieldErrors.railwayZone && (
+                    <p className="text-sm text-red-600">{fieldErrors.railwayZone}</p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-semibold text-gray-700">Email Address</Label>

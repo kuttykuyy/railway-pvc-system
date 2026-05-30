@@ -8,10 +8,11 @@ import { randomBytes } from 'crypto';
 import { validatePhoneNumber, sendUserSignupWelcome, sendWelcomeMessageToUser, getAdminWhatsAppNumber } from '@/lib/whatsapp-mydreams';
 import { isEmailVerificationRequired } from '@/lib/admin-settings';
 import { validatePassword } from '@/lib/password-strength';
+import { RAILWAY_ZONE_STEEL_CITY_MAP } from '@/lib/zone-steel-city-mapping';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, fullName, whatsappNumber } = await request.json();
+    const { email, password, fullName, whatsappNumber, accountType, railwayZone } = await request.json();
 
 
     if (!email || !password || !fullName || !whatsappNumber) {
@@ -19,6 +20,30 @@ export async function POST(request: NextRequest) {
         { error: 'Email, password, full name, and WhatsApp number are required' },
         { status: 400 }
       );
+    }
+
+    // Validate accountType and railwayZone
+    const resolvedAccountType = accountType || 'contractor';
+    if (resolvedAccountType !== 'contractor' && resolvedAccountType !== 'railway_official') {
+      return NextResponse.json(
+        { error: 'Invalid account type' },
+        { status: 400 }
+      );
+    }
+
+    if (resolvedAccountType === 'railway_official') {
+      if (!railwayZone) {
+        return NextResponse.json(
+          { error: 'Railway zone is required for department users' },
+          { status: 400 }
+        );
+      }
+      if (!RAILWAY_ZONE_STEEL_CITY_MAP[railwayZone]) {
+        return NextResponse.json(
+          { error: 'Invalid railway zone code' },
+          { status: 400 }
+        );
+      }
     }
 
     // Validate password strength and requirements
@@ -79,6 +104,9 @@ export async function POST(request: NextRequest) {
           password: hashedPassword,
           name: fullName,
           phone: whatsappNumber,
+          role: resolvedAccountType,
+          railwayZone: resolvedAccountType === 'railway_official' ? railwayZone : null,
+          railwayZoneName: resolvedAccountType === 'railway_official' ? (RAILWAY_ZONE_STEEL_CITY_MAP[railwayZone]?.name || null) : null,
           emailVerified: emailVerificationRequired ? null : new Date(), // Auto-verify if not required
           freeTrialUsed: 0,
           isTrialActive: true,

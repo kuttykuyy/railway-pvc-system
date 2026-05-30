@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     
     // Build query - properly typed for Prisma
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line
     const where: any = {
       userId: auth.userId
     };

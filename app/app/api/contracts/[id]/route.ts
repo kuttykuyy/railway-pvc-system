@@ -1,7 +1,7 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateApiAccess } from '@/lib/payment-validation';
+import { parseAgreementNumber } from '@/lib/railway-division-helper';
 
 export const dynamic = "force-dynamic";
 
@@ -24,16 +24,9 @@ export async function GET(
     // Check if user is admin
     const isAdmin = user.role === 'admin' || user.email === '30prasath93@gmail.com';
     
-    // Build where clause based on user role
-    let whereClause: any = { id: params.id };
-    
-    // For non-admin users, only show their own contracts
-    if (!isAdmin) {
-      whereClause.userId = user.id;
-    }
-
+    // Fetch the contract first
     const contract = await prisma.contract.findUnique({
-      where: whereClause,
+      where: { id: params.id },
       include: {
         user: {
           select: {
@@ -56,11 +49,44 @@ export async function GET(
         }
       }
     });
-    
+
     if (!contract) {
       return NextResponse.json(
-        { error: 'Contract not found or access denied' },
+        { error: 'Contract not found' },
         { status: 404 }
+      );
+    }
+
+    // Authorization check
+    let hasAccess = false;
+    if (isAdmin) {
+      hasAccess = true;
+    } else if (contract.userId === user.id) {
+      hasAccess = true;
+    } else if (user.role === 'railway_official') {
+      const parsed = parseAgreementNumber(contract.agreementNo);
+      if (parsed && user.railwayZone && parsed.zone.toUpperCase() === user.railwayZone.toUpperCase()) {
+        hasAccess = true;
+      }
+    } else {
+      // Check explicit access
+      const explicitAccess = await prisma.userContractAccess.findUnique({
+        where: {
+          userId_contractId: {
+            userId: user.id,
+            contractId: contract.id
+          }
+        }
+      });
+      if (explicitAccess && explicitAccess.isActive) {
+        hasAccess = true;
+      }
+    }
+
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: 'Access denied' },
+        { status: 403 }
       );
     }
     

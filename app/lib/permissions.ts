@@ -1,5 +1,6 @@
 
 import { PrismaClient } from '@prisma/client';
+import { parseAgreementNumber } from './railway-division-helper';
 
 const prisma = new PrismaClient();
 
@@ -19,7 +20,7 @@ export async function checkUserContractAccess(
     // Check if user is admin
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true }
+      select: { role: true, railwayZone: true }
     });
 
     if (user?.role === 'admin') {
@@ -32,13 +33,31 @@ export async function checkUserContractAccess(
       };
     }
 
-    // Check if user is the contract owner
+    // Check if contract exists
     const contract = await prisma.contract.findUnique({
       where: { id: contractId },
-      select: { userId: true }
+      select: { userId: true, agreementNo: true }
     });
 
-    if (contract?.userId === userId) {
+    if (!contract) {
+      return null;
+    }
+
+    if (user?.role === 'railway_official') {
+      // Access allowed if contract zone matches official's zone
+      const parsed = parseAgreementNumber(contract.agreementNo);
+      if (parsed && user.railwayZone && parsed.zone.toUpperCase() === user.railwayZone.toUpperCase()) {
+        return {
+          canView: true,
+          canEdit: false,
+          canDelete: false,
+          canCreateBills: false
+        };
+      }
+      return null;
+    }
+
+    if (contract.userId === userId) {
       // Owner has full access
       return {
         canView: true,
@@ -95,7 +114,7 @@ export async function checkUserBillAccess(
     // Check if user is admin
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true }
+      select: { role: true, railwayZone: true }
     });
 
     if (user?.role === 'admin') {
@@ -111,14 +130,29 @@ export async function checkUserBillAccess(
     // Get bill with contract info
     const bill = await prisma.bill.findUnique({
       where: { id: billId },
-      include: {
+      select: {
+        id: true,
+        zone: true,
         contract: {
-          select: { userId: true, id: true }
+          select: { id: true, userId: true }
         }
       }
     });
 
     if (!bill) {
+      return null;
+    }
+
+    if (user?.role === 'railway_official') {
+      // Access allowed if bill's zone matches official's zone
+      if (bill.zone && user.railwayZone && bill.zone.toUpperCase() === user.railwayZone.toUpperCase()) {
+        return {
+          canView: true,
+          canEdit: false,
+          canDelete: false,
+          canDownloadPdf: true
+        };
+      }
       return null;
     }
 
@@ -186,10 +220,10 @@ export async function checkUserBillAccess(
 
 export async function getUserAccessibleContracts(userId: string): Promise<string[]> {
   try {
-    // Check if user is admin
+    // Check if user is admin or official
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true }
+      select: { role: true, railwayZone: true }
     });
 
     if (user?.role === 'admin') {
@@ -198,6 +232,22 @@ export async function getUserAccessibleContracts(userId: string): Promise<string
         select: { id: true }
       });
       return allContracts.map(c => c.id);
+    }
+
+    if (user?.role === 'railway_official') {
+      if (!user.railwayZone) {
+        return []; // No zone assigned, no access
+      }
+      // Official can access all contracts matching their zone in the agreement number
+      const zoneContracts = await prisma.contract.findMany({
+        where: {
+          agreementNo: {
+            startsWith: `${user.railwayZone}/`
+          }
+        },
+        select: { id: true }
+      });
+      return zoneContracts.map(c => c.id);
     }
 
     // Get owned contracts
@@ -234,10 +284,10 @@ export async function getUserAccessibleContracts(userId: string): Promise<string
 
 export async function getUserAccessibleBills(userId: string): Promise<string[]> {
   try {
-    // Check if user is admin
+    // Check if user is admin or official
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true }
+      select: { role: true, railwayZone: true }
     });
 
     if (user?.role === 'admin') {
@@ -246,6 +296,20 @@ export async function getUserAccessibleBills(userId: string): Promise<string[]> 
         select: { id: true }
       });
       return allBills.map(b => b.id);
+    }
+
+    if (user?.role === 'railway_official') {
+      if (!user.railwayZone) {
+        return []; // No zone assigned, no access
+      }
+      // Official can access all bills matching their zone
+      const zoneBills = await prisma.bill.findMany({
+        where: {
+          zone: user.railwayZone
+        },
+        select: { id: true }
+      });
+      return zoneBills.map(b => b.id);
     }
 
     // Get accessible contracts first
