@@ -300,15 +300,17 @@ export default function HomePage() {
           <p className="text-xl text-slate-500 font-light mb-10 max-w-2xl mx-auto">
             Join the smart railway contractors across the Southern Railway division who use IR-PVC to save hours and eliminate calculation errors.
           </p>
-          <Link href="/auth/signin?mode=signup">
-            <Button size="lg" className="h-16 px-10 text-xl font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-xl shadow-blue-600/20 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
-              Create Your Free Account
-              <ArrowRight className="ml-3 w-6 h-6" />
-            </Button>
-          </Link>
-          <p className="mt-6 text-sm text-slate-400 font-medium">
-            Includes 1 free trial bill. No credit card required.
-          </p>
+          <div className="flex flex-col items-center justify-center">
+            <Link href="/auth/signin?mode=signup" className="inline-block">
+              <Button size="lg" className="h-16 px-10 text-xl font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-xl shadow-blue-600/20 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+                Create Your Free Account
+                <ArrowRight className="ml-3 w-6 h-6" />
+              </Button>
+            </Link>
+            <p className="mt-4 text-sm text-slate-400 font-medium text-center">
+              Includes 1 free trial bill. No credit card required.
+            </p>
+          </div>
         </div>
       </section>
 
