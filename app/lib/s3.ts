@@ -41,34 +41,9 @@ function uploadLocalFile(buffer: Buffer, key: string): string {
   }
 }
 
-/**
- * Upload a file to S3 (falls back to local filesystem if credentials fail)
- * @param buffer File buffer
- * @param fileName File name with path (e.g., "uploads/logo.png")
- * @returns S3 key (cloud_storage_path)
- */
 export async function uploadFile(buffer: Buffer, fileName: string): Promise<string> {
-  const key = `${folderPrefix}${fileName}`.replace(/\/+/g, '/'); // Remove duplicate slashes
-  
-  if (useLocalFallback || !s3Client) {
-    return uploadLocalFile(buffer, key);
-  }
-
-  try {
-    const command = new PutObjectCommand({
-      Bucket: bucketName,
-      Key: key,
-      Body: buffer,
-      ContentType: getContentType(fileName),
-    });
-    
-    await s3Client.send(command);
-    return key;
-  } catch (error) {
-    console.warn(`⚠️ S3 upload failed for ${key}, falling back to local file storage:`, error);
-    useLocalFallback = true; // Bypasses S3 for future uploads in this process instance
-    return uploadLocalFile(buffer, key);
-  }
+  // Bypasses S3 and local filesystem writes entirely in serverless environments
+  return `db://${fileName}`;
 }
 
 /**
@@ -78,15 +53,20 @@ export async function uploadFile(buffer: Buffer, fileName: string): Promise<stri
  * @returns Signed URL or local URL
  */
 export async function getFileUrl(key: string, expiresIn: number = 3600): Promise<string> {
+  const baseUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, '') || 'http://localhost:3000';
+  
+  // If this is a database-backed file, route it to our new database streaming API
+  if (key.startsWith('db://')) {
+    return `${baseUrl}/api/public/uploads?key=${encodeURIComponent(key)}`;
+  }
+
   // Check if file exists locally first (always prioritize local if it's there)
   const localFilePath = path.join(process.cwd(), 'public', 'uploads', key);
   if (fs.existsSync(localFilePath)) {
-    const baseUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, '') || 'http://localhost:3000';
     return `${baseUrl}/uploads/${key}`;
   }
 
   if (useLocalFallback || !s3Client) {
-    const baseUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, '') || 'http://localhost:3000';
     return `${baseUrl}/uploads/${key}`;
   }
 
@@ -100,7 +80,6 @@ export async function getFileUrl(key: string, expiresIn: number = 3600): Promise
     return url;
   } catch (error) {
     console.warn(`⚠️ Failed to generate S3 URL for key ${key}, falling back to local URL:`, error);
-    const baseUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, '') || 'http://localhost:3000';
     return `${baseUrl}/uploads/${key}`;
   }
 }

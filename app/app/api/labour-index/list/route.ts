@@ -46,7 +46,13 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    return NextResponse.json({ documents });
+    // Strip out base64 string from remarks to keep UI clean
+    const cleanedDocuments = documents.map(doc => ({
+      ...doc,
+      remarks: doc.remarks?.startsWith('base64:') ? null : doc.remarks
+    }));
+
+    return NextResponse.json({ documents: cleanedDocuments });
   } catch (error) {
     console.error("Error fetching component index documents:", error);
     return NextResponse.json(

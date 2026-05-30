@@ -90,10 +90,10 @@ export async function POST(request: NextRequest) {
     const fileName = `${componentType.toLowerCase()}-${year}-${monthsStr}-${timestamp}.pdf`;
     const s3Key = `component-indices/${componentType.toLowerCase()}/${fileName}`;
 
-    // Upload to S3
+    // Upload to S3 (returns db://... virtual path in serverless mode)
     const cloudStoragePath = await uploadFile(buffer, s3Key);
 
-    // Create new document
+    // Create new document (storing PDF as Base64 in remarks if database-backed)
     const newDoc = await prisma.labourIndexDocument.create({
       data: {
         componentType,
@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
         fileName,
         cloudStoragePath,
         uploadedBy: user.id,
+        remarks: cloudStoragePath.startsWith('db://') ? `base64:${buffer.toString('base64')}` : undefined,
       },
     });
 
