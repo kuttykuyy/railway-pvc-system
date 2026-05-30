@@ -48,12 +48,31 @@ export async function middleware(req: NextRequest) {
   }
 
   // Allow public assets and PWA files
-  if (pathname.startsWith('/_next/') || 
+  if (pathname.startsWith('/_next/') ||
       pathname.startsWith('/favicon') ||
       pathname === '/manifest.json' ||
       pathname === '/sw.js' ||
-      pathname.startsWith('/icons/') ||
-      pathname === '/') {
+      pathname.startsWith('/icons/')) {
+    return NextResponse.next();
+  }
+
+  // For root path, redirect authenticated users to /contracts
+  if (pathname === '/') {
+    let rootToken = await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET || 'Fi0MOZYHoOhJbC1I7POU3RgAgLAseMsL',
+      secureCookie: true
+    });
+    if (!rootToken) {
+      rootToken = await getToken({
+        req,
+        secret: process.env.NEXTAUTH_SECRET || 'Fi0MOZYHoOhJbC1I7POU3RgAgLAseMsL',
+        secureCookie: false
+      });
+    }
+    if (rootToken) {
+      return NextResponse.redirect(new URL('/contracts', req.url));
+    }
     return NextResponse.next();
   }
 
