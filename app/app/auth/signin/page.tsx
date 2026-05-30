@@ -26,9 +26,9 @@ function SignInForm() {
   // Redirect authenticated users to the contracts page
   useEffect(() => {
     if (status === 'authenticated') {
-      router.replace('/contracts');
+      window.location.href = '/contracts';
     }
-  }, [status, router]);
+  }, [status]);
 
   // Handle session errors and success messages from URL parameters
   useEffect(() => {

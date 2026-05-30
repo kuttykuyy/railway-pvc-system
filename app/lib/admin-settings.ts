@@ -97,7 +97,7 @@ export async function getBillingSettings() {
     lowCreditThreshold,
     provisionalIndicesCheckEnabled
   ] = await Promise.all([
-    getAdminSetting('BILL_PROCESSING_COST', 199), // Default ₹199 per bill (matches DEFAULT_SETTINGS in admin/settings/route.ts)
+    getAdminSetting('BILL_PROCESSING_COST', 99), // Default ₹99 per bill (matches DEFAULT_SETTINGS in admin/settings/route.ts)
     getAdminSetting('PAYMENT_PROCESSING_ENABLED', true),
     getAdminSetting('FREE_TRIAL_BILLS', 1), // Changed from 3 to 1 free trial bill
     getAdminSetting('LOW_CREDIT_THRESHOLD', 50),
