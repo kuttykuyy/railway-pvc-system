@@ -231,17 +231,17 @@ export default function Navigation() {
   };
 
   return (
-    <nav className="sticky top-0 z-50 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 shadow-lg border-b border-blue-700/50">
+    <nav className="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-200">
       <div className="container mx-auto px-2 sm:px-4 max-w-7xl">
         <div className="flex justify-between items-center h-16">
           {/* Brand */}
           <Link href="/contracts" className="flex items-center space-x-2 sm:space-x-3 group">
             <div className="flex flex-col">
-              <span className="text-lg sm:text-xl font-bold text-white hidden sm:block leading-tight tracking-tight">
+              <span className="text-lg sm:text-xl font-bold text-blue-600 hidden sm:block leading-tight tracking-tight">
                 IR-PVC
               </span>
 
-              <span className="text-sm font-bold text-white block sm:hidden">
+              <span className="text-sm font-bold text-blue-600 block sm:hidden">
                 IR-PVC
               </span>
             </div>
@@ -262,8 +262,8 @@ export default function Navigation() {
                       variant={isActive ? "secondary" : "ghost"}
                       size="sm"
                       className={cn(
-                        "flex items-center space-x-2 text-white hover:bg-white/20 transition-all duration-200",
-                        isActive && "bg-white/25 hover:bg-white/30 font-semibold"
+                        "flex items-center space-x-2 text-gray-700 hover:bg-gray-100 transition-all duration-200",
+                        isActive && "bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold"
                       )}
                     >
                       <Link href={item.href}>
@@ -286,8 +286,8 @@ export default function Navigation() {
                           variant={groupActive ? "secondary" : "ghost"}
                           size="sm"
                           className={cn(
-                            "flex items-center space-x-2 text-white hover:bg-white/20 transition-all duration-200",
-                            groupActive && "bg-white/25 hover:bg-white/30 font-semibold"
+                            "flex items-center space-x-2 text-gray-700 hover:bg-gray-100 transition-all duration-200",
+                            groupActive && "bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold"
                           )}
                         >
                           <GroupIcon className="h-4 w-4" />
@@ -321,57 +321,57 @@ export default function Navigation() {
                 
                 {/* Credit Balance & Top-up - Show for all authenticated users */}
                 {creditData && (
-                  <div className="flex items-center space-x-2 ml-2 pl-2 border-l border-blue-500/40">
+                  <div className="flex items-center space-x-2 ml-2 pl-2 border-l border-gray-200">
                     {/* Credit Balance Display */}
-                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-white/10 rounded-lg backdrop-blur-sm hover:bg-white/15 transition-colors">
-                      <Wallet className="h-4 w-4 text-white" />
+                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                      <Wallet className="h-4 w-4 text-gray-600" />
                       <div className="flex flex-col">
                         {creditData.trialInfo.isActive ? (
                           <>
-                            <span className="text-xs font-semibold text-white leading-tight">
+                            <span className="text-xs font-semibold text-gray-800 leading-tight">
                               {creditData.trialInfo.billsRemaining} Free Bill{creditData.trialInfo.billsRemaining !== 1 ? 's' : ''}
                             </span>
-                            <span className="text-xs text-blue-200 leading-tight">Trial Active</span>
+                            <span className="text-xs text-gray-500 leading-tight">Trial Active</span>
                           </>
                         ) : (
                           <>
                             <span className={cn(
                               "text-xs font-semibold leading-tight",
-                              hasInsufficientBalance ? "text-red-200" : "text-white"
+                              hasInsufficientBalance ? "text-red-600" : "text-gray-800"
                             )}>
                               ₹{creditData.balance.toFixed(2)}
                             </span>
-                            <span className="text-xs text-blue-200 leading-tight">Balance</span>
+                            <span className="text-xs text-gray-500 leading-tight">Balance</span>
                           </>
                         )}
                       </div>
                       {/* Insufficient Balance Warning Badge */}
                       {hasInsufficientBalance && (
                         <div className="ml-1">
-                          <AlertCircle className="h-4 w-4 text-red-300 animate-pulse" />
+                          <AlertCircle className="h-4 w-4 text-red-500 animate-pulse" />
                         </div>
                       )}
                     </div>
-                    
+
                     {/* Insufficient Balance Warning Tooltip */}
                     {hasInsufficientBalance && (
-                      <div className="hidden xl:flex items-center px-2 py-1 bg-red-500/20 border border-red-400/30 rounded-md backdrop-blur-sm">
-                        <AlertCircle className="h-3 w-3 text-red-200 mr-1.5" />
-                        <span className="text-xs text-red-100 font-medium whitespace-nowrap">
+                      <div className="hidden xl:flex items-center px-2 py-1 bg-red-50 border border-red-200 rounded-md">
+                        <AlertCircle className="h-3 w-3 text-red-500 mr-1.5" />
+                        <span className="text-xs text-red-600 font-medium whitespace-nowrap">
                           Low balance
                         </span>
                       </div>
                     )}
-                    
+
                     {/* Top-up Button */}
                     <Button
                       onClick={() => setShowTopupDialog(true)}
                       size="sm"
                       className={cn(
                         "shadow-sm",
-                        hasInsufficientBalance 
-                          ? "bg-red-500 text-white hover:bg-red-600 animate-pulse" 
-                          : "bg-white text-blue-600 hover:bg-blue-50"
+                        hasInsufficientBalance
+                          ? "bg-red-500 text-white hover:bg-red-600 animate-pulse"
+                          : "bg-blue-600 text-white hover:bg-blue-700"
                       )}
                     >
                       <Plus className="h-4 w-4 mr-1" />
@@ -381,22 +381,22 @@ export default function Navigation() {
                 )}
                 
                 {/* User Menu */}
-                <div className="flex items-center ml-2 pl-2 border-l border-blue-500/40">
+                <div className="flex items-center ml-2 pl-2 border-l border-gray-200">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="flex items-center space-x-2 text-white hover:bg-white/20">
-                        <div className="bg-white/20 p-1.5 rounded-full">
-                          <User className="h-4 w-4 text-white" />
+                      <Button variant="ghost" size="sm" className="flex items-center space-x-2 text-gray-700 hover:bg-gray-100">
+                        <div className="bg-gray-100 p-1.5 rounded-full">
+                          <User className="h-4 w-4 text-gray-600" />
                         </div>
                         <div className="flex flex-col items-start">
-                          <span className="text-sm text-white font-medium">
+                          <span className="text-sm text-gray-800 font-medium">
                             {session.user?.name || session.user?.email}
                           </span>
-                          <span className="text-xs text-blue-200 font-medium">
+                          <span className="text-xs text-gray-500 font-medium">
                             {getRoleLabel(role)}
                           </span>
                         </div>
-                        <ChevronDown className="h-4 w-4 text-white" />
+                        <ChevronDown className="h-4 w-4 text-gray-500" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56 bg-white/95 backdrop-blur-sm">
@@ -431,10 +431,10 @@ export default function Navigation() {
               </>
             ) : !isOnAuthPage ? (
               <div className="flex items-center space-x-2">
-                <Button asChild variant="ghost" size="sm" className="text-white hover:bg-white/20">
+                <Button asChild variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-100">
                   <Link href="/auth/signin">Sign In</Link>
                 </Button>
-                <Button asChild size="sm" className="bg-white text-blue-600 hover:bg-blue-50">
+                <Button asChild size="sm" className="bg-blue-600 text-white hover:bg-blue-700">
                   <Link href="/auth/signup">Sign Up</Link>
                 </Button>
               </div>
@@ -445,7 +445,7 @@ export default function Navigation() {
           <Button
             variant="ghost"
             size="sm"
-            className="md:hidden text-white hover:bg-white/20"
+            className="md:hidden text-gray-700 hover:bg-gray-100"
             onClick={() => setIsOpen(!isOpen)}
           >
             {isOpen ? <X className="h-5 w-5 sm:h-6 sm:w-6" /> : <Menu className="h-5 w-5 sm:h-6 sm:w-6" />}
@@ -454,21 +454,21 @@ export default function Navigation() {
 
         {/* Mobile Navigation */}
         {isOpen && (
-          <div className="md:hidden py-4 border-t border-blue-500/40 bg-blue-700/50 backdrop-blur-sm rounded-b-lg">
+          <div className="md:hidden py-4 border-t border-gray-200 bg-white rounded-b-lg">
             <div className="flex flex-col space-y-2">
               {session ? (
                 <>
                   {/* User Info */}
-                  <div className="px-4 py-2 bg-white/10 rounded-lg mb-2 backdrop-blur-sm">
+                  <div className="px-4 py-2 bg-gray-100 rounded-lg mb-2">
                     <div className="flex items-center space-x-2">
-                      <div className="bg-white/20 p-1.5 rounded-full">
-                        <User className="h-4 w-4 text-white" />
+                      <div className="bg-gray-200 p-1.5 rounded-full">
+                        <User className="h-4 w-4 text-gray-600" />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-sm text-white font-medium">
+                        <span className="text-sm text-gray-800 font-medium">
                           {session.user?.name || session.user?.email}
                         </span>
-                        <span className="text-xs text-blue-200 font-medium">
+                        <span className="text-xs text-gray-500 font-medium">
                           {getRoleLabel(role)}
                         </span>
                       </div>
@@ -477,57 +477,51 @@ export default function Navigation() {
                   
                   {/* Credit Balance & Top-up - Mobile - Show for all authenticated users */}
                   {creditData && (
-                    <div className="px-4 py-3 bg-white/10 rounded-lg mb-3 backdrop-blur-sm space-y-2">
+                    <div className="px-4 py-3 bg-gray-100 rounded-lg mb-3 space-y-2">
                       {/* Balance Display */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
-                          <Wallet className="h-4 w-4 text-white" />
-                          <span className="text-xs text-blue-200 font-medium">
+                          <Wallet className="h-4 w-4 text-gray-600" />
+                          <span className="text-xs text-gray-500 font-medium">
                             {creditData.trialInfo.isActive ? 'Trial Balance' : 'Credit Balance'}
                           </span>
                         </div>
                         <div className="flex items-center space-x-1.5">
                           {creditData.trialInfo.isActive ? (
-                            <span className="text-sm font-bold text-white">
+                            <span className="text-sm font-bold text-gray-800">
                               {creditData.trialInfo.billsRemaining} Free Bill{creditData.trialInfo.billsRemaining !== 1 ? 's' : ''}
                             </span>
                           ) : (
                             <span className={cn(
                               "text-sm font-bold",
-                              hasInsufficientBalance ? "text-red-200" : "text-white"
+                              hasInsufficientBalance ? "text-red-600" : "text-gray-800"
                             )}>
                               ₹{creditData.balance.toFixed(2)}
                             </span>
                           )}
-                          {/* Insufficient Balance Warning Badge */}
                           {hasInsufficientBalance && (
-                            <AlertCircle className="h-4 w-4 text-red-300 animate-pulse" />
+                            <AlertCircle className="h-4 w-4 text-red-500 animate-pulse" />
                           )}
                         </div>
                       </div>
-                      
-                      {/* Insufficient Balance Warning Message */}
+
                       {hasInsufficientBalance && (
-                        <div className="flex items-start space-x-2 p-2 bg-red-500/20 border border-red-400/30 rounded-md">
-                          <AlertCircle className="h-4 w-4 text-red-200 flex-shrink-0 mt-0.5" />
-                          <p className="text-xs text-red-100 font-medium">
+                        <div className="flex items-start space-x-2 p-2 bg-red-50 border border-red-200 rounded-md">
+                          <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-red-600 font-medium">
                             You can't create the bill with insufficient balance
                           </p>
                         </div>
                       )}
-                      
-                      {/* Top-up Button */}
+
                       <Button
-                        onClick={() => {
-                          setShowTopupDialog(true);
-                          setIsOpen(false);
-                        }}
+                        onClick={() => { setShowTopupDialog(true); setIsOpen(false); }}
                         size="sm"
                         className={cn(
                           "w-full shadow-sm",
-                          hasInsufficientBalance 
-                            ? "bg-red-500 text-white hover:bg-red-600 animate-pulse" 
-                            : "bg-white text-blue-600 hover:bg-blue-50"
+                          hasInsufficientBalance
+                            ? "bg-red-500 text-white hover:bg-red-600 animate-pulse"
+                            : "bg-blue-600 text-white hover:bg-blue-700"
                         )}
                       >
                         <Plus className="h-4 w-4 mr-2" />
@@ -549,8 +543,8 @@ export default function Navigation() {
                             variant={isActive ? "secondary" : "ghost"}
                             size="sm"
                             className={cn(
-                              "w-full justify-start flex items-center space-x-2 text-white hover:bg-white/20",
-                              isActive && "bg-white/25 hover:bg-white/30 font-semibold"
+                              "w-full justify-start flex items-center space-x-2 text-gray-700 hover:bg-gray-100",
+                              isActive && "bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold"
                             )}
                             onClick={() => setIsOpen(false)}
                           >
@@ -570,7 +564,7 @@ export default function Navigation() {
                     return (
                       <div key={group.name} className="space-y-1">
                         {/* Group Header */}
-                        <div className="flex items-center space-x-2 px-2 py-1 text-xs font-semibold text-blue-200 uppercase tracking-wide">
+                        <div className="flex items-center space-x-2 px-2 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wide">
                           <GroupIcon className="h-3 w-3" />
                           <span>{group.name}</span>
                         </div>
@@ -586,8 +580,8 @@ export default function Navigation() {
                               variant={isActive ? "secondary" : "ghost"}
                               size="sm"
                               className={cn(
-                                "w-full justify-start flex items-center space-x-2 ml-4 text-white hover:bg-white/20",
-                                isActive && "bg-white/25 hover:bg-white/30 font-semibold"
+                                "w-full justify-start flex items-center space-x-2 ml-4 text-gray-700 hover:bg-gray-100",
+                                isActive && "bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold"
                               )}
                               onClick={() => setIsOpen(false)}
                             >
@@ -603,12 +597,12 @@ export default function Navigation() {
                   })}
                   
                   {/* User Menu Actions */}
-                  <div className="pt-2 border-t border-blue-500/40 mt-2 space-y-1">
+                  <div className="pt-2 border-t border-gray-200 mt-2 space-y-1">
                     <Button
                       asChild
                       variant="ghost"
                       size="sm"
-                      className="w-full justify-start text-white hover:bg-white/20"
+                      className="w-full justify-start text-gray-700 hover:bg-gray-100"
                     >
                       <Link href="/profile" onClick={() => setIsOpen(false)}>
                         <User className="h-4 w-4" />
@@ -619,7 +613,7 @@ export default function Navigation() {
                       asChild
                       variant="ghost"
                       size="sm"
-                      className="w-full justify-start text-white hover:bg-white/20"
+                      className="w-full justify-start text-gray-700 hover:bg-gray-100"
                     >
                       <Link href="/settings/api-keys" onClick={() => setIsOpen(false)}>
                         <Key className="h-4 w-4" />
@@ -630,7 +624,7 @@ export default function Navigation() {
                       asChild
                       variant="ghost"
                       size="sm"
-                      className="w-full justify-start text-white hover:bg-white/20"
+                      className="w-full justify-start text-gray-700 hover:bg-gray-100"
                     >
                       <Link href="/billing" onClick={() => setIsOpen(false)}>
                         <CreditCard className="h-4 w-4" />
@@ -644,7 +638,7 @@ export default function Navigation() {
                       }}
                       variant="ghost"
                       size="sm"
-                      className="w-full justify-start text-red-200 hover:text-red-100 hover:bg-red-500/20"
+                      className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
                     >
                       <LogOut className="h-4 w-4" />
                       <span className="ml-2">Sign Out</span>
@@ -653,10 +647,10 @@ export default function Navigation() {
                 </>
               ) : !isOnAuthPage ? (
                 <div className="flex flex-col space-y-2">
-                  <Button asChild variant="ghost" size="sm" className="text-white hover:bg-white/20" onClick={() => setIsOpen(false)}>
+                  <Button asChild variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-100" onClick={() => setIsOpen(false)}>
                     <Link href="/auth/signin">Sign In</Link>
                   </Button>
-                  <Button asChild size="sm" className="bg-white text-blue-600 hover:bg-blue-50" onClick={() => setIsOpen(false)}>
+                  <Button asChild size="sm" className="bg-blue-600 text-white hover:bg-blue-700" onClick={() => setIsOpen(false)}>
                     <Link href="/auth/signup">Sign Up</Link>
                   </Button>
                 </div>
