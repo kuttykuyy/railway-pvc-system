@@ -141,7 +141,7 @@ export default function RootLayout({
         {/* Google AdSense Integration */}
         <script 
           async 
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6838761496784699" 
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6836761436784639" 
           crossOrigin="anonymous"
         />
         <script src="https://apps.abacus.ai/chatllm/appllm-lib.js"></script>
