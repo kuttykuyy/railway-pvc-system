@@ -172,7 +172,7 @@ export default function RootLayout({
                 window.addEventListener('load', function() {
                   try {
                     // Only register if we're not in test mode and on specific domains
-                    var allowedDomains = ['localhost', 'irpvc.in'];
+                    var allowedDomains = ['irpvc.in'];
                     var isAllowedDomain = allowedDomains.some(function(domain) {
                       return window.location.hostname === domain;
                     });

@@ -12,7 +12,7 @@ export default function ServiceWorkerUpdate() {
   useEffect(() => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       // Only register on specific allowed domains (skip preview domains)
-      const allowedDomains = ['localhost', 'irpvc.in'];
+      const allowedDomains = ['irpvc.in'];
       const isAllowedDomain = allowedDomains.some(domain => window.location.hostname === domain);
       const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
       
