@@ -1,4 +1,4 @@
-
+﻿
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -658,7 +658,7 @@ export async function POST(request: NextRequest) {
         const extType = ext.extensionType === 'EOT_5B' ? 'EOT (Cl. 5B)' 
           : ext.extensionType === 'EOT_5C' ? 'EOT (Cl. 5C)' 
           : ext.extensionType === 'RESCHEDULE' ? 'Reschedule'
-          : ext.extensionType || '—';
+          : ext.extensionType || 'â€”';
         
         return [
           idx + 1,
@@ -667,7 +667,7 @@ export async function POST(request: NextRequest) {
           format(new Date(ext.extendedCompletionDate), 'dd MMM yyyy'),
           `${ext.extensionDuration} days`,
           ext.isPvcRestricted ? 'Yes' : 'No',
-          ext.orderNumber || '—'
+          ext.orderNumber || 'â€”'
         ];
       });
 
@@ -717,9 +717,9 @@ export async function POST(request: NextRequest) {
       return [
         index + 1,
         bill.billNo,
-        bill.pvcNumber || '—',
+        bill.pvcNumber || 'â€”',
         format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy'),
-        bill.quarter || '—',
+        bill.quarter || 'â€”',
         calculatedTotal.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })
       ];
     });
@@ -928,7 +928,7 @@ export async function POST(request: NextRequest) {
                   if (steelTypeEnumToIndexName[st]) affectedIndexNames.add(steelTypeEnumToIndexName[st]);
                 }
               } else {
-                // No specific steel types — include all steel
+                // No specific steel types â€” include all steel
                 allSteelIndexNamesList.forEach(n => affectedIndexNames.add(n));
               }
             }
@@ -1727,7 +1727,7 @@ export async function POST(request: NextRequest) {
         pdf.setFontSize(16);
         pdf.setFont("helvetica", "bold");
         pdf.setTextColor(255, 0, 0); // Red color for warning
-        pdf.text("⚠ WORK CLASSIFICATION NOT ASSIGNED", marginLeft, yPosition);
+        pdf.text("âš  WORK CLASSIFICATION NOT ASSIGNED", marginLeft, yPosition);
         pdf.setTextColor(0, 0, 0); // Reset to black
         
         yPosition += 10;
@@ -1966,7 +1966,7 @@ export async function POST(request: NextRequest) {
             
             if (cementDetails) {
               const cementPvc = cementDetails.finalPvc;
-              const cementFormula = `${bill.cementAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })} × [(${cementDetails.averageIndex.toFixed(2)} - ${cementDetails.baseIndex.toFixed(2)}) ÷ ${cementDetails.baseIndex.toFixed(2)}] × 85%`;
+              const cementFormula = `${bill.cementAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Ã— [(${cementDetails.averageIndex.toFixed(2)} - ${cementDetails.baseIndex.toFixed(2)}) Ã· ${cementDetails.baseIndex.toFixed(2)}] Ã— 85%`;
               
               const cementTableData = [
                 [
@@ -2060,7 +2060,7 @@ export async function POST(request: NextRequest) {
                 
                 if (steelDetails) {
                   const steelPvc = steelDetails.finalPvc;
-                  const steelFormula = `${component.amount.toLocaleString('en-IN', { maximumFractionDigits: 1 })} × [(${steelDetails.averageIndex.toFixed(2)} - ${steelDetails.baseIndex.toFixed(2)}) ÷ ${steelDetails.baseIndex.toFixed(2)}] × 85%`;
+                  const steelFormula = `${component.amount.toLocaleString('en-IN', { maximumFractionDigits: 1 })} Ã— [(${steelDetails.averageIndex.toFixed(2)} - ${steelDetails.baseIndex.toFixed(2)}) Ã· ${steelDetails.baseIndex.toFixed(2)}] Ã— 85%`;
                   
                   const steelTableData = [
                     [
@@ -2362,11 +2362,11 @@ export async function POST(request: NextRequest) {
                 let formula: string;
                 if (steelIndexNamesToUse.length === 1) {
                   // Single steel type - show the type name
-                  formula = `${entryAmount.toLocaleString('en-IN')} × [(${steelCurrentIndex.toFixed(2)} - ${steelBaseIndex.toFixed(2)}) ÷ ${steelBaseIndex.toFixed(2)}] × ${percentText} (${steelIndexNamesToUse[0]})`;
+                  formula = `${entryAmount.toLocaleString('en-IN')} Ã— [(${steelCurrentIndex.toFixed(2)} - ${steelBaseIndex.toFixed(2)}) Ã· ${steelBaseIndex.toFixed(2)}] Ã— ${percentText} (${steelIndexNamesToUse[0]})`;
                 } else {
                   // Multiple steel types - show averaging
                   const steelTypeNames = steelIndexNamesToUse.join(', ');
-                  formula = `${entryAmount.toLocaleString('en-IN')} × [(${steelCurrentIndex.toFixed(2)} - ${steelBaseIndex.toFixed(2)}) ÷ ${steelBaseIndex.toFixed(2)}] × ${percentText} (Avg of: ${steelTypeNames})`;
+                  formula = `${entryAmount.toLocaleString('en-IN')} Ã— [(${steelCurrentIndex.toFixed(2)} - ${steelBaseIndex.toFixed(2)}) Ã· ${steelBaseIndex.toFixed(2)}] Ã— ${percentText} (Avg of: ${steelTypeNames})`;
                 }
                 
                 componentData.push([
@@ -2374,9 +2374,9 @@ export async function POST(request: NextRequest) {
                   formula,
                   pvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })
                 ]);
-                console.log(`✓ Steel component added to PDF with formula: ${formula}`);
+                console.log(`âœ“ Steel component added to PDF with formula: ${formula}`);
               } else {
-                console.log(`✗ Steel component NOT added - indices missing or zero`);
+                console.log(`âœ— Steel component NOT added - indices missing or zero`);
                 console.log(`   Base values: ${steelBaseValues.length}, Current values: ${steelCurrentValues.length}`);
                 console.log(`   steelBaseIndex: ${steelBaseIndex}, steelCurrentIndex: ${steelCurrentIndex}`);
                 
@@ -2409,7 +2409,7 @@ export async function POST(request: NextRequest) {
               );
               
               const pvcAmount = calcResult.finalPvc;
-              const formula = `${entryAmount.toLocaleString('en-IN')} × [(${currentIndex.toFixed(2)} - ${baseIndex.toFixed(2)}) ÷ ${baseIndex.toFixed(2)}] × ${percentText}`;
+              const formula = `${entryAmount.toLocaleString('en-IN')} Ã— [(${currentIndex.toFixed(2)} - ${baseIndex.toFixed(2)}) Ã· ${baseIndex.toFixed(2)}] Ã— ${percentText}`;
               componentData.push([
                 `${displayName} (${percentText})`,
                 formula,

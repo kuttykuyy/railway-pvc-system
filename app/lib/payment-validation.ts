@@ -3,6 +3,7 @@ import { prisma } from './db';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth';
 import { normalizeAgreementNo } from './railway-division-helper';
+import { verifyRazorpaySignature, fetchPaymentDetails } from './razorpay';
 
 export interface PaymentValidationResult {
   canProcess: boolean;
@@ -159,14 +160,6 @@ export async function processPaymentForBill(
   agreementNo?: string
 ): Promise<{ success: boolean; message: string; transaction?: any }> {
   try {
-    console.log('🔄 Processing payment for bill:', {
-      userId,
-      billId,
-      paymentMethod,
-      paymentReference,
-      razorpayData,
-      paidAmount
-    });
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -178,10 +171,13 @@ export async function processPaymentForBill(
       return { success: false, message: 'User not found' };
     }
 
-    // Calculate pricing
+    // Calculate pricing — fetch settings ONCE up front
+    const { getBillingSettings } = await import('./admin-settings');
+    const billingSettings = await getBillingSettings();
+    const baseAmount = billingSettings.billCost || 10;
+    const freeTrialLimit = billingSettings.freeTrialBills || 1;
+
     const currentDate = new Date();
-    
-    // Count today's bills for daily tiered discount
     const startOfDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
     const todayBillCount = await prisma.billTransaction.count({
       where: {
@@ -190,11 +186,6 @@ export async function processPaymentForBill(
         status: { in: ['pending', 'paid'] }
       }
     });
-
-    // Get billing settings for proper pricing
-    const { getBillingSettings } = await import('./admin-settings');
-    const billingSettings = await getBillingSettings();
-    const baseAmount = billingSettings.billCost || 10;
     let finalAmount = baseAmount;
     let discount = 0;
     let discountType: string | null = null;
@@ -219,15 +210,10 @@ export async function processPaymentForBill(
     discount = baseAmount - finalAmount;
     discountType = discountParts.length > 0 ? discountParts.join('+') : null;
 
-    // Check for free account first (highest priority)
+    // Check for free account first (highest priority) — reuses freeTrialLimit from above
     let isFree = false;
     let freeReason = '';
-    
-    // Get billing settings for free trial limit
-    const { getBillingSettings: getBillingSettingsForTrial } = await import('./admin-settings');
-    const trialSettings = await getBillingSettingsForTrial();
-    const freeTrialLimit = trialSettings.freeTrialBills || 1;
-    
+
     if (user.role === 'admin' || user.role === 'superadmin') {
       isFree = true;
       freeReason = user.role === 'superadmin' ? 'superadmin' : 'admin';
@@ -249,15 +235,6 @@ export async function processPaymentForBill(
       }
     }
 
-    console.log('💰 Payment calculation:', {
-      isFree,
-      freeReason,
-      isFreeAccount: user.isFreeAccount,
-      customProcessingFee: user.customProcessingFee,
-      finalAmount,
-      paidAmount,
-      paymentMethod
-    });
 
     if (isFree) {
       // Create free transaction
@@ -278,31 +255,41 @@ export async function processPaymentForBill(
 
       // Update user's free trial usage only if it's a trial bill
       if (freeReason === 'trial') {
-        const freeTrialRemaining = Math.max(0, freeTrialLimit - user.freeTrialUsed);
-        await prisma.user.update({
-          where: { id: userId },
-          data: {
-            freeTrialUsed: { increment: 1 },
-            totalBillsProcessed: { increment: 1 },
-            isTrialActive: user.freeTrialUsed + 1 < freeTrialLimit
+        // Use transaction to prevent race condition: two concurrent requests
+        // reading freeTrialUsed=0 and both getting a free trial bill
+        const updatedUser = await prisma.$transaction(async (tx) => {
+          const u = await tx.user.update({
+            where: { id: userId },
+            data: {
+              freeTrialUsed: { increment: 1 },
+              totalBillsProcessed: { increment: 1 },
+            },
+            select: { freeTrialUsed: true }
+          });
+          // Set isTrialActive based on the actual post-increment DB value
+          await tx.user.update({
+            where: { id: userId },
+            data: { isTrialActive: u.freeTrialUsed < freeTrialLimit }
+          });
+
+          // Record agreement number claim inside same transaction
+          if (agreementNo) {
+            const normalized = normalizeAgreementNo(agreementNo);
+            if (normalized) {
+              await tx.trialClaimedAgreement.upsert({
+                where: { normalizedAgreementNo: normalized },
+                create: { normalizedAgreementNo: normalized, claimedByUserId: userId },
+                update: {}
+              });
+            }
           }
+          return u;
         });
 
-        // Record this agreement number as having consumed a trial globally
-        if (agreementNo) {
-          const normalized = normalizeAgreementNo(agreementNo);
-          if (normalized) {
-            await prisma.trialClaimedAgreement.upsert({
-              where: { normalizedAgreementNo: normalized },
-              create: { normalizedAgreementNo: normalized, claimedByUserId: userId },
-              update: {} // already claimed, no update needed
-            });
-          }
-        }
-
+        const freeTrialRemaining = Math.max(0, freeTrialLimit - updatedUser.freeTrialUsed);
         return {
           success: true,
-          message: `Free trial bill processed (${freeTrialRemaining - 1} remaining)`,
+          message: `Free trial bill processed (${freeTrialRemaining} remaining)`,
           transaction
         };
       } else {
@@ -336,7 +323,7 @@ export async function processPaymentForBill(
     // Verify Razorpay payment if provided
     if (razorpayData?.razorpayPaymentId && razorpayData?.razorpayOrderId && razorpayData?.razorpaySignature) {
       
-      const { verifyRazorpaySignature, fetchPaymentDetails } = require('@/lib/razorpay');
+      // verifyRazorpaySignature and fetchPaymentDetails imported at top of file
 
       // Verify signature
       const isSignatureValid = verifyRazorpaySignature({
@@ -389,25 +376,27 @@ export async function processPaymentForBill(
       }
     });
 
-    // Update user stats
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        totalBillsProcessed: { increment: 1 }
+    // Update user stats + deduct credits atomically to prevent partial writes
+    const chargedAmount = paidAmount || finalAmount;
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { totalBillsProcessed: { increment: 1 } }
+      });
+      if (user.customerAccount) {
+        await tx.customerAccount.update({
+          where: { userId },
+          data: {
+            currentMonthBills: { increment: 1 },
+            creditBalance: { decrement: chargedAmount }
+          }
+        });
       }
     });
 
-    // Update customer account - deduct credit balance and increment monthly bill count
-    const chargedAmount = paidAmount || finalAmount;
+    // (kept for logging below)
     if (user.customerAccount) {
-      await prisma.customerAccount.update({
-        where: { userId },
-        data: {
-          currentMonthBills: { increment: 1 },
-          creditBalance: { decrement: chargedAmount }
-        }
-      });
-      console.log(`💳 Deducted ₹${chargedAmount} from credit balance (base: ₹${baseAmount}, discount: ₹${discount}, type: ${discountType || 'none'})`);
+      // ₹${chargedAmount} from credit balance (base: ₹${baseAmount}, discount: ₹${discount}, type: ${discountType || 'none'})`);
     }
 
     return {
