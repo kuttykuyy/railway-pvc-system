@@ -284,7 +284,16 @@ export async function POST(request: NextRequest) {
     }
 
     // ===== STEP 4B: Block trial if this agreement number already claimed globally =====
-    if (paymentValidation.isFree && user.isTrialActive) {
+    // Only applies to actual trial users — not admins, railway officials, or free accounts
+    const isActualTrialBill =
+      paymentValidation.isFree &&
+      user.isTrialActive &&
+      user.role !== 'admin' &&
+      user.role !== 'superadmin' &&
+      user.role !== 'railway_official' &&
+      !user.isFreeAccount &&
+      user.customProcessingFee !== 0;
+    if (isActualTrialBill) {
       const { normalizeAgreementNo } = await import('@/lib/railway-division-helper');
       const normalizedNo = normalizeAgreementNo(contract.agreementNo);
       if (normalizedNo) {

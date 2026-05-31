@@ -412,7 +412,8 @@ export async function POST(request: NextRequest) {
       undefined,
       undefined,
       isFreeAccount ? 0 : billCost,
-      pvcResult.totalPvc || 0
+      pvcResult.totalPvc || 0,
+      contract.agreementNo  // pass agreementNo so trial claims are recorded
     );
     
     if (!paymentResult.success) {

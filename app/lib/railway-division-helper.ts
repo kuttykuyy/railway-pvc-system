@@ -104,7 +104,17 @@ export function normalizeAgreementNo(agreementNo: string): string {
   const segments = agreementNo
     .toUpperCase()
     .split('/')
-    .map(s => s.trim().replace(/[^A-Z0-9]/g, ''));
+    .map(s =>
+      s
+        .trim()
+        // Collapse multiple spaces/dots into nothing
+        .replace(/[\s.]+/g, '')
+        // Strip trailing non-alphanumeric/hyphen chars (abuse characters like extra letters)
+        // but keep internal hyphens which are part of valid agreement number formats
+        .replace(/[^A-Z0-9-]/g, '')
+        // Remove trailing hyphens
+        .replace(/-+$/, '')
+    );
   // Remove trailing empty segments
   while (segments.length > 0 && segments[segments.length - 1] === '') {
     segments.pop();

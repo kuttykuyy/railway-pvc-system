@@ -304,21 +304,23 @@ export async function getUserAccessibleBills(userId: string): Promise<string[]> 
     }
 
     if (user?.role === 'railway_official') {
-      // Always include bills from contracts owned by this user
-      const ownedContractIds = await getUserAccessibleContracts(userId);
-      const ownedContractBills = await prisma.bill.findMany({
-        where: { contractId: { in: ownedContractIds } },
+      // Get owned contracts directly (avoids extra getUserAccessibleContracts call)
+      const ownedContracts = await prisma.contract.findMany({
+        where: { userId },
         select: { id: true }
       });
+      const ownedContractIds = ownedContracts.map(c => c.id);
 
-      if (!user.railwayZone) {
-        return ownedContractBills.map(b => b.id);
-      }
-      // Official can access all bills matching their zone
-      const zoneBills = await prisma.bill.findMany({
-        where: { zone: user.railwayZone },
-        select: { id: true }
-      });
+      // Run owned-contract bills and zone bills in parallel
+      const [ownedContractBills, zoneBills] = await Promise.all([
+        ownedContractIds.length > 0
+          ? prisma.bill.findMany({ where: { contractId: { in: ownedContractIds } }, select: { id: true } })
+          : Promise.resolve([]),
+        user.railwayZone
+          ? prisma.bill.findMany({ where: { zone: user.railwayZone }, select: { id: true } })
+          : Promise.resolve([])
+      ]);
+
       return [...new Set([...ownedContractBills.map(b => b.id), ...zoneBills.map(b => b.id)])];
     }
 
