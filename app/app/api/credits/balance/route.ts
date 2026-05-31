@@ -54,36 +54,26 @@ export async function GET(request: NextRequest) {
       currentBalance = user.customerAccount.creditBalance || 0;
     }
 
-    // Check if user has ever topped up credits (i.e., is a paid user)
-    const creditTopupCount = await withPrismaErrorHandling(() => prisma.creditTransaction.count({
-      where: {
-        userId: user.id,
-        type: 'add'
-      }
-    }));
-    const isPaidUser = creditTopupCount > 0;
-    
-    // Calculate if user can afford next bill
-    // Free accounts/superadmins can always afford next bill
-    const canAffordNextBill = isFree || !isPaidUser || isTrialActive || currentBalance >= billCost;
-    // Only show warning for users who have actually paid/topped up their account and are not free
-    const showLowCreditWarning = !isFree && !isTrialActive && isPaidUser && currentBalance < (billCost * 2) && currentBalance >= billCost;
-
-    // Get monthly bill count
+    // Run independent DB queries in parallel — saves one full round-trip
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
-    
-    const monthlyBillCount = await withPrismaErrorHandling(() => prisma.bill.count({
-      where: {
-        contract: {
-          userId: user.id
-        },
-        createdAt: {
-          gte: startOfMonth
+
+    const [creditTopupCount, monthlyBillCount] = await Promise.all([
+      withPrismaErrorHandling(() => prisma.creditTransaction.count({
+        where: { userId: user.id, type: 'add' }
+      })),
+      withPrismaErrorHandling(() => prisma.bill.count({
+        where: {
+          contract: { userId: user.id },
+          createdAt: { gte: startOfMonth }
         }
-      }
-    }));
+      }))
+    ]);
+
+    const isPaidUser = creditTopupCount > 0;
+    const canAffordNextBill = isFree || !isPaidUser || isTrialActive || currentBalance >= billCost;
+    const showLowCreditWarning = !isFree && !isTrialActive && isPaidUser && currentBalance < (billCost * 2) && currentBalance >= billCost;
 
     // Determine account tier
     let accountTier = 'Free Trial';
@@ -124,6 +114,12 @@ export async function GET(request: NextRequest) {
         tier: accountTier,
         monthlyBillCount,
         status: canAffordNextBill ? 'active' : 'insufficient_balance',
+      }
+    }, {
+      headers: {
+        // Private (user-specific) — browser may serve stale for 30s while revalidating
+        // Halves perceived latency on navigation re-renders without stale balance risk
+        'Cache-Control': 'private, max-age=15, stale-while-revalidate=30',
       }
     });
 

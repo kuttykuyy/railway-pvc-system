@@ -441,6 +441,10 @@ model Bill {
   @@index([batchId])
   @@index([status])
   @@index([approvedBy])
+  // Composite indexes for common query patterns
+  @@index([contractId, dateOfMeasurement]) // bills filtered by contract ordered by date
+  @@index([contractId, createdAt])         // bills list per contract paginated by creation
+  @@index([quarter, status])               // approval workflow queries
   @@map("bills")
 }
 
@@ -574,6 +578,7 @@ model BillTransaction {
   @@index([billId])
   @@index([status])
   @@index([createdAt])
+  @@index([userId, createdAt, status]) // daily tiered discount count query
   @@map("bill_transactions")
 }
 
@@ -832,6 +837,7 @@ model UserContractAccess {
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, contractId])
+  @@index([userId, isActive, canView]) // permissions lookup filter
   @@map("user_contract_access")
 }
 
@@ -854,6 +860,7 @@ model UserBillAccess {
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, billId])
+  @@index([userId, isActive, canView]) // permissions lookup filter
   @@map("user_bill_access")
 }
 

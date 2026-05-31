@@ -12,7 +12,9 @@ import rateLimiter, { RATE_LIMITS, getIdentifier } from './rate-limiter';
 import { handleApiError } from './error-handler';
 
 /**
- * Parse pagination parameters from request
+ * Parse offset-based pagination parameters from request.
+ * NOTE: offset pagination has O(n) cost at high page numbers — use
+ * getCursorPaginationParams for large datasets where cursor is supported.
  */
 export function getPaginationParams(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -21,6 +23,50 @@ export function getPaginationParams(request: NextRequest) {
   const skip = (page - 1) * limit;
 
   return { page, limit, skip };
+}
+
+/**
+ * Cursor-based pagination — O(1) at any depth, no offset scan.
+ *
+ * Usage in route:
+ *   const { cursor, limit } = getCursorPaginationParams(request);
+ *   const items = await prisma.bill.findMany({
+ *     take: limit + 1,          // fetch one extra to detect next page
+ *     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+ *     orderBy: { id: 'desc' },
+ *   });
+ *   return createCursorResponse(items, limit, item => item.id);
+ */
+export function getCursorPaginationParams(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const cursor = searchParams.get('cursor') || null;
+  const limit  = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)));
+  return { cursor, limit };
+}
+
+/**
+ * Create a cursor-paginated response.
+ * @param items    Raw items from DB (fetch limit+1 to detect next page)
+ * @param limit    Requested page size
+ * @param getCursor Function that extracts the cursor value from an item
+ */
+export function createCursorResponse<T>(
+  items: T[],
+  limit: number,
+  getCursor: (item: T) => string
+) {
+  const hasNextPage = items.length > limit;
+  const data = hasNextPage ? items.slice(0, limit) : items;
+  const nextCursor = hasNextPage ? getCursor(data[data.length - 1]) : null;
+
+  return {
+    data,
+    pagination: {
+      limit,
+      nextCursor,
+      hasNextPage,
+    },
+  };
 }
 
 /**

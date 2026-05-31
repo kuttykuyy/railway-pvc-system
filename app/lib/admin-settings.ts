@@ -90,26 +90,26 @@ export function clearSettingsCache(): void {
  * Get billing-related settings
  */
 export async function getBillingSettings() {
-  const [
-    billCost,
-    paymentEnabled,
-    freeTrialBills,
-    lowCreditThreshold,
-    provisionalIndicesCheckEnabled
-  ] = await Promise.all([
-    getAdminSetting('BILL_PROCESSING_COST', 99), // Default ₹99 per bill (matches DEFAULT_SETTINGS in admin/settings/route.ts)
-    getAdminSetting('PAYMENT_PROCESSING_ENABLED', true),
-    getAdminSetting('FREE_TRIAL_BILLS', 1), // Changed from 3 to 1 free trial bill
-    getAdminSetting('LOW_CREDIT_THRESHOLD', 50),
-    getAdminSetting('PROVISIONAL_INDICES_CHECK_ENABLED', true)
-  ]);
+  // Single cache read — getAdminSettings() returns a cached Map, so this is one lookup
+  const settings = await getAdminSettings();
+  const byKey = new Map(settings.map(s => [s.key, s]));
+
+  const parse = (key: string, def: any) => {
+    const s = byKey.get(key);
+    if (!s) return def;
+    switch (s.dataType) {
+      case 'number': return parseFloat(s.value) || def;
+      case 'boolean': return s.value.toLowerCase() === 'true';
+      default: return s.value;
+    }
+  };
 
   return {
-    billCost: Number(billCost),
-    paymentEnabled: Boolean(paymentEnabled),
-    freeTrialBills: Number(freeTrialBills),
-    lowCreditThreshold: Number(lowCreditThreshold),
-    provisionalIndicesCheckEnabled: Boolean(provisionalIndicesCheckEnabled)
+    billCost:                       Number(parse('BILL_PROCESSING_COST', 99)),
+    paymentEnabled:                 Boolean(parse('PAYMENT_PROCESSING_ENABLED', true)),
+    freeTrialBills:                 Number(parse('FREE_TRIAL_BILLS', 1)),
+    lowCreditThreshold:             Number(parse('LOW_CREDIT_THRESHOLD', 50)),
+    provisionalIndicesCheckEnabled: Boolean(parse('PROVISIONAL_INDICES_CHECK_ENABLED', true)),
   };
 }
 

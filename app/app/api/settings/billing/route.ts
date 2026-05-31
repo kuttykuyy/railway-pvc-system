@@ -25,10 +25,16 @@ export async function GET(req: NextRequest) {
     // Fetch billing settings from admin settings
     const settings = await getBillingSettings();
 
+    // Billing settings rarely change — cache publicly for 5 min, serve stale for 10 min
+    // Dramatically reduces DB load from the 60s navigation polling
     return NextResponse.json({
       billCost: settings.billCost,
       paymentEnabled: settings.paymentEnabled,
       freeTrialBills: settings.freeTrialBills,
+    }, {
+      headers: {
+        'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
+      }
     });
   } catch (error) {
     console.error('Error fetching billing settings:', error);
