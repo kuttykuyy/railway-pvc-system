@@ -172,30 +172,36 @@ export async function PUT(
     }
     
     // ===== STEP 2: Authentication & Authorization =====
-    const session = await getServerSession();
+    const { authOptions } = await import('@/lib/auth');
+    const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
+
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
       select: { id: true, role: true }
     });
-    
+
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-    
+
     // ===== STEP 3: Check Bill Exists and User Can Edit =====
     const existingBill = await prisma.bill.findUnique({
       where: { id },
       include: { contract: true, pvcCalculation: true }
     });
-    
+
     if (!existingBill) {
       return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
     }
-    
+
+    // 🔒 Security: contractId cannot be changed after creation — prevents moving bills between contracts
+    if (contractId && contractId !== existingBill.contractId) {
+      return NextResponse.json({ error: 'Contract cannot be changed after bill creation' }, { status: 400 });
+    }
+
     const { allowed, reason } = await canUserEditBill(user.id, id, user.role);
     if (!allowed) {
       return NextResponse.json({ error: reason || 'You do not have permission to edit this bill' }, { status: 403 });
@@ -249,8 +255,9 @@ export async function PUT(
     await prisma.bill.update({
       where: { id },
       data: {
-        contractId,
+        contractId: existingBill.contractId, // always use original contractId — immutable
         billNo,
+        editCount: { increment: 1 }, // track edit count for permission control
         grossBillAmount: parseFloat(grossBillAmount),
         billAmount: parseFloat(billAmount),
         cementAmount: parseFloat(cementAmount) || 0,

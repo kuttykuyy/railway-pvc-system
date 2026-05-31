@@ -1,9 +1,9 @@
 import { prisma } from './db';
 
 /**
- * Check if a user can edit a bill
- * Contractors can only edit a bill once
- * Admins and Railway Officials can edit anytime
+ * Check if a user can edit a bill.
+ * - Admins: always allowed
+ * - Owners: allowed once by default; unlimited if ALLOW_MULTIPLE_BILL_EDITS=true
  */
 export async function canUserEditBill(
   userId: string,
@@ -11,34 +11,37 @@ export async function canUserEditBill(
   userRole: string
 ): Promise<{ allowed: boolean; reason?: string }> {
   try {
-    // Get the bill with its contract to check ownership and edit history
     const bill = await prisma.bill.findUnique({
       where: { id: billId },
-      include: {
-        contract: {
-          select: {
-            userId: true
-          }
-        }
+      select: {
+        editCount: true,
+        contract: { select: { userId: true } }
       }
     });
 
-    if (!bill) {
-      return { allowed: false, reason: 'Bill not found' };
-    }
+    if (!bill) return { allowed: false, reason: 'Bill not found' };
 
-    // Admin can edit all bills
-    if (userRole === 'admin') {
-      return { allowed: true };
-    }
+    // Admins always allowed
+    if (userRole === 'admin' || userRole === 'superadmin') return { allowed: true };
 
-    // Check if user owns the bill
-    const isOwner = bill.contract.userId === userId;
-    if (!isOwner) {
+    // Ownership check
+    if (bill.contract.userId !== userId) {
       return { allowed: false, reason: 'You can only edit your own bills' };
     }
 
-    // All users can edit their own bills without restrictions
+    // Check ALLOW_MULTIPLE_BILL_EDITS admin setting
+    const setting = await prisma.adminSettings.findUnique({
+      where: { key: 'ALLOW_MULTIPLE_BILL_EDITS' }
+    });
+    const multipleEditsAllowed = setting?.value === 'true';
+
+    if (!multipleEditsAllowed && (bill.editCount ?? 0) >= 1) {
+      return {
+        allowed: false,
+        reason: 'Bills can only be edited once. Contact admin if you need further changes.'
+      };
+    }
+
     return { allowed: true };
   } catch (error) {
     console.error('Error checking bill edit permission:', error);

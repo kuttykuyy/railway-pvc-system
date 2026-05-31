@@ -399,6 +399,7 @@ model Bill {
   selectedSteelComponent   String?                   @default("Steel TMT Bars")
   steelTypes               Json?                     @default("[]") // Array of steel types for classification-based calculations: ["TMT", "ANGLE_CHANNEL", "PLATES", "OTHER_SECTIONS"]
   isFinalPvc               Boolean                   @default(false)
+  editCount                Int                       @default(0) // tracks how many times bill has been edited
   pvcNumber                String?
   zone                     String?
   fuelPriceType            String?                   @default("four_city_avg") // "four_city_avg" or "zone_city"
