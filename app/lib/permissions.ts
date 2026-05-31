@@ -1,8 +1,9 @@
+﻿import { prisma } from './db';
 
-import { PrismaClient } from '@prisma/client';
+
 import { parseAgreementNumber } from './railway-division-helper';
 
-const prisma = new PrismaClient();
+
 
 export interface UserPermissions {
   canView: boolean;
@@ -217,7 +218,13 @@ export async function checkUserBillAccess(
   }
 }
 
-export async function getUserAccessibleContracts(userId: string): Promise<string[]> {
+/**
+ * Returns accessible contract IDs for a user.
+ * Returns null for admins (meaning: unrestricted — callers must handle null
+ * by skipping the ID filter and querying all contracts directly).
+ * This avoids loading 100k+ IDs into Node.js memory at scale.
+ */
+export async function getUserAccessibleContracts(userId: string): Promise<string[] | null> {
   try {
     // Check if user is admin or official
     const user = await prisma.user.findUnique({
@@ -226,11 +233,8 @@ export async function getUserAccessibleContracts(userId: string): Promise<string
     });
 
     if (user?.role === 'admin') {
-      // Admin can access all contracts
-      const allContracts = await prisma.contract.findMany({
-        select: { id: true }
-      });
-      return allContracts.map(c => c.id);
+      // null = unrestricted access — do NOT fetch all IDs (memory cliff at scale)
+      return null;
     }
 
     if (user?.role === 'railway_official') {
@@ -287,7 +291,11 @@ export async function getUserAccessibleContracts(userId: string): Promise<string
   }
 }
 
-export async function getUserAccessibleBills(userId: string): Promise<string[]> {
+/**
+ * Returns accessible bill IDs for a user.
+ * Returns null for admins (meaning: unrestricted — callers skip the ID filter).
+ */
+export async function getUserAccessibleBills(userId: string): Promise<string[] | null> {
   try {
     // Check if user is admin or official
     const user = await prisma.user.findUnique({
@@ -296,11 +304,7 @@ export async function getUserAccessibleBills(userId: string): Promise<string[]> 
     });
 
     if (user?.role === 'admin') {
-      // Admin can access all bills
-      const allBills = await prisma.bill.findMany({
-        select: { id: true }
-      });
-      return allBills.map(b => b.id);
+      return null; // unrestricted
     }
 
     if (user?.role === 'railway_official') {

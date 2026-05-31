@@ -1,9 +1,9 @@
-
+﻿import { prisma } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+
 import { validateAdminAccess } from '@/lib/role-auth';
 
-const prisma = new PrismaClient();
+
 
 // PUT - Update sub-classification
 export async function PUT(

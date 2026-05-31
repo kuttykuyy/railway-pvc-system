@@ -64,100 +64,80 @@ export async function GET(request: NextRequest) {
         // Get pagination parameters
         const { page, limit, skip } = getPaginationParams(request);
         
-        // Get accessible bill IDs based on permissions
-        let accessibleBillIds = await getUserAccessibleBills(user.id);
-        
-        // If contractId is specified, filter by contract and check contract access
+        // Get accessible bill IDs — null means admin (unrestricted, no ID list needed)
+        const accessibleBillIds = await getUserAccessibleBills(user.id);
+        const isUnrestricted = accessibleBillIds === null;
+
+        // Build where clause — admins get no ID filter (avoids loading all IDs into memory)
+        let billsWhere: Record<string, any> = isUnrestricted ? {} : { id: { in: accessibleBillIds } };
+
+        // If contractId is specified, check contract access and narrow the filter
         if (contractId) {
           const contractAccess = await checkUserContractAccess(user.id, contractId);
           if (!contractAccess?.canView) {
             return NextResponse.json({ error: 'Access denied to this contract' }, { status: 403 });
           }
-          
-          // Get bills only from this contract that user has access to
-          const contractBills = await prisma.bill.findMany({
-            where: { 
-              contractId: contractId,
-              id: { in: accessibleBillIds }
-            },
-            select: { id: true }
-          });
-          
-          accessibleBillIds = contractBills.map(b => b.id);
+          billsWhere = { ...billsWhere, contractId };
         }
-        
-        if (accessibleBillIds.length === 0) {
-          return NextResponse.json(
-            createPaginatedResponse([], 0, page, limit)
-          );
+
+        // Early-exit only for non-admin users with empty access list
+        if (!isUnrestricted && (accessibleBillIds as string[]).length === 0) {
+          return NextResponse.json(createPaginatedResponse([], 0, page, limit));
         }
-        
-        // Get total count for pagination
-        const total = await prisma.bill.count({
-          where: {
-            id: { in: accessibleBillIds }
-          }
-        });
-        
-        // Get paginated bills
-        const bills = await prisma.bill.findMany({
-          where: {
-            id: { in: accessibleBillIds }
-          },
-          orderBy: { dateOfMeasurement: 'desc' },
-          skip,
-          take: limit,
-          include: {
-            contract: {
-              select: {
-                id: true,
-                agreementNo: true,
-                contractorName: true,
-                workDescription: true,
-                isExtended: true,
-                extensionType: true,
-                coveringLetterDesignation: true,
-                loaDate: true,
-                baseMonth: true,
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    email: true
-                  }
+
+        // Count and fetch in parallel — single round-trip each, no ID array ping-pong
+        const [total, bills] = await Promise.all([
+          prisma.bill.count({ where: billsWhere }),
+          prisma.bill.findMany({
+            where: billsWhere,
+            orderBy: { dateOfMeasurement: 'desc' },
+            skip,
+            take: limit,
+            include: {
+              contract: {
+                select: {
+                  id: true,
+                  agreementNo: true,
+                  contractorName: true,
+                  workDescription: true,
+                  isExtended: true,
+                  extensionType: true,
+                  coveringLetterDesignation: true,
+                  loaDate: true,
+                  baseMonth: true,
+                  user: { select: { id: true, name: true, email: true } }
                 }
-              }
-            },
-            workClassification: true,
-            classificationEntries: {
-              include: {
-                classification: true,
-                subClassification: true
-              }
-            },
-            pvcCalculation: true,
-            billTransaction: true
-          }
-        });
+              },
+              workClassification: true,
+              classificationEntries: {
+                include: { classification: true, subClassification: true }
+              },
+              pvcCalculation: true,
+              billTransaction: true
+            }
+          })
+        ]);
         
-        // Add provisional/final status to each bill
-        const billsWithStatus = await Promise.all(
-          bills.map(async (bill) => {
-            const indicesStatus = await isBillUsingProvisionalIndices(
-              bill.quarter,
-              bill.contract.baseMonth
-            );
-            
-            return {
-              ...bill,
-              indicesStatus: {
-                isProvisional: indicesStatus.isProvisional,
-                provisionalCount: indicesStatus.provisionalCount,
-                totalCount: indicesStatus.totalCount
-              }
-            };
+        // Batch provisional-index check: deduplicate quarters before hitting DB
+        // A page of 20 bills often share the same 2-3 quarters — no need for 20 queries
+        const uniqueQuarters = [...new Set(bills.map(b => `${b.quarter}::${b.contract.baseMonth.toISOString()}`))];
+        const statusByKey = new Map<string, { isProvisional: boolean; provisionalCount: number; totalCount: number }>();
+        await Promise.all(
+          uniqueQuarters.map(async key => {
+            const [quarter, baseMonthISO] = key.split('::');
+            const status = await isBillUsingProvisionalIndices(quarter, new Date(baseMonthISO));
+            statusByKey.set(key, {
+              isProvisional: status.isProvisional,
+              provisionalCount: status.provisionalCount,
+              totalCount: status.totalCount,
+            });
           })
         );
+        const billsWithStatus = bills.map(bill => ({
+          ...bill,
+          indicesStatus: statusByKey.get(`${bill.quarter}::${bill.contract.baseMonth.toISOString()}`)
+            ?? { isProvisional: false, provisionalCount: 0, totalCount: 0 }
+        }));
         
         // Create paginated response
         const response = createPaginatedResponse(billsWithStatus, total, page, limit);

@@ -1,9 +1,9 @@
-
+﻿import { prisma } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+
 import { validateAdminAccess } from '@/lib/role-auth';
 
-const prisma = new PrismaClient();
+
 
 // POST - Create new sub-classification under a main classification
 export async function POST(

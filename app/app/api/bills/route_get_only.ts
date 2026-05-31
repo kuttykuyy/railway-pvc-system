@@ -62,32 +62,21 @@ export async function GET(request: NextRequest) {
         // Get pagination parameters
         const { page, limit, skip } = getPaginationParams(request);
         
-        // Get accessible bill IDs based on permissions
-        let accessibleBillIds = await getUserAccessibleBills(user.id);
-        
-        // If contractId is specified, filter by contract and check contract access
+        // null = admin (unrestricted)
+        const accessibleBillIds = await getUserAccessibleBills(user.id);
+        const isUnrestricted = accessibleBillIds === null;
+        let billsWhere: Record<string, any> = isUnrestricted ? {} : { id: { in: accessibleBillIds } };
+
         if (contractId) {
           const contractAccess = await checkUserContractAccess(user.id, contractId);
           if (!contractAccess?.canView) {
             return NextResponse.json({ error: 'Access denied to this contract' }, { status: 403 });
           }
-          
-          // Get bills only from this contract that user has access to
-          const contractBills = await prisma.bill.findMany({
-            where: { 
-              contractId: contractId,
-              id: { in: accessibleBillIds }
-            },
-            select: { id: true }
-          });
-          
-          accessibleBillIds = contractBills.map(b => b.id);
+          billsWhere = { ...billsWhere, contractId };
         }
-        
-        if (accessibleBillIds.length === 0) {
-          return NextResponse.json(
-            createPaginatedResponse([], 0, page, limit)
-          );
+
+        if (!isUnrestricted && (accessibleBillIds as string[]).length === 0) {
+          return NextResponse.json(createPaginatedResponse([], 0, page, limit));
         }
         
         // Get total count for pagination

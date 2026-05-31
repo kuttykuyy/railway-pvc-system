@@ -1,8 +1,8 @@
-
+﻿import { prisma } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+
+
 
 // GET - Get single classification
 export async function GET(

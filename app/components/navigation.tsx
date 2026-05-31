@@ -108,46 +108,27 @@ export default function Navigation() {
   // Get user role information
   const { isAdmin, isRailwayOfficial, role } = getClientRoleInfo(session);
 
-  // Fetch credit balance
+  // Fetch credit balance + billing settings in a single parallel round-trip
   useEffect(() => {
-    const fetchCreditBalance = async () => {
-      if (status !== 'authenticated') return;
-      
+    if (status !== 'authenticated') return;
+
+    const fetchNavData = async () => {
       try {
-        const response = await fetch('/api/credits/balance');
-        if (response.ok) {
-          const data: CreditBalance = await response.json();
-          setCreditData(data);
-        }
+        const [balanceRes, settingsRes] = await Promise.all([
+          fetch('/api/credits/balance'),
+          fetch('/api/settings/billing'),
+        ]);
+        if (balanceRes.ok) setCreditData(await balanceRes.json());
+        if (settingsRes.ok) setBillingSettings(await settingsRes.json());
       } catch (err) {
-        console.error('Failed to fetch credit balance:', err);
+        console.error('Failed to fetch nav data:', err);
       }
     };
 
-    fetchCreditBalance();
-    
-    // Refresh balance every 30 seconds
-    const interval = setInterval(fetchCreditBalance, 30000);
+    fetchNavData();
+    // Refresh every 60s instead of 30s — halves the polling load
+    const interval = setInterval(fetchNavData, 60000);
     return () => clearInterval(interval);
-  }, [status]);
-
-  // Fetch billing settings to check minimum bill cost
-  useEffect(() => {
-    const fetchBillingSettings = async () => {
-      if (status !== 'authenticated') return;
-      
-      try {
-        const response = await fetch('/api/settings/billing');
-        if (response.ok) {
-          const data = await response.json();
-          setBillingSettings(data);
-        }
-      } catch (err) {
-        console.error('Failed to fetch billing settings:', err);
-      }
-    };
-
-    fetchBillingSettings();
   }, [status]);
 
   // Check if user has insufficient balance

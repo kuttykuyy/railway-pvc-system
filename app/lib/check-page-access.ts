@@ -1,8 +1,9 @@
+﻿import { prisma } from './db';
 
-import { PrismaClient } from '@prisma/client';
+
 import { isAdminOnlyPage } from './page-permissions';
 
-const prisma = new PrismaClient();
+
 
 /**
  * Check if a user has access to a specific page

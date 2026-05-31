@@ -1,11 +1,12 @@
+﻿import { prisma } from '@/lib/db';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+
 import { AVAILABLE_PAGES, getNonAdminPages } from '@/lib/page-permissions';
 
-const prisma = new PrismaClient();
+
 
 // Get all user permissions
 export async function GET(req: NextRequest) {

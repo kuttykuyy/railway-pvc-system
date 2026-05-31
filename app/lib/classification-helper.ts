@@ -1,13 +1,11 @@
-/**
+﻿/**
  * Classification Helper - Updated to use new hierarchical structure
  * Uses SubClassification and ClassificationGroup models
  * 
  * DEPRECATED: Old Classification model is kept for backward compatibility only
  */
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from './db';
 
 export interface ClassificationWithComponents {
   id: string;

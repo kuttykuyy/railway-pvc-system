@@ -61,19 +61,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get accessible contract IDs based on permissions
+    // null = admin (unrestricted) — skip ID filter to avoid loading all IDs into memory
     const accessibleContractIds = await getUserAccessibleContracts(user.id);
-    
-    if (accessibleContractIds.length === 0) {
+    const isUnrestricted = accessibleContractIds === null;
+
+    if (!isUnrestricted && accessibleContractIds.length === 0) {
       return NextResponse.json([]);
     }
 
+    const contractsWhere = isUnrestricted ? {} : { id: { in: accessibleContractIds } };
+
     const contracts = await prisma.contract.findMany({
-      where: {
-        id: {
-          in: accessibleContractIds
-        }
-      },
+      where: contractsWhere,
       orderBy: { createdAt: 'desc' },
       include: {
         user: {

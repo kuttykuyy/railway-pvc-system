@@ -1,10 +1,11 @@
-﻿import { logger } from './logger';
+﻿import { prisma } from './db';
+import { logger } from './logger';
 
 import { PVC_COMPONENTS, QuarterlyAverage } from './types';
-import { PrismaClient } from '@prisma/client';
+
 import { getClassificationOrDefault } from './classification-helper';
 
-const prisma = new PrismaClient();
+
 
 // PVC Formula: NEW Step-by-step calculation method requested by user
 export function calculatePvcComponent(
