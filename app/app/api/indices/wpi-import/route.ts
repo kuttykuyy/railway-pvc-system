@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 /**
  * API endpoint to fetch and import WPI data from eaindustry.nic.in
  * POST /api/indices/wpi-import
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
     }
 
     const url = request.nextUrl.searchParams.get('url') || getLatestWPIUrl();
-    console.log('[WPI Import] Fetching preview from:', url);
+    logger.log('[WPI Import] Fetching preview from:', url);
 
     // Fetch the Excel file
     const response = await fetch(url, {
@@ -128,8 +129,8 @@ export async function POST(request: NextRequest) {
       fetchUrl = getLatestWPIUrl();
     }
 
-    console.log('[WPI Import] Fetching from:', fetchUrl);
-    console.log('[WPI Import] Is Provisional:', isProvisional);
+    logger.log('[WPI Import] Fetching from:', fetchUrl);
+    logger.log('[WPI Import] Is Provisional:', isProvisional);
 
     // Fetch the Excel file
     const response = await fetch(fetchUrl, {
@@ -151,11 +152,11 @@ export async function POST(request: NextRequest) {
     const worksheet = workbook.Sheets[sheetName];
     const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
-    console.log('[WPI Import] Parsed Excel with', data.length, 'rows');
+    logger.log('[WPI Import] Parsed Excel with', data.length, 'rows');
 
     // Parse WPI data
     const wpiData = parseWPIExcelData(data);
-    console.log('[WPI Import] Found', wpiData.length, 'commodities');
+    logger.log('[WPI Import] Found', wpiData.length, 'commodities');
 
     // Parse months to update if provided
     let monthDates: Date[] | undefined;
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
     // Update database
     const result = await updateIndicesFromWPI(wpiData, isProvisional, monthDates);
 
-    console.log('[WPI Import] Update complete:', result.updated, 'values updated');
+    logger.log('[WPI Import] Update complete:', result.updated, 'values updated');
 
     return NextResponse.json({
       success: result.success,
@@ -188,3 +189,4 @@ export async function POST(request: NextRequest) {
     }, { status: 500 });
   }
 }
+

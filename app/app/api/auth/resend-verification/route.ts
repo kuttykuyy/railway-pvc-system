@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
@@ -71,8 +72,8 @@ export async function POST(request: NextRequest) {
     
     const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${token}`;
 
-    console.log('[Resend Verification] Sending email to:', user.email);
-    console.log('[Resend Verification] Verification URL:', verificationUrl);
+    logger.log('[Resend Verification] Sending email to:', user.email);
+    logger.log('[Resend Verification] Verification URL:', verificationUrl);
 
     await resend.emails.send({
       from: 'Railway PVC System <noreply@irpvc.in>',
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
       html: getVerificationEmailHtml(verificationUrl, user.email),
     });
 
-    console.log('✅ Verification email resent to:', user.email);
+    logger.log('✅ Verification email resent to:', user.email);
 
     return NextResponse.json(
       { message: 'Verification email sent successfully' },
@@ -95,3 +96,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

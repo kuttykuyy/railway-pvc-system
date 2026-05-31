@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
@@ -104,7 +105,7 @@ export async function GET(request: NextRequest) {
       );
 
       if (entriesNeedingFix.length > 0) {
-        console.log(`🔧 Recalculating ${entriesNeedingFix.length} classification entries for bill ${bill.billNo}`);
+        logger.log(`🔧 Recalculating ${entriesNeedingFix.length} classification entries for bill ${bill.billNo}`);
         
         // Get quarterly averages for this bill's quarter
         const quarterlyAverages = await getQuarterlyAverages(
@@ -152,7 +153,7 @@ export async function GET(request: NextRequest) {
           entry.totalPvc = entryPvc.totalPvc;
         }
 
-        console.log(`✅ Fixed ${entriesNeedingFix.length} entries for bill ${bill.billNo}`);
+        logger.log(`✅ Fixed ${entriesNeedingFix.length} entries for bill ${bill.billNo}`);
       }
     }
     // ===== END FIX =====
@@ -336,3 +337,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

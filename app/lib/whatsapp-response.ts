@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 
 /**
  * WhatsApp Response Handler
@@ -63,7 +64,7 @@ export async function sendWhatsAppTextMessage(
     url.searchParams.append('Contact', phoneNumber);
     url.searchParams.append('Message', message);
 
-    console.log('Sending WhatsApp text message:', {
+    logger.log('Sending WhatsApp text message:', {
       contact: phoneNumber,
       messageLength: message.length,
     });
@@ -77,7 +78,7 @@ export async function sendWhatsAppTextMessage(
     });
 
     const responseText = await response.text();
-    console.log('MyDreams API Response:', {
+    logger.log('MyDreams API Response:', {
       status: response.status,
       body: responseText,
     });
@@ -128,7 +129,7 @@ export async function sendWhatsAppButtonMessage(
     url.searchParams.append('Type', 'button');
     url.searchParams.append('Button', buttonStr);
 
-    console.log('Sending WhatsApp button message:', {
+    logger.log('Sending WhatsApp button message:', {
       contact: phoneNumber,
       buttons: buttons.length,
     });
@@ -141,7 +142,7 @@ export async function sendWhatsAppButtonMessage(
     });
 
     const responseText = await response.text();
-    console.log('MyDreams API Response:', {
+    logger.log('MyDreams API Response:', {
       status: response.status,
       body: responseText,
     });
@@ -162,3 +163,4 @@ export async function sendWhatsAppButtonMessage(
     };
   }
 }
+

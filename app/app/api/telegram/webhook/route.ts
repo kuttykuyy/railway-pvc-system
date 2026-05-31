@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 /**
  * POST /api/telegram/webhook
  * Receives updates from Telegram Bot API
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
       const chatId = String(message.chat.id);
       const text = message.text;
 
-      console.log(`[Telegram] Chat ${chatId}: ${text}`);
+      logger.log(`[Telegram] Chat ${chatId}: ${text}`);
 
       // Process asynchronously so we respond quickly to Telegram
       handleTelegramMessage(chatId, text).catch(err =>
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
       const chatId = String(callbackQuery.message.chat.id);
       const data = callbackQuery.data;
 
-      console.log(`[Telegram] Callback ${chatId}: ${data}`);
+      logger.log(`[Telegram] Callback ${chatId}: ${data}`);
 
       handleTelegramMessage(chatId, data).catch(err =>
         console.error('[Telegram] Callback handler error:', err)
@@ -55,3 +56,4 @@ export async function GET() {
     timestamp: new Date().toISOString(),
   });
 }
+

@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 
 /**
  * MyDreams Technology WhatsApp API Integration
@@ -128,13 +129,13 @@ export async function sendBillPDFWhatsApp(
     // Removed Name and PDFName parameters - they were being counted as additional template params
     // causing "7 parameters sent vs 5 expected" error
 
-    console.log('Sending WhatsApp message via MyDreams API');
-    console.log('- Contact:', formattedContact);
-    console.log('- Template:', params.template);
-    console.log('- Params:', params.params);
-    console.log('- Params Count:', params.params?.length || 0);
-    console.log('- File URL:', params.fileUrl);
-    console.log('API URL:', url.toString().replace(credentials.apiKey, '***HIDDEN***'));
+    logger.log('Sending WhatsApp message via MyDreams API');
+    logger.log('- Contact:', formattedContact);
+    logger.log('- Template:', params.template);
+    logger.log('- Params:', params.params);
+    logger.log('- Params Count:', params.params?.length || 0);
+    logger.log('- File URL:', params.fileUrl);
+    logger.log('API URL:', url.toString().replace(credentials.apiKey, '***HIDDEN***'));
 
     // Send the request
     const response = await fetch(url.toString(), {
@@ -145,11 +146,11 @@ export async function sendBillPDFWhatsApp(
     });
 
     const responseText = await response.text();
-    console.log('=== MyDreams API Response ===');
-    console.log('Status:', response.status, response.statusText);
-    console.log('Headers:', Object.fromEntries(response.headers.entries()));
-    console.log('Body:', responseText);
-    console.log('===========================');
+    logger.log('=== MyDreams API Response ===');
+    logger.log('Status:', response.status, response.statusText);
+    logger.log('Headers:', Object.fromEntries(response.headers.entries()));
+    logger.log('Body:', responseText);
+    logger.log('===========================');
 
     if (!response.ok) {
       console.error('MyDreams API Error Response:', {
@@ -167,11 +168,11 @@ export async function sendBillPDFWhatsApp(
     let data: any = {};
     try {
       data = JSON.parse(responseText);
-      console.log('Parsed Response Data:', data);
+      logger.log('Parsed Response Data:', data);
     } catch (e) {
       // Response might not be JSON
-      console.log('Response is not JSON format, treating as success');
-      console.log('Raw response:', responseText);
+      logger.log('Response is not JSON format, treating as success');
+      logger.log('Raw response:', responseText);
     }
 
     // Check for error in response data
@@ -262,8 +263,8 @@ export async function sendBillPDFNotification(
   // Template params should include all 5 parameters
   const params = templateParams || [customerName];
 
-  console.log(`[WhatsApp] Sending notification with template: ${template}`);
-  console.log(`[WhatsApp] Parameters:`, params);
+  logger.log(`[WhatsApp] Sending notification with template: ${template}`);
+  logger.log(`[WhatsApp] Parameters:`, params);
 
   return sendBillPDFWhatsApp({
     contact: phoneNumber,
@@ -324,13 +325,13 @@ export async function sendBillPDFWithTemplate(
     const encodedToken = encodeURIComponent(pdfToken);
     const pdfUrl = `${process.env.NEXTAUTH_URL}/api/public/bill-pdf?billId=${billId}&token=${encodedToken}`;
 
-    console.log('[WhatsApp] Sending bill with complete template data:');
-    console.log('- Bill ID:', billId);
-    console.log('- Bill Number:', billData.billNumber);
-    console.log('- Agreement No:', billData.agreementNo);
-    console.log('- Measurement Period:', billData.measurementPeriod);
-    console.log('- Bill Amount:', billData.billAmount);
-    console.log('- Phone Number:', phoneNumber);
+    logger.log('[WhatsApp] Sending bill with complete template data:');
+    logger.log('- Bill ID:', billId);
+    logger.log('- Bill Number:', billData.billNumber);
+    logger.log('- Agreement No:', billData.agreementNo);
+    logger.log('- Measurement Period:', billData.measurementPeriod);
+    logger.log('- Bill Amount:', billData.billAmount);
+    logger.log('- Phone Number:', phoneNumber);
 
     return sendBillPDFNotification(
       phoneNumber,
@@ -378,8 +379,8 @@ export async function sendUserSignupWelcome(
       format(istTime, 'dd-MMM-yyyy \'at\' hh:mm a'),                // {{4}} - Registration Date & Time (IST)
     ];
 
-    console.log('[WhatsApp] Sending user signup welcome with template: user_signup_welcome');
-    console.log('[WhatsApp] Parameters:', templateParams);
+    logger.log('[WhatsApp] Sending user signup welcome with template: user_signup_welcome');
+    logger.log('[WhatsApp] Parameters:', templateParams);
 
     // Send via WhatsApp (no file attachment for signup welcome)
     const credentials = await getMyDreamsCredentials();
@@ -400,10 +401,10 @@ export async function sendUserSignupWelcome(
     url.searchParams.append('Template', 'user_signup_welcome');
     url.searchParams.append('Param', templateParams.join(','));
 
-    console.log('[WhatsApp] User signup welcome API URL prepared');
-    console.log('- Contact:', formattedContact);
-    console.log('- Template: user_signup_welcome');
-    console.log('- Params Count:', templateParams.length);
+    logger.log('[WhatsApp] User signup welcome API URL prepared');
+    logger.log('- Contact:', formattedContact);
+    logger.log('- Template: user_signup_welcome');
+    logger.log('- Params Count:', templateParams.length);
 
     // Send the request
     const response = await fetch(url.toString(), {
@@ -414,10 +415,10 @@ export async function sendUserSignupWelcome(
     });
 
     const responseText = await response.text();
-    console.log('=== MyDreams User Signup Welcome Response ===');
-    console.log('Status:', response.status, response.statusText);
-    console.log('Body:', responseText);
-    console.log('==========================================');
+    logger.log('=== MyDreams User Signup Welcome Response ===');
+    logger.log('Status:', response.status, response.statusText);
+    logger.log('Body:', responseText);
+    logger.log('==========================================');
 
     if (!response.ok) {
       console.error('[WhatsApp] User signup welcome API error:', {
@@ -437,7 +438,7 @@ export async function sendUserSignupWelcome(
       data = JSON.parse(responseText);
     } catch (e) {
       // Response might not be JSON
-      console.log('[WhatsApp] Response is not JSON, treating as success');
+      logger.log('[WhatsApp] Response is not JSON, treating as success');
     }
 
     // Check for error in response data
@@ -449,7 +450,7 @@ export async function sendUserSignupWelcome(
       };
     }
 
-    console.log('[WhatsApp] ✅ User signup welcome sent successfully');
+    logger.log('[WhatsApp] ✅ User signup welcome sent successfully');
     return {
       success: true,
       messageId: data.messageId || data.id || data.message_id || 'sent',
@@ -500,8 +501,8 @@ export async function sendPaymentConfirmation(
       format(istTime, 'dd-MMM-yyyy \'at\' hh:mm a'),                 // {{7}} - Payment Date & Time (IST)
     ];
 
-    console.log('[WhatsApp] Sending payment confirmation with template: payment_confirmation');
-    console.log('[WhatsApp] Parameters:', templateParams);
+    logger.log('[WhatsApp] Sending payment confirmation with template: payment_confirmation');
+    logger.log('[WhatsApp] Parameters:', templateParams);
 
     // Send via WhatsApp (no file attachment for payment confirmation)
     const credentials = await getMyDreamsCredentials();
@@ -522,10 +523,10 @@ export async function sendPaymentConfirmation(
     url.searchParams.append('Template', 'payment_confirmation');
     url.searchParams.append('Param', templateParams.join(','));
 
-    console.log('[WhatsApp] Payment confirmation API URL prepared');
-    console.log('- Contact:', formattedContact);
-    console.log('- Template: payment_confirmation');
-    console.log('- Params Count:', templateParams.length);
+    logger.log('[WhatsApp] Payment confirmation API URL prepared');
+    logger.log('- Contact:', formattedContact);
+    logger.log('- Template: payment_confirmation');
+    logger.log('- Params Count:', templateParams.length);
 
     // Send the request
     const response = await fetch(url.toString(), {
@@ -536,10 +537,10 @@ export async function sendPaymentConfirmation(
     });
 
     const responseText = await response.text();
-    console.log('=== MyDreams Payment Confirmation Response ===');
-    console.log('Status:', response.status, response.statusText);
-    console.log('Body:', responseText);
-    console.log('==========================================');
+    logger.log('=== MyDreams Payment Confirmation Response ===');
+    logger.log('Status:', response.status, response.statusText);
+    logger.log('Body:', responseText);
+    logger.log('==========================================');
 
     if (!response.ok) {
       console.error('[WhatsApp] Payment confirmation API error:', {
@@ -559,7 +560,7 @@ export async function sendPaymentConfirmation(
       data = JSON.parse(responseText);
     } catch (e) {
       // Response might not be JSON
-      console.log('[WhatsApp] Response is not JSON, treating as success');
+      logger.log('[WhatsApp] Response is not JSON, treating as success');
     }
 
     // Check for error in response data
@@ -571,7 +572,7 @@ export async function sendPaymentConfirmation(
       };
     }
 
-    console.log('[WhatsApp] ✅ Payment confirmation sent successfully');
+    logger.log('[WhatsApp] ✅ Payment confirmation sent successfully');
     return {
       success: true,
       messageId: data.messageId || data.id || data.message_id || 'sent',
@@ -608,7 +609,7 @@ export async function sendOtpWhatsApp(
     url.searchParams.append('Template', 'otp_verification');
     url.searchParams.append('Param', otpCode);
 
-    console.log('[WhatsApp OTP] Sending OTP to:', formattedContact);
+    logger.log('[WhatsApp OTP] Sending OTP to:', formattedContact);
 
     const response = await fetch(url.toString(), {
       method: 'GET',
@@ -616,7 +617,7 @@ export async function sendOtpWhatsApp(
     });
 
     const data = await response.json();
-    console.log('[WhatsApp OTP] API response:', data);
+    logger.log('[WhatsApp OTP] API response:', data);
 
     const isSuccess =
       data.status === 'success' ||
@@ -629,7 +630,7 @@ export async function sendOtpWhatsApp(
       return { success: false, error: errorMsg };
     }
 
-    console.log('[WhatsApp OTP] ✅ OTP sent successfully');
+    logger.log('[WhatsApp OTP] ✅ OTP sent successfully');
     return {
       success: true,
       messageId: data.messageId || data.id || data.message_id || 'sent',
@@ -657,8 +658,8 @@ export async function sendWelcomeMessageToUser(
       supportNumber,           // {{2}} - Support WhatsApp Number
     ];
 
-    console.log('[WhatsApp] Sending welcome message to user with template: welcome_new_user');
-    console.log('[WhatsApp] Parameters:', templateParams);
+    logger.log('[WhatsApp] Sending welcome message to user with template: welcome_new_user');
+    logger.log('[WhatsApp] Parameters:', templateParams);
 
     // Send via WhatsApp
     const credentials = await getMyDreamsCredentials();
@@ -679,10 +680,10 @@ export async function sendWelcomeMessageToUser(
     url.searchParams.append('Template', 'welcome_new_user');
     url.searchParams.append('Param', templateParams.join(','));
 
-    console.log('[WhatsApp] Welcome message API URL prepared');
-    console.log('- Contact:', formattedContact);
-    console.log('- Template: welcome_new_user');
-    console.log('- Params Count:', templateParams.length);
+    logger.log('[WhatsApp] Welcome message API URL prepared');
+    logger.log('- Contact:', formattedContact);
+    logger.log('- Template: welcome_new_user');
+    logger.log('- Params Count:', templateParams.length);
 
     // Send the request
     const response = await fetch(url.toString(), {
@@ -693,7 +694,7 @@ export async function sendWelcomeMessageToUser(
     });
 
     const data = await response.json();
-    console.log('[WhatsApp] Welcome message API response:', data);
+    logger.log('[WhatsApp] Welcome message API response:', data);
 
     // Check success - MyDreams API can return different formats
     const isSuccess = 
@@ -728,7 +729,7 @@ export async function sendWelcomeMessageToUser(
       };
     }
 
-    console.log('[WhatsApp] ✅ Welcome message sent successfully to user');
+    logger.log('[WhatsApp] ✅ Welcome message sent successfully to user');
     return {
       success: true,
       messageId: data.messageId || data.id || data.message_id || 'sent',
@@ -741,3 +742,4 @@ export async function sendWelcomeMessageToUser(
     };
   }
 }
+

@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 /**
  * GET /api/telegram/setup-webhook
  * Registers the webhook URL with Telegram
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
 
     // Check current webhook
     const currentInfo = await getTelegramWebhookInfo();
-    console.log('Current webhook info:', currentInfo);
+    logger.log('Current webhook info:', currentInfo);
 
     // Set new webhook
     const result = await setTelegramWebhook(webhookUrl);
@@ -35,3 +36,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

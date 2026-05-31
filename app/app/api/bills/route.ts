@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
@@ -191,7 +192,7 @@ export async function GET(request: NextRequest) {
 // REWRITTEN FOR CLEAN STEEL TYPE HANDLING
 // ============================================================================
 export async function POST(request: NextRequest) {
-  console.log('\n🚀 ===== NEW BILL API: POST REQUEST STARTED =====\n');
+  logger.log('\n🚀 ===== NEW BILL API: POST REQUEST STARTED =====\n');
   
   try {
     // ===== STEP 1: Authentication & Authorization =====
@@ -255,7 +256,7 @@ export async function POST(request: NextRequest) {
     let pvcCheckCredit = 0;
     if (recentPvcCheck && !recentPvcCheck.isFree) {
       pvcCheckCredit = recentPvcCheck.amount; // Typically ₹500
-      console.log(`✅ Found recent PVC check (${recentPvcCheck.id}): Applying ₹${pvcCheckCredit} credit toward bill processing`);
+      logger.log(`✅ Found recent PVC check (${recentPvcCheck.id}): Applying ₹${pvcCheckCredit} credit toward bill processing`);
     }
     
     // ===== STEP 4: Check Contract Access =====
@@ -364,11 +365,11 @@ export async function POST(request: NextRequest) {
         contract.originalCompletionDate && 
         measurementDate > contract.originalCompletionDate) {
       quarterDateForCalculation = contract.originalCompletionDate;
-      console.log(`✅ 17B Extension: Using original completion date (${quarterDateForCalculation.toDateString()}) for quarter calculation`);
+      logger.log(`✅ 17B Extension: Using original completion date (${quarterDateForCalculation.toDateString()}) for quarter calculation`);
     }
     
     const quarter = getQuarterFromDate(quarterDateForCalculation, contract.baseMonth);
-    console.log(`📊 Calculated Quarter: ${quarter}`);
+    logger.log(`📊 Calculated Quarter: ${quarter}`);
     
     // ===== STEP 7: Generate PVC Number =====
     const billCountForContract = await prisma.bill.count({ where: { contractId } });
@@ -376,10 +377,10 @@ export async function POST(request: NextRequest) {
     const autoPvcNumber = `PVC/${contract.agreementNo}/${sequenceNumber}`;
     
     // ===== STEP 8: CRITICAL - Extract Steel Types from Classification Entries =====
-    console.log('\n🔍 ===== EXTRACTING STEEL TYPES =====');
+    logger.log('\n🔍 ===== EXTRACTING STEEL TYPES =====');
     const extractedSteelTypes = await extractSteelTypesFromEntries(classificationEntries);
-    console.log(`✅ Steel types to be stored in bill: [${extractedSteelTypes.join(', ') || 'None'}]`);
-    console.log('🔍 ===== STEEL TYPES EXTRACTED =====\n');
+    logger.log(`✅ Steel types to be stored in bill: [${extractedSteelTypes.join(', ') || 'None'}]`);
+    logger.log('🔍 ===== STEEL TYPES EXTRACTED =====\n');
     
     // ===== STEP 9: Create Bill Record with Steel Types =====
     const billingSettings = await getBillingSettings();
@@ -411,8 +412,8 @@ export async function POST(request: NextRequest) {
       }
     });
     
-    console.log(`✅ Bill created with ID: ${bill.id}`);
-    console.log(`   Steel types stored: [${(bill.steelTypes as string[])?.join(', ') || 'None'}]`);
+    logger.log(`✅ Bill created with ID: ${bill.id}`);
+    logger.log(`   Steel types stored: [${(bill.steelTypes as string[])?.join(', ') || 'None'}]`);
     
     // ===== STEP 10: Get Quarterly Averages (Needed for Entry PVC Calculations) =====
     // Use zone-based steel city prices instead of default Chennai rates
@@ -423,8 +424,8 @@ export async function POST(request: NextRequest) {
       'RBI Cement', 'RBI Explosives',
       ...steelIndexNames
     ];
-    console.log(`📊 Using steel indices for zone "${zone}" (city: ${getSteelCityForZone(zone)}):`, steelIndexNames);
-    console.log(`⛽ Using fuel index: ${fuelIndexName} (fuelPriceType: ${fuelPriceType})`);
+    logger.log(`📊 Using steel indices for zone "${zone}" (city: ${getSteelCityForZone(zone)}):`, steelIndexNames);
+    logger.log(`⛽ Using fuel index: ${fuelIndexName} (fuelPriceType: ${fuelPriceType})`);
     
     const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, calculationMethod);
     
@@ -439,7 +440,7 @@ export async function POST(request: NextRequest) {
     let totalClassificationExplosives = 0;
     
     if (classificationEntries && classificationEntries.length > 0) {
-      console.log(`\n📋 Creating ${classificationEntries.length} classification entries with per-entry PVC calculations...`);
+      logger.log(`\n📋 Creating ${classificationEntries.length} classification entries with per-entry PVC calculations...`);
       
       const { calculateClassificationEntryPvc } = await import('@/lib/pvc-calculations');
       
@@ -505,7 +506,7 @@ export async function POST(request: NextRequest) {
           });
           
           if (hasSteelComponent && entrySteelTypes.length > 0) {
-            console.log(`   ✅ Entry with steel PVC: ₹${entryPvc.steelPvc.toFixed(2)} → Steel types: [${entrySteelTypes.join(', ')}]`);
+            logger.log(`   ✅ Entry with steel PVC: ₹${entryPvc.steelPvc.toFixed(2)} → Steel types: [${entrySteelTypes.join(', ')}]`);
           }
           
           // Accumulate totals
@@ -518,19 +519,19 @@ export async function POST(request: NextRequest) {
           totalClassificationExplosives += entryPvc.explosivesPvc;
           totalClassificationPvc += entryPvc.totalPvc;
           
-          console.log(`   ✅ Entry created with PVC: ₹${entryPvc.totalPvc.toFixed(2)}`);
+          logger.log(`   ✅ Entry created with PVC: ₹${entryPvc.totalPvc.toFixed(2)}`);
         }
       }
       
-      console.log(`\n📊 Total Classification PVC: ₹${totalClassificationPvc.toFixed(2)}`);
+      logger.log(`\n📊 Total Classification PVC: ₹${totalClassificationPvc.toFixed(2)}`);
     }
     
     // ===== STEP 12: Use Per-Entry PVC Calculations (Already Computed) =====
-    console.log('\n💰 ===== USING PER-ENTRY PVC CALCULATIONS =====');
-    console.log(`   Contract Extension: ${contract.isExtended ? contract.extensionType : 'None'}`);
-    console.log(`   Total Classification Labour PVC: ₹${totalClassificationLabour.toFixed(2)}`);
-    console.log(`   Total Classification Steel PVC: ₹${totalClassificationSteel.toFixed(2)}`);
-    console.log(`   Total Classification PVC: ₹${totalClassificationPvc.toFixed(2)}`);
+    logger.log('\n💰 ===== USING PER-ENTRY PVC CALCULATIONS =====');
+    logger.log(`   Contract Extension: ${contract.isExtended ? contract.extensionType : 'None'}`);
+    logger.log(`   Total Classification Labour PVC: ₹${totalClassificationLabour.toFixed(2)}`);
+    logger.log(`   Total Classification Steel PVC: ₹${totalClassificationSteel.toFixed(2)}`);
+    logger.log(`   Total Classification PVC: ₹${totalClassificationPvc.toFixed(2)}`);
     
     // Use the per-entry totals as the extension compliant result
     const extensionCompliantResult = {
@@ -555,7 +556,7 @@ export async function POST(request: NextRequest) {
       }
     };
     
-    console.log('💰 ===== PER-ENTRY PVC CALCULATIONS COMPLETE =====\n');
+    logger.log('💰 ===== PER-ENTRY PVC CALCULATIONS COMPLETE =====\n');
     
     // ===== STEP 14: Calculate Dedicated Cement and Steel PVC =====
     const dedicatedCementPvc = calculateDedicatedCementPvc(parseFloat(cementAmount) || 0, quarterlyAverages);
@@ -581,12 +582,12 @@ export async function POST(request: NextRequest) {
       finalCementPvc +
       finalSteelPvc;
     
-    console.log('\n📊 ===== FINAL PVC BREAKDOWN =====');
-    console.log(`   Labour: ₹${extensionCompliantResult.labourPvc.toFixed(2)}`);
-    console.log(`   Cement: ₹${finalCementPvc.toFixed(2)} (classification: ₹${extensionCompliantResult.cementPvc.toFixed(2)} + dedicated: ₹${dedicatedCementPvc.toFixed(2)})`);
-    console.log(`   Steel: ₹${finalSteelPvc.toFixed(2)} (classification: ₹${extensionCompliantResult.steelPvc.toFixed(2)} + dedicated: ₹${totalDedicatedSteelPvc.toFixed(2)})`);
-    console.log(`   TOTAL PVC: ₹${totalPvc.toFixed(2)}`);
-    console.log('📊 ===== PVC BREAKDOWN COMPLETE =====\n');
+    logger.log('\n📊 ===== FINAL PVC BREAKDOWN =====');
+    logger.log(`   Labour: ₹${extensionCompliantResult.labourPvc.toFixed(2)}`);
+    logger.log(`   Cement: ₹${finalCementPvc.toFixed(2)} (classification: ₹${extensionCompliantResult.cementPvc.toFixed(2)} + dedicated: ₹${dedicatedCementPvc.toFixed(2)})`);
+    logger.log(`   Steel: ₹${finalSteelPvc.toFixed(2)} (classification: ₹${extensionCompliantResult.steelPvc.toFixed(2)} + dedicated: ₹${totalDedicatedSteelPvc.toFixed(2)})`);
+    logger.log(`   TOTAL PVC: ₹${totalPvc.toFixed(2)}`);
+    logger.log('📊 ===== PVC BREAKDOWN COMPLETE =====\n');
     
     // ===== STEP 16: Calculate Cumulative PVC =====
     const previousPvcCalculations = await prisma.pvcCalculation.findMany({
@@ -630,7 +631,7 @@ export async function POST(request: NextRequest) {
     });
     
     // ===== STEP 18: Create Bill Transaction =====
-    console.log('\n💳 ===== CREATING BILL TRANSACTION =====');
+    logger.log('\n💳 ===== CREATING BILL TRANSACTION =====');
     const { processPaymentForBill } = await import('@/lib/payment-validation');
     
     // Apply PVC check credit to bill processing fee
@@ -638,7 +639,7 @@ export async function POST(request: NextRequest) {
     const finalBillAmount = Math.max(0, billProcessingFee - pvcCheckCredit);
     
     if (pvcCheckCredit > 0) {
-      console.log(`💳 PVC Check Credit Applied: ₹${billProcessingFee} - ₹${pvcCheckCredit} = ₹${finalBillAmount}`);
+      logger.log(`💳 PVC Check Credit Applied: ₹${billProcessingFee} - ₹${pvcCheckCredit} = ₹${finalBillAmount}`);
     }
     
     const paymentResult = await processPaymentForBill(
@@ -656,9 +657,9 @@ export async function POST(request: NextRequest) {
       console.error('❌ Failed to create bill transaction:', paymentResult.message);
       // Still return the bill even if transaction fails
     } else {
-      console.log('✅ Bill transaction created successfully');
+      logger.log('✅ Bill transaction created successfully');
     }
-    console.log('💳 ===== BILL TRANSACTION COMPLETE =====\n');
+    logger.log('💳 ===== BILL TRANSACTION COMPLETE =====\n');
     
     // ===== STEP 19: Return Created Bill =====
     const createdBill = await prisma.bill.findUnique({
@@ -677,13 +678,13 @@ export async function POST(request: NextRequest) {
       }
     });
     
-    console.log(`\n✅ ===== BILL CREATED SUCCESSFULLY =====`);
-    console.log(`   Bill ID: ${bill.id}`);
-    console.log(`   Bill No: ${bill.billNo}`);
-    console.log(`   Steel Types Stored: [${(bill.steelTypes as string[])?.join(', ') || 'None'}]`);
-    console.log(`   Total PVC: ₹${totalPvc.toFixed(2)}`);
-    console.log(`   Transaction Status: ${paymentResult.success ? 'Processed' : 'Failed'}`);
-    console.log(`✅ ===== NEW BILL API: REQUEST COMPLETE =====\n`);
+    logger.log(`\n✅ ===== BILL CREATED SUCCESSFULLY =====`);
+    logger.log(`   Bill ID: ${bill.id}`);
+    logger.log(`   Bill No: ${bill.billNo}`);
+    logger.log(`   Steel Types Stored: [${(bill.steelTypes as string[])?.join(', ') || 'None'}]`);
+    logger.log(`   Total PVC: ₹${totalPvc.toFixed(2)}`);
+    logger.log(`   Transaction Status: ${paymentResult.success ? 'Processed' : 'Failed'}`);
+    logger.log(`✅ ===== NEW BILL API: REQUEST COMPLETE =====\n`);
     
     // Send WhatsApp notification with PDF if configured and contractor has phone number
     const isWhatsAppConfigured = await isMyDreamsWhatsAppConfigured();
@@ -691,7 +692,7 @@ export async function POST(request: NextRequest) {
     
     if (isWhatsAppConfigured && contractorPhone && validatePhoneNumber(contractorPhone) && createdBill) {
       try {
-        console.log(`📱 Sending WhatsApp notification with PDF to contractor: ${contractorPhone}`);
+        logger.log(`📱 Sending WhatsApp notification with PDF to contractor: ${contractorPhone}`);
         
         // Generate JWT token for public PDF access (valid for 24 hours)
         const JWT_SECRET = process.env.NEXTAUTH_SECRET || 'fallback-secret-key';
@@ -717,7 +718,7 @@ export async function POST(request: NextRequest) {
         );
         
         if (result.success) {
-          console.log(`✅ WhatsApp notification with PDF sent successfully. Message ID: ${result.messageId}`);
+          logger.log(`✅ WhatsApp notification with PDF sent successfully. Message ID: ${result.messageId}`);
         } else {
           console.error(`⚠️ Failed to send WhatsApp notification: ${result.error}`);
         }
@@ -726,9 +727,9 @@ export async function POST(request: NextRequest) {
         // Don't fail the bill creation if WhatsApp fails
       }
     } else if (isWhatsAppConfigured && !contractorPhone) {
-      console.log('ℹ️ WhatsApp is configured but contractor phone number is missing');
+      logger.log('ℹ️ WhatsApp is configured but contractor phone number is missing');
     } else if (isWhatsAppConfigured && contractorPhone && !validatePhoneNumber(contractorPhone)) {
-      console.log(`⚠️ WhatsApp is configured but contractor phone number is invalid: ${contractorPhone}`);
+      logger.log(`⚠️ WhatsApp is configured but contractor phone number is invalid: ${contractorPhone}`);
     }
     
     // Send WhatsApp notification to admin about new bill creation
@@ -736,7 +737,7 @@ export async function POST(request: NextRequest) {
       try {
         const adminWhatsAppNumber = await getAdminWhatsAppNumber();
         if (adminWhatsAppNumber) {
-          console.log(`📱 Sending bill creation notification to admin: ${adminWhatsAppNumber}`);
+          logger.log(`📱 Sending bill creation notification to admin: ${adminWhatsAppNumber}`);
           
           // Send to admin with full bill details (function handles PDF generation and formatting)
           const result = await sendBillPDFWithTemplate(
@@ -746,14 +747,14 @@ export async function POST(request: NextRequest) {
           );
           
           if (result.success) {
-            console.log(`✅ Admin notification sent successfully. Message ID: ${result.messageId}`);
-            console.log(`   Bill: ${createdBill.billNo}`);
-            console.log(`   Contractor: ${contract.contractorName}`);
+            logger.log(`✅ Admin notification sent successfully. Message ID: ${result.messageId}`);
+            logger.log(`   Bill: ${createdBill.billNo}`);
+            logger.log(`   Contractor: ${contract.contractorName}`);
           } else {
             console.error(`⚠️ Failed to send admin notification: ${result.error}`);
           }
         } else {
-          console.log('ℹ️ Admin WhatsApp number not configured, skipping admin notification');
+          logger.log('ℹ️ Admin WhatsApp number not configured, skipping admin notification');
         }
       } catch (adminWhatsappError) {
         console.error('⚠️ Error sending admin WhatsApp notification:', adminWhatsappError);
@@ -795,3 +796,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message, code }, { status: statusCode });
   }
 }
+

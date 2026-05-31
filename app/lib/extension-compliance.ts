@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 
 // GCC 17A/17B Extension Compliance for PVC Calculations
 // Implements PVC restrictions as per GCC April 2022 Policy
@@ -74,9 +75,9 @@ export async function analyzeContractExtension(
   contractId: string,
   measurementDate: Date
 ): Promise<ExtensionDetails> {
-  console.log('\n🔍 ===== ANALYZING CONTRACT EXTENSION =====');
-  console.log(`📋 Contract ID: ${contractId}`);
-  console.log(`📅 Measurement Date: ${measurementDate.toISOString().slice(0, 10)}`);
+  logger.log('\n🔍 ===== ANALYZING CONTRACT EXTENSION =====');
+  logger.log(`📋 Contract ID: ${contractId}`);
+  logger.log(`📅 Measurement Date: ${measurementDate.toISOString().slice(0, 10)}`);
   
   const contract = await prisma.contract.findUnique({
     where: { id: contractId },
@@ -91,12 +92,12 @@ export async function analyzeContractExtension(
     throw new Error('Contract not found');
   }
 
-  console.log(`📝 Contract Agreement: ${contract.agreementNo}`);
-  console.log(`🔧 Extension Status in DB:`);
-  console.log(`   isExtended: ${contract.isExtended}`);
-  console.log(`   extensionType: ${contract.extensionType}`);
-  console.log(`   originalCompletionDate: ${contract.originalCompletionDate?.toISOString().slice(0, 10) || 'null'}`);
-  console.log(`   currentCompletionDate: ${contract.currentCompletionDate?.toISOString().slice(0, 10) || 'null'}`);
+  logger.log(`📝 Contract Agreement: ${contract.agreementNo}`);
+  logger.log(`🔧 Extension Status in DB:`);
+  logger.log(`   isExtended: ${contract.isExtended}`);
+  logger.log(`   extensionType: ${contract.extensionType}`);
+  logger.log(`   originalCompletionDate: ${contract.originalCompletionDate?.toISOString().slice(0, 10) || 'null'}`);
+  logger.log(`   currentCompletionDate: ${contract.currentCompletionDate?.toISOString().slice(0, 10) || 'null'}`);
 
   // Check if we're in an extension period
   const originalCompletion = contract.originalCompletionDate;
@@ -107,30 +108,30 @@ export async function analyzeContractExtension(
     ? measurementDate > originalCompletion 
     : false;
 
-  console.log(`⏰ Extension Period Check:`);
-  console.log(`   isExtended: ${isExtended}`);
-  console.log(`   isInExtensionPeriod: ${isInExtensionPeriod}`);
-  console.log(`   Measurement > Original Completion: ${measurementDate > (originalCompletion || new Date(0))}`);
+  logger.log(`⏰ Extension Period Check:`);
+  logger.log(`   isExtended: ${isExtended}`);
+  logger.log(`   isInExtensionPeriod: ${isInExtensionPeriod}`);
+  logger.log(`   Measurement > Original Completion: ${measurementDate > (originalCompletion || new Date(0))}`);
 
   // Get the latest extension details
   const latestExtension = contract.extensions[0];
   const extensionType = contract.extensionType as '17A' | '17B' | null;
 
-  console.log(`📊 Extension Type: ${extensionType || 'null'}`);
+  logger.log(`📊 Extension Type: ${extensionType || 'null'}`);
 
   // Determine if PVC restriction applies (17B extensions only)
   const requiresPvcRestriction = isInExtensionPeriod && extensionType === '17B';
   
-  console.log(`🚨 PVC Restriction Required: ${requiresPvcRestriction}`);
+  logger.log(`🚨 PVC Restriction Required: ${requiresPvcRestriction}`);
   
   // For 17B, PVC restriction date is the end of original/17A completion period
   let pvcRestrictionDate: Date | undefined;
   if (requiresPvcRestriction && originalCompletion) {
     pvcRestrictionDate = originalCompletion;
-    console.log(`📍 PVC Restriction Date: ${pvcRestrictionDate.toISOString().slice(0, 10)}`);
+    logger.log(`📍 PVC Restriction Date: ${pvcRestrictionDate.toISOString().slice(0, 10)}`);
   }
 
-  console.log('🔍 ===== ANALYSIS COMPLETE =====\n');
+  logger.log('🔍 ===== ANALYSIS COMPLETE =====\n');
 
   return {
     isExtended,
@@ -181,7 +182,7 @@ export async function getCappedIndices(
     1
   );
   
-  console.log(`📅 17B Restriction - Index_L Calculation:`, {
+  logger.log(`📅 17B Restriction - Index_L Calculation:`, {
     originalCompletionDate: restrictionDate.toISOString().slice(0, 10),
     lastMonthOfCompletion: lastMonthOfCompletion.toISOString().slice(0, 7),
     formula: 'Index_L = Index of the last month of original completion period'
@@ -206,7 +207,7 @@ export async function getCappedIndices(
       // - If CurrentQuarterAvg <= Index_L: Use CurrentQuarterAvg (allow downward variation)
       cappedIndices[qa.indexName] = Math.min(qa.average, indexL);
       
-      console.log(`🔒 17B Cap for ${qa.indexName} (GCC 46A.10):`, {
+      logger.log(`🔒 17B Cap for ${qa.indexName} (GCC 46A.10):`, {
         currentQuarterAvg: qa.average.toFixed(2),
         indexL_LastMonth: indexL.toFixed(2),
         lastMonth: lastMonthOfCompletion.toISOString().slice(0, 7),
@@ -220,7 +221,7 @@ export async function getCappedIndices(
       indexL_Values[qa.indexName] = qa.baseValue;
       cappedIndices[qa.indexName] = qa.baseValue;
       missingIndices.push(qa.indexName);
-      console.warn(`⚠️ No monthly data for ${qa.indexName} in ${lastMonthOfCompletion.toISOString().slice(0, 7)}, using base value (PROVISIONAL)`);
+      logger.warn(`⚠️ No monthly data for ${qa.indexName} in ${lastMonthOfCompletion.toISOString().slice(0, 7)}, using base value (PROVISIONAL)`);
     }
   }
   
@@ -693,3 +694,4 @@ export async function createContractExtension(
     }
   });
 }
+

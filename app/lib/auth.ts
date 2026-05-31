@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
@@ -201,7 +202,7 @@ export const authOptions: NextAuthOptions = {
   events: {
     async signOut({ token }) {
       // Clear any cached data on sign out
-      console.log('User signed out:', token?.email);
+      logger.log('User signed out:', token?.email);
     },
   },
   pages: {
@@ -211,3 +212,4 @@ export const authOptions: NextAuthOptions = {
   debug: false,
   secret: process.env.NEXTAUTH_SECRET,
 };
+

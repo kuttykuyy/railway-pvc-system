@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -9,11 +10,11 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('[GST Excel Export] Starting export...');
+    logger.log('[GST Excel Export] Starting export...');
     
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
-      console.log('[GST Excel Export] Unauthorized - no session');
+      logger.log('[GST Excel Export] Unauthorized - no session');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -23,13 +24,13 @@ export async function GET(request: NextRequest) {
     });
 
     if (!user) {
-      console.log('[GST Excel Export] User not found');
+      logger.log('[GST Excel Export] User not found');
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     // Check if user is admin
     if (user.role !== 'admin') {
-      console.log('[GST Excel Export] Access denied - not admin');
+      logger.log('[GST Excel Export] Access denied - not admin');
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get('month'); // Format: YYYY-MM
     const year = searchParams.get('year'); // Format: YYYY
 
-    console.log('[GST Excel Export] Filters - month:', month, 'year:', year);
+    logger.log('[GST Excel Export] Filters - month:', month, 'year:', year);
 
     // Build filter query
     let dateFilter: any = {};
@@ -85,7 +86,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    console.log('[GST Excel Export] Found invoices:', invoices.length);
+    logger.log('[GST Excel Export] Found invoices:', invoices.length);
 
     if (invoices.length === 0) {
       return NextResponse.json(
@@ -190,7 +191,7 @@ export async function GET(request: NextRequest) {
     const periodText = month ? month : year ? year : 'All';
     const filename = `GST_Report_${periodText}_${new Date().toISOString().split('T')[0]}.xlsx`;
 
-    console.log('[GST Excel Export] Export successful, filename:', filename);
+    logger.log('[GST Excel Export] Export successful, filename:', filename);
 
     // Return file
     return new NextResponse(excelBuffer, {
@@ -208,3 +209,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

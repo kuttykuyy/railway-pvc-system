@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 /**
  * PPAC (Petroleum Planning & Analysis Cell) Fetcher
  * Automatically fetches diesel prices from ppac.gov.in
@@ -27,7 +28,7 @@ export interface FuelPriceEntry {
  */
 export async function getLatestPPACPdfUrl(): Promise<PPACPdfInfo | null> {
   try {
-    console.log('[PPAC Fetcher] Fetching PPAC RSP page...');
+    logger.log('[PPAC Fetcher] Fetching PPAC RSP page...');
     const response = await fetch(PPAC_RSP_PAGE, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -53,7 +54,7 @@ export async function getLatestPPACPdfUrl(): Promise<PPACPdfInfo | null> {
       const altMatches = html.match(altPattern);
       
       if (!altMatches || altMatches.length === 0) {
-        console.log('[PPAC Fetcher] No PDF links found on page');
+        logger.log('[PPAC Fetcher] No PDF links found on page');
         return null;
       }
       
@@ -71,7 +72,7 @@ export async function getLatestPPACPdfUrl(): Promise<PPACPdfInfo | null> {
     const pdfUrl = matches[0];
     const filename = pdfUrl.split('/').pop() || 'ppac-daily-prices.pdf';
     
-    console.log(`[PPAC Fetcher] Found PDF: ${filename}`);
+    logger.log(`[PPAC Fetcher] Found PDF: ${filename}`);
     
     return {
       url: pdfUrl,
@@ -103,7 +104,7 @@ function extractDateFromFilename(filename: string): string | undefined {
  */
 export async function downloadPPACPdf(url: string): Promise<string> {
   try {
-    console.log(`[PPAC Fetcher] Downloading PDF from ${url}`);
+    logger.log(`[PPAC Fetcher] Downloading PDF from ${url}`);
     
     const response = await fetch(url, {
       headers: {
@@ -119,7 +120,7 @@ export async function downloadPPACPdf(url: string): Promise<string> {
     const arrayBuffer = await response.arrayBuffer();
     const base64 = Buffer.from(arrayBuffer).toString('base64');
     
-    console.log(`[PPAC Fetcher] Downloaded PDF, size: ${Math.round(arrayBuffer.byteLength / 1024)} KB`);
+    logger.log(`[PPAC Fetcher] Downloaded PDF, size: ${Math.round(arrayBuffer.byteLength / 1024)} KB`);
     
     return base64;
   } catch (error: any) {
@@ -137,7 +138,7 @@ export async function extractFuelPricesWithAI(base64: string): Promise<FuelPrice
     throw new Error('ABACUSAI_API_KEY not configured');
   }
 
-  console.log('[PPAC Fetcher] Calling AI to extract diesel prices...');
+  logger.log('[PPAC Fetcher] Calling AI to extract diesel prices...');
   
   const requestBody = JSON.stringify({
     model: 'gpt-5.4-mini',
@@ -188,7 +189,7 @@ Rules:
   
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log(`[PPAC Fetcher] AI request attempt ${attempt}/${MAX_RETRIES}...`);
+      logger.log(`[PPAC Fetcher] AI request attempt ${attempt}/${MAX_RETRIES}...`);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout
@@ -209,7 +210,7 @@ Rules:
         const errorText = await response.text();
         // Check if it's a timeout/server error worth retrying
         if ((response.status >= 500 || response.status === 524) && attempt < MAX_RETRIES) {
-          console.warn(`[PPAC Fetcher] AI API error ${response.status} on attempt ${attempt}, retrying in 5s...`);
+          logger.warn(`[PPAC Fetcher] AI API error ${response.status} on attempt ${attempt}, retrying in 5s...`);
           lastError = new Error(`AI API error ${response.status}: ${errorText.substring(0, 200)}`);
           await new Promise(resolve => setTimeout(resolve, 5000));
           continue;
@@ -225,16 +226,16 @@ Rules:
     } catch (error: any) {
       if (error.name === 'AbortError') {
         lastError = new Error(`AI API request timed out after 90s (attempt ${attempt}/${MAX_RETRIES})`);
-        console.warn(`[PPAC Fetcher] ${lastError.message}`);
+        logger.warn(`[PPAC Fetcher] ${lastError.message}`);
       } else if (error.message?.includes('AI API error')) {
         throw error; // Non-retryable API errors
       } else {
         lastError = error;
-        console.warn(`[PPAC Fetcher] Request failed on attempt ${attempt}: ${error.message}`);
+        logger.warn(`[PPAC Fetcher] Request failed on attempt ${attempt}: ${error.message}`);
       }
       
       if (attempt < MAX_RETRIES) {
-        console.log(`[PPAC Fetcher] Retrying in 5s...`);
+        logger.log(`[PPAC Fetcher] Retrying in 5s...`);
         await new Promise(resolve => setTimeout(resolve, 5000));
       }
     }
@@ -244,8 +245,8 @@ Rules:
     throw lastError || new Error('AI API returned empty response after all retries');
   }
   
-  console.log('[PPAC Fetcher] AI response length:', content.length);
-  console.log('[PPAC Fetcher] AI response preview:', content.substring(0, 500));
+  logger.log('[PPAC Fetcher] AI response length:', content.length);
+  logger.log('[PPAC Fetcher] AI response preview:', content.substring(0, 500));
   
   // Parse JSON from response - try multiple extraction strategies
   let jsonStr = '';
@@ -254,7 +255,7 @@ Rules:
   const codeBlockMatch = content.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
   if (codeBlockMatch) {
     jsonStr = codeBlockMatch[1];
-    console.log('[PPAC Fetcher] Extracted JSON from code block');
+    logger.log('[PPAC Fetcher] Extracted JSON from code block');
   }
   
   // Strategy 2: Direct JSON array match
@@ -262,7 +263,7 @@ Rules:
     const directMatch = content.match(/\[\s*\{[\s\S]*\}\s*\]/);
     if (directMatch) {
       jsonStr = directMatch[0];
-      console.log('[PPAC Fetcher] Extracted JSON via direct match');
+      logger.log('[PPAC Fetcher] Extracted JSON via direct match');
     }
   }
   
@@ -271,7 +272,7 @@ Rules:
     const trimmed = content.trim();
     if (trimmed.startsWith('[')) {
       jsonStr = trimmed;
-      console.log('[PPAC Fetcher] Using entire content as JSON');
+      logger.log('[PPAC Fetcher] Using entire content as JSON');
     }
   }
   
@@ -290,7 +291,7 @@ Rules:
   }
   
   const prices: FuelPriceEntry[] = pricesArray;
-  console.log(`[PPAC Fetcher] Extracted ${prices.length} diesel price entries`);
+  logger.log(`[PPAC Fetcher] Extracted ${prices.length} diesel price entries`);
   
   return prices;
 }
@@ -364,7 +365,7 @@ export async function importFuelPricesToDatabase(prices: FuelPriceEntry[]): Prom
     }
   }
 
-  console.log(`[PPAC Fetcher] Import complete: ${created} created, ${updated} updated, ${errors} errors`);
+  logger.log(`[PPAC Fetcher] Import complete: ${created} created, ${updated} updated, ${errors} errors`);
   
   return { created, updated, errors, errorDetails };
 }
@@ -424,3 +425,4 @@ export async function fetchAndImportPPACPrices(): Promise<{
     };
   }
 }
+

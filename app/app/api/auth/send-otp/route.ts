@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validatePhoneNumber, sendOtpWhatsApp } from '@/lib/whatsapp-mydreams';
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[OTP] ✅ OTP sent to:', phone);
+    logger.log('[OTP] ✅ OTP sent to:', phone);
 
     return NextResponse.json({
       success: true,
@@ -113,3 +114,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

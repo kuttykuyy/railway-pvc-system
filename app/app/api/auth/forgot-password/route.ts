@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import crypto from 'crypto';
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     // For security, always return success even if user doesn't exist
     // This prevents email enumeration attacks
     if (!user) {
-      console.log(`Password reset requested for non-existent email: ${normalizedEmail}`);
+      logger.log(`Password reset requested for non-existent email: ${normalizedEmail}`);
       return NextResponse.json(
         { message: 'If an account exists with this email, you will receive a password reset link.' },
         { status: 200 }
@@ -68,12 +69,12 @@ export async function POST(request: NextRequest) {
 
     const resetUrl = `${baseUrl}/auth/reset-password?token=${resetToken}`;
 
-    console.log('Password Reset URL Generation:');
-    console.log('- NEXTAUTH_URL:', process.env.NEXTAUTH_URL);
-    console.log('- X-Forwarded-Host:', request.headers.get('x-forwarded-host'));
-    console.log('- Host:', request.headers.get('host'));
-    console.log('- Selected Base URL:', baseUrl);
-    console.log('- Reset URL:', resetUrl);
+    logger.log('Password Reset URL Generation:');
+    logger.log('- NEXTAUTH_URL:', process.env.NEXTAUTH_URL);
+    logger.log('- X-Forwarded-Host:', request.headers.get('x-forwarded-host'));
+    logger.log('- Host:', request.headers.get('host'));
+    logger.log('- Selected Base URL:', baseUrl);
+    logger.log('- Reset URL:', resetUrl);
 
     // Send password reset email
     try {
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
         html: getResetPasswordEmailHtml(resetUrl, user.email),
       });
 
-      console.log(`Password reset email sent successfully to: ${user.email}`);
+      logger.log(`Password reset email sent successfully to: ${user.email}`);
     } catch (emailError) {
       console.error('Failed to send password reset email:', emailError);
       // Don't reveal email sending failure to user for security
@@ -102,3 +103,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

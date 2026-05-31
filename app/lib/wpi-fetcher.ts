@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 /**
  * WPI Data Fetcher - Fetches Wholesale Price Index data from eaindustry.nic.in
  * Base Year: 2011-12 = 100
@@ -137,7 +138,7 @@ export async function updateIndicesFromWPI(
   for (const priceIndex of priceIndices) {
     // Skip non-WPI indices (Labour, Steel types, MPNG Fuel)
     if (!WPI_MAPPINGS[priceIndex.name]) {
-      console.log(`[WPI] Skipping ${priceIndex.name} - not a WPI index`);
+      logger.log(`[WPI] Skipping ${priceIndex.name} - not a WPI index`);
       continue;
     }
     
@@ -147,7 +148,7 @@ export async function updateIndicesFromWPI(
       continue;
     }
     
-    console.log(`[WPI] Found match for ${priceIndex.name}: ${wpiMatch.commName}`);
+    logger.log(`[WPI] Found match for ${priceIndex.name}: ${wpiMatch.commName}`);
     
     // Filter months to update
     let valuesToUpdate = wpiMatch.monthlyValues;
@@ -251,11 +252,11 @@ export async function updateIndicesFromWPI(
             },
           });
           if (olderResult.count > 0) {
-            console.log(`[WPI] Marked ${olderResult.count} older records as final`);
+            logger.log(`[WPI] Marked ${olderResult.count} older records as final`);
           }
 
           if (bulkResult.count > 0) {
-            console.log(`[WPI] Marked ${bulkResult.count} records as provisional for months: ${latest2Months.join(', ')}`);
+            logger.log(`[WPI] Marked ${bulkResult.count} records as provisional for months: ${latest2Months.join(', ')}`);
             details.push({ index: 'PROVISIONAL', month: latest2Months.join(', '), value: bulkResult.count });
           }
         }

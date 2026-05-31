@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = globalThis as unknown as {
@@ -28,7 +29,7 @@ function buildDatabaseUrl(): string {
   // Additional validation: Check if it's a valid PostgreSQL URL format
   if (!baseUrl.startsWith('postgres://') && !baseUrl.startsWith('postgresql://')) {
     console.error('❌ DATABASE_URL is not a valid PostgreSQL connection string')
-    console.log('Raw DATABASE_URL value (first 20 chars):', baseUrl.substring(0, 20))
+    logger.log('Raw DATABASE_URL value (first 20 chars):', baseUrl.substring(0, 20))
     return baseUrl // Return as-is if not a standard postgres URL
   }
   
@@ -62,8 +63,8 @@ function buildDatabaseUrl(): string {
     return url.toString()
   } catch (error: any) {
     console.error('⚠️ Failed to parse DATABASE_URL:', error?.message || error)
-    console.log('Raw DATABASE_URL value (first 30 chars):', baseUrl.substring(0, 30))
-    console.log('DATABASE_URL length:', baseUrl.length)
+    logger.log('Raw DATABASE_URL value (first 30 chars):', baseUrl.substring(0, 30))
+    logger.log('DATABASE_URL length:', baseUrl.length)
     
     // Return original URL if parsing fails
     return baseUrl
@@ -116,7 +117,7 @@ export const prisma = (() => {
 
   if (process.env.NODE_ENV === 'development') {
     (client as any).$on('warn', (e: any) => {
-      console.warn('prisma:warn', e?.message || e);
+      logger.warn('prisma:warn', e?.message || e);
     });
   }
 
@@ -176,7 +177,7 @@ async function ensureConnection(): Promise<void> {
       errorMsg.includes('server closed')
     
     if (isIdleSessionTimeout) {
-      console.warn('⚠️  Detected idle session timeout in health check, attempting reconnection...')
+      logger.warn('⚠️  Detected idle session timeout in health check, attempting reconnection...')
       await reconnectDatabase()
     }
   }
@@ -192,7 +193,7 @@ async function reconnectDatabase(retries = 5): Promise<void> {
   
   for (let i = 0; i < retries; i++) {
     try {
-      console.log(`🔄 [${new Date().toISOString()}] Reconnecting to database (attempt ${i + 1}/${retries})...`)
+      logger.log(`🔄 [${new Date().toISOString()}] Reconnecting to database (attempt ${i + 1}/${retries})...`)
       
       // Force disconnect all connections
       await prisma.$disconnect().catch(() => {})
@@ -207,7 +208,7 @@ async function reconnectDatabase(retries = 5): Promise<void> {
       // Verify with actual query
       await prisma.$queryRaw`SELECT 1`
       
-      console.log('✅ Database reconnected successfully')
+      logger.log('✅ Database reconnected successfully')
       globalForPrisma.lastHealthCheck = Date.now()
       globalForPrisma.reconnecting = false
       return
@@ -320,7 +321,7 @@ if (typeof window === 'undefined') {
     try {
       await prisma.$connect()
       globalForPrisma.lastHealthCheck = Date.now()
-      console.log('✅ Database connected successfully')
+      logger.log('✅ Database connected successfully')
     } catch (error: any) {
       console.error('❌ Initial database connection failed:', error?.message)
       // Try to reconnect
@@ -470,3 +471,4 @@ if (typeof window === 'undefined') {
     return originalStderrWrite(chunk, ...rest)
   }
 }
+

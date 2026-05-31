@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { jsPDF } from 'jspdf';
 
@@ -73,8 +74,8 @@ function justifyText(doc: jsPDF, text: string, x: number, y: number, maxWidth: n
 
 export async function generateCoveringLetter(data: CoveringLetterData): Promise<Buffer> {
   try {
-    console.log('PDF Generator: Starting PDF generation');
-    console.log('PDF Generator: Data received:', {
+    logger.log('PDF Generator: Starting PDF generation');
+    logger.log('PDF Generator: Data received:', {
       companyName: data.companyName,
       billNumber: data.billNumber,
       billAmount: data.billAmount
@@ -82,13 +83,13 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
 
     // Validate required data
     if (!data.companyName || data.companyName === 'Company Name') {
-      console.warn('⚠ PDF Generator: Company name is missing or default');
+      logger.warn('⚠ PDF Generator: Company name is missing or default');
     }
     if (!data.billNumber) {
-      console.warn('⚠ PDF Generator: Bill number is missing');
+      logger.warn('⚠ PDF Generator: Bill number is missing');
     }
     if (!data.billAmount) {
-      console.warn('⚠ PDF Generator: Bill amount is missing');
+      logger.warn('⚠ PDF Generator: Bill amount is missing');
     }
 
     const doc = new jsPDF({
@@ -96,7 +97,7 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
       unit: 'mm',
       format: 'a4',
     });
-    console.log('✓ PDF Generator: jsPDF instance created');
+    logger.log('✓ PDF Generator: jsPDF instance created');
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -263,12 +264,12 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
     doc.setFont('helvetica', 'normal');
     doc.text('Thanking You,', margin, yPos);
 
-    console.log('✓ PDF Generator: PDF content created');
+    logger.log('✓ PDF Generator: PDF content created');
 
     // Convert to buffer
-    console.log('PDF Generator: Converting to buffer...');
+    logger.log('PDF Generator: Converting to buffer...');
     const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
-    console.log('✓ PDF Generator: Buffer created, size:', pdfBuffer.length, 'bytes');
+    logger.log('✓ PDF Generator: Buffer created, size:', pdfBuffer.length, 'bytes');
     
     return pdfBuffer;
   } catch (error) {
@@ -277,3 +278,4 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
     throw new Error(`PDF generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
+

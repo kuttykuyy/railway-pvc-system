@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 
 /**
  * Steel Type Handler - Centralized steel type extraction and validation
@@ -28,8 +29,8 @@ export async function extractSteelTypesFromEntries(
     steelTypes?: string[];
   }>
 ): Promise<string[]> {
-  console.log('\n🔧 [STEEL HANDLER] Extracting steel types from classification entries');
-  console.log(`   Total entries: ${classificationEntries.length}`);
+  logger.log('\n🔧 [STEEL HANDLER] Extracting steel types from classification entries');
+  logger.log(`   Total entries: ${classificationEntries.length}`);
   
   const collectedSteelTypes = new Set<string>();
 
@@ -55,13 +56,13 @@ export async function extractSteelTypesFromEntries(
 
     // Only collect steel types from entries with steel components
     if (hasSteelComponent && entry.steelTypes && Array.isArray(entry.steelTypes)) {
-      console.log(`   Entry with steel (${entry.amount}): ${entry.steelTypes.join(', ')}`);
+      logger.log(`   Entry with steel (${entry.amount}): ${entry.steelTypes.join(', ')}`);
       entry.steelTypes.forEach(type => collectedSteelTypes.add(type));
     }
   }
 
   const result = Array.from(collectedSteelTypes);
-  console.log(`   ✅ Extracted steel types: ${result.length > 0 ? result.join(', ') : 'None (will use average of all types)'}`);
+  logger.log(`   ✅ Extracted steel types: ${result.length > 0 ? result.join(', ') : 'None (will use average of all types)'}`);
   
   return result;
 }
@@ -82,3 +83,4 @@ export function validateSteelTypes(steelTypes: unknown): steelTypes is string[] 
 export function getSteelIndexNames(steelTypes: string[]): string[] {
   return steelTypes.map(type => STEEL_TYPE_INDEX_MAP[type as SteelType]).filter(Boolean);
 }
+

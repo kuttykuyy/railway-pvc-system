@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     const { baseMonth, baseMonthDisplay, billResults, indicesData } = body;
 
     // Validation and logging
-    console.log('[PDF Export] Received request:', {
+    logger.log('[PDF Export] Received request:', {
       baseMonth,
       baseMonthDisplay,
       billResultsCount: billResults?.length,
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     // Validate each bill result structure
     for (let i = 0; i < billResults.length; i++) {
       const bill = billResults[i];
-      console.log(`[PDF Export] Validating Bill ${i}:`, {
+      logger.log(`[PDF Export] Validating Bill ${i}:`, {
         hasBillId: !!bill.billId,
         hasAmount: !!bill.amount,
         amountType: typeof bill.amount,
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create a new PDF document
-    console.log('[PDF Export] Creating PDF document');
+    logger.log('[PDF Export] Creating PDF document');
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
     const { width, height } = page.getSize();
     let yPosition = height - 50;
 
-    console.log('[PDF Export] Drawing title page');
+    logger.log('[PDF Export] Drawing title page');
 
     // Title
     page.drawText('PVC Work Classification Comparison Report', {
@@ -154,10 +155,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Bill Results
-    console.log('[PDF Export] Processing bill results, count:', billResults.length);
+    logger.log('[PDF Export] Processing bill results, count:', billResults.length);
     for (let billIndex = 0; billIndex < billResults.length; billIndex++) {
       const billResult = billResults[billIndex];
-      console.log(`[PDF Export] Processing bill ${billIndex + 1}/${billResults.length}:`, {
+      logger.log(`[PDF Export] Processing bill ${billIndex + 1}/${billResults.length}:`, {
         billId: billResult.billId,
         amount: billResult.amount,
         resultsCount: billResult.results?.length
@@ -201,11 +202,11 @@ export async function POST(request: NextRequest) {
           (b.totalPvc || 0) - (a.totalPvc || 0)
         );
         
-        console.log(`[PDF Export] Bill ${billIdText}: Processing ${sortedResults.length} classifications`);
+        logger.log(`[PDF Export] Bill ${billIdText}: Processing ${sortedResults.length} classifications`);
 
         for (let i = 0; i < sortedResults.length; i++) {
           const result = sortedResults[i];
-          console.log(`[PDF Export] Processing classification ${i + 1}/${sortedResults.length}:`, {
+          logger.log(`[PDF Export] Processing classification ${i + 1}/${sortedResults.length}:`, {
             code: result.classification?.code,
             totalPvc: result.totalPvc
           });
@@ -316,9 +317,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate PDF bytes
-    console.log('[PDF Export] Saving PDF document');
+    logger.log('[PDF Export] Saving PDF document');
     const pdfBytes = await pdfDoc.save();
-    console.log('[PDF Export] PDF generated successfully, size:', pdfBytes.length, 'bytes');
+    logger.log('[PDF Export] PDF generated successfully, size:', pdfBytes.length, 'bytes');
 
     // Safe filename generation
     const safeBaseMonth = (baseMonth || 'unknown').replace(/[^a-zA-Z0-9-_]/g, '_');
@@ -350,3 +351,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

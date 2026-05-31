@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
@@ -162,8 +163,8 @@ export async function POST(request: NextRequest) {
         
         const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${result.token}`;
         
-        console.log('[Signup] Sending verification email to:', result.user.email);
-        console.log('[Signup] Verification URL:', verificationUrl);
+        logger.log('[Signup] Sending verification email to:', result.user.email);
+        logger.log('[Signup] Verification URL:', verificationUrl);
         
         await resend.emails.send({
           from: 'Railway PVC System <noreply@irpvc.in>',
@@ -172,13 +173,13 @@ export async function POST(request: NextRequest) {
           html: getVerificationEmailHtml(verificationUrl, result.user.email),
         });
 
-        console.log('✅ Verification email sent to:', result.user.email);
+        logger.log('✅ Verification email sent to:', result.user.email);
       } catch (emailError) {
         console.error('❌ Failed to send verification email:', emailError);
         // Don't fail the signup if email fails, but log it
       }
     } else {
-      console.log('ℹ️ Email verification disabled - user auto-verified:', result.user.email);
+      logger.log('ℹ️ Email verification disabled - user auto-verified:', result.user.email);
     }
 
     // Send welcome email to new user (async, non-blocking)
@@ -249,7 +250,7 @@ export async function POST(request: NextRequest) {
       }).then(async (res) => {
         const data = await res.json();
         if (data.success) {
-          console.log('✅ Welcome email sent to:', email);
+          logger.log('✅ Welcome email sent to:', email);
         } else {
           console.error('❌ Welcome email failed:', data.message);
         }
@@ -274,7 +275,7 @@ export async function POST(request: NextRequest) {
     // Send WhatsApp notification to admin about new user signup (don't await to avoid delaying response)
     getAdminWhatsAppNumber().then(async (adminWhatsAppNumber) => {
       if (!adminWhatsAppNumber) {
-        console.warn('⚠️ Admin WhatsApp number not configured, skipping notification');
+        logger.warn('⚠️ Admin WhatsApp number not configured, skipping notification');
         return;
       }
 
@@ -287,9 +288,9 @@ export async function POST(request: NextRequest) {
       );
 
       if (whatsappResult.success) {
-        console.log('✅ WhatsApp signup notification sent to admin:', adminWhatsAppNumber);
-        console.log('- New user:', result.user.email);
-        console.log('- Message ID:', whatsappResult.messageId);
+        logger.log('✅ WhatsApp signup notification sent to admin:', adminWhatsAppNumber);
+        logger.log('- New user:', result.user.email);
+        logger.log('- Message ID:', whatsappResult.messageId);
         
         // Log to database for tracking
         prisma.whatsAppLog.create({
@@ -324,8 +325,8 @@ export async function POST(request: NextRequest) {
         result.user.id
       ).then((userWhatsappResult) => {
         if (userWhatsappResult.success) {
-          console.log('✅ Welcome WhatsApp message sent to user:', whatsappNumber);
-          console.log('- Message ID:', userWhatsappResult.messageId);
+          logger.log('✅ Welcome WhatsApp message sent to user:', whatsappNumber);
+          logger.log('- Message ID:', userWhatsappResult.messageId);
           
           // Log to database for tracking
           prisma.whatsAppLog.create({
@@ -350,7 +351,7 @@ export async function POST(request: NextRequest) {
         console.error('⚠️ Error in user WhatsApp welcome flow:', error);
       });
     } else {
-      console.log('⚠️ User WhatsApp number not valid or missing, skipping welcome message');
+      logger.log('⚠️ User WhatsApp number not valid or missing, skipping welcome message');
     }
 
     return NextResponse.json(
@@ -372,3 +373,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

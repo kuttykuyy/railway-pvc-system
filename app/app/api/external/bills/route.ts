@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 /**
  * External API: Bill Creation
  * Allows external apps (like primerp.in) to create PVC bills
@@ -148,7 +149,7 @@ export async function GET(request: NextRequest) {
  * - classificationEntries: array of classification entries
  */
 export async function POST(request: NextRequest) {
-  console.log('\n\ud83d\ude80 [ExternalAPI] POST /api/external/bills - Request received');
+  logger.log('\n\ud83d\ude80 [ExternalAPI] POST /api/external/bills - Request received');
   
   try {
     // ===== Step 1: Validate API Key =====
@@ -160,7 +161,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    console.log(`\u2705 API key validated for user: ${auth.userEmail}`);
+    logger.log(`\u2705 API key validated for user: ${auth.userEmail}`);
     
     // ===== Step 2: Parse Request Body =====
     const body = await request.json();
@@ -307,7 +308,7 @@ export async function POST(request: NextRequest) {
     }
     
     const quarter = getQuarterFromDate(quarterDateForCalculation, contract.baseMonth);
-    console.log(`\ud83d\udcca Calculated Quarter: ${quarter}`);
+    logger.log(`\ud83d\udcca Calculated Quarter: ${quarter}`);
     
     // ===== Step 8: Generate PVC Number =====
     const billCountForContract = await prisma.bill.count({ where: { contractId } });
@@ -343,7 +344,7 @@ export async function POST(request: NextRequest) {
       }
     });
     
-    console.log(`\u2705 Bill created: ${bill.id}`);
+    logger.log(`\u2705 Bill created: ${bill.id}`);
     
     // ===== Step 11: Calculate PVC using the same approach as main API =====
     // Use zone-based steel city prices instead of default Chennai rates
@@ -419,7 +420,7 @@ export async function POST(request: NextRequest) {
     if (!paymentResult.success) {
       console.error('\\u274c Failed to process payment:', paymentResult.message);
     } else {
-      console.log('\\u2705 Payment processed successfully');
+      logger.log('\\u2705 Payment processed successfully');
     }
     
     // ===== Step 14: Return Success Response =====
@@ -461,3 +462,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 /**
  * Telegram Bot API utilities
  */
@@ -96,7 +97,7 @@ export async function setTelegramWebhook(webhookUrl: string): Promise<any> {
       body: JSON.stringify({ url: webhookUrl }),
     });
     const data = await res.json();
-    console.log('Telegram setWebhook result:', data);
+    logger.log('Telegram setWebhook result:', data);
     return data;
   } catch (err) {
     console.error('Telegram setWebhook exception:', err);
@@ -129,3 +130,4 @@ export function replyKeyboard(buttons: string[][], oneTime = true) {
     resize_keyboard: true,
   };
 }
+

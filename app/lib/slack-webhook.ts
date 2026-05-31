@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 
 /**
  * Slack Webhook Notification Utility
@@ -84,7 +85,7 @@ async function sendSlackNotification(payload: SlackNotificationPayload): Promise
       return false;
     }
 
-    console.log('✅ Slack notification sent successfully');
+    logger.log('✅ Slack notification sent successfully');
     return true;
   } catch (error) {
     console.error('❌ Failed to send Slack notification:', error);
@@ -420,3 +421,4 @@ export async function notifyCreditTopupRequest(data: CreditTopupRequestData): Pr
 
   return await sendSlackNotification(payload);
 }
+

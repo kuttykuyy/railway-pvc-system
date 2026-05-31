@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -11,10 +12,10 @@ import { parseAgreementNumber } from '@/lib/railway-division-helper';
  */
 export async function POST(req: NextRequest) {
   try {
-    console.log('=== Bill Approval Submission API Called ===');
+    logger.log('=== Bill Approval Submission API Called ===');
     
     const session = await getServerSession(authOptions);
-    console.log('Session user:', session?.user?.email);
+    logger.log('Session user:', session?.user?.email);
     
     if (!session?.user?.email) {
       console.error('No session found');
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
       where: { email: session.user.email }
     });
 
-    console.log('User found:', { id: user?.id, role: user?.role, email: user?.email });
+    logger.log('User found:', { id: user?.id, role: user?.role, email: user?.email });
 
     if (!user) {
       console.error('User not found in database');
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { billId, assignedToUserId } = await req.json();
-    console.log('Request data:', { billId, assignedToUserId });
+    logger.log('Request data:', { billId, assignedToUserId });
 
     if (!billId) {
       console.error('No bill ID provided');
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    console.log('Bill found:', bill ? { 
+    logger.log('Bill found:', bill ? { 
       id: bill.id, 
       status: bill.status, 
       contractId: bill.contractId,
@@ -104,12 +105,12 @@ export async function POST(req: NextRequest) {
 
     // Parse agreement number to determine zone and division
     const parsed = parseAgreementNumber(bill.contract.agreementNo);
-    console.log('Parsed agreement number:', parsed);
+    logger.log('Parsed agreement number:', parsed);
     
     let finalAssignedTo = assignedToUserId;
 
     if (parsed && !assignedToUserId) {
-      console.log('Looking for railway officials with:', {
+      logger.log('Looking for railway officials with:', {
         zone: parsed.zone,
         division: parsed.division
       });
@@ -129,12 +130,12 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      console.log(`Found ${matchingOfficials.length} matching officials:`, matchingOfficials);
+      logger.log(`Found ${matchingOfficials.length} matching officials:`, matchingOfficials);
 
       // Auto-assign if only one official matches
       if (matchingOfficials.length === 1) {
         finalAssignedTo = matchingOfficials[0].id;
-        console.log('Auto-assigning to:', matchingOfficials[0]);
+        logger.log('Auto-assigning to:', matchingOfficials[0]);
       } else if (matchingOfficials.length === 0) {
         console.error('No railway officials found for the zone/division');
         return NextResponse.json(
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       } else {
-        console.log('Multiple officials found, requiring selection');
+        logger.log('Multiple officials found, requiring selection');
         return NextResponse.json(
           { 
             error: 'Multiple officials found. Please select an official.',
@@ -154,7 +155,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.log('Updating bill status to submitted. Final assigned to:', finalAssignedTo);
+    logger.log('Updating bill status to submitted. Final assigned to:', finalAssignedTo);
 
     // Update bill status to submitted with optional assignment
     const updatedBill = await prisma.bill.update({
@@ -166,7 +167,7 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    console.log('Bill updated successfully');
+    logger.log('Bill updated successfully');
 
     // Create approval history entry
     await prisma.billApprovalHistory.create({
@@ -182,7 +183,7 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    console.log('Approval history created');
+    logger.log('Approval history created');
 
     // TODO: Send email notification to assigned railway official or all matching officials
     // This can be implemented later with email service
@@ -203,3 +204,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

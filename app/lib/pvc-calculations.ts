@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 
 import { PVC_COMPONENTS, QuarterlyAverage } from './types';
 import { PrismaClient } from '@prisma/client';
@@ -188,7 +189,7 @@ function calculateSteelPvc(
       
       const pvc = calculatePvcComponent(billAmount, avgIndexValue, avgBaseValue, steelPercentage);
       
-      console.log(`📊 Steel PVC Calculation with ${selectedIndices.length} type(s):`, {
+      logger.log(`📊 Steel PVC Calculation with ${selectedIndices.length} type(s):`, {
         steelTypes: steelTypes,
         selectedIndices: selectedIndices.map(idx => ({ name: idx.indexName, base: idx.baseValue, avg: idx.average })),
         avgBaseValue,
@@ -218,7 +219,7 @@ function calculateSteelPvc(
     
     const pvc = calculatePvcComponent(billAmount, avgIndexValue, avgBaseValue, steelPercentage);
     
-    console.log(`📊 Steel PVC Calculation (default - average of all types):`, {
+    logger.log(`📊 Steel PVC Calculation (default - average of all types):`, {
       availableIndices: availableIndices.map(idx => ({ name: idx.indexName, base: idx.baseValue, avg: idx.average })),
       avgBaseValue,
       avgIndexValue,
@@ -308,8 +309,8 @@ export async function calculateDynamicClassificationPvc(
 
   // Check if this is a processing fee classification
   if (isProcessingFeeClassification(components)) {
-    console.log(`Processing fee classification detected: ${workClassificationCode || 'Unknown'}`);
-    console.log('All component percentages are 0%, returning zero PVC');
+    logger.log(`Processing fee classification detected: ${workClassificationCode || 'Unknown'}`);
+    logger.log('All component percentages are 0%, returning zero PVC');
     return {
       labourPvc: 0,
       plantMachineryPvc: 0,
@@ -577,7 +578,7 @@ export function calculateClassificationBasedPvcWithComponentsAndSteps(
           selectedSteelTypes: components.steelTypes
         };
         
-        console.log(`📊 Steel PVC Calculation (with steps) using ${selectedIndices.length} selected type(s):`, {
+        logger.log(`📊 Steel PVC Calculation (with steps) using ${selectedIndices.length} selected type(s):`, {
           steelTypes: components.steelTypes,
           selectedIndices: selectedIndices.map(idx => ({ name: idx.indexName, base: idx.baseValue, avg: idx.average })),
           avgBaseValue,
@@ -758,7 +759,7 @@ export async function calculateClassificationEntryPvc(
 
   const totalPvc = labourPvc + plantMachineryPvc + fuelPowerPvc + otherMaterialsPvc + cementPvc + steelPvc + explosivesPvc;
 
-  console.log(`📊 Entry PVC Calculation (Amount: ₹${entry.amount.toLocaleString()}):`, {
+  logger.log(`📊 Entry PVC Calculation (Amount: ₹${entry.amount.toLocaleString()}):`, {
     labourPvc: labourPvc.toFixed(2),
     plantMachineryPvc: plantMachineryPvc.toFixed(2),
     fuelPowerPvc: fuelPowerPvc.toFixed(2),
@@ -892,7 +893,7 @@ export async function calculateWeightedComponents(classificationEntries: Array<{
     steelTypes: collectedSteelTypes.size > 0 ? Array.from(collectedSteelTypes) : undefined
   };
   
-  console.log('🔧 calculateWeightedComponents - Collected Steel Types:', result.steelTypes);
+  logger.log('🔧 calculateWeightedComponents - Collected Steel Types:', result.steelTypes);
   
   return result;
 }
@@ -984,7 +985,7 @@ export function calculateClassificationBasedPvcWithComponents(
         
         steelPvc = calculatePvcComponent(billAmount, avgIndexValue, avgBaseValue, components.steel);
         
-        console.log(`📊 Steel PVC Calculation with ${selectedIndices.length} selected type(s):`, {
+        logger.log(`📊 Steel PVC Calculation with ${selectedIndices.length} selected type(s):`, {
           steelTypes: components.steelTypes,
           selectedIndices: selectedIndices.map(idx => ({ name: idx.indexName, base: idx.baseValue, avg: idx.average })),
           avgBaseValue,
@@ -1011,7 +1012,7 @@ export function calculateClassificationBasedPvcWithComponents(
         
         steelPvc = calculatePvcComponent(billAmount, avgIndexValue, avgBaseValue, components.steel);
         
-        console.log(`📊 Steel PVC Calculation (default - average of all types):`, {
+        logger.log(`📊 Steel PVC Calculation (default - average of all types):`, {
           availableIndices: availableIndices.map(idx => ({ name: idx.indexName, base: idx.baseValue, avg: idx.average })),
           avgBaseValue,
           avgIndexValue,
@@ -1650,3 +1651,4 @@ export function getQuarterMonths(quarter: string, baseMonth: Date): Date[] {
   
   return dates;
 }
+

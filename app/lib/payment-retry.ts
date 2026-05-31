@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 
 /**
  * Payment Retry Utility
@@ -121,7 +122,7 @@ export function logRetryAttempt(
     errorDetails: attempt.error?.details
   };
   
-  console.warn(`[Payment Retry] ${operation} - Attempt ${attempt.attemptNumber}/${attempt.totalAttempts}`, logData);
+  logger.warn(`[Payment Retry] ${operation} - Attempt ${attempt.attemptNumber}/${attempt.totalAttempts}`, logData);
 }
 
 /**
@@ -227,14 +228,14 @@ export async function retryWithBackoff<T>(
     try {
       // Log the attempt
       if (attempt > 0) {
-        console.log(`[Payment Retry] ${operationName} - Attempt ${attempt + 1}/${config.maxRetries + 1}`);
+        logger.log(`[Payment Retry] ${operationName} - Attempt ${attempt + 1}/${config.maxRetries + 1}`);
       }
       
       const result = await operation();
       
       // Success - log and return
       if (attempt > 0) {
-        console.log(`[Payment Retry] ${operationName} - Succeeded after ${attempt} retries`);
+        logger.log(`[Payment Retry] ${operationName} - Succeeded after ${attempt} retries`);
       }
       
       return result;
@@ -291,3 +292,4 @@ export async function retryWithBackoff<T>(
   // This should never be reached, but just in case
   throw lastError;
 }
+

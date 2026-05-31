@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
@@ -28,15 +29,15 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const token = searchParams.get('token');
 
-    console.log('[Email Verification] Request received');
-    console.log('[Email Verification] NEXTAUTH_URL:', envUrl);
-    console.log('[Email Verification] X-Forwarded-Host:', forwardedHost);
-    console.log('[Email Verification] Host:', host);
-    console.log('[Email Verification] Selected Base URL:', baseUrl);
-    console.log('[Email Verification] Token present:', !!token);
+    logger.log('[Email Verification] Request received');
+    logger.log('[Email Verification] NEXTAUTH_URL:', envUrl);
+    logger.log('[Email Verification] X-Forwarded-Host:', forwardedHost);
+    logger.log('[Email Verification] Host:', host);
+    logger.log('[Email Verification] Selected Base URL:', baseUrl);
+    logger.log('[Email Verification] Token present:', !!token);
 
     if (!token) {
-      console.log('[Email Verification] Error: Missing token');
+      logger.log('[Email Verification] Error: Missing token');
       return NextResponse.redirect(new URL('/auth/verify-error?error=missing_token', baseUrl));
     }
 
@@ -46,20 +47,20 @@ export async function GET(request: NextRequest) {
     });
 
     if (!verificationToken) {
-      console.log('[Email Verification] Error: Invalid or already used token');
+      logger.log('[Email Verification] Error: Invalid or already used token');
       return NextResponse.redirect(new URL('/auth/verify-error?error=invalid_token', baseUrl));
     }
 
     // Check if token has expired
     if (verificationToken.expires < new Date()) {
-      console.log('[Email Verification] Error: Token expired');
+      logger.log('[Email Verification] Error: Token expired');
       await prisma.verificationToken.delete({
         where: { token },
       });
       return NextResponse.redirect(new URL('/auth/verify-error?error=expired_token', baseUrl));
     }
 
-    console.log('[Email Verification] Verifying email for:', verificationToken.identifier);
+    logger.log('[Email Verification] Verifying email for:', verificationToken.identifier);
 
     // Update user's emailVerified field
     await prisma.user.update({
@@ -72,9 +73,9 @@ export async function GET(request: NextRequest) {
       where: { token },
     });
 
-    console.log('[Email Verification] Success! Redirecting to success page');
+    logger.log('[Email Verification] Success! Redirecting to success page');
     const successUrl = new URL('/auth/verify-success', baseUrl);
-    console.log('[Email Verification] Redirect URL:', successUrl.toString());
+    logger.log('[Email Verification] Redirect URL:', successUrl.toString());
     
     return NextResponse.redirect(successUrl);
   } catch (error) {
@@ -82,3 +83,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/auth/verify-error?error=server_error', baseUrl));
   }
 }
+

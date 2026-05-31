@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
@@ -11,7 +12,7 @@ import { sendPaymentConfirmation } from '@/lib/whatsapp-mydreams';
  */
 export async function POST(request: NextRequest) {
   const requestId = `WEBHOOK_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Razorpay webhook received`);
+  logger.log(`[${requestId}] Razorpay webhook received`);
 
   try {
     // Get raw body for signature verification
@@ -36,16 +37,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[${requestId}] Webhook secret loaded (length: ${webhookSecret.length})`);
-    console.log(`[${requestId}] Body length: ${body.length}`);
-    console.log(`[${requestId}] Received signature: ${signature}`);
+    logger.log(`[${requestId}] Webhook secret loaded (length: ${webhookSecret.length})`);
+    logger.log(`[${requestId}] Body length: ${body.length}`);
+    logger.log(`[${requestId}] Received signature: ${signature}`);
 
     const expectedSignature = crypto
       .createHmac('sha256', webhookSecret)
       .update(body)
       .digest('hex');
 
-    console.log(`[${requestId}] Expected signature: ${expectedSignature}`);
+    logger.log(`[${requestId}] Expected signature: ${expectedSignature}`);
 
     if (signature !== expectedSignature) {
       console.error(`[${requestId}] Invalid webhook signature`);
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[${requestId}] Webhook signature verified successfully`);
+    logger.log(`[${requestId}] Webhook signature verified successfully`);
 
     // Parse webhook payload
     const event = JSON.parse(body);
@@ -64,9 +65,9 @@ export async function POST(request: NextRequest) {
     const payment = event.payload?.payment?.entity;
     const order = event.payload?.order?.entity;
 
-    console.log(`[${requestId}] Event type: ${eventType}`);
-    console.log(`[${requestId}] Order ID: ${order?.id || payment?.order_id || 'N/A'}`);
-    console.log(`[${requestId}] Payment ID: ${payment?.id || 'N/A'}`);
+    logger.log(`[${requestId}] Event type: ${eventType}`);
+    logger.log(`[${requestId}] Order ID: ${order?.id || payment?.order_id || 'N/A'}`);
+    logger.log(`[${requestId}] Payment ID: ${payment?.id || 'N/A'}`);
 
     // Handle payment events
     if (eventType === 'payment.authorized' || eventType === 'payment.captured') {
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     } else if (eventType === 'payment.failed') {
       await handlePaymentFailure(requestId, payment);
     } else {
-      console.log(`[${requestId}] Unhandled event type: ${eventType}`);
+      logger.log(`[${requestId}] Unhandled event type: ${eventType}`);
     }
 
     return NextResponse.json({ success: true });
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function handlePaymentSuccess(requestId: string, payment: any) {
-  console.log(`[${requestId}] Processing successful payment`);
+  logger.log(`[${requestId}] Processing successful payment`);
 
   const orderId = payment.order_id;
   const paymentId = payment.id;
@@ -105,11 +106,11 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
 
   // Check if already processed
   if (transaction.status === 'success') {
-    console.log(`[${requestId}] Transaction already processed: ${orderId}`);
+    logger.log(`[${requestId}] Transaction already processed: ${orderId}`);
     return;
   }
 
-  console.log(`[${requestId}] Processing transaction: ${transaction.id}`);
+  logger.log(`[${requestId}] Processing transaction: ${transaction.id}`);
 
   // Update transaction
   await prisma.razorpayTransaction.update({
@@ -136,7 +137,7 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
   const currentBalance = user.customerAccount?.creditBalance || 0;
   const newBalance = currentBalance + transaction.creditAmount;
 
-  console.log(`[${requestId}] Adding credits:`, {
+  logger.log(`[${requestId}] Adding credits:`, {
     userId: user.id,
     currentBalance,
     addingCredits: transaction.creditAmount,
@@ -169,12 +170,12 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
     },
   });
 
-  console.log(`[${requestId}] ✅ Payment processed successfully via webhook`);
-  console.log(`[${requestId}] Credits: ₹${transaction.creditAmount} added. GST invoice will be generated when user provides billing details.`);
+  logger.log(`[${requestId}] ✅ Payment processed successfully via webhook`);
+  logger.log(`[${requestId}] Credits: ₹${transaction.creditAmount} added. GST invoice will be generated when user provides billing details.`);
 
   // Send WhatsApp payment confirmation if user has phone number
   if (user.phone) {
-    console.log(`[${requestId}] Sending WhatsApp payment confirmation to ${user.phone}...`);
+    logger.log(`[${requestId}] Sending WhatsApp payment confirmation to ${user.phone}...`);
     try {
       // Determine actual credits added based on GST option
       const transactionNotes = transaction.notes as any;
@@ -194,7 +195,7 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
       );
       
       if (whatsappResult.success) {
-        console.log(`[${requestId}] ✅ WhatsApp payment confirmation sent successfully (webhook)`);
+        logger.log(`[${requestId}] ✅ WhatsApp payment confirmation sent successfully (webhook)`);
       } else {
         console.error(`[${requestId}] ⚠️ WhatsApp payment confirmation failed (webhook):`, whatsappResult.error);
       }
@@ -230,7 +231,7 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
             sentAt: new Date(),
           },
         });
-        console.log(`[${requestId}] ✅ WhatsApp payment log saved to database (webhook)`);
+        logger.log(`[${requestId}] ✅ WhatsApp payment log saved to database (webhook)`);
       } catch (logError: any) {
         console.error(`[${requestId}] ⚠️ Failed to log WhatsApp message to database (webhook):`, logError);
         // Don't fail the webhook if logging fails
@@ -240,12 +241,12 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
       // Don't fail the webhook if WhatsApp fails
     }
   } else {
-    console.log(`[${requestId}] ⚠️ User has no phone number, skipping WhatsApp notification (webhook)`);
+    logger.log(`[${requestId}] ⚠️ User has no phone number, skipping WhatsApp notification (webhook)`);
   }
 }
 
 async function handlePaymentFailure(requestId: string, payment: any) {
-  console.log(`[${requestId}] Processing failed payment`);
+  logger.log(`[${requestId}] Processing failed payment`);
 
   const orderId = payment.order_id;
 
@@ -269,5 +270,6 @@ async function handlePaymentFailure(requestId: string, payment: any) {
     },
   });
 
-  console.log(`[${requestId}] Payment marked as failed`);
+  logger.log(`[${requestId}] Payment marked as failed`);
 }
+

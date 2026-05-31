@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { getFileUrl } from "@/lib/s3";
 import { prisma } from "@/lib/db";
@@ -58,7 +59,7 @@ export async function embedComponentIndices(
     });
 
     if (documents.length === 0) {
-      console.log(`No component index documents found for ${year}-${month}`);
+      logger.log(`No component index documents found for ${year}-${month}`);
       return mainPdfBytes;
     }
 
@@ -80,7 +81,7 @@ export async function embedComponentIndices(
     }
     
     const deduplicatedDocuments = Array.from(documentsByPath.values());
-    console.log(`Found ${uniqueDocuments.length} total documents, ${deduplicatedDocuments.length} unique by file (deduped by cloud storage path)`);
+    logger.log(`Found ${uniqueDocuments.length} total documents, ${deduplicatedDocuments.length} unique by file (deduped by cloud storage path)`);
 
     // Load main PDF
     const mainPdf = await PDFDocument.load(mainPdfBytes);
@@ -113,7 +114,7 @@ export async function embedComponentIndices(
           mainPdf.addPage(page);
         });
 
-        console.log(`Embedded ${doc.componentType} index document`);
+        logger.log(`Embedded ${doc.componentType} index document`);
       } catch (error) {
         console.error(`Error embedding ${doc.componentType} index:`, error);
         // Continue with other documents even if one fails
@@ -153,7 +154,7 @@ export async function embedComponentIndicesRange(
       yearsInRange.push(year);
     }
 
-    console.log(`Fetching component indices for years ${yearsInRange.join(', ')} from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    logger.log(`Fetching component indices for years ${yearsInRange.join(', ')} from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
     // Fetch documents for all years in range
     // Using Map with "componentType-year" as key to ensure one document per component per year
@@ -186,7 +187,7 @@ export async function embedComponentIndicesRange(
     const uniqueDocuments = Array.from(allDocuments.values());
 
     if (uniqueDocuments.length === 0) {
-      console.log(`No component index documents found for years ${yearsInRange.join(', ')}`);
+      logger.log(`No component index documents found for years ${yearsInRange.join(', ')}`);
       return mainPdfBytes;
     }
 
@@ -200,7 +201,7 @@ export async function embedComponentIndicesRange(
     }
     
     const deduplicatedDocuments = Array.from(documentsByPath.values());
-    console.log(`Found ${uniqueDocuments.length} total documents, ${deduplicatedDocuments.length} unique by file (deduped by cloud storage path)`);
+    logger.log(`Found ${uniqueDocuments.length} total documents, ${deduplicatedDocuments.length} unique by file (deduped by cloud storage path)`);
 
     // Load main PDF
     const mainPdf = await PDFDocument.load(mainPdfBytes);
@@ -240,7 +241,7 @@ export async function embedComponentIndicesRange(
             mainPdf.addPage(page);
           });
 
-          console.log(`Embedded ${doc.componentType} index document for year ${doc.displayYear}`);
+          logger.log(`Embedded ${doc.componentType} index document for year ${doc.displayYear}`);
         } catch (error) {
           console.error(`Error embedding ${doc.componentType} index for year ${doc.displayYear}:`, error);
           // Continue with other documents even if one fails
@@ -413,7 +414,7 @@ export async function getMPNGFuelMonthlyAverage(
 
     // If we have actual PPAC data, use it
     if (dailyFuelPrices.length > 0) {
-      console.log(`Found ${dailyFuelPrices.length} PPAC daily fuel prices (basis: ${isZoneCity ? cityName : '4-city avg'})`);
+      logger.log(`Found ${dailyFuelPrices.length} PPAC daily fuel prices (basis: ${isZoneCity ? cityName : '4-city avg'})`);
       
       // Group daily prices by month
       const monthlyGroups: Map<string, typeof dailyFuelPrices> = new Map();
@@ -485,7 +486,7 @@ export async function getMPNGFuelMonthlyAverage(
 
     // Fallback: Use the appropriate MPNG Fuel index
     const fuelIndexName = isZoneCity ? `MPNG Fuel - ${cityName}` : 'MPNG Fuel';
-    console.log(`No PPAC daily data found, falling back to index: ${fuelIndexName}`);
+    logger.log(`No PPAC daily data found, falling back to index: ${fuelIndexName}`);
     
     const mpngFuelIndex = await prisma.priceIndex.findUnique({
       where: { name: fuelIndexName },
@@ -505,7 +506,7 @@ export async function getMPNGFuelMonthlyAverage(
     });
 
     if (!mpngFuelIndex || mpngFuelIndex.monthlyValues.length === 0) {
-      console.log("No MPNG Fuel indices found for date range");
+      logger.log("No MPNG Fuel indices found for date range");
       return null;
     }
 
@@ -563,3 +564,4 @@ export async function getMPNGFuelMonthlyAverage(
     return null;
   }
 }
+

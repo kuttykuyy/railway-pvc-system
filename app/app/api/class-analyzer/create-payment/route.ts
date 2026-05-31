@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
   
   try {
     // Log request initiation
-    console.log('[PVC Payment] Payment creation initiated');
+    logger.log('[PVC Payment] Payment creation initiated');
     
     const session = await getServerSession(authOptions);
 
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
     }
 
     const userId = (session.user as any).id as string;
-    console.log('[PVC Payment] User ID:', userId);
+    logger.log('[PVC Payment] User ID:', userId);
     
     const { sessionToken } = await request.json();
 
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log('[PVC Payment] Checking session:', sessionToken);
+    logger.log('[PVC Payment] Checking session:', sessionToken);
 
     // Check if session exists and is unpaid
     const pvcSession = await prisma.pvcComparisonSession.findUnique({
@@ -53,14 +54,14 @@ export async function POST(request: Request) {
     }
 
     if (pvcSession.paymentStatus === 'paid') {
-      console.log('[PVC Payment] Session already paid');
+      logger.log('[PVC Payment] Session already paid');
       return NextResponse.json(
         { error: 'Session already paid', code: 'ALREADY_PAID' },
         { status: 400 }
       );
     }
 
-    console.log('[PVC Payment] Checking Razorpay configuration...');
+    logger.log('[PVC Payment] Checking Razorpay configuration...');
 
     // Check if Razorpay is enabled
     const razorpaySetting = await prisma.adminSettings.findUnique({
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
     });
 
     const razorpayEnabled = razorpaySetting?.value === 'true';
-    console.log('[PVC Payment] Razorpay enabled:', razorpayEnabled);
+    logger.log('[PVC Payment] Razorpay enabled:', razorpayEnabled);
 
     if (!razorpayEnabled) {
       console.error('[PVC Payment] Razorpay is disabled in admin settings');
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log('[PVC Payment] Creating Razorpay order...');
+    logger.log('[PVC Payment] Creating Razorpay order...');
 
     // Create Razorpay order
     const Razorpay = (await import('razorpay')).default;
@@ -129,7 +130,7 @@ export async function POST(request: Request) {
           userId,
         },
       });
-      console.log('[PVC Payment] Razorpay order created:', order.id);
+      logger.log('[PVC Payment] Razorpay order created:', order.id);
     } catch (razorpayError: any) {
       console.error('[PVC Payment] Razorpay API error:', razorpayError);
       errorDetails = razorpayError.message || 'Unknown Razorpay error';
@@ -153,7 +154,7 @@ export async function POST(request: Request) {
     });
 
     const duration = Date.now() - startTime;
-    console.log(`[PVC Payment] Payment order created successfully in ${duration}ms`);
+    logger.log(`[PVC Payment] Payment order created successfully in ${duration}ms`);
 
     return NextResponse.json({
       orderId: order.id,
@@ -190,3 +191,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -8,7 +9,7 @@ import { sendPaymentConfirmation } from '@/lib/whatsapp-mydreams';
 
 export async function POST(request: NextRequest) {
   const requestId = Date.now().toString(36);
-  console.log(`[${requestId}] Payment verification request started`);
+  logger.log(`[${requestId}] Payment verification request started`);
   
   try {
     const session = await getServerSession(authOptions);
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[${requestId}] User: ${session.user.email}`);
+    logger.log(`[${requestId}] User: ${session.user.email}`);
 
     const body = await request.json();
     const { 
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
       transactionId 
     } = body;
 
-    console.log(`[${requestId}] Payment details:`, {
+    logger.log(`[${requestId}] Payment details:`, {
       order_id: razorpay_order_id,
       payment_id: razorpay_payment_id,
       signature: razorpay_signature ? 'Present' : 'Missing'
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify signature
-    console.log(`[${requestId}] Verifying signature...`);
+    logger.log(`[${requestId}] Verifying signature...`);
     const isValid = verifyRazorpaySignature({
       razorpayOrderId: razorpay_order_id,
       razorpayPaymentId: razorpay_payment_id,
@@ -60,10 +61,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[${requestId}] Signature verified successfully`);
+    logger.log(`[${requestId}] Signature verified successfully`);
 
     // Get transaction from database
-    console.log(`[${requestId}] Looking up transaction: ${razorpay_order_id}`);
+    logger.log(`[${requestId}] Looking up transaction: ${razorpay_order_id}`);
     const transaction = await prisma.razorpayTransaction.findUnique({
       where: { orderId: razorpay_order_id },
     });
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[${requestId}] Transaction found:`, {
+    logger.log(`[${requestId}] Transaction found:`, {
       id: transaction.id,
       userId: transaction.userId,
       status: transaction.status,
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
 
     // Check if already processed (by webhook or previous verification)
     if (transaction.status === 'success') {
-      console.log(`[${requestId}] Transaction already processed (likely by webhook)`);
+      logger.log(`[${requestId}] Transaction already processed (likely by webhook)`);
       
       // Determine actual credits added based on GST option
       const transactionNotes = transaction.notes as any;
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user first to verify ownership
-    console.log(`[${requestId}] Looking up user account...`);
+    logger.log(`[${requestId}] Looking up user account...`);
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
       include: { customerAccount: true },
@@ -138,15 +139,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[${requestId}] User ownership verified`);
+    logger.log(`[${requestId}] User ownership verified`);
 
     // Fetch payment details from Razorpay
-    console.log(`[${requestId}] Fetching payment details from Razorpay...`);
+    logger.log(`[${requestId}] Fetching payment details from Razorpay...`);
     const paymentDetails = await fetchPaymentDetails(razorpay_payment_id);
-    console.log(`[${requestId}] Payment method: ${paymentDetails.method}`);
+    logger.log(`[${requestId}] Payment method: ${paymentDetails.method}`);
 
     // Update transaction status
-    console.log(`[${requestId}] Updating transaction status to success...`);
+    logger.log(`[${requestId}] Updating transaction status to success...`);
     await prisma.razorpayTransaction.update({
       where: { id: transaction.id },
       data: {
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest) {
         completedAt: new Date(),
       },
     });
-    console.log(`[${requestId}] Transaction status updated`);
+    logger.log(`[${requestId}] Transaction status updated`);
 
     // Determine how much to add to wallet based on GST option
     // Get gstOption from transaction notes
@@ -169,16 +170,16 @@ export async function POST(request: NextRequest) {
     // If "Include GST" option was selected, add the full totalAmount to wallet (including GST)
     if (gstOption === 'include') {
       creditsToAdd = transaction.totalAmount; // Add full amount including GST
-      console.log(`[${requestId}] GST Option: Include - Adding full payment amount to wallet (₹${creditsToAdd})`);
+      logger.log(`[${requestId}] GST Option: Include - Adding full payment amount to wallet (₹${creditsToAdd})`);
     } else {
-      console.log(`[${requestId}] GST Option: ${gstOption} - Adding creditAmount to wallet (₹${creditsToAdd})`);
+      logger.log(`[${requestId}] GST Option: ${gstOption} - Adding creditAmount to wallet (₹${creditsToAdd})`);
     }
 
     // Get current balance
     const currentBalance = user.customerAccount?.creditBalance || 0;
     const newBalance = currentBalance + creditsToAdd;
 
-    console.log(`[${requestId}] Credit update:`, {
+    logger.log(`[${requestId}] Credit update:`, {
       currentBalance,
       addingCredits: creditsToAdd,
       gstOption,
@@ -187,7 +188,7 @@ export async function POST(request: NextRequest) {
 
     // Update or create customer account
     if (user.customerAccount) {
-      console.log(`[${requestId}] Updating existing customer account...`);
+      logger.log(`[${requestId}] Updating existing customer account...`);
       await prisma.customerAccount.update({
         where: { userId: user.id },
         data: {
@@ -195,7 +196,7 @@ export async function POST(request: NextRequest) {
         },
       });
     } else {
-      console.log(`[${requestId}] Creating new customer account...`);
+      logger.log(`[${requestId}] Creating new customer account...`);
       await prisma.customerAccount.create({
         data: {
           userId: user.id,
@@ -205,10 +206,10 @@ export async function POST(request: NextRequest) {
         },
       });
     }
-    console.log(`[${requestId}] Customer account updated`);
+    logger.log(`[${requestId}] Customer account updated`);
 
     // Create credit transaction record
-    console.log(`[${requestId}] Creating credit transaction record...`);
+    logger.log(`[${requestId}] Creating credit transaction record...`);
     await prisma.creditTransaction.create({
       data: {
         userId: user.id,
@@ -219,19 +220,19 @@ export async function POST(request: NextRequest) {
         balanceAfter: newBalance,
       },
     });
-    console.log(`[${requestId}] Credit transaction record created`);
+    logger.log(`[${requestId}] Credit transaction record created`);
 
     // Generate temporary invoice number (will be finalized when user provides billing details)
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
     const tempInvoiceNumber = `GST-${dateStr}-PENDING`;
 
-    console.log(`[${requestId}] ✅ Payment verification completed successfully`);
-    console.log(`[${requestId}] Temporary Invoice: ${tempInvoiceNumber}, Credits Added: ₹${creditsToAdd}, New Balance: ₹${newBalance}`);
+    logger.log(`[${requestId}] ✅ Payment verification completed successfully`);
+    logger.log(`[${requestId}] Temporary Invoice: ${tempInvoiceNumber}, Credits Added: ₹${creditsToAdd}, New Balance: ₹${newBalance}`);
 
     // Send WhatsApp payment confirmation if user has phone number
     if (user.phone) {
-      console.log(`[${requestId}] Sending WhatsApp payment confirmation to ${user.phone}...`);
+      logger.log(`[${requestId}] Sending WhatsApp payment confirmation to ${user.phone}...`);
       try {
         // Use the actual payment completion time
         const paymentTime = new Date(); // This is the time when payment was completed
@@ -248,7 +249,7 @@ export async function POST(request: NextRequest) {
         );
         
         if (whatsappResult.success) {
-          console.log(`[${requestId}] ✅ WhatsApp payment confirmation sent successfully`);
+          logger.log(`[${requestId}] ✅ WhatsApp payment confirmation sent successfully`);
         } else {
           console.error(`[${requestId}] ⚠️ WhatsApp payment confirmation failed:`, whatsappResult.error);
         }
@@ -284,7 +285,7 @@ export async function POST(request: NextRequest) {
               sentAt: new Date(),
             },
           });
-          console.log(`[${requestId}] ✅ WhatsApp payment log saved to database`);
+          logger.log(`[${requestId}] ✅ WhatsApp payment log saved to database`);
         } catch (logError: any) {
           console.error(`[${requestId}] ⚠️ Failed to log WhatsApp message to database:`, logError);
           // Don't fail the payment verification if logging fails
@@ -294,7 +295,7 @@ export async function POST(request: NextRequest) {
         // Don't fail the payment verification if WhatsApp fails
       }
     } else {
-      console.log(`[${requestId}] ⚠️ User has no phone number, skipping WhatsApp notification`);
+      logger.log(`[${requestId}] ⚠️ User has no phone number, skipping WhatsApp notification`);
     }
 
     return NextResponse.json({
@@ -316,3 +317,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

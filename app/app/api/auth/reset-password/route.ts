@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`Password reset successfully for user: ${user.email}`);
+    logger.log(`Password reset successfully for user: ${user.email}`);
 
     return NextResponse.json(
       { message: 'Password reset successfully. You can now sign in with your new password.' },
@@ -86,3 +87,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

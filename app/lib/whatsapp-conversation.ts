@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 
 /**
  * WhatsApp Conversation Management
@@ -178,6 +179,7 @@ export async function cleanupExpiredConversations() {
     },
   });
 
-  console.log(`Cleaned up ${deleted.count} expired WhatsApp conversations`);
+  logger.log(`Cleaned up ${deleted.count} expired WhatsApp conversations`);
   return deleted.count;
 }
+

@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -123,14 +124,14 @@ export async function POST(request: NextRequest) {
       isInterstate: false, // Default to intrastate (Tamil Nadu)
     });
 
-    console.log(`[GST Invoice] Generated: ${gstInvoice.invoiceNumber} for transaction ${transaction.id}`);
+    logger.log(`[GST Invoice] Generated: ${gstInvoice.invoiceNumber} for transaction ${transaction.id}`);
 
     // Send WhatsApp notification if phone number is provided and WhatsApp is configured
     if (customerPhone && customerPhone.trim()) {
       const whatsappConfigured = await isMyDreamsWhatsAppConfigured();
       
       if (whatsappConfigured) {
-        console.log(`[GST Invoice] Attempting to send WhatsApp notification to ${customerPhone}`);
+        logger.log(`[GST Invoice] Attempting to send WhatsApp notification to ${customerPhone}`);
         
         // Public PDF URL (no authentication required for WhatsApp download)
         const pdfUrl = `https://irpvc.in/api/public/gst-invoice-pdf/${gstInvoice.id}`;
@@ -193,13 +194,13 @@ export async function POST(request: NextRequest) {
                 sentAt: new Date(),
               },
             });
-            console.log(`[GST Invoice] WhatsApp log saved to database`);
+            logger.log(`[GST Invoice] WhatsApp log saved to database`);
           } catch (logError: any) {
             console.error(`[GST Invoice] ⚠️ Failed to save WhatsApp log:`, logError);
           }
 
           if (whatsappResult.success) {
-            console.log(`[GST Invoice] ✅ WhatsApp notification sent successfully - Message ID: ${whatsappResult.messageId}`);
+            logger.log(`[GST Invoice] ✅ WhatsApp notification sent successfully - Message ID: ${whatsappResult.messageId}`);
           } else {
             console.error(`[GST Invoice] ⚠️ Failed to send WhatsApp notification: ${whatsappResult.error}`);
           }
@@ -208,10 +209,10 @@ export async function POST(request: NextRequest) {
           console.error(`[GST Invoice] ⚠️ WhatsApp notification error:`, whatsappError);
         }
       } else {
-        console.log(`[GST Invoice] ℹ️ WhatsApp not configured, skipping notification`);
+        logger.log(`[GST Invoice] ℹ️ WhatsApp not configured, skipping notification`);
       }
     } else {
-      console.log(`[GST Invoice] ℹ️ No phone number provided, skipping WhatsApp notification`);
+      logger.log(`[GST Invoice] ℹ️ No phone number provided, skipping WhatsApp notification`);
     }
 
     return NextResponse.json({
@@ -228,3 +229,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

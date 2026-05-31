@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -20,13 +21,13 @@ import { calculateGst } from '@/lib/gst-invoice';
 export async function POST(request: NextRequest) {
   const requestId = `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
-  console.log(`[${requestId}] Razorpay order creation request initiated`);
+  logger.log(`[${requestId}] Razorpay order creation request initiated`);
   
   try {
     // Step 1: Authenticate user
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
-      console.warn(`[${requestId}] Unauthorized access attempt`);
+      logger.warn(`[${requestId}] Unauthorized access attempt`);
       return NextResponse.json(
         { 
           error: 'Unauthorized',
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[${requestId}] User authenticated: ${session.user.email}`);
+    logger.log(`[${requestId}] User authenticated: ${session.user.email}`);
 
     // Step 2: Parse and validate request body
     let body;
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     // Validate gstOption
     if (gstOption && !['include', 'exclude', 'without'].includes(gstOption)) {
-      console.warn(`[${requestId}] Invalid gstOption:`, gstOption);
+      logger.warn(`[${requestId}] Invalid gstOption:`, gstOption);
       return NextResponse.json(
         { 
           error: 'Invalid request',
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     // Validate creditAmount
     if (creditAmount === undefined || creditAmount === null) {
-      console.warn(`[${requestId}] Missing creditAmount in request`);
+      logger.warn(`[${requestId}] Missing creditAmount in request`);
       return NextResponse.json(
         { 
           error: 'Invalid request',
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (typeof creditAmount !== 'number') {
-      console.warn(`[${requestId}] Invalid creditAmount type:`, typeof creditAmount);
+      logger.warn(`[${requestId}] Invalid creditAmount type:`, typeof creditAmount);
       return NextResponse.json(
         { 
           error: 'Invalid request',
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (creditAmount <= 0) {
-      console.warn(`[${requestId}] Invalid creditAmount value:`, creditAmount);
+      logger.warn(`[${requestId}] Invalid creditAmount value:`, creditAmount);
       return NextResponse.json(
         { 
           error: 'Invalid request',
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!Number.isFinite(creditAmount)) {
-      console.warn(`[${requestId}] Non-finite creditAmount:`, creditAmount);
+      logger.warn(`[${requestId}] Non-finite creditAmount:`, creditAmount);
       return NextResponse.json(
         { 
           error: 'Invalid request',
@@ -121,7 +122,7 @@ export async function POST(request: NextRequest) {
 
     // Validate totalAmount
     if (totalAmount === undefined || totalAmount === null) {
-      console.warn(`[${requestId}] Missing totalAmount in request`);
+      logger.warn(`[${requestId}] Missing totalAmount in request`);
       return NextResponse.json(
         { 
           error: 'Invalid request',
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (typeof totalAmount !== 'number' || totalAmount <= 0 || !Number.isFinite(totalAmount)) {
-      console.warn(`[${requestId}] Invalid totalAmount:`, totalAmount);
+      logger.warn(`[${requestId}] Invalid totalAmount:`, totalAmount);
       return NextResponse.json(
         { 
           error: 'Invalid request',
@@ -146,7 +147,7 @@ export async function POST(request: NextRequest) {
 
     // Validate gstAmount
     if (gstAmount === undefined || gstAmount === null || typeof gstAmount !== 'number' || !Number.isFinite(gstAmount)) {
-      console.warn(`[${requestId}] Invalid gstAmount:`, gstAmount);
+      logger.warn(`[${requestId}] Invalid gstAmount:`, gstAmount);
       return NextResponse.json(
         { 
           error: 'Invalid request',
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[${requestId}] Amounts validated - Credit: ₹${creditAmount}, Total: ₹${totalAmount}, GST: ₹${gstAmount}, Option: ${gstOption}`);
+    logger.log(`[${requestId}] Amounts validated - Credit: ₹${creditAmount}, Total: ₹${totalAmount}, GST: ₹${gstAmount}, Option: ${gstOption}`);
 
     // Step 3: Check if Razorpay is enabled
     let setting;
@@ -178,7 +179,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (setting?.value !== 'razorpay') {
-      console.warn(`[${requestId}] Razorpay not enabled. Current setting:`, setting?.value);
+      logger.warn(`[${requestId}] Razorpay not enabled. Current setting:`, setting?.value);
       return NextResponse.json(
         { 
           error: 'Payment method unavailable',
@@ -189,7 +190,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[${requestId}] Razorpay is enabled`);
+    logger.log(`[${requestId}] Razorpay is enabled`);
 
     // Step 4: Get user details
     let user;
@@ -221,13 +222,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[${requestId}] User found: ${user.id}`);
+    logger.log(`[${requestId}] User found: ${user.id}`);
 
     // Step 5: Calculate GST breakdown for invoice (CGST + SGST)
     let gstCalc;
     if (gstAmount > 0) {
       gstCalc = calculateGst(creditAmount, false);
-      console.log(`[${requestId}] GST breakdown calculated:`, {
+      logger.log(`[${requestId}] GST breakdown calculated:`, {
         creditAmount,
         totalGst: gstAmount,
         cgst: gstCalc.cgst,
@@ -281,10 +282,10 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      console.log(`[${requestId}] Using fallback receipt: ${shortReceipt}`);
+      logger.log(`[${requestId}] Using fallback receipt: ${shortReceipt}`);
     }
     
-    console.log(`[${requestId}] Generated receipt: ${receipt} (length: ${receipt.length})`);
+    logger.log(`[${requestId}] Generated receipt: ${receipt} (length: ${receipt.length})`);
     
     let razorpayOrder;
     
@@ -304,7 +305,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      console.log(`[${requestId}] Razorpay order created: ${razorpayOrder.id}`);
+      logger.log(`[${requestId}] Razorpay order created: ${razorpayOrder.id}`);
     } catch (razorpayError: any) {
       console.error(`[${requestId}] Razorpay order creation failed:`, {
         error: razorpayError.message,
@@ -346,7 +347,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      console.log(`[${requestId}] Transaction saved to database: ${transaction.id}`);
+      logger.log(`[${requestId}] Transaction saved to database: ${transaction.id}`);
     } catch (dbError: any) {
       console.error(`[${requestId}] Database error saving transaction:`, dbError);
       
@@ -374,7 +375,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 9: Return success response
-    console.log(`[${requestId}] Order creation completed successfully`);
+    logger.log(`[${requestId}] Order creation completed successfully`);
     
     return NextResponse.json({
       success: true,
@@ -409,3 +410,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

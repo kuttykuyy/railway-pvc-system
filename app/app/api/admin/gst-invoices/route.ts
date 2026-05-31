@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -9,30 +10,30 @@ export const revalidate = 0;
 
 // GET /api/admin/gst-invoices - Get all GST invoices (admin only)
 export async function GET(request: NextRequest) {
-  console.log('[Admin GST Invoices] API route called');
+  logger.log('[Admin GST Invoices] API route called');
   try {
     const session = await getServerSession(authOptions);
-    console.log('[Admin GST Invoices] Session:', session ? 'exists' : 'missing');
+    logger.log('[Admin GST Invoices] Session:', session ? 'exists' : 'missing');
     
     if (!session?.user?.email) {
-      console.log('[Admin GST Invoices] No session or email found');
+      logger.log('[Admin GST Invoices] No session or email found');
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    console.log('[Admin GST Invoices] User email:', session.user.email);
+    logger.log('[Admin GST Invoices] User email:', session.user.email);
 
     // Get user and check if admin
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
     });
 
-    console.log('[Admin GST Invoices] User found:', user ? `${user.email} (${user.role})` : 'not found');
+    logger.log('[Admin GST Invoices] User found:', user ? `${user.email} (${user.role})` : 'not found');
 
     if (!user || user.role !== 'admin') {
-      console.log('[Admin GST Invoices] User not admin or not found');
+      logger.log('[Admin GST Invoices] User not admin or not found');
       return NextResponse.json(
         { error: 'Unauthorized. Admin access required.' },
         { status: 403 }
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all GST invoices with user information
-    console.log('[Admin GST Invoices] Fetching GST invoices...');
+    logger.log('[Admin GST Invoices] Fetching GST invoices...');
     const invoices = await prisma.gstInvoice.findMany({
       include: {
         user: {
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    console.log(`[Admin GST Invoices] Found ${invoices.length} invoices`);
+    logger.log(`[Admin GST Invoices] Found ${invoices.length} invoices`);
     return NextResponse.json({ invoices });
   } catch (error: any) {
     console.error('[Admin GST Invoices] Error:', error);
@@ -64,3 +65,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

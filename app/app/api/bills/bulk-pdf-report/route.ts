@@ -1,4 +1,5 @@
-﻿
+﻿import { logger } from '@/lib/logger';
+
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -2131,9 +2132,9 @@ export async function POST(request: NextRequest) {
         let quarterlyAverageIndices: { [key: string]: number } = {};
         
         try {
-          console.log(`\n=====  BULK PDF: Fetching quarterly averages for ${bill.billNo} =====`);
-          console.log(`Quarter: ${bill.quarter}`);
-          console.log(`Base Month: ${format(new Date(bill.contract.baseMonth), 'MMM yyyy')}`);
+          logger.log(`\n=====  BULK PDF: Fetching quarterly averages for ${bill.billNo} =====`);
+          logger.log(`Quarter: ${bill.quarter}`);
+          logger.log(`Base Month: ${format(new Date(bill.contract.baseMonth), 'MMM yyyy')}`);
           
           const quarterlyAvgs = await getQuarterlyAverages(
             bill.quarter, 
@@ -2146,21 +2147,21 @@ export async function POST(request: NextRequest) {
             quarterlyAverageIndices[avg.indexName] = avg.average;
           }
           
-          console.log(`Quarterly averages fetched:`);
+          logger.log(`Quarterly averages fetched:`);
           for (const indexName of allIndicesNames) {
             if (quarterlyAverageIndices[indexName]) {
-              console.log(`  ${indexName}: ${quarterlyAverageIndices[indexName].toFixed(2)}`);
+              logger.log(`  ${indexName}: ${quarterlyAverageIndices[indexName].toFixed(2)}`);
             } else {
-              console.log(`  ${indexName}: NOT FOUND`);
+              logger.log(`  ${indexName}: NOT FOUND`);
             }
           }
-          console.log('=====  End quarterly averages =====\n');
+          logger.log('=====  End quarterly averages =====\n');
         } catch (error) {
           console.error(`ERROR: Failed to get quarterly averages for ${bill.billNo}:`, error);
           // Try fallback to consolidated data if available
           const billQuarterData = consolidatedQuarterlyData.find(qData => qData.quarter === bill.quarter);
           if (billQuarterData) {
-            console.log(`Using fallback: consolidated quarterly data`);
+            logger.log(`Using fallback: consolidated quarterly data`);
             for (const indexName of allIndicesNames) {
               if (billQuarterData.averages[indexName]) {
                 quarterlyAverageIndices[indexName] = billQuarterData.averages[indexName];
@@ -2288,9 +2289,9 @@ export async function POST(request: NextRequest) {
             
             // For steel, use selected steel types from bill (same logic as single bill PDF)
             if (component.key === 'steel') {
-              console.log(`\n=== STEEL COMPONENT DEBUG for ${classCode} ===`);
-              console.log(`Steel %: ${component.percent}`);
-              console.log(`Raw bill.steelTypes:`, bill.steelTypes);
+              logger.log(`\n=== STEEL COMPONENT DEBUG for ${classCode} ===`);
+              logger.log(`Steel %: ${component.percent}`);
+              logger.log(`Raw bill.steelTypes:`, bill.steelTypes);
               
               // Map steel type enum to index names (same as single PDF)
               const steelTypeMap: { [key: string]: string } = {
@@ -2311,19 +2312,19 @@ export async function POST(request: NextRequest) {
                   .map((enumType: string) => steelTypeMap[enumType])
                   .filter((indexName: string) => indexName !== undefined);
                 
-                console.log(`Bill has steel type selection: [${billSteelTypes.join(', ')}]`);
-                console.log(`Converted to index names: [${steelIndexNamesToUse.join(', ')}]`);
+                logger.log(`Bill has steel type selection: [${billSteelTypes.join(', ')}]`);
+                logger.log(`Converted to index names: [${steelIndexNamesToUse.join(', ')}]`);
               } else {
-                console.log(`Using all steel types (no selection in bill)`);
+                logger.log(`Using all steel types (no selection in bill)`);
               }
               
               // Debug: Show available indices
-              console.log(`\nAvailable steel indices:`);
+              logger.log(`\nAvailable steel indices:`);
               for (const indexName of allSteelIndexNames) {
-                console.log(`  ${indexName}: Base=${baseIndexData[indexName] || 'N/A'}, Current=${quarterlyAverageIndices[indexName] || 'N/A'}`);
+                logger.log(`  ${indexName}: Base=${baseIndexData[indexName] || 'N/A'}, Current=${quarterlyAverageIndices[indexName] || 'N/A'}`);
               }
               
-              console.log(`\nSteel index names to use for averaging: [${steelIndexNamesToUse.join(', ')}]`);
+              logger.log(`\nSteel index names to use for averaging: [${steelIndexNamesToUse.join(', ')}]`);
               
               // Average the selected steel type indices for both base and current
               const steelBaseValues = steelIndexNamesToUse
@@ -2334,7 +2335,7 @@ export async function POST(request: NextRequest) {
                 .map((indexName: string) => quarterlyAverageIndices[indexName])
                 .filter((val: number) => val && val > 0);
               
-              console.log(`Base values found: ${steelBaseValues.length}, Current values found: ${steelCurrentValues.length}`);
+              logger.log(`Base values found: ${steelBaseValues.length}, Current values found: ${steelCurrentValues.length}`);
               
               const steelBaseIndex = steelBaseValues.length > 0
                 ? steelBaseValues.reduce((sum: number, val: number) => sum + val, 0) / steelBaseValues.length
@@ -2344,7 +2345,7 @@ export async function POST(request: NextRequest) {
                 ? steelCurrentValues.reduce((sum: number, val: number) => sum + val, 0) / steelCurrentValues.length
                 : 0;
               
-              console.log(`Averaged Base Index: ${steelBaseIndex}, Averaged Current Index: ${steelCurrentIndex}`);
+              logger.log(`Averaged Base Index: ${steelBaseIndex}, Averaged Current Index: ${steelCurrentIndex}`);
               
               if (steelBaseIndex > 0 && steelCurrentIndex > 0) {
                 // Use the same calculation function as single bill PDF
@@ -2374,11 +2375,11 @@ export async function POST(request: NextRequest) {
                   formula,
                   pvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })
                 ]);
-                console.log(`âœ“ Steel component added to PDF with formula: ${formula}`);
+                logger.log(`âœ“ Steel component added to PDF with formula: ${formula}`);
               } else {
-                console.log(`âœ— Steel component NOT added - indices missing or zero`);
-                console.log(`   Base values: ${steelBaseValues.length}, Current values: ${steelCurrentValues.length}`);
-                console.log(`   steelBaseIndex: ${steelBaseIndex}, steelCurrentIndex: ${steelCurrentIndex}`);
+                logger.log(`âœ— Steel component NOT added - indices missing or zero`);
+                logger.log(`   Base values: ${steelBaseValues.length}, Current values: ${steelCurrentValues.length}`);
+                logger.log(`   steelBaseIndex: ${steelBaseIndex}, steelCurrentIndex: ${steelCurrentIndex}`);
                 
                 // Add a placeholder row showing that steel indices are missing
                 componentData.push([
@@ -2387,7 +2388,7 @@ export async function POST(request: NextRequest) {
                   '0.00'
                 ]);
               }
-              console.log(`=== END STEEL DEBUG ===\n`);
+              logger.log(`=== END STEEL DEBUG ===\n`);
               continue;
             }
             
@@ -2618,3 +2619,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

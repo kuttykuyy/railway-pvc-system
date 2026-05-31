@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getQuarterFromDate, calculateDedicatedCementPvc, calculateDedicatedSteelPvc } from '@/lib/pvc-calculations';
@@ -223,7 +224,7 @@ export async function POST(request: NextRequest) {
       ] : [])
     ]);
 
-    console.log(`✅ PVC Check completed for user ${user.email}: ₹${totalPvc.toFixed(2)} (${isPositive ? 'POSITIVE' : 'NEGATIVE'}), charged ₹${chargedAmount}`);
+    logger.log(`✅ PVC Check completed for user ${user.email}: ₹${totalPvc.toFixed(2)} (${isPositive ? 'POSITIVE' : 'NEGATIVE'}), charged ₹${chargedAmount}`);
 
     return NextResponse.json({
       success: true,
@@ -248,3 +249,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message || 'PVC check failed' }, { status: 500 });
   }
 }
+

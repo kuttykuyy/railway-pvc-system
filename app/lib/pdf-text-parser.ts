@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 /**
  * Text-based PDF parser for Indian Railway running account bills.
  * Extracts bill data using regex pattern matching on text extracted via pdfjs-dist.
@@ -92,11 +93,11 @@ export async function extractPdfText(pdfBuffer: ArrayBuffer): Promise<string[] |
   }
 
   if (totalChars < 100) {
-    console.log(`\u{1F4C4} PDF has only ${totalChars} chars of text - likely scanned/image PDF`);
+    logger.log(`\u{1F4C4} PDF has only ${totalChars} chars of text - likely scanned/image PDF`);
     return null;
   }
 
-  console.log(`\u{1F4C4} Extracted ${totalChars} chars of text from ${numPages} pages`);
+  logger.log(`\u{1F4C4} Extracted ${totalChars} chars of text from ${numPages} pages`);
   return pages;
 }
 
@@ -498,7 +499,7 @@ function crossValidateWithScheduleSummary(
     const itemTotal = schedTotals[sched] || 0;
     const diff = Math.abs(itemTotal - summary.amtIncSpecialCondition);
     if (diff > 1) {
-      console.warn(`⚠️ Schedule ${sched}: items amtSinceLastBillSpecial sum=${itemTotal.toFixed(2)} vs summary=${summary.amtIncSpecialCondition.toFixed(2)} (diff=${diff.toFixed(2)})`);
+      logger.warn(`⚠️ Schedule ${sched}: items amtSinceLastBillSpecial sum=${itemTotal.toFixed(2)} vs summary=${summary.amtIncSpecialCondition.toFixed(2)} (diff=${diff.toFixed(2)})`);
     }
   }
 }
@@ -511,7 +512,7 @@ export async function parseBillPdf(pdfBuffer: ArrayBuffer): Promise<ParsedBillDa
   const pages = await extractPdfText(pdfBuffer);
   if (!pages) return null;
 
-  console.log('\u{1F4DD} Parsing bill data from extracted text...');
+  logger.log('\u{1F4DD} Parsing bill data from extracted text...');
 
   const header = parseHeader(pages[0] || '');
   const itemPages = pages.slice(1);
@@ -599,6 +600,7 @@ export async function parseBillPdf(pdfBuffer: ArrayBuffer): Promise<ParsedBillDa
     extractionMethod: 'text-parser',
   };
 
-  console.log(`\u2705 Text parser: ${items.length} items, gross=${grossBillAmount}, cement=${cementTotal}, steel=${steelTotal}`);
+  logger.log(`\u2705 Text parser: ${items.length} items, gross=${grossBillAmount}, cement=${cementTotal}, steel=${steelTotal}`);
   return result;
 }
+

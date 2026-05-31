@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 /**
  * Public API endpoint for accessing bill PDFs via WhatsApp
@@ -20,7 +21,7 @@ const JWT_SECRET = process.env.NEXTAUTH_SECRET || 'fallback-secret-key';
 
 export async function GET(req: NextRequest) {
   const startTime = Date.now();
-  console.log('[Public PDF] Request received at:', new Date().toISOString());
+  logger.log('[Public PDF] Request received at:', new Date().toISOString());
   
   try {
     const searchParams = req.nextUrl.searchParams;
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
     const billId = searchParams.get('billId');
     const templateId = searchParams.get('templateId');
 
-    console.log('[Public PDF] Params - billId:', billId, 'token:', token ? 'present' : 'missing', 'templateId:', templateId);
+    logger.log('[Public PDF] Params - billId:', billId, 'token:', token ? 'present' : 'missing', 'templateId:', templateId);
 
     if (!token || !billId) {
       console.error('[Public PDF] Missing token or billId');
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest) {
           { status: 403 }
         );
       }
-      console.log('[Public PDF] Token verified successfully, expires:', new Date(decoded.exp * 1000).toISOString());
+      logger.log('[Public PDF] Token verified successfully, expires:', new Date(decoded.exp * 1000).toISOString());
     } catch (error: any) {
       console.error('[Public PDF] Token verification failed:', error.message);
       return NextResponse.json(
@@ -69,7 +70,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
     }
     
-    console.log('[Public PDF] Bill found:', bill.billNo);
+    logger.log('[Public PDF] Bill found:', bill.billNo);
 
     // Build PDF report URL with all parameters
     let pdfReportUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/bills/${billId}/pdf-report?public_access=true&token=${encodeURIComponent(token)}`;
@@ -78,7 +79,7 @@ export async function GET(req: NextRequest) {
       pdfReportUrl += `&templateId=${templateId}`;
     }
     
-    console.log('[Public PDF] Fetching PDF from:', pdfReportUrl.substring(0, 80) + '...');
+    logger.log('[Public PDF] Fetching PDF from:', pdfReportUrl.substring(0, 80) + '...');
 
     try {
       // Fetch the PDF from the internal endpoint with a longer timeout
@@ -97,7 +98,7 @@ export async function GET(req: NextRequest) {
       
       clearTimeout(timeoutId);
       
-      console.log('[Public PDF] Internal fetch response:', pdfResponse.status, pdfResponse.statusText);
+      logger.log('[Public PDF] Internal fetch response:', pdfResponse.status, pdfResponse.statusText);
 
       if (!pdfResponse.ok) {
         const errorText = await pdfResponse.text();
@@ -112,7 +113,7 @@ export async function GET(req: NextRequest) {
       // Get the PDF as a buffer
       const pdfBuffer = await pdfResponse.arrayBuffer();
       const elapsed = Date.now() - startTime;
-      console.log('[Public PDF] PDF generated successfully, size:', pdfBuffer.byteLength, 'bytes, time:', elapsed, 'ms');
+      logger.log('[Public PDF] PDF generated successfully, size:', pdfBuffer.byteLength, 'bytes, time:', elapsed, 'ms');
 
       // Return the PDF with proper headers for WhatsApp
       return new NextResponse(pdfBuffer, {
@@ -150,3 +151,4 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+

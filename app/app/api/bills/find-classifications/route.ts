@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 /**
  * API Route: Find Classifications from Bill PDF
@@ -343,7 +344,7 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
       ];
     }
 
-    console.log('Calling AI API for classification matching...');
+    logger.log('Calling AI API for classification matching...');
 
     // Call the LLM API with JSON response format
     const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
@@ -411,7 +412,7 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
       result.matches.map(async (match: ClassificationMatch) => {
         const classification = classifications.find((c: any) => c.id === match.classificationId);
         if (!classification) {
-          console.warn(`Classification not found: ${match.classificationId}`);
+          logger.warn(`Classification not found: ${match.classificationId}`);
           return match;
         }
 
@@ -513,3 +514,4 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
     );
   }
 }
+

@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 
 import { prisma } from './db';
 import { GST_RATE } from './billing';
@@ -12,7 +13,7 @@ export const generateGstInvoiceNumber = (): string => {
   const uniqueId = `${timestamp.toString().slice(-6)}${random}`;
   
   const invoiceNumber = `GST-${uniqueId}`;
-  console.log(`[GST] Generated invoice number: ${invoiceNumber}`);
+  logger.log(`[GST] Generated invoice number: ${invoiceNumber}`);
   
   return invoiceNumber;
 };
@@ -99,7 +100,7 @@ export const createGstInvoice = async (
   // Use current timestamp for invoice date
   const invoiceDate = new Date(Date.now());
   
-  console.log(`[GST] Creating invoice: ${invoiceNumber} for user ${userId} at ${invoiceDate.toISOString()}`);
+  logger.log(`[GST] Creating invoice: ${invoiceNumber} for user ${userId} at ${invoiceDate.toISOString()}`);
   
   // Create invoice
   const invoice = await prisma.gstInvoice.create({
@@ -158,3 +159,4 @@ export const getGstInvoiceByTransaction = async (
     where: { razorpayTransactionId },
   });
 };
+

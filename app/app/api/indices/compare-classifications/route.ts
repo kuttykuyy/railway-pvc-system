@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -22,7 +23,7 @@ async function getQuarterlyAverage(
   const measurementMonth = startOfMonth(measurementDate);
   const baseMonth = startOfMonth(baseDate);
 
-  console.log(`[${componentName}] Looking for indices:`, {
+  logger.log(`[${componentName}] Looking for indices:`, {
     measurementMonth: format(measurementMonth, 'yyyy-MM'),
     baseMonth: format(baseMonth, 'yyyy-MM')
   });
@@ -34,11 +35,11 @@ async function getQuarterlyAverage(
   });
 
   if (!priceIndex) {
-    console.log(`[${componentName}] Price index not found in database`);
+    logger.log(`[${componentName}] Price index not found in database`);
     return null;
   }
 
-  console.log(`[${componentName}] Found price index with ${priceIndex.monthlyValues.length} monthly values`);
+  logger.log(`[${componentName}] Found price index with ${priceIndex.monthlyValues.length} monthly values`);
 
   // Get measurement quarter indices (measurement month + 2 months after)
   // IMPROVED: Now accepts partial quarter data (1-3 months)
@@ -48,8 +49,8 @@ async function getQuarterlyAverage(
     return mvDate >= measurementMonth && mvDate <= twoMonthsAfter;
   });
 
-  console.log(`[${componentName}] Quarter range: ${format(measurementMonth, 'yyyy-MM')} to ${format(twoMonthsAfter, 'yyyy-MM')}`);
-  console.log(`[${componentName}] Found ${measurementIndices.length} measurement indices:`, 
+  logger.log(`[${componentName}] Quarter range: ${format(measurementMonth, 'yyyy-MM')} to ${format(twoMonthsAfter, 'yyyy-MM')}`);
+  logger.log(`[${componentName}] Found ${measurementIndices.length} measurement indices:`, 
     measurementIndices.map(mv => ({
       month: format(new Date(mv.month), 'yyyy-MM'),
       value: mv.value
@@ -64,23 +65,23 @@ async function getQuarterlyAverage(
   });
 
   if (baseIndexValue) {
-    console.log(`[${componentName}] Found base index:`, {
+    logger.log(`[${componentName}] Found base index:`, {
       month: format(new Date(baseIndexValue.month), 'yyyy-MM'),
       value: baseIndexValue.value
     });
   } else {
-    console.log(`[${componentName}] Base index NOT found for ${format(baseMonth, 'yyyy-MM')}`);
+    logger.log(`[${componentName}] Base index NOT found for ${format(baseMonth, 'yyyy-MM')}`);
   }
 
   // IMPROVED: Accept at least 1 month of data (instead of requiring all 3)
   if (measurementIndices.length === 0 || !baseIndexValue) {
-    console.log(`[${componentName}] Missing critical data - measurementIndices: ${measurementIndices.length}, baseIndex: ${!!baseIndexValue}`);
+    logger.log(`[${componentName}] Missing critical data - measurementIndices: ${measurementIndices.length}, baseIndex: ${!!baseIndexValue}`);
     return null;
   }
 
   // Log warning if partial quarter data
   if (measurementIndices.length < 3) {
-    console.log(`[${componentName}] ⚠️ WARNING: Using partial quarter data (${measurementIndices.length} month${measurementIndices.length > 1 ? 's' : ''} instead of 3)`);
+    logger.log(`[${componentName}] ⚠️ WARNING: Using partial quarter data (${measurementIndices.length} month${measurementIndices.length > 1 ? 's' : ''} instead of 3)`);
   }
 
   // Calculate average from available months
@@ -100,7 +101,7 @@ async function getQuarterlyAverage(
     monthsUsed: measurementIndices.length
   };
 
-  console.log(`[${componentName}] Calculation result:`, result);
+  logger.log(`[${componentName}] Calculation result:`, result);
 
   return result;
 }
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { baseMonth, bills, classificationSelections } = body;
 
-    console.log('[PVC Comparison] Received request:', {
+    logger.log('[PVC Comparison] Received request:', {
       baseMonth,
       billsCount: bills?.length,
       classificationSelections,
@@ -260,7 +261,7 @@ export async function POST(request: NextRequest) {
       bills.map(async (bill: { id: string; billNumber?: string; amount: number; measurementDate: string; dedicatedTmt?: number; dedicatedCement?: number }) => {
         const measurementDateObj = parseDateDDMMYYYY(bill.measurementDate);
         
-        console.log(`[PVC Comparison] Processing Bill ${bill.id}:`, {
+        logger.log(`[PVC Comparison] Processing Bill ${bill.id}:`, {
           amount: bill.amount,
           baseMonth,
           baseDateObj: baseDateObj.toISOString(),
@@ -299,15 +300,15 @@ export async function POST(request: NextRequest) {
 
             const classification = classifications.find(c => c.id === classificationId);
             if (!classification) {
-              console.log(`[Bill ${bill.id}][Selection ${selectionIndex}] Classification ${classificationId} not found`);
+              logger.log(`[Bill ${bill.id}][Selection ${selectionIndex}] Classification ${classificationId} not found`);
               return null;
             }
 
-            console.log(`\n[Bill ${bill.id}][Selection ${selectionIndex}] Processing classification ${classification.code}`);
+            logger.log(`\n[Bill ${bill.id}][Selection ${selectionIndex}] Processing classification ${classification.code}`);
             if (steelTypes.length > 0) {
-              console.log(`  Steel types: ${steelTypes.join(', ')}`);
+              logger.log(`  Steel types: ${steelTypes.join(', ')}`);
             } else {
-              console.log(`  Steel types: Using average of all steel types`);
+              logger.log(`  Steel types: Using average of all steel types`);
             }
         const componentPvcs = {
           labour: 0,
@@ -324,7 +325,7 @@ export async function POST(request: NextRequest) {
         let totalPvc = 0;
 
         // Calculate PVC for each component
-        console.log(`  Components:`, {
+        logger.log(`  Components:`, {
           labour: classification.labour,
           steel: classification.steel,
           cement: classification.cement,
@@ -339,7 +340,7 @@ export async function POST(request: NextRequest) {
           const componentKey = key as keyof typeof componentPvcs;
           const percentage = classification[componentKey];
 
-          console.log(`  Processing ${key} (${percentage}%)`);
+          logger.log(`  Processing ${key} (${percentage}%)`);
 
           if (percentage > 0) {
             // Check cache first
@@ -374,12 +375,12 @@ export async function POST(request: NextRequest) {
                 quarterData.base,
                 percentage
               );
-              console.log(`  ${key} PVC calculated: ₹${result.pvc.toFixed(2)}`);
+              logger.log(`  ${key} PVC calculated: ₹${result.pvc.toFixed(2)}`);
               componentPvcs[componentKey] = result.pvc;
               componentCalculations[componentKey] = result.calculationSteps;
               totalPvc += result.pvc;
             } else {
-              console.log(`  ${key} - No quarter data found, skipping`);
+              logger.log(`  ${key} - No quarter data found, skipping`);
               componentCalculations[componentKey] = null;
             }
           } else {
@@ -390,14 +391,14 @@ export async function POST(request: NextRequest) {
         // Process steel component with selected steel types
         const steelPercentage = classification.steel;
         if (steelPercentage > 0) {
-          console.log(`  Processing steel (${steelPercentage}%)`);
+          logger.log(`  Processing steel (${steelPercentage}%)`);
           
           // Determine which steel indices to use
           const steelIndexNames = steelTypes.length > 0
             ? steelTypes.map((st: string) => steelTypeIndexMap[st]).filter(Boolean)
             : Object.values(steelTypeIndexMap);
 
-          console.log(`  Using steel indices: ${steelIndexNames.join(', ')}`);
+          logger.log(`  Using steel indices: ${steelIndexNames.join(', ')}`);
 
           // Fetch quarterly data for each steel type
           const steelQuarterData: { average: number; base: number }[] = [];
@@ -429,9 +430,9 @@ export async function POST(request: NextRequest) {
             
             if (quarterData) {
               steelQuarterData.push(quarterData);
-              console.log(`    ${steelIndexName}: Base=${quarterData.base}, Avg=${quarterData.average}`);
+              logger.log(`    ${steelIndexName}: Base=${quarterData.base}, Avg=${quarterData.average}`);
             } else {
-              console.log(`    ${steelIndexName}: No data found`);
+              logger.log(`    ${steelIndexName}: No data found`);
             }
           }
 
@@ -440,7 +441,7 @@ export async function POST(request: NextRequest) {
             const avgOfAverages = steelQuarterData.reduce((sum, d) => sum + d.average, 0) / steelQuarterData.length;
             const avgOfBases = steelQuarterData.reduce((sum, d) => sum + d.base, 0) / steelQuarterData.length;
 
-            console.log(`  Steel averaged indices: Base=${avgOfBases.toFixed(2)}, Avg=${avgOfAverages.toFixed(2)}`);
+            logger.log(`  Steel averaged indices: Base=${avgOfBases.toFixed(2)}, Avg=${avgOfAverages.toFixed(2)}`);
 
             const result = calculateComponentPvc(
               bill.amount,
@@ -449,20 +450,20 @@ export async function POST(request: NextRequest) {
               steelPercentage
             );
 
-            console.log(`  Steel PVC calculated: ₹${result.pvc.toFixed(2)}`);
+            logger.log(`  Steel PVC calculated: ₹${result.pvc.toFixed(2)}`);
             componentPvcs.steel = result.pvc;
             componentCalculations.steel = result.calculationSteps;
             totalPvc += result.pvc;
           } else {
-            console.log(`  Steel - No quarter data found for any steel type, skipping`);
+            logger.log(`  Steel - No quarter data found for any steel type, skipping`);
             componentCalculations.steel = null;
           }
         } else {
           componentCalculations.steel = null;
         }
 
-        console.log(`  Total PVC: ₹${totalPvc.toFixed(2)}`);
-        console.log(`  Component breakdown:`, {
+        logger.log(`  Total PVC: ₹${totalPvc.toFixed(2)}`);
+        logger.log(`  Component breakdown:`, {
           labour: componentPvcs.labour.toFixed(2),
           steel: componentPvcs.steel.toFixed(2),
           cement: componentPvcs.cement.toFixed(2),
@@ -509,7 +510,7 @@ export async function POST(request: NextRequest) {
         
         // Process dedicated TMT if provided
         if (bill.dedicatedTmt && bill.dedicatedTmt > 0) {
-          console.log(`\n[Bill ${bill.id}] Processing dedicated TMT: ₹${bill.dedicatedTmt}`);
+          logger.log(`\n[Bill ${bill.id}] Processing dedicated TMT: ₹${bill.dedicatedTmt}`);
           
           // Use TMT Bars index
           const tmtIndexName = 'Steel TMT Bars';
@@ -546,7 +547,7 @@ export async function POST(request: NextRequest) {
               85 // 85% composition
             );
             
-            console.log(`  Dedicated TMT PVC: ₹${result.pvc.toFixed(2)}`);
+            logger.log(`  Dedicated TMT PVC: ₹${result.pvc.toFixed(2)}`);
             
             dedicatedComponents.push({
               component: 'tmt',
@@ -557,13 +558,13 @@ export async function POST(request: NextRequest) {
               calculationSteps: result.calculationSteps
             });
           } else {
-            console.log(`  Dedicated TMT - No quarter data found, skipping`);
+            logger.log(`  Dedicated TMT - No quarter data found, skipping`);
           }
         }
         
         // Process dedicated Cement if provided
         if (bill.dedicatedCement && bill.dedicatedCement > 0) {
-          console.log(`\n[Bill ${bill.id}] Processing dedicated Cement: ₹${bill.dedicatedCement}`);
+          logger.log(`\n[Bill ${bill.id}] Processing dedicated Cement: ₹${bill.dedicatedCement}`);
           
           // Use RBI Cement index
           const cementIndexName = 'RBI Cement';
@@ -600,7 +601,7 @@ export async function POST(request: NextRequest) {
               85 // 85% composition
             );
             
-            console.log(`  Dedicated Cement PVC: ₹${result.pvc.toFixed(2)}`);
+            logger.log(`  Dedicated Cement PVC: ₹${result.pvc.toFixed(2)}`);
             
             dedicatedComponents.push({
               component: 'cement',
@@ -611,7 +612,7 @@ export async function POST(request: NextRequest) {
               calculationSteps: result.calculationSteps
             });
           } else {
-            console.log(`  Dedicated Cement - No quarter data found, skipping`);
+            logger.log(`  Dedicated Cement - No quarter data found, skipping`);
           }
         }
 
@@ -655,7 +656,7 @@ export async function POST(request: NextRequest) {
           usageCount: 1,
         },
       });
-      console.log(`[PVC Comparison] Updated daily usage for user ${userId}`);
+      logger.log(`[PVC Comparison] Updated daily usage for user ${userId}`);
     } catch (usageError) {
       console.error('[PVC Comparison] Error tracking usage:', usageError);
       // Don't fail the request if usage tracking fails
@@ -675,3 +676,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 /**
  * API endpoint to send bill PDF via WhatsApp using MyDreams API
@@ -101,7 +102,7 @@ export async function POST(req: NextRequest) {
       pdfUrl += `&templateId=${templateId}`;
     }
     
-    console.log('[WhatsApp] PDF URL generated:', pdfUrl.substring(0, 100) + '...');
+    logger.log('[WhatsApp] PDF URL generated:', pdfUrl.substring(0, 100) + '...');
     
     // Format all 5 template parameters for 'bill_created_with_pdf' template
     // {{1}} = Customer Name
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
       bill.grossBillAmount ? `₹${bill.grossBillAmount.toFixed(2)}` : 'N/A',
     ];
     
-    console.log('WhatsApp Send Request:', {
+    logger.log('WhatsApp Send Request:', {
       billId,
       billNumber,
       phoneNumber,
@@ -140,7 +141,7 @@ export async function POST(req: NextRequest) {
       formattedTemplateParams
     );
     
-    console.log('WhatsApp Send Result:', result);
+    logger.log('WhatsApp Send Result:', result);
 
     // Log the WhatsApp message to database
     try {
@@ -207,3 +208,4 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

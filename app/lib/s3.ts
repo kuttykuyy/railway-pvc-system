@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 import fs from 'fs';
 import path from 'path';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
@@ -15,7 +16,7 @@ try {
   bucketName = config.bucketName;
   folderPrefix = config.folderPrefix;
 } catch (error) {
-  console.warn('⚠️ AWS S3 initialization failed. Falling back to local storage:', error);
+  logger.warn('⚠️ AWS S3 initialization failed. Falling back to local storage:', error);
   useLocalFallback = true;
 }
 
@@ -32,7 +33,7 @@ function uploadLocalFile(buffer: Buffer, key: string): string {
     
     // Write buffer to file
     fs.writeFileSync(fullPath, buffer);
-    console.log(`✅ Saved file locally at: ${fullPath}`);
+    logger.log(`✅ Saved file locally at: ${fullPath}`);
     return key;
   } catch (error) {
     console.error('❌ Local file upload fallback failed:', error);
@@ -79,7 +80,7 @@ export async function getFileUrl(key: string, expiresIn: number = 3600): Promise
     const url = await getSignedUrl(s3Client, command, { expiresIn });
     return url;
   } catch (error) {
-    console.warn(`⚠️ Failed to generate S3 URL for key ${key}, falling back to local URL:`, error);
+    logger.warn(`⚠️ Failed to generate S3 URL for key ${key}, falling back to local URL:`, error);
     return `${baseUrl}/uploads/${key}`;
   }
 }
@@ -94,7 +95,7 @@ export async function deleteFile(key: string): Promise<void> {
     const localFilePath = path.join(process.cwd(), 'public', 'uploads', key);
     if (fs.existsSync(localFilePath)) {
       fs.unlinkSync(localFilePath);
-      console.log(`✅ Deleted local file at: ${localFilePath}`);
+      logger.log(`✅ Deleted local file at: ${localFilePath}`);
     }
   } catch (err) {
     console.error('Error deleting local file:', err);
@@ -149,3 +150,4 @@ function getContentType(fileName: string): string {
   
   return contentTypes[ext || ''] || 'application/octet-stream';
 }
+

@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -6,10 +7,10 @@ import { prisma } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('=== Update Posting Details API Called ===');
+    logger.log('=== Update Posting Details API Called ===');
     
     const session = await getServerSession(authOptions);
-    console.log('Session:', session?.user?.email);
+    logger.log('Session:', session?.user?.email);
     
     if (!session?.user?.email) {
       console.error('No session or email found');
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await request.json();
-    console.log('Received data:', JSON.stringify(data, null, 2));
+    logger.log('Received data:', JSON.stringify(data, null, 2));
     
     // Validate required fields for railway officials
     if (!data.designation || !data.department || !data.railwayZone || !data.division) {
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Updating user:', session.user.email);
+    logger.log('Updating user:', session.user.email);
     
     // Update user posting details
     const updatedUser = await prisma.user.update({
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log('User updated successfully:', {
+    logger.log('User updated successfully:', {
       id: updatedUser.id,
       designation: updatedUser.designation,
       department: updatedUser.department,
@@ -82,3 +83,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

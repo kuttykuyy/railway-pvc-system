@@ -1,3 +1,4 @@
+﻿import { logger } from '@/lib/logger';
 
 /**
  * Incoming WhatsApp Webhook Endpoint
@@ -29,13 +30,13 @@ export async function POST(req: NextRequest) {
     });
 
     if (!webhookEnabled || webhookEnabled.value !== 'true') {
-      console.log('WhatsApp webhook is not enabled');
+      logger.log('WhatsApp webhook is not enabled');
       return NextResponse.json({ error: 'Webhook not enabled' }, { status: 403 });
     }
 
     // Parse incoming webhook payload
     const payload = await req.json();
-    console.log('Incoming WhatsApp webhook:', payload);
+    logger.log('Incoming WhatsApp webhook:', payload);
 
     // Extract message data (adjust based on actual MyDreams webhook format)
     const contact = payload.contact || payload.from || payload.phoneNumber;
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log('Processing WhatsApp message:', {
+    logger.log('Processing WhatsApp message:', {
       contact,
       message: message.substring(0, 100),
       messageId,
@@ -108,3 +109,4 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 
 import { prisma } from './db'
 
@@ -27,7 +28,7 @@ function isConnectionError(error: any): boolean {
   ]
   
   if (postgresConnectionStates.includes(sqlState)) {
-    console.warn(`🔴 PostgreSQL connection error detected: SQLSTATE ${sqlState}`)
+    logger.warn(`🔴 PostgreSQL connection error detected: SQLSTATE ${sqlState}`)
     return true
   }
   
@@ -41,7 +42,7 @@ function isConnectionError(error: any): boolean {
   ]
   
   if (prismaConnectionCodes.includes(errorCode)) {
-    console.warn(`🔴 Prisma connection error detected: ${errorCode}`)
+    logger.warn(`🔴 Prisma connection error detected: ${errorCode}`)
     return true
   }
   
@@ -73,7 +74,7 @@ function isConnectionError(error: any): boolean {
   
   const hasConnectionError = connectionErrorPatterns.some(pattern => errorMessage.includes(pattern))
   if (hasConnectionError) {
-    console.warn(`🔴 Connection error pattern detected in message: ${errorMessage.substring(0, 100)}...`)
+    logger.warn(`🔴 Connection error pattern detected in message: ${errorMessage.substring(0, 100)}...`)
   }
   
   return hasConnectionError
@@ -96,7 +97,7 @@ export async function withDatabaseConnection<T>(
         try {
           await prisma.$queryRaw`SELECT 1`
         } catch (healthError) {
-          console.warn(`⚠️ Health check failed before retry ${attempt}, reconnecting...`)
+          logger.warn(`⚠️ Health check failed before retry ${attempt}, reconnecting...`)
           await prisma.$disconnect()
           await new Promise(resolve => setTimeout(resolve, 500))
           await prisma.$connect()
@@ -117,7 +118,7 @@ export async function withDatabaseConnection<T>(
       
       // Check if it's a connection error that we should retry
       if (isConnectionError(error) && attempt < maxRetries) {
-        console.warn(`⚠️ Connection error detected, retrying ${operationName}...`)
+        logger.warn(`⚠️ Connection error detected, retrying ${operationName}...`)
         
         // Try to reconnect with exponential backoff
         try {
@@ -125,11 +126,11 @@ export async function withDatabaseConnection<T>(
           
           // Exponential backoff: 1s, 2s, 4s, etc., max 10s
           const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 10000)
-          console.log(`⏳ Waiting ${backoffMs}ms before reconnecting...`)
+          logger.log(`⏳ Waiting ${backoffMs}ms before reconnecting...`)
           await new Promise(resolve => setTimeout(resolve, backoffMs))
           
           await prisma.$connect()
-          console.log(`✅ Reconnected successfully, retrying ${operationName}...`)
+          logger.log(`✅ Reconnected successfully, retrying ${operationName}...`)
         } catch (reconnectError) {
           console.error('❌ Reconnection failed:', reconnectError)
           // Continue to retry anyway, the next attempt will try to reconnect again
@@ -171,16 +172,16 @@ export async function initializeDatabaseConnection(): Promise<void> {
     await prisma.$connect()
     const isHealthy = await checkDatabaseConnection()
     if (isHealthy) {
-      console.log('✅ Database connection established and healthy')
+      logger.log('✅ Database connection established and healthy')
     } else {
-      console.warn('⚠️ Database connected but health check failed')
+      logger.warn('⚠️ Database connected but health check failed')
       // Try one more time
       await prisma.$disconnect()
       await new Promise(resolve => setTimeout(resolve, 1000))
       await prisma.$connect()
       const retryHealth = await checkDatabaseConnection()
       if (retryHealth) {
-        console.log('✅ Database connection healthy after retry')
+        logger.log('✅ Database connection healthy after retry')
       } else {
         throw new Error('Database connection unhealthy after retry')
       }
@@ -197,7 +198,7 @@ export async function initializeDatabaseConnection(): Promise<void> {
 export async function ensureDatabaseConnection(): Promise<void> {
   const isHealthy = await checkDatabaseConnection()
   if (!isHealthy) {
-    console.warn('⚠️ Database connection not healthy, reconnecting...')
+    logger.warn('⚠️ Database connection not healthy, reconnecting...')
     try {
       await prisma.$disconnect()
       await new Promise(resolve => setTimeout(resolve, 1000))
@@ -206,7 +207,7 @@ export async function ensureDatabaseConnection(): Promise<void> {
       // Verify reconnection
       const retryHealth = await checkDatabaseConnection()
       if (retryHealth) {
-        console.log('✅ Database reconnected successfully')
+        logger.log('✅ Database reconnected successfully')
       } else {
         throw new Error('Failed to restore database connection')
       }
@@ -242,3 +243,4 @@ export async function withTimeout<T>(
     throw error
   }
 }
+

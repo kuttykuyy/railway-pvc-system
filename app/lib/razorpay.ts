@@ -1,3 +1,4 @@
+﻿import { logger } from './logger';
 
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -9,7 +10,7 @@ const loadRazorpayCredentials = () => {
   try {
     // First, try environment variables
     if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
-      console.log('[Razorpay] Loading credentials from environment variables');
+      logger.log('[Razorpay] Loading credentials from environment variables');
       return {
         keyId: process.env.RAZORPAY_KEY_ID,
         keySecret: process.env.RAZORPAY_KEY_SECRET,
@@ -27,7 +28,7 @@ const loadRazorpayCredentials = () => {
       const authSecrets = JSON.parse(fs.readFileSync(authSecretsPath, 'utf8'));
       
       if (authSecrets.razorpay?.secrets?.key_id?.value && authSecrets.razorpay?.secrets?.key_secret?.value) {
-        console.log('[Razorpay] Loading credentials from auth secrets file');
+        logger.log('[Razorpay] Loading credentials from auth secrets file');
         return {
           keyId: authSecrets.razorpay.secrets.key_id.value,
           keySecret: authSecrets.razorpay.secrets.key_secret.value,
@@ -35,7 +36,7 @@ const loadRazorpayCredentials = () => {
       }
     }
     
-    console.warn('[Razorpay] Credentials not found in environment variables or auth secrets file');
+    logger.warn('[Razorpay] Credentials not found in environment variables or auth secrets file');
   } catch (error) {
     console.error('[Razorpay] Error loading credentials:', error);
   }
@@ -147,7 +148,7 @@ export const createRazorpayOrder = async (
   };
 
   // Log order creation attempt
-  console.log('[Razorpay] Creating order:', {
+  logger.log('[Razorpay] Creating order:', {
     amount: options.amount,
     currency: options.currency,
     receipt: options.receipt,
@@ -159,7 +160,7 @@ export const createRazorpayOrder = async (
     const order = await razorpay.orders.create(options);
     
     // Log successful order creation
-    console.log('[Razorpay] Order created successfully:', {
+    logger.log('[Razorpay] Order created successfully:', {
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
@@ -259,3 +260,4 @@ export const isRazorpayEnabled = (): boolean => {
   const credentials = loadRazorpayCredentials();
   return credentials !== null;
 };
+
