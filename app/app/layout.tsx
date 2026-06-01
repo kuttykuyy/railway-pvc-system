@@ -107,7 +107,7 @@ export const metadata: Metadata = {
     ],
   },
   verification: {
-    google: 'google-site-verification-code-here', // Add your verification code from Google Search Console
+    google: process.env.GOOGLE_SITE_VERIFICATION || 'google-site-verification-code-here', // Add your verification code from Google Search Console
   },
   other: {
     'mobile-web-app-capable': 'yes',
