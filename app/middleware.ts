@@ -76,9 +76,10 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow SEO files (sitemap, robots.txt)
+  // Allow SEO files (sitemap, robots.txt) and ads.txt
   if (pathname === '/sitemap.xml' || 
-      pathname === '/robots.txt') {
+      pathname === '/robots.txt' ||
+      pathname === '/ads.txt') {
     return NextResponse.next();
   }
 
@@ -128,8 +129,9 @@ export const config = {
      * - icons/ (PWA icons)
      * - sitemap.xml (SEO sitemap)
      * - robots.txt (SEO robots file)
+     * - ads.txt (AdSense ads.txt)
      * - public folder
      */
-    "/((?!api/auth|api/public|api/v1|api/external|api/whatsapp/webhook|api/telegram|api/razorpay/webhook|_next/static|_next/image|favicon|manifest.json|sw.js|icons/|public|api/signup|sitemap.xml|robots.txt).*)",
+    "/((?!api/auth|api/public|api/v1|api/external|api/whatsapp/webhook|api/telegram|api/razorpay/webhook|_next/static|_next/image|favicon|manifest.json|sw.js|icons/|public|api/signup|sitemap.xml|robots.txt|ads.txt).*)",
   ],
 };
