@@ -334,10 +334,10 @@ export default function ContractsPage() {
 
       {/* Empty state */}
       {filtered.length === 0 && (
-        <div className="text-center py-16 border border-dashed border-gray-200 rounded-lg">
-          <Building2 className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-          <p className="font-medium text-gray-600">{contracts.length === 0 ? 'No contracts yet' : 'No results'}</p>
-          <p className="text-sm text-gray-400 mt-1">
+        <div className="flex flex-col items-center justify-center text-center py-16 border border-dashed border-gray-200 rounded-lg">
+          <Building2 className="h-10 w-10 text-gray-300 mb-3" />
+          <p className="font-medium text-gray-600 mx-auto">{contracts.length === 0 ? 'No contracts yet' : 'No results'}</p>
+          <p className="text-sm text-gray-400 mt-1 mx-auto">
             {contracts.length === 0 ? 'Create your first contract to get started.' : 'Try a different search or filter.'}
           </p>
           {contracts.length === 0 ? (
