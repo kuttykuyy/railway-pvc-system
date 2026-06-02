@@ -236,10 +236,10 @@ export default async function ContractDetailPage({ params }: Props) {
         </div>
 
         {contract.bills.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
+          <div className="flex flex-col items-center justify-center text-center py-12 text-gray-400">
             <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
-            <p className="font-medium text-gray-600">No bills yet</p>
-            <p className="text-sm mt-1">Add your first running account bill to start PVC calculations.</p>
+            <p className="font-medium text-gray-600 mx-auto max-w-none">No bills yet</p>
+            <p className="text-sm mt-1 mx-auto max-w-none">Add your first running account bill to start PVC calculations.</p>
             <Link href={`/bills/new?contractId=${contract.id}`}
               className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
               <Plus className="h-4 w-4" /> Add First Bill

@@ -90,6 +90,20 @@ export async function areFinalIndicesAvailableForBill(
   baseMonth: Date
 ): Promise<{ available: boolean; message: string; missingMonths?: string[]; isProvisional?: boolean }> {
   try {
+    // Validate measurement date is strictly in a calendar month after the contract base month
+    const baseMonthDate = new Date(baseMonth);
+    const measurementYear = measurementDate.getFullYear();
+    const measurementMonth = measurementDate.getMonth();
+    const baseYear = baseMonthDate.getFullYear();
+    const baseMonthVal = baseMonthDate.getMonth();
+    
+    if (measurementYear < baseYear || (measurementYear === baseYear && measurementMonth <= baseMonthVal)) {
+      return {
+        available: false,
+        message: `Measurement date must be in a month after the contract base month (${baseMonthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })})`
+      };
+    }
+
     // Import getQuarterFromDate and getQuarterMonths here to avoid circular dependencies
     const { getQuarterFromDate } = await import('./pvc-calculations');
     const { getQuarterMonths } = await import('./pvc-calculations');

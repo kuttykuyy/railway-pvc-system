@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
@@ -304,9 +304,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Measurement date cannot be in the future' }, { status: 400 });
     }
     
-    if (measurementDate <= contract.baseMonth) {
+    const baseMonthDate = new Date(contract.baseMonth);
+    const measurementYear = measurementDate.getFullYear();
+    const measurementMonth = measurementDate.getMonth();
+    const baseYear = baseMonthDate.getFullYear();
+    const baseMonthVal = baseMonthDate.getMonth();
+    
+    if (measurementYear < baseYear || (measurementYear === baseYear && measurementMonth <= baseMonthVal)) {
       return NextResponse.json({ 
-        error: `Measurement date must be after contract base month (${contract.baseMonth.toDateString()})`
+        error: `Measurement date must be in a month after the contract base month (${baseMonthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })})`
       }, { status: 400 });
     }
     

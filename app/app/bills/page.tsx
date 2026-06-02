@@ -1507,7 +1507,7 @@ export default function BillsPage() {
           <CardContent className="flex flex-col items-center justify-center py-16">
             <FileText className="h-16 w-16 text-slate-300 mb-6" />
             <h3 className="text-xl font-bold text-slate-900 mb-2">No bills yet</h3>
-            <p className="text-slate-500 text-center mb-8 max-w-sm">
+            <p className="text-slate-500 text-center mb-8 max-w-sm mx-auto">
               Start processing your first running account bill to see PVC calculations.
             </p>
             <Button asChild size="lg" className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl">
@@ -1523,7 +1523,7 @@ export default function BillsPage() {
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Filter className="h-16 w-16 text-slate-300 mb-6" />
             <h3 className="text-xl font-bold text-slate-900 mb-2">No bills match filters</h3>
-            <p className="text-slate-500 text-center mb-8 max-w-sm">
+            <p className="text-slate-500 text-center mb-8 max-w-sm mx-auto">
               Try adjusting your filters to see more results.
             </p>
             <Button onClick={clearFilters} variant="outline" size="lg" className="rounded-xl border-slate-200">

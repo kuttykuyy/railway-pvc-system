@@ -1,4 +1,4 @@
-﻿import { prisma } from './db';
+import { prisma } from './db';
 import { logger } from './logger';
 
 import { PVC_COMPONENTS, QuarterlyAverage } from './types';
@@ -1591,6 +1591,10 @@ export function getQuarterMonths(quarter: string, baseMonth: Date): Date[] {
   // Validate inputs
   if (!quarter || typeof quarter !== 'string') {
     throw new Error(`Invalid quarter: ${quarter}`);
+  }
+  
+  if (quarter === 'Q0') {
+    throw new Error('Measurement date must be in a month after the contract base month.');
   }
   
   if (!baseMonth || isNaN(baseMonth.getTime())) {

@@ -227,6 +227,18 @@ export async function PUT(
     // ===== STEP 5: Calculate Quarter =====
     const measurementDate = new Date(dateOfMeasurement);
     
+    const baseMonthDate = new Date(contract.baseMonth);
+    const measurementYear = measurementDate.getFullYear();
+    const measurementMonth = measurementDate.getMonth();
+    const baseYear = baseMonthDate.getFullYear();
+    const baseMonthVal = baseMonthDate.getMonth();
+    
+    if (measurementYear < baseYear || (measurementYear === baseYear && measurementMonth <= baseMonthVal)) {
+      return NextResponse.json({ 
+        error: `Measurement date must be in a month after the contract base month (${baseMonthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })})`
+      }, { status: 400 });
+    }
+    
     // Check if final price indices are available for ALL months needed in the calculation
     // PVC calculation uses a three-month average, so we need to check the entire quarter
     const indicesCheck = await areFinalIndicesAvailableForBill(measurementDate, contract.baseMonth);
