@@ -1,7 +1,8 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,8 @@ export function GstBillingDetailsDialog({
   creditAmount,
   invoiceNumber,
 }: GstBillingDetailsDialogProps) {
+  const { data: session } = useSession();
+  
   const [formData, setFormData] = useState({
     customerName: '',
     customerEmail: '',
@@ -33,6 +36,16 @@ export function GstBillingDetailsDialog({
     customerAddress: '',
   });
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open && session?.user) {
+      setFormData(prev => ({
+        ...prev,
+        customerName: prev.customerName || session.user?.name || '',
+        customerEmail: prev.customerEmail || session.user?.email || '',
+      }));
+    }
+  }, [open, session]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
