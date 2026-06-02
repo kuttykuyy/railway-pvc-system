@@ -1040,12 +1040,15 @@ export default function ClassAnalyzerPage() {
             />
             <p className="text-xs text-muted-foreground">Format: mm-yyyy</p>
             {availableDateRange.minDate && availableDateRange.maxDate && (
-              <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <div className="flex items-center gap-2.5 p-2 px-3 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800 animate-blink font-semibold">
+                <AlertCircle className="h-4 w-4 flex-shrink-0 animate-pulse text-blue-500" />
                 <span>
                   Indices available from{' '}
                   <strong>{availableDateRange.minDate.split('-').reverse().join('-')}</strong> to{' '}
                   <strong>{availableDateRange.maxDate.split('-').reverse().join('-')}</strong>
+                  <span className="ml-2 bg-blue-100/80 text-blue-900 border border-blue-250 px-1.5 py-0.5 rounded font-extrabold whitespace-nowrap">
+                    (All indices up to date: {new Date(availableDateRange.maxDate).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })})
+                  </span>
                 </span>
               </div>
             )}

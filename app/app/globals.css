@@ -240,3 +240,12 @@
     @apply fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full shadow-lg touch-manipulation;
   }
 }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+.animate-blink {
+  animation: blink 1.5s ease-in-out infinite;
+}

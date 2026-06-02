@@ -323,6 +323,36 @@ function EditBillPageContent() {
           </div>
         </div>
       </form>
+
+      {/* Validation and Error Modal Popup */}
+      {error && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200 animate-in fade-in zoom-in">
+          <div className="w-full max-w-md bg-white border border-gray-200 rounded-3xl p-6 shadow-2xl space-y-5">
+            <div className="text-center space-y-4">
+              <div className="relative inline-flex items-center justify-center p-4 bg-red-50 rounded-2xl text-red-600 shadow-sm animate-bounce">
+                <AlertTriangle className="h-8 w-8 animate-pulse" />
+              </div>
+              
+              <div className="space-y-2">
+                <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">Validation Error</h2>
+                <div className="text-sm text-slate-700 max-h-[30vh] overflow-y-auto leading-relaxed text-left bg-slate-50 border border-slate-100 rounded-xl p-4 mt-2 font-semibold whitespace-pre-line shadow-inner">
+                  {error}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setError('')}
+                className="w-full h-11 bg-slate-950 hover:bg-slate-900 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98] inline-flex items-center justify-center"
+              >
+                Understood
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

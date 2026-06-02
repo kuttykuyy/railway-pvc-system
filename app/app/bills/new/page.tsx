@@ -1121,9 +1121,14 @@ function NewBillPageContent() {
                           Enter the date when work was measured. The system automatically detects the correct PVC quarter based on this date.
                         </p>
                         {availableDateRange && availableDateRange.minDate && availableDateRange.maxDate ? (
-                          <p className="text-xs text-gray-600 flex items-center gap-1">
-                            <Info className="h-3 w-3" />
-                            Indices available from {new Date(availableDateRange.minDate).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' })} to {new Date(availableDateRange.maxDate).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' })}
+                          <p className="text-xs text-blue-600 font-bold flex items-center gap-1.5 animate-blink mt-1">
+                            <Info className="h-3.5 w-3.5 text-blue-500 animate-pulse flex-shrink-0" />
+                            <span>
+                              Indices available from {new Date(availableDateRange.minDate).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' })} to {new Date(availableDateRange.maxDate).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' })}
+                              <span className="ml-1.5 bg-blue-50 border border-blue-150 text-blue-700 px-1.5 py-0.5 rounded font-black whitespace-nowrap">
+                                (All indices up to date: {new Date(availableDateRange.maxDate).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })})
+                              </span>
+                            </span>
                           </p>
                         ) : isLoadingDateRange ? (
                           <p className="text-xs text-gray-500 flex items-center gap-1">
@@ -1550,6 +1555,35 @@ function NewBillPageContent() {
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Validation and Error Modal Popup */}
+      {error && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-md bg-white border border-slate-100 rounded-3xl p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-250">
+            <div className="text-center space-y-4">
+              <div className="relative inline-flex items-center justify-center p-4 bg-red-50 rounded-2xl text-red-600 shadow-sm animate-bounce">
+                <AlertTriangle className="h-8 w-8 animate-pulse" />
+              </div>
+              
+              <div className="space-y-2">
+                <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">Validation Error</h2>
+                <div className="text-sm text-slate-700 max-h-[30vh] overflow-y-auto leading-relaxed text-left bg-slate-50 border border-slate-100 rounded-xl p-4 mt-2 font-semibold whitespace-pre-line shadow-inner">
+                  {error}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <Button
+                onClick={() => setError('')}
+                className="w-full h-11 bg-slate-950 hover:bg-slate-900 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98]"
+              >
+                Understood
+              </Button>
+            </div>
+          </Card>
         </div>
       )}
     </div>
