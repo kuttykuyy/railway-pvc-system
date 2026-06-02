@@ -101,7 +101,7 @@ export function GstBillingDetailsDialog({
       toast.success('GST invoice generated successfully!', { duration: 3000 });
 
       // Download PDF
-      const pdfUrl = `/api/gst-invoices/pdf?id=${data.id}`;
+      const pdfUrl = `/api/gst-invoices/${data.id}/pdf`;
       const link = document.createElement('a');
       link.href = pdfUrl;
       link.download = `GST_Invoice_${invoiceNumber}.pdf`;
