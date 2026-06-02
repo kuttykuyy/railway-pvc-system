@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
 
 export const dynamic = "force-dynamic";
 
@@ -165,6 +167,72 @@ export async function PUT(request: NextRequest) {
     console.error('Error updating monthly values:', error);
     return NextResponse.json(
       { error: 'Failed to update monthly values' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/indices/monthly - Delete monthly index value(s)
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { priceIndexId, month, deleteEntireRow } = body;
+    
+    if (!month) {
+      return NextResponse.json(
+        { error: 'Month is required' },
+        { status: 400 }
+      );
+    }
+
+    const monthDate = new Date(month);
+    monthDate.setDate(1);
+    monthDate.setHours(0, 0, 0, 0);
+
+    if (deleteEntireRow) {
+      // Delete all index values for this month
+      const result = await prisma.monthlyIndexValue.deleteMany({
+        where: {
+          month: monthDate
+        }
+      });
+      
+      return NextResponse.json({
+        success: true,
+        deletedCount: result.count,
+        message: `Successfully deleted all ${result.count} values for ${month}`
+      });
+    } else {
+      // Delete a single index value for this index and month
+      if (!priceIndexId) {
+        return NextResponse.json(
+          { error: 'Price index ID is required for single record deletion' },
+          { status: 400 }
+        );
+      }
+
+      const result = await prisma.monthlyIndexValue.deleteMany({
+        where: {
+          priceIndexId,
+          month: monthDate
+        }
+      });
+
+      return NextResponse.json({
+        success: true,
+        deletedCount: result.count,
+        message: `Successfully deleted value for index ID ${priceIndexId} in ${month}`
+      });
+    }
+  } catch (error) {
+    console.error('Error deleting monthly index value:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete monthly index value' },
       { status: 500 }
     );
   }

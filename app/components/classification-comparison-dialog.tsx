@@ -14,7 +14,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { BarChart3, X, ChevronDown, ChevronUp, TrendingUp, TrendingDown } from 'lucide-react';
+import { BarChart3, X, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
 interface ClassificationComparisonDialogProps {
@@ -165,6 +166,8 @@ export function ClassificationComparisonDialog({
   measurementDate,
 }: ClassificationComparisonDialogProps) {
   const [open, setOpen] = useState(false);
+  const [subscriptionActive, setSubscriptionActive] = useState(false);
+  const [checkingSub, setCheckingSub] = useState(true);
   const [allClassifications, setAllClassifications] = useState<ClassificationOption[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -174,18 +177,45 @@ export function ClassificationComparisonDialog({
   const [fetchedIndicesData, setFetchedIndicesData] = useState<{ base: { [key: string]: number }; current: { [key: string]: number } } | null>(null);
   const [indicesLoading, setIndicesLoading] = useState(false);
 
+  // Fetch subscription status on mount
+  useEffect(() => {
+    const checkSub = async () => {
+      try {
+        const res = await fetch('/api/credits/balance');
+        if (res.ok) {
+          const data = await res.json();
+          const isExempt = 
+            data.accountInfo?.tier === 'Superadmin' || 
+            data.accountInfo?.tier === 'Admin' || 
+            data.accountInfo?.tier === 'Railway Department' || 
+            data.accountInfo?.tier === 'Free Tier' || 
+            data.accountInfo?.tier === 'Unlimited' || 
+            !data.paymentProcessingEnabled;
+          
+          const hasSub = !!data.subscription?.isActive;
+          setSubscriptionActive(isExempt || hasSub);
+        }
+      } catch (err) {
+        console.error('Error checking subscription for comparison:', err);
+      } finally {
+        setCheckingSub(false);
+      }
+    };
+    checkSub();
+  }, []);
+
   // Use externally provided indices if available, otherwise use fetched ones
   const indicesData = externalIndicesData || fetchedIndicesData;
 
   useEffect(() => {
-    if (open && allClassifications.length === 0) {
+    if (open && subscriptionActive && allClassifications.length === 0) {
       fetchClassifications();
     }
     // If no external indices provided, try to fetch from page context
-    if (open && !externalIndicesData && !fetchedIndicesData && !indicesLoading) {
+    if (open && subscriptionActive && !externalIndicesData && !fetchedIndicesData && !indicesLoading) {
       fetchIndicesFromContext();
     }
-  }, [open]);
+  }, [open, subscriptionActive]);
 
   const fetchIndicesFromContext = async () => {
     try {
@@ -417,10 +447,22 @@ export function ClassificationComparisonDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={subscriptionActive ? open : false} onOpenChange={(val) => {
+      if (!subscriptionActive && !checkingSub) {
+        toast.error("Requires Advanced Feature Subscription (₹99/month). Please subscribe in the Billing panel to access this feature.");
+        return;
+      }
+      setOpen(val);
+    }}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7">
-          <BarChart3 size={12} />
+          {checkingSub ? (
+            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+          ) : !subscriptionActive ? (
+            <span className="text-[10px]">🔒</span>
+          ) : (
+            <BarChart3 size={12} />
+          )}
           Compare
         </Button>
       </DialogTrigger>

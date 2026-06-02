@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { BackButton } from "@/components/ui/back-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, RefreshCcw, ChevronLeft, ChevronRight, Download, Globe, Upload, FileText, Loader2, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Plus, RefreshCcw, ChevronLeft, ChevronRight, Download, Globe, Upload, FileText, Loader2, ShieldCheck, ShieldAlert, Trash2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { getClientRoleInfo } from "@/lib/role-auth";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -207,11 +207,12 @@ export default function SpreadsheetPage() {
           uniqueKeys.forEach(key => {
             const cellData = apiRow[key];
             row[key] = cellData ? {
+              id: cellData.id ?? null,
               value: cellData.value,
               isProvisional: cellData.isProvisional ?? false,
               formula: cellData.formula ?? null,
               steelDetail: cellData.steelDetail ?? null,
-            } : { value: null, isProvisional: false, formula: null, steelDetail: null };
+            } : { id: null, value: null, isProvisional: false, formula: null, steelDetail: null };
           });
           
           return row;
@@ -240,6 +241,86 @@ export default function SpreadsheetPage() {
       fetchData();
     }
   }, [session, isAdmin, fetchData]);
+
+  const getMonthDateString = (monthName: string) => {
+    const monthIdx = MONTHS.indexOf(monthName);
+    if (monthIdx === -1) return "";
+    return `${year}-${String(monthIdx + 1).padStart(2, '0')}-01`;
+  };
+
+  const handleDeleteCell = async (monthName: string, colKey: string, cellId?: string | null) => {
+    const monthStr = getMonthDateString(monthName);
+    if (!monthStr) return;
+
+    const col = [...NON_STEEL_COLUMNS, ...getAllSteelColumns()].find(c => c.key === colKey);
+    if (!col) {
+      toast.error("Invalid column");
+      return;
+    }
+
+    const priceIndex = priceIndices.find(p => p.name === col.dbName);
+    const priceIndexId = priceIndex?.id;
+
+    if (!priceIndexId) {
+      toast.error(`Index details not found for ${col.dbName}`);
+      return;
+    }
+
+    const confirmDelete = window.confirm(`Are you sure you want to delete the ${col.name} index value for ${monthName} ${year}?`);
+    if (!confirmDelete) return;
+
+    try {
+      let url = "/api/indices/monthly";
+      let options: any = {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ priceIndexId, month: monthStr })
+      };
+
+      if (cellId) {
+        url = `/api/indices/monthly/${cellId}`;
+        options = {
+          method: "DELETE"
+        };
+      }
+
+      const response = await fetch(url, options);
+      if (response.ok) {
+        toast.success("Index value deleted successfully");
+        fetchData();
+      } else {
+        const err = await response.json();
+        toast.error(err.error || "Failed to delete index value");
+      }
+    } catch (err) {
+      toast.error("Failed to delete index value");
+    }
+  };
+
+  const handleDeleteRow = async (monthName: string) => {
+    const monthStr = getMonthDateString(monthName);
+    if (!monthStr) return;
+
+    const confirmDelete = window.confirm(`Are you sure you want to delete ALL price indices for ${monthName} ${year}? This will clear the entire row.`);
+    if (!confirmDelete) return;
+
+    try {
+      const response = await fetch("/api/indices/monthly", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: monthStr, deleteEntireRow: true })
+      });
+      if (response.ok) {
+        toast.success(`Successfully cleared all index values for ${monthName} ${year}`);
+        fetchData();
+      } else {
+        const err = await response.json();
+        toast.error(err.error || "Failed to delete row values");
+      }
+    } catch (err) {
+      toast.error("Failed to delete row values");
+    }
+  };
 
   const handleAddEntry = async () => {
     if (!addMonth || !addIndex || !addValue) {
@@ -1700,7 +1781,16 @@ export default function SpreadsheetPage() {
                   {data.map((row, rowIdx) => (
                     <tr key={row.month} className={rowIdx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                       <td className="border px-2 py-2 font-medium text-gray-700">
-                        {row.month}
+                        <div className="flex items-center justify-between group">
+                          <span>{row.month}</span>
+                          <button
+                            onClick={() => handleDeleteRow(row.month)}
+                            className="text-red-500 hover:text-red-700 p-0.5 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity ml-2"
+                            title={`Clear all values for ${row.month}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </td>
                       {NON_STEEL_COLUMNS.map(col => {
                         const cell = row[col.key];
@@ -1712,10 +1802,22 @@ export default function SpreadsheetPage() {
                             title={hasValue && cell?.formula ? cell.formula : undefined}
                           >
                             {hasValue ? (
-                              <span>
-                                {cell.value.toFixed(2)}
-                                {cell.isProvisional && <span className="text-amber-600 text-xs ml-1">(P)</span>}
-                              </span>
+                              <div className="flex items-center justify-center gap-1 group">
+                                <span>
+                                  {cell.value.toFixed(2)}
+                                  {cell.isProvisional && <span className="text-amber-600 text-xs ml-1">(P)</span>}
+                                </span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteCell(row.month, col.key, cell.id);
+                                  }}
+                                  className="text-red-500 hover:text-red-700 p-0.5 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Delete value"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
                             ) : (
                               <span className="text-gray-300">-</span>
                             )}
@@ -1753,10 +1855,22 @@ export default function SpreadsheetPage() {
                             } : undefined}
                           >
                             {hasValue ? (
-                              <span className={`font-mono ${hasDetail ? "underline decoration-dotted decoration-gray-400" : ""}`}>
-                                {cell.value.toFixed(0)}
-                                {cell.isProvisional && <span className="text-amber-600 ml-0.5">(P)</span>}
-                              </span>
+                              <div className="flex items-center justify-center gap-1 group">
+                                <span className={`font-mono ${hasDetail ? "underline decoration-dotted decoration-gray-400" : ""}`}>
+                                  {cell.value.toFixed(0)}
+                                  {cell.isProvisional && <span className="text-amber-600 ml-0.5">(P)</span>}
+                                </span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteCell(row.month, col.key, cell.id);
+                                  }}
+                                  className="text-red-500 hover:text-red-700 p-0.5 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Delete value"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
                             ) : (
                               <span className="text-gray-300">-</span>
                             )}

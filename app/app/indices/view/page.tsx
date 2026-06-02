@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Download, ChevronLeft, ChevronRight, Database, Info, TrendingUp, Flame, Construction, Hammer, Layers, MapPin } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, Database, Info, TrendingUp, Flame, Construction, Hammer, Layers, MapPin, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
@@ -66,8 +66,43 @@ export default function IndicesViewPage() {
   const [steelCity, setSteelCity] = useState('Default');
   const [tab, setTab] = useState<'sheet'|'glossary'>('sheet');
   const [detail, setDetail] = useState<{ month: string; colName: string; city: string; value: number; detail: any } | null>(null);
+  const [subscriptionActive, setSubscriptionActive] = useState(false);
+  const [checkingSub, setCheckingSub] = useState(true);
 
   const allCols = [...NON_STEEL, ...(STEEL_BY_CITY[steelCity] || STEEL_BY_CITY.Default)];
+
+  useEffect(() => {
+    if (status === 'loading') return;
+    if (!session) {
+      router.push('/auth/signin');
+      return;
+    }
+
+    const checkSub = async () => {
+      try {
+        const res = await fetch('/api/credits/balance');
+        if (res.ok) {
+          const data = await res.json();
+          const isExempt = 
+            data.accountInfo?.tier === 'Superadmin' || 
+            data.accountInfo?.tier === 'Admin' || 
+            data.accountInfo?.tier === 'Railway Department' || 
+            data.accountInfo?.tier === 'Free Tier' || 
+            data.accountInfo?.tier === 'Unlimited' || 
+            !data.paymentProcessingEnabled;
+          
+          const hasSub = !!data.subscription?.isActive;
+          setSubscriptionActive(isExempt || hasSub);
+        }
+      } catch (err) {
+        console.error('Error checking subscription for indices view:', err);
+      } finally {
+        setCheckingSub(false);
+      }
+    };
+
+    checkSub();
+  }, [session, status, router]);
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -76,7 +111,7 @@ export default function IndicesViewPage() {
     fetch(`/api/indices/yearly-view?year=${year}`)
       .then(r => r.json()).then(d => setData(d.data || []))
       .catch(() => {}).finally(() => setLoading(false));
-  }, [session, status, year]);
+  }, [session, status, year, router]);
 
   const val = (v: any): number | null => {
     if (v == null) return null;
@@ -128,14 +163,38 @@ export default function IndicesViewPage() {
           <p className="text-sm text-gray-500 mt-0.5">Historical index rates used for Price Variation Clause computations</p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/indices/jpc-view"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
-            <Database className="h-4 w-4" /> JPC Raw Rates
-          </Link>
-          <button onClick={download} disabled={downloading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60">
-            <Download className="h-4 w-4" /> {downloading ? 'Downloading...' : 'Excel'}
-          </button>
+          {checkingSub ? (
+            <>
+              <div className="h-9 w-32 bg-gray-200 animate-pulse rounded-lg" />
+              <div className="h-9 w-20 bg-gray-200 animate-pulse rounded-lg" />
+            </>
+          ) : !subscriptionActive ? (
+            <>
+              <button
+                onClick={() => toast.error("Requires Advanced Feature Subscription (₹99/month). Please subscribe in the Billing panel to access this feature.")}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
+              >
+                <span className="text-[10px]">🔒</span> JPC Raw Rates
+              </button>
+              <button
+                onClick={() => toast.error("Requires Advanced Feature Subscription (₹99/month). Please subscribe in the Billing panel to access this feature.")}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                <span className="text-[10px]">🔒</span> Excel
+              </button>
+            </>
+          ) : (
+            <>
+              <Link href="/indices/jpc-view"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
+                <Database className="h-4 w-4" /> JPC Raw Rates
+              </Link>
+              <button onClick={download} disabled={downloading}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60">
+                <Download className="h-4 w-4" /> {downloading ? 'Downloading...' : 'Excel'}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -241,8 +300,14 @@ export default function IndicesViewPage() {
                         return (
                           <td key={col.key}
                             className={`px-3 py-2.5 text-center font-mono ${i >= NON_STEEL.length ? 'bg-blue-50/20 border-l border-blue-50' : ''} ${prov ? 'text-amber-600 italic' : 'text-gray-700'} ${clickable ? 'cursor-pointer hover:bg-blue-100/50' : ''}`}
-                            title={clickable ? 'Click for JPC breakdown' : formula(cv) ? `Formula: ${formula(cv)}` : undefined}
-                            onClick={clickable ? () => setDetail({ month, colName: col.label, city: steelCity === 'Default' ? 'Chennai' : steelCity, value: n!, detail: sd }) : undefined}
+                            title={clickable ? (!subscriptionActive ? '🔒 Click for JPC breakdown' : 'Click for JPC breakdown') : formula(cv) ? `Formula: ${formula(cv)}` : undefined}
+                            onClick={clickable ? () => {
+                              if (!subscriptionActive) {
+                                toast.error("Requires Advanced Feature Subscription (₹99/month). Please subscribe in the Billing panel to access this feature.");
+                                return;
+                              }
+                              setDetail({ month, colName: col.label, city: steelCity === 'Default' ? 'Chennai' : steelCity, value: n!, detail: sd });
+                            } : undefined}
                           >
                             {n == null ? <span className="text-gray-300">—</span> : (
                               <span className="flex items-center justify-center gap-1">

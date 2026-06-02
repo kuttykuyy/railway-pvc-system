@@ -65,6 +65,7 @@ export default function JpcViewPage() {
   const [itemsData, setItemsData] = useState<Record<string, JpcItemData>>({});
   const [indexAverages, setIndexAverages] = useState<Record<string, IndexAverage>>({});
   const [itemCount, setItemCount] = useState(0);
+  const [checkingSub, setCheckingSub] = useState(true);
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -72,6 +73,34 @@ export default function JpcViewPage() {
       router.push('/auth/signin');
       return;
     }
+
+    const checkSub = async () => {
+      try {
+        const res = await fetch('/api/credits/balance');
+        if (res.ok) {
+          const data = await res.json();
+          const isExempt = 
+            data.accountInfo?.tier === 'Superadmin' || 
+            data.accountInfo?.tier === 'Admin' || 
+            data.accountInfo?.tier === 'Railway Department' || 
+            data.accountInfo?.tier === 'Free Tier' || 
+            data.accountInfo?.tier === 'Unlimited' || 
+            !data.paymentProcessingEnabled;
+          
+          const hasSub = !!data.subscription?.isActive;
+          if (!isExempt && !hasSub) {
+            toast.error("Requires Advanced Feature Subscription (₹99/month). Please subscribe in the Billing panel to access this feature.");
+            router.push('/indices/view');
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Error checking subscription for JPC view:', err);
+      } finally {
+        setCheckingSub(false);
+      }
+    };
+    checkSub();
   }, [session, status, router]);
 
   const fetchJpcData = useCallback(async () => {
@@ -97,10 +126,10 @@ export default function JpcViewPage() {
   }, [selectedMonth, selectedCity]);
 
   useEffect(() => {
-    if (session) {
+    if (session && !checkingSub) {
       fetchJpcData();
     }
-  }, [session, fetchJpcData]);
+  }, [session, fetchJpcData, checkingSub]);
 
   const navigateMonth = (direction: 'prev' | 'next') => {
     const [year, month] = selectedMonth.split('-').map(Number);
@@ -133,10 +162,10 @@ export default function JpcViewPage() {
     return acc;
   }, {} as Record<string, JpcItem[]>);
 
-  if (status === 'loading') {
+  if (status === 'loading' || checkingSub) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <LoadingSpinner size="lg" />
+        <LoadingSpinner size="lg" text="Checking subscription status..." />
       </div>
     );
   }

@@ -24,8 +24,31 @@ const INDEX_NAME_MAP: Record<string, string> = {
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const isExempt = 
+      user.role === 'superadmin' || 
+      user.role === 'admin' || 
+      user.role === 'railway_official' || 
+      user.isFreeAccount || 
+      user.customProcessingFee === 0;
+
+    const hasSub = !!(user.pvcToolSubscriptionActive && 
+                      user.pvcToolSubscriptionExpiry && 
+                      new Date(user.pvcToolSubscriptionExpiry) > new Date());
+
+    if (!isExempt && !hasSub) {
+      return NextResponse.json({ error: 'Requires Advanced Feature Subscription' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);

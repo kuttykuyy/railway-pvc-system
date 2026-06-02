@@ -228,7 +228,7 @@ export async function GET(request: NextRequest) {
       });
 
       // Add index values with isProvisional
-      indices.forEach((index: { name: string; monthlyValues: { month: Date; value: number; isProvisional?: boolean }[] }) => {
+      indices.forEach((index: { name: string; monthlyValues: { id: string; month: Date; value: number; isProvisional?: boolean }[] }) => {
         const key = INDEX_NAME_MAP[index.name];
         if (key) {
           const monthValue = index.monthlyValues.find((mv: { month: Date; value: number }) => {
@@ -236,7 +236,7 @@ export async function GET(request: NextRequest) {
             return mvMonth === monthIndex;
           });
           if (monthValue) {
-            row[key] = { value: monthValue.value, isProvisional: monthValue.isProvisional ?? false, formula: null, steelDetail: null };
+            row[key] = { id: monthValue.id, value: monthValue.value, isProvisional: monthValue.isProvisional ?? false, formula: null, steelDetail: null };
             
             // Add steel formula if applicable
             const base = steelBaseKey(key);
