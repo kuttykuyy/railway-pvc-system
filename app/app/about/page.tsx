@@ -271,7 +271,7 @@ export default function AboutUsPage() {
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50/60 border border-emerald-100/50 rounded-2xl text-xs text-emerald-800 max-w-2xl mx-auto leading-relaxed">
                 <CheckCircle className="h-4 w-4 text-emerald-600 flex-shrink-0" />
                 <span>
-                  <strong>Railway Official Exemption:</strong> Registered Railway Department officials receive 100% free accounts for validation, audit check, and WPI index monitoring. First bill is free for all contractor trials.
+                  <strong>Railway Official Exemption:</strong> Registered Railway Department officials receive 100% free accounts for validation, audit check, and WPI index monitoring.
                 </span>
               </div>
             </div>
@@ -288,7 +288,7 @@ export default function AboutUsPage() {
           <div className="flex flex-wrap justify-center gap-4 relative z-10 pt-2">
             <Link href="/auth/signin?mode=signup">
               <button className="px-8 py-3 bg-white hover:bg-blue-50 text-blue-700 rounded-xl font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 text-sm">
-                Get Started Free
+                Get Started Now
               </button>
             </Link>
             <Link href="/">

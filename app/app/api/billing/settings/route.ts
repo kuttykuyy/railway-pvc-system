@@ -24,11 +24,11 @@ export async function GET(request: Request) {
     // Get billing settings
     const settings = await getBillingSettings();
     
-    // Calculate user's free trial status
-    const freeTrialUsed = user.freeTrialUsed || 0;
-    const freeTrialLimit = settings.freeTrialBills || 1;
-    const freeTrialRemaining = Math.max(0, freeTrialLimit - freeTrialUsed);
-    const isTrialActive = user.isTrialActive && freeTrialRemaining > 0;
+    // Calculate user's free trial status (completely disabled)
+    const freeTrialUsed = 0;
+    const freeTrialLimit = 0;
+    const freeTrialRemaining = 0;
+    const isTrialActive = false;
 
     return NextResponse.json({
       billCost: settings.billCost,

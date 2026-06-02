@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getQuarterFromDate, calculateDedicatedCementPvc, calculateDedicatedSteelPvc } from '@/lib/pvc-calculations';
@@ -74,17 +74,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
     }
 
-    // Check balance (unless free account)
+    // Check tools subscription status
     const isFree = user.isFreeAccount || user.customProcessingFee === 0 || user.role === 'admin' || user.role === 'superadmin' || user.role === 'railway_official';
-    if (!isFree) {
-      const currentBalance = user.customerAccount?.creditBalance || 0;
-      if (currentBalance < PVC_CHECK_FEE) {
-        return NextResponse.json({
-          error: `Insufficient balance. Required: ₹${PVC_CHECK_FEE}, Available: ₹${currentBalance}. Please add credits to continue.`,
-          requiredAmount: PVC_CHECK_FEE,
-          currentBalance,
-        }, { status: 402 });
-      }
+    const hasActiveSub = !!(user.pvcToolSubscriptionActive && 
+                           user.pvcToolSubscriptionExpiry && 
+                           new Date(user.pvcToolSubscriptionExpiry) > new Date());
+    
+    if (!isFree && !hasActiveSub) {
+      return NextResponse.json({
+        error: 'Requires Advanced Feature Subscription (₹99/month). Please subscribe in the Billing panel to access this feature.',
+        requiresSubscription: true
+      }, { status: 403 });
     }
 
     // Validate measurement date
@@ -186,9 +186,9 @@ export async function POST(request: NextRequest) {
       totalExplosives + finalCementPvc + finalSteelPvc;
 
     const isPositive = totalPvc >= 0;
-    const chargedAmount = isFree ? 0 : PVC_CHECK_FEE;
+    const chargedAmount = 0;
 
-    // Record PVC check and deduct balance in a transaction
+    // Record PVC check in a transaction
     const [pvcCheck] = await prisma.$transaction([
       prisma.pvcCheck.create({
         data: {
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
           totalPvc,
           isPositive,
           amount: chargedAmount,
-          isFree,
+          isFree: true,
           breakdown: {
             labour: totalLabour,
             plantMachinery: totalPlant,
@@ -214,14 +214,7 @@ export async function POST(request: NextRequest) {
             dedicatedSteel: totalDedicatedSteelPvc,
           }
         }
-      }),
-      // Deduct balance if not free
-      ...((!isFree && user.customerAccount) ? [
-        prisma.customerAccount.update({
-          where: { userId: user.id },
-          data: { creditBalance: { decrement: PVC_CHECK_FEE } }
-        })
-      ] : [])
+      })
     ]);
 
     logger.log(`✅ PVC Check completed for user ${user.email}: ₹${totalPvc.toFixed(2)} (${isPositive ? 'POSITIVE' : 'NEGATIVE'}), charged ₹${chargedAmount}`);

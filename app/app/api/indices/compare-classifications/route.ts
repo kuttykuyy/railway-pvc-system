@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -163,8 +163,29 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 401 });
+    }
+
+    // Check advanced tools subscription status
+    const isFree = user.isFreeAccount || user.customProcessingFee === 0 || user.role === 'admin' || user.role === 'superadmin' || user.role === 'railway_official';
+    const hasActiveSub = !!(user.pvcToolSubscriptionActive && 
+                           user.pvcToolSubscriptionExpiry && 
+                           new Date(user.pvcToolSubscriptionExpiry) > new Date());
+    
+    if (!isFree && !hasActiveSub) {
+      return NextResponse.json({
+        error: 'Requires Advanced Feature Subscription (₹99/month). Please subscribe in the Billing panel to access this feature.',
+        requiresSubscription: true
+      }, { status: 403 });
     }
 
     const body = await request.json();

@@ -49,7 +49,9 @@ model User {
   companyName           String?
   freeTrialUsed         Int                    @default(0)
   gstin                 String?
-  isTrialActive         Boolean                @default(true)
+  isTrialActive         Boolean                @default(false)
+  pvcToolSubscriptionActive Boolean          @default(false)
+  pvcToolSubscriptionExpiry DateTime?
   panNumber             String?
   phone                 String?
   totalBillsProcessed   Int                    @default(0)

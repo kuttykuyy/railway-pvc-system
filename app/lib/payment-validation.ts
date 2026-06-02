@@ -75,22 +75,14 @@ export async function validateBillProcessing(
       }
     }
 
-    // Check if user has free trial remaining
-    // Get billing settings
-    const { getBillingSettings } = await import('./admin-settings');
-    const billingSettings = await getBillingSettings();
-    const freeTrialLimit = billingSettings.freeTrialBills || 1;
-    const freeTrialRemaining = Math.max(0, freeTrialLimit - user.freeTrialUsed);
-    
-    if (user.isTrialActive && freeTrialRemaining > 0) {
-      return {
-        canProcess: true,
-        isFree: true,
-        reason: `Free trial bill (${freeTrialRemaining - 1} remaining after this)`
-      };
+    // Check if user has free trial remaining (completely disabled)
+    if (false) {
+      // bypassed
     }
 
     // For paid bills, calculate cost with daily volume discount
+    const { getBillingSettings } = await import('./admin-settings');
+    const billingSettings = await getBillingSettings();
     const baseBillCost = billingSettings.billCost || 10;
     
     // Count bills created by this user today (for daily tiered discount)
@@ -227,11 +219,9 @@ export async function processPaymentForBill(
       isFree = true;
       freeReason = 'custom_zero_fee';
     } else {
-      // Check for free trial
-      const freeTrialRemaining = Math.max(0, freeTrialLimit - user.freeTrialUsed);
-      if (user.isTrialActive && freeTrialRemaining > 0) {
-        isFree = true;
-        freeReason = 'trial';
+      // Check for free trial (completely disabled)
+      if (false) {
+        // bypassed
       }
     }
 

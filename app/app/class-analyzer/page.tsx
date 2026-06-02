@@ -14,7 +14,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import { TrendingUp, TrendingDown, Calculator, AlertCircle, ChevronDown, ChevronUp, RefreshCcw, Image as ImageIcon } from 'lucide-react';
+import { TrendingUp, TrendingDown, Calculator, AlertCircle, ChevronDown, ChevronUp, RefreshCcw, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getClientRoleInfo } from '@/lib/role-auth';
 import html2canvas from 'html2canvas';
@@ -175,12 +175,10 @@ export default function ClassAnalyzerPage() {
   const [validationError, setValidationError] = useState<string>('');
   const errorRef = useRef<HTMLDivElement>(null);
   
-  // Daily usage states
-  const [dailyLimit, setDailyLimit] = useState(10);
-  const [usedToday, setUsedToday] = useState(0);
-  const [remainingToday, setRemainingToday] = useState(10);
-  const [hasReachedLimit, setHasReachedLimit] = useState(false);
-  const [resetsAt, setResetsAt] = useState<Date | null>(null);
+  // Subscription status states
+  const [subscriptionActive, setSubscriptionActive] = useState<boolean>(true);
+  const [creditBalance, setCreditBalance] = useState<number>(0);
+  const [subscribing, setSubscribing] = useState<boolean>(false);
 
   // Available steel types
   const steelTypes = [
@@ -207,7 +205,7 @@ export default function ClassAnalyzerPage() {
     }
   }, [validationError]);
 
-  // Check daily usage
+  // Check subscription status
   useEffect(() => {
     if (status === 'loading') return;
     
@@ -216,34 +214,56 @@ export default function ClassAnalyzerPage() {
       return;
     }
     
-    checkDailyUsage();
+    checkSubscriptionStatus();
   }, [status, session, router]);
 
-  const checkDailyUsage = async () => {
+  const checkSubscriptionStatus = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/class-analyzer/check-session');
-      
+      const response = await fetch('/api/credits/balance');
       if (response.ok) {
         const data = await response.json();
-        setDailyLimit(data.dailyLimit || 10);
-        setUsedToday(data.usedToday || 0);
-        setRemainingToday(data.remainingToday || 10);
-        setHasReachedLimit(data.hasReachedLimit || false);
+        // Check if user is exempt (has a free/official/admin role) or has an active subscription
+        const isExempt = 
+          data.accountInfo?.tier === 'Superadmin' || 
+          data.accountInfo?.tier === 'Admin' || 
+          data.accountInfo?.tier === 'Railway Department' || 
+          data.accountInfo?.tier === 'Free Tier' || 
+          data.accountInfo?.tier === 'Unlimited' || 
+          !data.paymentProcessingEnabled;
         
-        if (data.resetsAt) {
-          setResetsAt(new Date(data.resetsAt));
-        }
-
-        if (data.hasReachedLimit) {
-          toast.error(`Daily limit reached (${data.dailyLimit} comparisons per day). Resets at midnight.`);
-        }
+        const hasSub = !!data.subscription?.isActive;
+        setSubscriptionActive(isExempt || hasSub);
+        setCreditBalance(data.balance || 0);
       }
     } catch (error) {
-      console.error('Error checking daily usage:', error);
-      toast.error('Failed to check daily usage');
+      console.error('Error checking subscription status:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubscribeTools = async () => {
+    if (subscribing) return;
+    setSubscribing(true);
+    try {
+      const response = await fetch('/api/billing/subscribe-tools', {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(data.message || 'Subscription activated successfully!');
+        setSubscriptionActive(true);
+        // Refresh classifications and indices
+        fetchClassifications();
+      } else {
+        toast.error(data.error || 'Failed to activate subscription.');
+      }
+    } catch (error) {
+      console.error('Error activating subscription:', error);
+      toast.error('An unexpected error occurred. Please try again.');
+    } finally {
+      setSubscribing(false);
     }
   };
 
@@ -513,9 +533,8 @@ export default function ClassAnalyzerPage() {
     // Clear any previous validation errors
     setValidationError('');
     
-    // Check daily limit first
-    if (hasReachedLimit) {
-      toast.error(`Daily limit reached (${dailyLimit} comparisons per day). Please try again after midnight.`);
+    if (!subscriptionActive) {
+      toast.error('Advanced Tools Subscription required (₹99/month)');
       return;
     }
     
@@ -613,8 +632,8 @@ export default function ClassAnalyzerPage() {
         
         toast.success(`Comparison completed for ${validBills.length} bill(s)`);
         
-        // Refresh usage counter after successful comparison
-        checkDailyUsage();
+        // Refresh subscription status and balance
+        checkSubscriptionStatus();
       } else {
         const error = await response.json();
         console.log('[Class Analyzer] Error response:', error);
@@ -893,27 +912,112 @@ export default function ClassAnalyzerPage() {
     );
   }
 
+  if (!subscriptionActive) {
+    return (
+      <div className="container mx-auto px-4 py-16 max-w-4xl min-h-[70vh] flex items-center justify-center">
+        <Card className="relative overflow-hidden border border-slate-100 bg-gradient-to-br from-white via-indigo-50/5 to-purple-50/10 rounded-3xl p-8 lg:p-12 shadow-[0_20px_50px_rgba(79,70,229,0.07)] text-center space-y-8 max-w-2xl mx-auto">
+          {/* Glassmorphic glowing circles */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-300/10 blur-[80px] rounded-full pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-300/10 blur-[80px] rounded-full pointer-events-none" />
+          
+          <div className="relative inline-flex items-center justify-center p-5 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-3xl shadow-xl shadow-indigo-500/20">
+            <Calculator className="h-10 w-10 text-white" />
+          </div>
+          
+          <div className="space-y-3 relative z-10">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-full">
+              <span className="flex h-2 w-2 rounded-full bg-indigo-600 animate-pulse" />
+              Advanced Contractor Feature
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 leading-tight">
+              Unlock the Work <br/>Classification Analyzer
+            </h1>
+            <p className="text-slate-500 text-sm sm:text-base font-light max-w-md mx-auto leading-relaxed">
+              Compare multiple bills across different work classifications instantly. Find the most profitable and compliant setup with zero per-event check fees.
+            </p>
+          </div>
+
+          <div className="p-6 bg-slate-50/80 border border-slate-100/80 rounded-2xl max-w-md mx-auto space-y-4 text-left shadow-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Subscription Benefits</p>
+            <ul className="text-xs sm:text-sm text-slate-600 space-y-2.5 font-light">
+              <li className="flex items-center gap-2">
+                <span className="text-indigo-600 font-extrabold text-base">✓</span> <strong>Unlimited Comparisons:</strong> Run unlimited classifications check.
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-indigo-600 font-extrabold text-base">✓</span> <strong>Zero Event Fees:</strong> No cost per bill checked.
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-indigo-600 font-extrabold text-base">✓</span> <strong>Dual Access:</strong> Includes full access to the PVC Check tool.
+              </li>
+            </ul>
+          </div>
+
+          <div className="pt-4 max-w-sm mx-auto space-y-3 relative z-10">
+            <div className="flex items-baseline justify-between px-6">
+              <span className="text-xs text-slate-400 font-medium">Monthly Plan:</span>
+              <span className="text-2xl font-black text-indigo-600">₹99 <span className="text-[11px] text-slate-400 font-medium">/ month</span></span>
+            </div>
+            
+            <Button
+              onClick={handleSubscribeTools}
+              disabled={subscribing || creditBalance < 99}
+              className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/25 active:scale-[0.98] transition-all text-sm"
+            >
+              {subscribing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Activating Subscription...
+                </>
+              ) : (
+                'Activate Now (₹99)'
+              )}
+            </Button>
+            
+            {creditBalance < 99 ? (
+              <div className="space-y-2">
+                <p className="text-xs text-red-500 font-semibold leading-relaxed">
+                  Your current balance is ₹{creditBalance.toFixed(2)}. Insufficient credits to subscribe.
+                </p>
+                <Button 
+                  variant="outline" 
+                  onClick={() => router.push('/billing')}
+                  className="w-full border-slate-200 text-slate-700 hover:bg-slate-50 text-xs rounded-xl h-10 font-bold"
+                >
+                  Top Up Wallet Credits
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 font-medium">
+                Deducted atomically from your wallet balance (₹{creditBalance.toFixed(2)} available)
+              </p>
+            )}
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-7xl">
       <div className="mb-4 sm:mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Class Analyzer - Compare Work Classifications</h1>
-          <Card className="p-3 sm:p-4 bg-primary/5 border-primary/20">
+          <Card className="p-3 sm:p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-150">
             <div className="flex items-center gap-2">
-              <Calculator className="h-5 w-5 text-primary" />
+              <Calculator className="h-5 w-5 text-indigo-600 animate-pulse" />
               <div className="text-sm">
-                <p className="font-semibold text-primary">
-                  {remainingToday} / {dailyLimit} comparisons left today
+                <p className="font-semibold text-indigo-700">
+                  Unlimited Comparisons Enabled
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {hasReachedLimit ? 'Limit reached' : 'Free daily usage'}
+                <p className="text-xs text-slate-500">
+                  Active Subscription Plan
                 </p>
               </div>
             </div>
           </Card>
         </div>
         <p className="text-sm sm:text-base text-muted-foreground">
-          Compare multiple bills across different work classifications to find the best option • Free tool with {dailyLimit} comparisons per day
+          Compare multiple bills across different work classifications to find the best option under GCC guidelines.
         </p>
       </div>
 

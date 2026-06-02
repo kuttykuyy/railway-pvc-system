@@ -41,12 +41,12 @@ export async function GET(request: NextRequest) {
     const isFree = user.isFreeAccount || isSuperadmin || isAdmin || isRailwayOfficial || user.customProcessingFee === 0;
     
     const billCost = isFree ? 0 : (billingSettings.billCost || 10); // ₹0 cost if user is free/admin/superadmin/official
-    const freeTrialLimit = billingSettings.freeTrialBills || 1; // Get from admin settings
+    const freeTrialLimit = 0;
     
     // Calculate free trial info
-    const freeTrialUsed = user.freeTrialUsed || 0;
-    const freeTrialRemaining = Math.max(0, freeTrialLimit - freeTrialUsed);
-    const isTrialActive = user.isTrialActive && freeTrialRemaining > 0 && !isFree;
+    const freeTrialUsed = 0;
+    const freeTrialRemaining = 0;
+    const isTrialActive = false;
 
     // Get current account balance
     let currentBalance = 0;
@@ -72,11 +72,16 @@ export async function GET(request: NextRequest) {
     ]);
 
     const isPaidUser = creditTopupCount > 0;
-    const canAffordNextBill = isFree || !isPaidUser || isTrialActive || currentBalance >= billCost;
-    const showLowCreditWarning = !isFree && !isTrialActive && isPaidUser && currentBalance < (billCost * 2) && currentBalance >= billCost;
+    const canAffordNextBill = isFree || currentBalance >= billCost;
+    const showLowCreditWarning = !isFree && isPaidUser && currentBalance < (billCost * 2) && currentBalance >= billCost;
+
+    // Determine tools subscription status
+    const hasActiveSub = !!(user.pvcToolSubscriptionActive && 
+                           user.pvcToolSubscriptionExpiry && 
+                           new Date(user.pvcToolSubscriptionExpiry) > new Date());
 
     // Determine account tier
-    let accountTier = 'Free Trial';
+    let accountTier = 'Low Balance';
     if (isSuperadmin) {
       accountTier = 'Superadmin';
     } else if (isAdmin) {
@@ -87,7 +92,7 @@ export async function GET(request: NextRequest) {
       accountTier = 'Free Tier';
     } else if (user.customProcessingFee === 0) {
       accountTier = 'Unlimited';
-    } else if (!isTrialActive) {
+    } else {
       if (currentBalance >= billCost * 5) {
         accountTier = 'Premium';
       } else if (currentBalance >= billCost) {
@@ -109,6 +114,10 @@ export async function GET(request: NextRequest) {
         billsUsed: freeTrialUsed,
         billsRemaining: freeTrialRemaining,
         billsTotal: freeTrialLimit, // Include total for frontend display
+      },
+      subscription: {
+        isActive: hasActiveSub,
+        expiryDate: user.pvcToolSubscriptionExpiry,
       },
       accountInfo: {
         tier: accountTier,

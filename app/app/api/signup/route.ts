@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
           railwayZoneName: resolvedAccountType === 'railway_official' ? (RAILWAY_ZONE_STEEL_CITY_MAP[railwayZone]?.name || null) : null,
           emailVerified: emailVerificationRequired ? null : new Date(), // Auto-verify if not required
           freeTrialUsed: 0,
-          isTrialActive: true,
+          isTrialActive: false,
           totalBillsProcessed: 0
         }
       });
@@ -206,11 +206,6 @@ export async function POST(request: NextRequest) {
                 <li><strong>Auto PVC Calculation</strong> — The system fetches the latest price indices and calculates PVC automatically.</li>
                 <li><strong>Download PDF</strong> — Get your PVC statement as a ready-to-submit PDF document.</li>
               </ol>
-            </div>
-
-            <div style="background: #f0fdf4; border-left: 4px solid #16a34a; padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 0 0 24px;">
-              <h3 style="margin: 0 0 8px; color: #166534; font-size: 15px;">🎁 Free Trial</h3>
-              <p style="margin: 0; font-size: 14px; line-height: 1.6;">You have <strong>1 free bill</strong> to explore the platform. After that, check the pricing section on our homepage for volume-based discounts.</p>
             </div>
 
             <div style="background: #fefce8; border-left: 4px solid #ca8a04; padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 0 0 24px;">

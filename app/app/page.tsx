@@ -72,7 +72,7 @@ export default function HomePage() {
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
                 <Link href="/auth/signin?mode=signup">
                   <Button size="lg" className="h-14 px-8 text-lg font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-600/20 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300">
-                    Get Started Free
+                    Get Started Now
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                 </Link>
@@ -84,7 +84,7 @@ export default function HomePage() {
               </div>
 
               <div className="flex items-center justify-center lg:justify-start gap-6 pt-6 text-sm text-slate-500 font-medium">
-                <span className="flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-500" /> Free Trial</span>
+                <span className="flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-500" /> Auto Indices</span>
                 <span className="flex items-center gap-2"><Shield className="w-5 h-5 text-blue-500" /> Secure</span>
                 <span className="flex items-center gap-2"><Smartphone className="w-5 h-5 text-purple-500" /> Mobile Ready</span>
               </div>
@@ -288,6 +288,39 @@ export default function HomePage() {
             </div>
           </div>
 
+          {/* Advanced Tools Add-on */}
+          <div className="mt-12 max-w-4xl mx-auto">
+            <div className="relative overflow-hidden bg-gradient-to-r from-blue-50 via-indigo-50/50 to-purple-50 border border-indigo-100 rounded-3xl p-8 lg:p-10 flex flex-col md:flex-row items-center justify-between gap-8 hover:shadow-xl hover:border-indigo-200 transition-all duration-300">
+              <div className="absolute top-0 right-0 bg-indigo-600 text-[10px] text-white font-extrabold px-4 py-1 rounded-bl-2xl tracking-widest uppercase">
+                Add-on Subscription
+              </div>
+              <div className="space-y-4 text-center md:text-left">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-indigo-200 text-xs font-semibold text-indigo-700">
+                  <Gift className="w-3.5 h-3.5 text-indigo-600" />
+                  Advanced Contractor Tools
+                </div>
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                  PVC Check & Work Class Analyzer
+                </h3>
+                <p className="text-slate-600 text-sm font-light max-w-xl">
+                  Unlock unlimited access to the dynamic <strong>PVC Check tool</strong> and <strong>Classification Comparison Analyzer</strong>. Run unlimited checks with zero per-event fees!
+                </p>
+              </div>
+              <div className="text-center shrink-0 space-y-3 bg-white/80 backdrop-blur-md border border-indigo-50 p-6 rounded-2xl min-w-[200px] shadow-sm">
+                <div className="flex items-baseline justify-center gap-0.5">
+                  <span className="text-4xl font-black text-indigo-600">₹99</span>
+                  <span className="text-slate-500 font-medium text-xs">/ month</span>
+                </div>
+                <p className="text-xs text-slate-400 font-medium">Charged from credit wallet</p>
+                <Link href="/auth/signin?mode=signup" className="block">
+                  <Button size="sm" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-md shadow-indigo-600/10">
+                    Get Started Now
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+
         </div>
       </section>
 
@@ -303,12 +336,12 @@ export default function HomePage() {
           <div className="flex flex-col items-center justify-center">
             <Link href="/auth/signin?mode=signup" className="inline-block">
               <Button size="lg" className="h-16 px-10 text-xl font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-xl shadow-blue-600/20 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
-                Create Your Free Account
+                Create Your Account
                 <ArrowRight className="ml-3 w-6 h-6" />
               </Button>
             </Link>
             <p className="mt-4 text-sm text-slate-400 font-medium text-center">
-              Includes 1 free trial bill. No credit card required.
+              Unified billing system. Pay-as-you-go credit model.
             </p>
           </div>
         </div>

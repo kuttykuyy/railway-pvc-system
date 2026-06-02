@@ -26,7 +26,8 @@ import {
   CheckCircle2,
   Info,
   ChevronRight,
-  ArrowRight
+  ArrowRight,
+  Loader2
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -189,12 +190,77 @@ function NewBillPageContent() {
   } | null>(null);
   const [showPvcCheckResult, setShowPvcCheckResult] = useState(false);
 
+  // Tools subscription states
+  const [subscriptionActive, setSubscriptionActive] = useState<boolean>(true); // Default to true to avoid flash
+  const [creditBalance, setCreditBalance] = useState<number>(0);
+  const [subscribing, setSubscribing] = useState<boolean>(false);
+  const [showSubscribeModal, setShowSubscribeModal] = useState<boolean>(false);
+
   useEffect(() => {
     checkMaintenanceMode();
     fetchContracts();
     fetchClassificationGroups();
     fetchAvailableDateRange();
+    checkSubscriptionStatus();
   }, []);
+
+  const checkSubscriptionStatus = async () => {
+    try {
+      const response = await fetch('/api/credits/balance');
+      if (response.ok) {
+        const data = await response.json();
+        // Check if user is exempt (has a free/official/admin role) or has an active subscription
+        const isExempt = 
+          data.accountInfo?.tier === 'Superadmin' || 
+          data.accountInfo?.tier === 'Admin' || 
+          data.accountInfo?.tier === 'Railway Department' || 
+          data.accountInfo?.tier === 'Free Tier' || 
+          data.accountInfo?.tier === 'Unlimited' || 
+          !data.paymentProcessingEnabled;
+        
+        const hasSub = !!data.subscription?.isActive;
+        setSubscriptionActive(isExempt || hasSub);
+        setCreditBalance(data.balance || 0);
+      }
+    } catch (error) {
+      console.error('Error checking subscription status:', error);
+    }
+  };
+
+  const handleSubscribeTools = async () => {
+    if (subscribing) return;
+    setSubscribing(true);
+    try {
+      const response = await fetch('/api/billing/subscribe-tools', {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(data.message || 'Subscription activated successfully!', { duration: 4000 });
+        setSubscriptionActive(true);
+        setShowSubscribeModal(false);
+        // Automatically check PVC after successful activation
+        setTimeout(() => {
+          handlePvcCheck();
+        }, 300);
+      } else {
+        toast.error(data.error || 'Failed to activate subscription.');
+      }
+    } catch (error) {
+      console.error('Error activating subscription:', error);
+      toast.error('An unexpected error occurred. Please try again.');
+    } finally {
+      setSubscribing(false);
+    }
+  };
+
+  const handlePvcCheckClick = async () => {
+    if (!subscriptionActive) {
+      setShowSubscribeModal(true);
+      return;
+    }
+    await handlePvcCheck();
+  };
 
   // Scroll to error when it appears
   useEffect(() => {
@@ -1308,7 +1374,7 @@ function NewBillPageContent() {
                     <div className="flex flex-col items-center gap-1">
                       <Button
                         type="button"
-                        onClick={handlePvcCheck}
+                        onClick={handlePvcCheckClick}
                         disabled={isPvcChecking || isSaving || !formData.contractId || !formData.zone || !formData.dateOfMeasurement || classificationEntries.length === 0}
                         className="bg-orange-600 hover:bg-orange-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-orange-500/10 font-semibold h-10"
                       >
@@ -1316,8 +1382,17 @@ function NewBillPageContent() {
                           <LoadingSpinner size="sm" text="Checking..." />
                         ) : (
                           <>
-                            <TrendingUp className="h-4 w-4 mr-2" />
-                            PVC Check (₹500)
+                            {subscriptionActive ? (
+                              <>
+                                <TrendingUp className="h-4 w-4 mr-2" />
+                                PVC Check
+                              </>
+                            ) : (
+                              <>
+                                <span className="mr-1.5">🔒</span>
+                                PVC Check
+                              </>
+                            )}
                           </>
                         )}
                       </Button>
@@ -1363,6 +1438,78 @@ function NewBillPageContent() {
         requiredAmount={creditInfo.requiredAmount}
         shortfall={creditInfo.shortfall}
       />
+
+      {/* Subscription Dialog */}
+      {showSubscribeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-md bg-white border border-slate-100 rounded-3xl p-6 shadow-2xl space-y-6 text-center animate-in fade-in zoom-in duration-250">
+            <div className="relative inline-flex items-center justify-center p-4 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-2xl shadow-lg shadow-indigo-500/10">
+              <span className="text-2xl text-white">🔒</span>
+            </div>
+            
+            <div className="space-y-2">
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Advanced Features Required</h2>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                The PVC Check is an advanced tool. Subscribe to the monthly bundle for <strong>₹99/month</strong> to get unlimited PVC Checks and classification comparisons.
+              </p>
+            </div>
+
+            <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-left space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <span className="text-slate-500">Monthly Plan Cost:</span>
+                <span className="text-indigo-600 font-black">₹99</span>
+              </div>
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <span className="text-slate-500">Your Wallet Balance:</span>
+                <span className={creditBalance >= 99 ? "text-green-600" : "text-red-500"}>₹{creditBalance.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <Button
+                onClick={handleSubscribeTools}
+                disabled={subscribing || creditBalance < 99}
+                className="w-full h-11 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold rounded-xl shadow-md shadow-indigo-500/10"
+              >
+                {subscribing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Subscribing...
+                  </>
+                ) : (
+                  'Subscribe Now (₹99)'
+                )}
+              </Button>
+              
+              {creditBalance < 99 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-red-500 font-bold">
+                    Insufficient credits in your wallet balance.
+                  </p>
+                  <Button
+                    variant="link"
+                    onClick={() => {
+                      setShowSubscribeModal(false);
+                      router.push('/billing');
+                    }}
+                    className="text-xs text-indigo-600 hover:underline p-0 h-auto font-bold"
+                  >
+                    Top Up Credits in Billing Panel →
+                  </Button>
+                </div>
+              )}
+              
+              <Button
+                variant="ghost"
+                onClick={() => setShowSubscribeModal(false)}
+                className="w-full text-slate-500 text-xs font-medium hover:bg-slate-50 rounded-xl"
+              >
+                Close Dialog
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* PVC Check Result Dialog */}
       {showPvcCheckResult && pvcCheckResult && (

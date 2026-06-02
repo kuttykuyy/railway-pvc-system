@@ -47,7 +47,7 @@ export const PRICING_TIERS: PricingTier[] = [
 ];
 
 export const BASE_PRICE_PER_BILL = 1;
-export const FREE_TRIAL_BILLS = 3;
+export const FREE_TRIAL_BILLS = 0;
 export const GST_RATE = 0.18; // 18% GST
 
 /**
@@ -73,8 +73,8 @@ export async function calculateBillPricing(userId: string): Promise<{
     throw new Error('User not found');
   }
 
-  // Check for free trial
-  if (user.isTrialActive && user.freeTrialUsed < FREE_TRIAL_BILLS) {
+  // Check for free trial (completely disabled)
+  if (false) {
     return {
       originalPrice: BASE_PRICE_PER_BILL,
       finalPrice: 0,

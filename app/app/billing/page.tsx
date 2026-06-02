@@ -49,6 +49,10 @@ interface CreditBalance {
     billsRemaining: number;
     billsTotal: number;
   };
+  subscription?: {
+    isActive: boolean;
+    expiryDate: string | null;
+  };
   accountInfo: {
     tier: string;
     monthlyBillCount: number;
@@ -98,6 +102,32 @@ export default function BillingPage() {
   const [razorpayDialogOpen, setRazorpayDialogOpen] = useState(false);
   const [razorpayEnabled, setRazorpayEnabled] = useState(false);
   const [activeTab, setActiveTab] = useState<'transactions' | 'invoices'>('transactions');
+  const [subscribing, setSubscribing] = useState(false);
+  const [subscriptionMessage, setSubscriptionMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  const handleSubscribeTools = async () => {
+    if (subscribing) return;
+    setSubscribing(true);
+    setSubscriptionMessage(null);
+    try {
+      const response = await fetch('/api/billing/subscribe-tools', {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSubscriptionMessage({ type: 'success', text: data.message });
+        // Refresh balance and transaction details
+        await handleTopupSuccess();
+      } else {
+        setSubscriptionMessage({ type: 'error', text: data.error || 'Failed to activate subscription.' });
+      }
+    } catch (error) {
+      console.error('Error activating subscription:', error);
+      setSubscriptionMessage({ type: 'error', text: 'An unexpected error occurred. Please try again.' });
+    } finally {
+      setSubscribing(false);
+    }
+  };
 
   // Redirect unauthenticated users to sign in
   useEffect(() => {
@@ -299,7 +329,7 @@ export default function BillingPage() {
         ) : (
           <>
             {/* Credit Balance Overview */}
-            <div className={`grid grid-cols-1 ${effectiveBillCost === 0 ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-6`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Current Balance / Unlimited Plan Card */}
               <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden hover:scale-[1.005] transition-transform duration-200">
                 <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-5">
@@ -466,6 +496,101 @@ export default function BillingPage() {
                       )}
                     </div>
                   )}
+                </CardContent>
+              </Card>
+
+              {/* Advanced Tools Subscription Card */}
+              <Card className="border border-slate-100 shadow-sm bg-gradient-to-br from-white via-indigo-50/10 to-purple-50/20 rounded-2xl overflow-hidden hover:scale-[1.005] hover:border-indigo-200 transition-all duration-205 flex flex-col justify-between">
+                <CardHeader className="bg-gradient-to-r from-indigo-50/30 to-purple-50/30 border-b border-slate-100 p-5">
+                  <CardTitle className="flex items-center justify-between text-slate-900 text-base font-bold">
+                    <span className="flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-indigo-600 animate-pulse" />
+                      Advanced Tools Add-on
+                    </span>
+                    {effectiveBillCost === 0 ? (
+                      <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100 text-[10px] rounded-lg font-semibold px-2 py-0.5">
+                        Exempt
+                      </Badge>
+                    ) : creditBalance?.subscription?.isActive ? (
+                      <Badge className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-100 text-[10px] rounded-lg font-semibold px-2 py-0.5 animate-pulse">
+                        Active
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 text-[10px] rounded-lg font-semibold px-2 py-0.5">
+                        Inactive
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-5 flex flex-col justify-between flex-grow min-h-[180px] space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs font-semibold text-slate-500">
+                      <span>Features Included:</span>
+                      <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-extrabold uppercase">Unlimited Access</span>
+                    </div>
+                    <ul className="text-xs text-slate-600 space-y-1.5 font-light leading-relaxed">
+                      <li className="flex items-center gap-1.5">
+                        <span className="text-indigo-600 font-bold">✓</span> PVC Check Tool (Instant checks)
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <span className="text-indigo-600 font-bold">✓</span> Classification Comparison (Class Analyzer)
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100/80 space-y-3 mt-auto">
+                    {effectiveBillCost === 0 ? (
+                      <p className="text-xs text-slate-500 font-normal leading-relaxed">
+                        Exempt from tool fees. You have full, unlimited access to advanced tools.
+                      </p>
+                    ) : creditBalance?.subscription?.isActive ? (
+                      <div className="space-y-1.5">
+                        <p className="text-xs text-slate-700 font-medium">
+                          Subscription active until:
+                        </p>
+                        <p className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                          <Calendar className="h-3.5 w-3.5 text-indigo-500 animate-pulse" />
+                          {creditBalance.subscription.expiryDate ? formatDate(creditBalance.subscription.expiryDate) : 'N/A'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-xs text-slate-500 font-medium">Price:</span>
+                          <span className="text-lg font-black text-indigo-600">₹99 <span className="text-[10px] text-slate-400 font-medium">/ month</span></span>
+                        </div>
+                        
+                        <Button
+                          onClick={handleSubscribeTools}
+                          disabled={subscribing || (creditBalance?.balance || 0) < 99}
+                          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl h-9 text-xs font-bold shadow-md shadow-indigo-500/10 active:scale-[0.98] transition-all"
+                        >
+                          {subscribing ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                              Activating...
+                            </>
+                          ) : (
+                            'Subscribe Now (₹99)'
+                          )}
+                        </Button>
+                        
+                        {(creditBalance?.balance || 0) < 99 && (
+                          <p className="text-[10px] text-red-500 font-medium text-center">
+                            Insufficient balance. Please top up your wallet first.
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {subscriptionMessage && (
+                      <p className={`text-xs font-bold text-center mt-1.5 ${
+                        subscriptionMessage.type === 'success' ? 'text-green-600' : 'text-red-500'
+                      }`}>
+                        {subscriptionMessage.text}
+                      </p>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </div>

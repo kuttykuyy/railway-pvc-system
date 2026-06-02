@@ -271,7 +271,10 @@ export async function GET() {
           }
         }),
         prisma.user.count({
-          where: { isTrialActive: true }
+          where: {
+            pvcToolSubscriptionActive: true,
+            pvcToolSubscriptionExpiry: { gte: new Date() }
+          }
         })
       ]);
 
