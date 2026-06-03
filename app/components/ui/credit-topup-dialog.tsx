@@ -23,6 +23,8 @@ interface CreditTopupDialogProps {
   children?: React.ReactNode;
 }
 
+const MIN_TOPUP_AMOUNT = 1000;
+
 export function CreditTopupDialog({ currentBalance, children }: CreditTopupDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -37,8 +39,8 @@ export function CreditTopupDialog({ currentBalance, children }: CreditTopupDialo
       const amount = requestedAmount ? parseFloat(requestedAmount) : undefined;
       
       // Validate amount if provided
-      if (amount !== undefined && (isNaN(amount) || amount <= 0)) {
-        toast.error('Please enter a valid amount');
+      if (amount !== undefined && (isNaN(amount) || amount < MIN_TOPUP_AMOUNT)) {
+        toast.error(`Minimum top-up amount is ₹${MIN_TOPUP_AMOUNT.toLocaleString('en-IN')}`);
         setLoading(false);
         return;
       }
@@ -117,12 +119,12 @@ export function CreditTopupDialog({ currentBalance, children }: CreditTopupDialo
                 placeholder="e.g., 10000"
                 value={requestedAmount}
                 onChange={(e) => setRequestedAmount(e.target.value)}
-                min="0"
-                step="100"
+                min={MIN_TOPUP_AMOUNT}
+                step="500"
                 disabled={loading}
               />
               <p className="text-xs text-gray-500">
-                Enter the amount you'd like to add to your account
+                Minimum: ₹{MIN_TOPUP_AMOUNT.toLocaleString('en-IN')}. Enter the amount you'd like to add to your account
               </p>
             </div>
 

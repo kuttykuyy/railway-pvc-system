@@ -27,12 +27,14 @@ declare global {
 
 type GstOption = 'include' | 'exclude' | 'without';
 
+const MIN_TOPUP_AMOUNT = 1000;
+
 export function RazorpayTopupDialog({ 
   open, 
   onOpenChange,
   onSuccess 
 }: RazorpayTopupDialogProps) {
-  const [creditAmount, setCreditAmount] = useState<string>('100');
+  const [creditAmount, setCreditAmount] = useState<string>('1000');
   const [gstOption, setGstOption] = useState<GstOption>('include');
   const [loading, setLoading] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
@@ -85,7 +87,7 @@ export function RazorpayTopupDialog({
     if (open) {
       // Reset states when dialog opens
       setLoading(false);
-      setCreditAmount('100');
+      setCreditAmount('1000');
       setGstOption('include');
       setConfigError(null);
       fetchConfig();
@@ -128,8 +130,8 @@ export function RazorpayTopupDialog({
       return;
     }
 
-    if (amount < 1) {
-      toast.error('Minimum top-up amount is ₹1');
+    if (amount < MIN_TOPUP_AMOUNT) {
+      toast.error(`Minimum top-up amount is ₹${MIN_TOPUP_AMOUNT.toLocaleString('en-IN')}`);
       return;
     }
 
@@ -396,7 +398,7 @@ export function RazorpayTopupDialog({
                 <Input
                   id="creditAmount"
                   type="number"
-                  min="1"
+                  min={MIN_TOPUP_AMOUNT}
                   step="1"
                   value={creditAmount}
                   onChange={(e) => setCreditAmount(e.target.value)}
@@ -406,7 +408,7 @@ export function RazorpayTopupDialog({
                 />
               </div>
               <p className="text-xs text-gray-500">
-                Minimum: ₹1 | Suggested: ₹100, ₹1000, ₹5000, ₹10000
+                Minimum: ₹{MIN_TOPUP_AMOUNT.toLocaleString('en-IN')} | Suggested: ₹1000, ₹2000, ₹5000, ₹10000
               </p>
             </div>
 
@@ -468,7 +470,7 @@ export function RazorpayTopupDialog({
             </Button>
             <Button
               onClick={handlePayment}
-              disabled={loading || !razorpayLoaded || !config?.enabled || configLoading || !!configError || enteredAmount < 1}
+              disabled={loading || !razorpayLoaded || !config?.enabled || configLoading || !!configError || enteredAmount < MIN_TOPUP_AMOUNT}
               className="w-full sm:w-auto"
             >
               {loading ? (

@@ -7,6 +7,8 @@ import { createRazorpayOrder, getRazorpayKeyId } from '@/lib/razorpay';
 import { prisma } from '@/lib/db';
 import { calculateGst } from '@/lib/gst-invoice';
 
+const MIN_TOPUP_AMOUNT = 1000;
+
 /**
  * POST /api/razorpay/create-order
  * Creates a Razorpay order for credit purchase
@@ -103,6 +105,18 @@ export async function POST(request: NextRequest) {
           error: 'Invalid request',
           message: 'creditAmount must be greater than 0',
           code: 'INVALID_CREDIT_AMOUNT_VALUE'
+        },
+        { status: 400 }
+      );
+    }
+
+    if (creditAmount < MIN_TOPUP_AMOUNT) {
+      logger.warn(`[${requestId}] creditAmount below minimum:`, creditAmount);
+      return NextResponse.json(
+        {
+          error: 'Invalid request',
+          message: `Minimum top-up amount is ₹${MIN_TOPUP_AMOUNT.toLocaleString('en-IN')}`,
+          code: 'MINIMUM_TOPUP_AMOUNT'
         },
         { status: 400 }
       );

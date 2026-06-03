@@ -7,6 +7,8 @@ import { notifyCreditTopupRequest } from '@/lib/slack-webhook';
 
 export const dynamic = "force-dynamic";
 
+const MIN_TOPUP_AMOUNT = 1000;
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -23,9 +25,9 @@ export async function POST(request: NextRequest) {
     const { requestedAmount, message } = body;
 
     // Validate requested amount if provided
-    if (requestedAmount && (typeof requestedAmount !== 'number' || requestedAmount <= 0)) {
+    if (requestedAmount && (typeof requestedAmount !== 'number' || requestedAmount < MIN_TOPUP_AMOUNT)) {
       return NextResponse.json(
-        { error: 'Invalid requested amount' },
+        { error: `Minimum top-up amount is ₹${MIN_TOPUP_AMOUNT.toLocaleString('en-IN')}` },
         { status: 400 }
       );
     }
