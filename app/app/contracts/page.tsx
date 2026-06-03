@@ -1,36 +1,74 @@
-
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { StatusMessage } from '@/components/ui/status-message';
-import { PostingDetailsNotice } from '@/components/posting-details-notice';
-import {
-  Building2, Plus, Eye, FileText, Receipt, TrendingUp, Trash2,
-  Search, IndianRupee, CheckCircle, AlertTriangle, LayoutGrid, LayoutList
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
-import { toISTDate } from '@/lib/ist-utils';
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  Building2,
+  CalendarDays,
+  CheckCircle,
+  ClipboardList,
+  Edit,
+  Eye,
+  FileText,
+  Filter,
+  IndianRupee,
+  LayoutGrid,
+  LayoutList,
+  Plus,
+  Receipt,
+  Search,
+  Trash2,
+  TrendingUp,
+  X,
+} from 'lucide-react';
+
+import { PostingDetailsNotice } from '@/components/posting-details-notice';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { StatusMessage } from '@/components/ui/status-message';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Contract {
   id: string;
   agreementNo: string;
   contractorName: string;
   workDescription: string;
-  dateOfOpening: Date;
-  baseMonth: Date;
+  dateOfOpening: string | Date;
+  baseMonth: string | Date;
   loaNo: string | null;
   loaDate: string | Date | null;
   user?: { name: string | null; email: string } | null;
   _count: { bills: number; pvcCalculations: number };
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string | Date;
+  updatedAt: string | Date;
   contractValue: number | null;
   tenderAdvertisedValue: number | null;
   pvcApplicable: boolean;
@@ -40,24 +78,78 @@ interface Bill {
   id: string;
   billNo: string;
   billAmount: number;
-  dateOfMeasurement: Date;
+  dateOfMeasurement: string | Date;
   quarter: string;
-  createdAt: Date;
+  createdAt: string | Date;
   pvcCalculation: { totalPvc: number; cumulativePvc: number } | null;
 }
 
-const fmtCurrency = (n: number) => {
-  if (n >= 10000000) return `₹${(n / 10000000).toFixed(2)} Cr`;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(2)} L`;
-  return `₹${n.toLocaleString('en-IN')}`;
+const toNumber = (value: number | null | undefined) => Number(value || 0);
+
+const fmtCurrency = (value: number | null | undefined) => {
+  const n = toNumber(value);
+  if (!n) return 'Not set';
+  if (n >= 10000000) return `Rs ${(n / 10000000).toFixed(2)} Cr`;
+  if (n >= 100000) return `Rs ${(n / 100000).toFixed(2)} L`;
+  return `Rs ${n.toLocaleString('en-IN')}`;
 };
 
+const dateLabel = (value: string | Date | null | undefined, pattern = 'dd MMM yyyy') => {
+  if (!value) return 'Not set';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not set';
+  return format(date, pattern);
+};
+
+function contractAttentionReasons(contract: Contract) {
+  const reasons: string[] = [];
+
+  if (contract._count.bills === 0) reasons.push('No bills created');
+  if (contract.pvcApplicable && contract._count.bills > 0 && contract._count.pvcCalculations === 0) {
+    reasons.push('PVC pending');
+  }
+  if (!contract.contractValue && !contract.tenderAdvertisedValue) reasons.push('Value missing');
+  if (!contract.loaNo) reasons.push('LOA missing');
+
+  return reasons;
+}
+
 function StatusPill({ contract }: { contract: Contract }) {
-  if (contract._count.pvcCalculations > 0)
-    return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium"><CheckCircle className="h-3 w-3" />PVC Done</span>;
-  if (contract._count.bills > 0)
-    return <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">Active</span>;
-  return <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">No Bills</span>;
+  const reasons = contractAttentionReasons(contract);
+
+  if (contract._count.pvcCalculations > 0) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+        <CheckCircle className="h-3.5 w-3.5" />
+        PVC ready
+      </span>
+    );
+  }
+
+  if (reasons.includes('PVC pending')) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        PVC pending
+      </span>
+    );
+  }
+
+  if (contract._count.bills > 0) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700">
+        <Receipt className="h-3.5 w-3.5" />
+        Billing active
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+      <FileText className="h-3.5 w-3.5" />
+      Setup
+    </span>
+  );
 }
 
 function BillsDialog({ contract }: { contract: Contract }) {
@@ -68,79 +160,83 @@ function BillsDialog({ contract }: { contract: Contract }) {
 
   useEffect(() => {
     if (!open) return;
+
+    setError('');
     setLoading(true);
     fetch(`/api/bills?contractId=${contract.id}`)
-      .then(r => r.json())
-      .then(d => setBills((Array.isArray(d) ? d : d.data || []).slice(0, 10)))
-      .catch(e => setError(e.message))
+      .then((response) => response.json())
+      .then((data) => setBills((Array.isArray(data) ? data : data.data || []).slice(0, 10)))
+      .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [open]);
+  }, [contract.id, open]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button className="text-xs text-blue-600 hover:underline font-medium">
+        <button className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-50">
+          <Receipt className="h-3.5 w-3.5" />
           {contract._count.bills} bill{contract._count.bills !== 1 ? 's' : ''}
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-h-[82vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg font-semibold">
-            Bills — {contract.agreementNo}
-          </DialogTitle>
-          <p className="text-sm text-gray-500">{contract.contractorName}</p>
+          <DialogTitle className="text-lg font-semibold">Bills for {contract.agreementNo}</DialogTitle>
+          <p className="text-sm text-slate-500">{contract.contractorName}</p>
         </DialogHeader>
 
         {loading ? (
-          <div className="flex justify-center py-10"><LoadingSpinner text="Loading bills..." /></div>
+          <div className="flex justify-center py-10">
+            <LoadingSpinner text="Loading bills..." />
+          </div>
         ) : error ? (
           <StatusMessage type="error" title="Error" message={error} />
         ) : bills.length === 0 ? (
-          <div className="text-center py-10 text-gray-400">
-            <FileText className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            <p>No bills yet.</p>
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <FileText className="mb-3 h-10 w-10 text-slate-300" />
+            <p className="font-medium text-slate-700">No bills have been created for this contract.</p>
             <Button asChild size="sm" className="mt-4">
-              <Link href={`/bills/new?contractId=${contract.id}`}><Plus className="h-4 w-4 mr-1" />Create First Bill</Link>
+              <Link href={`/bills/new?contractId=${contract.id}`}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                Create first bill
+              </Link>
             </Button>
           </div>
         ) : (
           <>
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="overflow-hidden rounded-lg border border-slate-200">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
-                    <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500">Bill No</th>
-                    <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500">Quarter</th>
-                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500">Bill Amount</th>
-                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500">PVC</th>
-                    <th className="text-right px-3 py-2 text-xs font-semibold text-gray-500">Cumulative PVC</th>
-                    <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500">Measurement Date</th>
-                    <th className="px-3 py-2"></th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500">Bill no</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500">Quarter</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">Bill amount</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">PVC</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">Cumulative</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500">Measured</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">Open</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {bills.map(bill => (
-                    <tr key={bill.id} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 font-semibold text-gray-800">{bill.billNo}</td>
-                      <td className="px-3 py-2 text-gray-600">{bill.quarter}</td>
-                      <td className="px-3 py-2 text-right font-medium">₹{bill.billAmount.toLocaleString('en-IN')}</td>
+                <tbody className="divide-y divide-slate-100">
+                  {bills.map((bill) => (
+                    <tr key={bill.id} className="hover:bg-slate-50">
+                      <td className="px-3 py-2 font-semibold text-slate-900">{bill.billNo}</td>
+                      <td className="px-3 py-2 text-slate-600">{bill.quarter}</td>
+                      <td className="px-3 py-2 text-right font-medium">{fmtCurrency(bill.billAmount)}</td>
                       <td className="px-3 py-2 text-right">
                         {bill.pvcCalculation ? (
-                          <span className={bill.pvcCalculation.totalPvc >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
-                            ₹{bill.pvcCalculation.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                          <span className={bill.pvcCalculation.totalPvc >= 0 ? 'font-semibold text-emerald-700' : 'font-semibold text-red-600'}>
+                            {fmtCurrency(bill.pvcCalculation.totalPvc)}
                           </span>
-                        ) : <span className="text-gray-300">—</span>}
+                        ) : (
+                          <span className="text-slate-400">Pending</span>
+                        )}
                       </td>
+                      <td className="px-3 py-2 text-right text-slate-700">
+                        {bill.pvcCalculation ? fmtCurrency(bill.pvcCalculation.cumulativePvc) : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-slate-500">{dateLabel(bill.dateOfMeasurement)}</td>
                       <td className="px-3 py-2 text-right">
-                        {bill.pvcCalculation ? (
-                          <span className="text-gray-700 font-medium">
-                            ₹{bill.pvcCalculation.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                          </span>
-                        ) : <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="px-3 py-2 text-gray-500 text-xs">{format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy')}</td>
-                      <td className="px-3 py-2">
-                        <Link href={`/bills/${bill.id}`} className="text-blue-600 hover:text-blue-800">
+                        <Link href={`/bills/${bill.id}`} className="inline-flex rounded-md p-1.5 text-slate-500 hover:bg-sky-50 hover:text-sky-700">
                           <Eye className="h-4 w-4" />
                         </Link>
                       </td>
@@ -150,9 +246,9 @@ function BillsDialog({ contract }: { contract: Contract }) {
               </table>
             </div>
             {contract._count.bills > 10 && (
-              <div className="text-center pt-2">
-                <Link href={`/contracts/${contract.id}`} className="text-sm text-blue-600 hover:underline">
-                  View all {contract._count.bills} bills →
+              <div className="pt-2 text-center">
+                <Link href={`/contracts/${contract.id}`} className="text-sm font-medium text-sky-700 hover:underline">
+                  View all {contract._count.bills} bills
                 </Link>
               </div>
             )}
@@ -165,25 +261,34 @@ function BillsDialog({ contract }: { contract: Contract }) {
 
 function DeleteButton({ contract, onDelete }: { contract: Contract; onDelete: (id: string) => void }) {
   const [loading, setLoading] = useState(false);
+
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <button className="p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" disabled={loading}>
+        <button
+          aria-label={`Delete ${contract.agreementNo}`}
+          className="rounded-md p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+          disabled={loading}
+        >
           {loading ? <LoadingSpinner size="sm" /> : <Trash2 className="h-4 w-4" />}
         </button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete Contract</AlertDialogTitle>
+          <AlertDialogTitle>Delete contract?</AlertDialogTitle>
           <AlertDialogDescription>
-            Delete "{contract.agreementNo}"? All bills and PVC calculations will be permanently removed.
+            This will permanently delete {contract.agreementNo}, including all bills and PVC calculations linked to it.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            className="bg-red-600 hover:bg-red-700 text-white"
-            onClick={async () => { setLoading(true); await onDelete(contract.id); setLoading(false); }}
+            className="bg-red-600 text-white hover:bg-red-700"
+            onClick={async () => {
+              setLoading(true);
+              await onDelete(contract.id);
+              setLoading(false);
+            }}
           >
             Delete
           </AlertDialogAction>
@@ -193,9 +298,37 @@ function DeleteButton({ contract, onDelete }: { contract: Contract; onDelete: (i
   );
 }
 
+function MetricCard({
+  label,
+  value,
+  helper,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  helper: string;
+  icon: typeof Building2;
+  tone: string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
+          <p className="mt-1 truncate text-2xl font-bold text-slate-950">{value}</p>
+          <p className="mt-1 text-xs text-slate-500">{helper}</p>
+        </div>
+        <div className={`rounded-md p-2 ${tone}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ContractsPage() {
   const [contracts, setContracts] = useState<Contract[]>([]);
-  const [filtered, setFiltered] = useState<Contract[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
@@ -206,264 +339,437 @@ export default function ContractsPage() {
   useEffect(() => {
     const saved = localStorage.getItem('contractsViewMode');
     if (saved === 'grid' || saved === 'table') setViewMode(saved);
+
     fetch('/api/contracts')
-      .then(r => r.json())
+      .then((response) => {
+        if (!response.ok) throw new Error('Failed to fetch contracts');
+        return response.json();
+      })
       .then(setContracts)
-      .catch(e => setError(e.message))
+      .catch((err) => setError(err.message))
       .finally(() => setIsLoading(false));
   }, []);
 
-  useEffect(() => {
-    let f = [...contracts];
-    if (search) {
-      const q = search.toLowerCase();
-      f = f.filter(c =>
-        c.agreementNo.toLowerCase().includes(q) ||
-        c.contractorName.toLowerCase().includes(q) ||
-        c.workDescription.toLowerCase().includes(q)
+  const filtered = useMemo(() => {
+    let list = [...contracts];
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((contract) =>
+        [
+          contract.agreementNo,
+          contract.contractorName,
+          contract.workDescription,
+          contract.loaNo || '',
+          contract.user?.name || '',
+          contract.user?.email || '',
+        ].some((value) => value.toLowerCase().includes(q))
       );
     }
+
     if (statusFilter !== 'all') {
-      f = f.filter(c =>
-        statusFilter === 'active' ? c._count.bills > 0 :
-        statusFilter === 'inactive' ? c._count.bills === 0 :
-        statusFilter === 'with-pvc' ? c._count.pvcCalculations > 0 : true
-      );
+      list = list.filter((contract) => {
+        const attention = contractAttentionReasons(contract).length > 0;
+        if (statusFilter === 'needs-action') return attention;
+        if (statusFilter === 'active') return contract._count.bills > 0;
+        if (statusFilter === 'no-bills') return contract._count.bills === 0;
+        if (statusFilter === 'with-pvc') return contract._count.pvcCalculations > 0;
+        if (statusFilter === 'not-eligible') return !contract.pvcApplicable;
+        return true;
+      });
     }
-    f.sort((a, b) =>
-      sortBy === 'newest' ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() :
-      sortBy === 'oldest' ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() :
-      sortBy === 'name' ? a.agreementNo.localeCompare(b.agreementNo) :
-      sortBy === 'contractor' ? a.contractorName.localeCompare(b.contractorName) :
-      sortBy === 'bills' ? b._count.bills - a._count.bills : 0
-    );
-    setFiltered(f);
-  }, [contracts, search, statusFilter, sortBy]);
+
+    list.sort((a, b) => {
+      if (sortBy === 'oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      if (sortBy === 'agreement') return a.agreementNo.localeCompare(b.agreementNo);
+      if (sortBy === 'contractor') return a.contractorName.localeCompare(b.contractorName);
+      if (sortBy === 'bills') return b._count.bills - a._count.bills;
+      if (sortBy === 'value') return toNumber(b.contractValue || b.tenderAdvertisedValue) - toNumber(a.contractValue || a.tenderAdvertisedValue);
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    return list;
+  }, [contracts, search, sortBy, statusFilter]);
+
+  const stats = useMemo(() => {
+    const active = contracts.filter((contract) => contract._count.bills > 0).length;
+    const pvcDone = contracts.filter((contract) => contract._count.pvcCalculations > 0).length;
+    const needsAction = contracts.filter((contract) => contractAttentionReasons(contract).length > 0).length;
+    const totalBills = contracts.reduce((sum, contract) => sum + contract._count.bills, 0);
+    const totalValue = contracts.reduce((sum, contract) => sum + toNumber(contract.contractValue || contract.tenderAdvertisedValue), 0);
+
+    return {
+      active,
+      needsAction,
+      pvcDone,
+      totalBills,
+      totalValue,
+      total: contracts.length,
+    };
+  }, [contracts]);
+
+  const attentionContracts = useMemo(
+    () => contracts.filter((contract) => contractAttentionReasons(contract).length > 0).slice(0, 4),
+    [contracts]
+  );
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/contracts/${id}`, { method: 'DELETE' });
-    setContracts(cs => cs.filter(c => c.id !== id));
+    const response = await fetch(`/api/contracts/${id}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(data.error || 'Failed to delete contract');
+      return;
+    }
+    setContracts((current) => current.filter((contract) => contract.id !== id));
   };
 
-  const stats = {
-    total: contracts.length,
-    active: contracts.filter(c => c._count.bills > 0).length,
-    pvcEligible: contracts.filter(c => c.pvcApplicable).length,
-    totalBills: contracts.reduce((s, c) => s + c._count.bills, 0),
-    totalValue: contracts.reduce((s, c) => s + (c.contractValue || 0), 0),
+  const resetFilters = () => {
+    setSearch('');
+    setStatusFilter('all');
+    setSortBy('newest');
   };
 
-  if (isLoading) return <div className="flex justify-center py-16"><LoadingSpinner size="lg" text="Loading contracts..." /></div>;
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[420px] items-center justify-center">
+        <LoadingSpinner size="lg" text="Loading contracts..." />
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
+    <div className="mx-auto max-w-7xl px-4 py-6">
       <PostingDetailsNotice />
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="mt-4 flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Contracts</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage railway contracts and PVC calculations</p>
-        </div>
-        <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white">
-          <Link href="/contracts/new"><Plus className="h-4 w-4 mr-1.5" />New Contract</Link>
-        </Button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Total Contracts', value: stats.total, icon: Building2, color: 'text-gray-900' },
-          { label: 'Portfolio Value', value: fmtCurrency(stats.totalValue), icon: IndianRupee, color: 'text-green-600' },
-          { label: 'PVC Eligible', value: stats.pvcEligible, icon: TrendingUp, color: 'text-blue-600' },
-          { label: 'Bills Processed', value: stats.totalBills, icon: Receipt, color: 'text-amber-600' },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">{label}</p>
-              <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
-            </div>
-            <Icon className={`h-5 w-5 opacity-30 ${color}`} />
+          <div className="flex items-center gap-2 text-sm font-semibold text-sky-700">
+            <ClipboardList className="h-4 w-4" />
+            Contract workspace
           </div>
-        ))}
-      </div>
-
-      {/* Filter bar */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input placeholder="Search agreement, contractor, work..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 text-sm" />
+          <h1 className="mt-1 text-2xl font-bold text-slate-950">Contracts</h1>
+          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+            Track agreements, bills, base months, and PVC readiness from one operational view.
+          </p>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-9 text-sm w-44"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="active">With Bills</SelectItem>
-            <SelectItem value="inactive">No Bills</SelectItem>
-            <SelectItem value="with-pvc">With PVC</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={sortBy} onValueChange={setSortBy}>
-          <SelectTrigger className="h-9 text-sm w-44"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="newest">Newest First</SelectItem>
-            <SelectItem value="oldest">Oldest First</SelectItem>
-            <SelectItem value="name">Agreement No.</SelectItem>
-            <SelectItem value="contractor">Contractor</SelectItem>
-            <SelectItem value="bills">Most Bills</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="flex border border-gray-200 rounded-lg overflow-hidden">
-          <button onClick={() => { setViewMode('grid'); localStorage.setItem('contractsViewMode', 'grid'); }}
-            className={`px-3 py-1.5 text-sm flex items-center gap-1 transition-colors ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
-            <LayoutGrid className="h-4 w-4" /> Grid
-          </button>
-          <button onClick={() => { setViewMode('table'); localStorage.setItem('contractsViewMode', 'table'); }}
-            className={`px-3 py-1.5 text-sm flex items-center gap-1 transition-colors ${viewMode === 'table' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
-            <LayoutList className="h-4 w-4" /> Table
-          </button>
+
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link href="/contracts/loa-analyzer">
+              <FileText className="mr-2 h-4 w-4" />
+              LOA analyzer
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/contracts/new">
+              <Plus className="mr-2 h-4 w-4" />
+              New contract
+            </Link>
+          </Button>
         </div>
       </div>
 
-      {error && <StatusMessage type="error" title="Error" message={error} />}
+      {error && <div className="mt-4"><StatusMessage type="error" title="Error" message={error} /></div>}
 
-      {/* Results count */}
-      {filtered.length > 0 && (
-        <p className="text-xs text-gray-400">{filtered.length} contract{filtered.length !== 1 ? 's' : ''}</p>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <MetricCard label="Contracts" value={stats.total} helper={`${stats.active} with billing activity`} icon={Building2} tone="bg-slate-100 text-slate-700" />
+        <MetricCard label="Portfolio value" value={fmtCurrency(stats.totalValue)} helper="Agreement or tender value" icon={IndianRupee} tone="bg-emerald-50 text-emerald-700" />
+        <MetricCard label="Bills" value={stats.totalBills} helper="Across visible contracts" icon={Receipt} tone="bg-sky-50 text-sky-700" />
+        <MetricCard label="PVC ready" value={stats.pvcDone} helper="Contracts with PVC calculations" icon={TrendingUp} tone="bg-violet-50 text-violet-700" />
+        <MetricCard label="Needs action" value={stats.needsAction} helper="Missing bills, LOA, value, or PVC" icon={AlertTriangle} tone="bg-amber-50 text-amber-700" />
+      </div>
+
+      {attentionContracts.length > 0 && (
+        <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
+                <AlertTriangle className="h-4 w-4" />
+                Priority follow-up
+              </div>
+              <p className="mt-1 text-sm text-amber-700">
+                These contracts are missing data or the next billing/PVC step.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[620px]">
+              {attentionContracts.map((contract) => (
+                <Link
+                  key={contract.id}
+                  href={`/contracts/${contract.id}`}
+                  className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-white px-3 py-2 text-sm hover:border-amber-300 hover:bg-amber-50"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-slate-900">{contract.agreementNo}</p>
+                    <p className="truncate text-xs text-slate-500">{contractAttentionReasons(contract).join(', ')}</p>
+                  </div>
+                  <ArrowUpRight className="h-4 w-4 shrink-0 text-amber-700" />
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Empty state */}
-      {filtered.length === 0 && (
-        <div className="flex flex-col items-center justify-center text-center py-16 border border-dashed border-gray-200 rounded-lg">
-          <Building2 className="h-10 w-10 text-gray-300 mb-3" />
-          <p className="font-medium text-gray-600 mx-auto">{contracts.length === 0 ? 'No contracts yet' : 'No results'}</p>
-          <p className="text-sm text-gray-400 mt-1 mx-auto">
-            {contracts.length === 0 ? 'Create your first contract to get started.' : 'Try a different search or filter.'}
-          </p>
-          {contracts.length === 0 ? (
-            <Button asChild size="sm" className="mt-4 bg-blue-600 text-white hover:bg-blue-700">
-              <Link href="/contracts/new"><Plus className="h-4 w-4 mr-1" />Create Contract</Link>
-            </Button>
-          ) : (
-            <button onClick={() => { setSearch(''); setStatusFilter('all'); setSortBy('newest'); }} className="mt-4 text-sm text-blue-600 hover:underline">
+      <div className="mt-5 rounded-lg border border-slate-200 bg-white p-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="Search agreement, contractor, work, LOA, or owner"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-10 pl-9"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:flex">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-10 w-full sm:w-44">
+                <Filter className="mr-2 h-4 w-4 text-slate-400" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All contracts</SelectItem>
+                <SelectItem value="needs-action">Needs action</SelectItem>
+                <SelectItem value="active">With bills</SelectItem>
+                <SelectItem value="no-bills">No bills</SelectItem>
+                <SelectItem value="with-pvc">PVC ready</SelectItem>
+                <SelectItem value="not-eligible">PVC not eligible</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="h-10 w-full sm:w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
+                <SelectItem value="agreement">Agreement no</SelectItem>
+                <SelectItem value="contractor">Contractor</SelectItem>
+                <SelectItem value="bills">Most bills</SelectItem>
+                <SelectItem value="value">Highest value</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="flex overflow-hidden rounded-md border border-slate-200">
+              <button
+                aria-label="Grid view"
+                onClick={() => {
+                  setViewMode('grid');
+                  localStorage.setItem('contractsViewMode', 'grid');
+                }}
+                className={`grid h-10 w-10 place-items-center ${viewMode === 'grid' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <button
+                aria-label="Table view"
+                onClick={() => {
+                  setViewMode('table');
+                  localStorage.setItem('contractsViewMode', 'table');
+                }}
+                className={`grid h-10 w-10 place-items-center border-l border-slate-200 ${viewMode === 'table' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+              >
+                <LayoutList className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+          <span>
+            Showing <strong className="text-slate-900">{filtered.length}</strong> of {contracts.length} contracts
+          </span>
+          {(search || statusFilter !== 'all' || sortBy !== 'newest') && (
+            <button onClick={resetFilters} className="inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium text-sky-700 hover:bg-sky-50">
+              <X className="h-4 w-4" />
               Clear filters
             </button>
           )}
         </div>
-      )}
+      </div>
 
-      {/* Grid view */}
-      {filtered.length > 0 && viewMode === 'grid' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filtered.map(c => (
-            <div key={c.id} className={`bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-sm transition-shadow border-l-4 ${
-              c._count.pvcCalculations > 0 ? 'border-l-green-500' : c._count.bills > 0 ? 'border-l-blue-500' : 'border-l-gray-200'
-            }`}>
-              {/* Card header */}
-              <div className="px-4 pt-4 pb-3 border-b border-gray-100">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-gray-900 text-base">{c.agreementNo}</span>
-                      <StatusPill contract={c} />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-0.5 truncate">{c.workDescription}</p>
-                  </div>
-                  <DeleteButton contract={c} onDelete={handleDelete} />
-                </div>
-              </div>
-
-              {/* Card body */}
-              <div className="px-4 py-3 space-y-3">
-                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                  <div>
-                    <span className="text-xs text-gray-400 block">Contractor</span>
-                    <span className="font-medium text-gray-800 truncate block">{c.contractorName}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-gray-400 block">Contract Value</span>
-                    <span className="font-semibold text-green-600">{c.contractValue ? fmtCurrency(c.contractValue) : '—'}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-gray-400 block">Opening Date</span>
-                    <span className="text-gray-700">{format(new Date(c.dateOfOpening), 'dd MMM yyyy')}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-gray-400 block">Base Month</span>
-                    <span className="text-gray-700">{format(new Date(c.baseMonth), 'MMM yyyy')}</span>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                  <div className="flex items-center gap-3 text-xs text-gray-500">
-                    <BillsDialog contract={c} />
-                    <span>· {c._count.pvcCalculations} PVC calcs</span>
-                    {c.user && <span className="hidden sm:inline">· {c.user.name || c.user.email}</span>}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Link href={`/contracts/${c.id}`}
-                      className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">
-                      <Eye className="h-3.5 w-3.5" /> View
-                    </Link>
-                    <Link href={`/bills/new?contractId=${c.id}`}
-                      className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700">
-                      <Plus className="h-3.5 w-3.5" /> Bill
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+      {filtered.length === 0 ? (
+        <div className="mt-5 flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white py-16 text-center">
+          <Building2 className="mb-3 h-10 w-10 text-slate-300" />
+          <p className="font-semibold text-slate-800">{contracts.length === 0 ? 'No contracts yet' : 'No matching contracts'}</p>
+          <p className="mt-1 max-w-md text-sm text-slate-500">
+            {contracts.length === 0
+              ? 'Create the first contract to start tracking bills, base months, and PVC calculations.'
+              : 'Try changing the search text or status filter.'}
+          </p>
+          {contracts.length === 0 ? (
+            <Button asChild size="sm" className="mt-4">
+              <Link href="/contracts/new">
+                <Plus className="mr-1.5 h-4 w-4" />
+                Create contract
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={resetFilters} className="mt-4">
+              Clear filters
+            </Button>
+          )}
         </div>
-      )}
+      ) : viewMode === 'grid' ? (
+        <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {filtered.map((contract) => {
+            const reasons = contractAttentionReasons(contract);
+            const mainValue = contract.contractValue || contract.tenderAdvertisedValue;
 
-      {/* Table view */}
-      {filtered.length > 0 && viewMode === 'table' && (
-        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+            return (
+              <div key={contract.id} className="rounded-lg border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+                <div className="border-b border-slate-100 px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link href={`/contracts/${contract.id}`} className="truncate text-base font-bold text-slate-950 hover:text-sky-700">
+                          {contract.agreementNo}
+                        </Link>
+                        <StatusPill contract={contract} />
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-sm text-slate-500">{contract.workDescription}</p>
+                    </div>
+                    <DeleteButton contract={contract} onDelete={handleDelete} />
+                  </div>
+                </div>
+
+                <div className="px-4 py-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase text-slate-400">Contractor</p>
+                      <p className="mt-1 truncate font-semibold text-slate-900">{contract.contractorName}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase text-slate-400">Value</p>
+                      <p className="mt-1 font-semibold text-emerald-700">{fmtCurrency(mainValue)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase text-slate-400">Opening</p>
+                      <p className="mt-1 flex items-center gap-1.5 text-slate-700">
+                        <CalendarDays className="h-4 w-4 text-slate-400" />
+                        {dateLabel(contract.dateOfOpening)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase text-slate-400">Base month</p>
+                      <p className="mt-1 text-slate-700">{dateLabel(contract.baseMonth, 'MMM yyyy')}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <BillsDialog contract={contract} />
+                    <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700">
+                      <TrendingUp className="h-3.5 w-3.5" />
+                      {contract._count.pvcCalculations} PVC
+                    </span>
+                    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${contract.pvcApplicable ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                      {contract.pvcApplicable ? 'Eligible' : 'Not eligible'}
+                    </span>
+                  </div>
+
+                  {reasons.length > 0 && (
+                    <div className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      <span className="font-semibold">Needs:</span> {reasons.join(', ')}
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                    <p className="truncate text-xs text-slate-500">
+                      {contract.user ? `Owner: ${contract.user.name || contract.user.email}` : 'Owner not assigned'}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/contracts/${contract.id}`}>
+                          <Eye className="mr-1.5 h-4 w-4" />
+                          View
+                        </Link>
+                      </Button>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/contracts/${contract.id}/edit`}>
+                          <Edit className="mr-1.5 h-4 w-4" />
+                          Edit
+                        </Link>
+                      </Button>
+                      <Button asChild size="sm">
+                        <Link href={`/bills/new?contractId=${contract.id}`}>
+                          <Plus className="mr-1.5 h-4 w-4" />
+                          Bill
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+            <table className="w-full min-w-[1020px] text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Agreement No.</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Contractor</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Value</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Opening</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Base Month</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500">Bills</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500">PVC</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Status</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Agreement</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Contractor</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-500">Value</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Dates</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-slate-500">Bills</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-slate-500">PVC</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Status</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-500">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filtered.map(c => (
-                  <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-semibold text-gray-900">{c.agreementNo}</td>
-                    <td className="px-4 py-3 text-gray-700 max-w-40 truncate">{c.contractorName}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-green-600">
-                      {c.contractValue ? fmtCurrency(c.contractValue) : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{format(new Date(c.dateOfOpening), 'dd MMM yyyy')}</td>
-                    <td className="px-4 py-3 text-gray-600">{format(new Date(c.baseMonth), 'MMM yyyy')}</td>
-                    <td className="px-4 py-3 text-center"><BillsDialog contract={c} /></td>
-                    <td className="px-4 py-3 text-center text-gray-600">{c._count.pvcCalculations}</td>
-                    <td className="px-4 py-3"><StatusPill contract={c} /></td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <Link href={`/contracts/${c.id}`}
-                          className="p-1.5 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors">
-                          <Eye className="h-4 w-4" />
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((contract) => {
+                  const reasons = contractAttentionReasons(contract);
+                  return (
+                    <tr key={contract.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3">
+                        <Link href={`/contracts/${contract.id}`} className="font-bold text-slate-950 hover:text-sky-700">
+                          {contract.agreementNo}
                         </Link>
-                        <Link href={`/bills/new?contractId=${c.id}`}
-                          className="p-1.5 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors">
-                          <Plus className="h-4 w-4" />
-                        </Link>
-                        <DeleteButton contract={c} onDelete={handleDelete} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        <p className="mt-1 max-w-xs truncate text-xs text-slate-500">{contract.workDescription}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="max-w-[180px] truncate font-medium text-slate-800">{contract.contractorName}</p>
+                        <p className="text-xs text-slate-500">{contract.loaNo || 'LOA not set'}</p>
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-emerald-700">
+                        {fmtCurrency(contract.contractValue || contract.tenderAdvertisedValue)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        <p>{dateLabel(contract.dateOfOpening)}</p>
+                        <p className="text-xs text-slate-500">Base {dateLabel(contract.baseMonth, 'MMM yyyy')}</p>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <BillsDialog contract={contract} />
+                      </td>
+                      <td className="px-4 py-3 text-center font-semibold text-slate-700">{contract._count.pvcCalculations}</td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-1">
+                          <StatusPill contract={contract} />
+                          {reasons.length > 0 && <p className="text-xs text-amber-700">{reasons[0]}</p>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <Link href={`/contracts/${contract.id}`} className="rounded-md p-2 text-slate-500 hover:bg-sky-50 hover:text-sky-700" aria-label="View contract">
+                            <Eye className="h-4 w-4" />
+                          </Link>
+                          <Link href={`/contracts/${contract.id}/edit`} className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="Edit contract">
+                            <Edit className="h-4 w-4" />
+                          </Link>
+                          <Link href={`/bills/new?contractId=${contract.id}`} className="rounded-md p-2 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700" aria-label="Create bill">
+                            <Plus className="h-4 w-4" />
+                          </Link>
+                          <DeleteButton contract={contract} onDelete={handleDelete} />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
