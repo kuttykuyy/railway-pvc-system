@@ -293,11 +293,21 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   y += 4;
 
   // ── C. PVC COMPUTATION TABLE ───────────────────────────────────────────────
-  ensureSpace(50);
+  ensureSpace(60);
   pdf.setFontSize(9);
   pdf.setFont('helvetica', 'bold');
   pdf.text('C. PRICE VARIATION COMPUTATION (GCC Clause 17)', mL, y);
-  y += 4;
+  y += 5;
+
+  // GCC Formula display
+  pdf.setFontSize(8);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(60, 60, 60);
+  pdf.text('Formula (GCC Cl.17):  Vn = W x SUM[ Pn x (In - I0) / I0 ]', mL + 2, y);
+  pdf.setFont('helvetica', 'italic');
+  pdf.text('where  W = Gross Bill Amount,  Pn = Component Weight (%),  I0 = Base Month Index,  In = Quarter Average Index', mL + 2, y + 4);
+  pdf.setTextColor(0, 0, 0);
+  y += 9;
 
   // Build component data
   const labourBase = getIndexBase(quarterlyAverages, 'Labour');
@@ -361,6 +371,9 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     'PVC Amount (Rs.)',
   ]];
 
+  const fixedPct = Math.max(0, 1 - totalPct);
+  const fixedAmt = billAmount * fixedPct;
+
   const tableBody: any[] = allComponents.map((c, i) => [
     i + 1,
     c.name,
@@ -371,6 +384,17 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     fmtVariation(c.variation),
     fmt(c.pvcAmt),
   ]);
+
+  // Fixed (non-variable) component row
+  if (fixedPct > 0.0001) {
+    tableBody.push([
+      { content: '', styles: {} },
+      { content: 'Fixed (Non-Variable)', styles: { fontStyle: 'italic' as const, textColor: [80, 80, 80] as [number,number,number] } },
+      { content: (fixedPct * 100).toFixed(2) + '%', styles: { halign: 'center' as const, fontStyle: 'italic' as const, textColor: [80, 80, 80] as [number,number,number] } },
+      { content: fmt(fixedAmt), styles: { halign: 'right' as const, fontStyle: 'italic' as const, textColor: [80, 80, 80] as [number,number,number] } },
+      { content: 'Not subject to PVC', colSpan: 4, styles: { halign: 'center' as const, fontStyle: 'italic' as const, textColor: [80, 80, 80] as [number,number,number] } },
+    ]);
+  }
 
   tableBody.push([
     '', 'TOTAL PVC',
@@ -419,9 +443,14 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     }, // Total: 10+60+24+45+26+38+28+42 = 273mm
     didParseCell: (data: any) => {
       if (data.section === 'body' && data.row.index === tableBody.length - 1) {
+        // TOTAL PVC row
         data.cell.styles.fontStyle = 'bold';
         data.cell.styles.fillColor = [220, 220, 220];
         data.cell.styles.fontSize = 9;
+      }
+      if (data.section === 'body' && fixedPct > 0.0001 && data.row.index === tableBody.length - 2) {
+        // Fixed row background
+        data.cell.styles.fillColor = [248, 248, 248];
       }
     },
   });
@@ -754,6 +783,24 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         columnStyles: histColStyles,
       });
     }
+  }
+
+  // ── PROVISIONAL WATERMARK on page 1 ──────────────────────────────────────
+  if (isProvisional) {
+    pdf.setPage(1);
+    pdf.saveGraphicsState();
+    // Use GState for transparency — jsPDF supports setGState with opacity
+    (pdf as any).setGState(new (pdf as any).GState({ opacity: 0.10 }));
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(72);
+    pdf.setTextColor(200, 0, 0);
+    // Rotate 45 degrees around page center
+    pdf.text('PROVISIONAL', pageW / 2, pageH / 2, {
+      align: 'center',
+      angle: 45,
+    });
+    pdf.restoreGraphicsState();
+    pdf.setTextColor(0, 0, 0);
   }
 
   return Buffer.from(pdf.output('arraybuffer'));
