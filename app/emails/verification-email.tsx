@@ -1,4 +1,3 @@
-
 import * as React from 'react';
 import {
   Html,
@@ -6,10 +5,12 @@ import {
   Body,
   Container,
   Section,
+  Row,
+  Column,
   Text,
   Button,
   Hr,
-  Img,
+  Link,
 } from '@react-email/components';
 
 interface VerificationEmailProps {
@@ -22,46 +23,57 @@ export const VerificationEmail = ({
   userEmail,
 }: VerificationEmailProps) => {
   return (
-    <Html>
+    <Html lang="en">
       <Head />
       <Body style={main}>
-        <Container style={container}>
+        <Container style={wrapper}>
+          {/* Header */}
           <Section style={header}>
-            <Text style={heading}>Railway PVC System</Text>
+            <Row>
+              <Column align="center">
+                <div style={logoMark}>🚂</div>
+                <Text style={brandName}>IR PVC System</Text>
+                <Text style={brandSub}>Indian Railways · Price Variation Calculator</Text>
+              </Column>
+            </Row>
           </Section>
-          
-          <Section style={content}>
-            <Text style={paragraph}>Hello,</Text>
-            
-            <Text style={paragraph}>
-              Thank you for registering with Railway PVC System. Please verify your email address to activate your account.
+
+          {/* Body */}
+          <Section style={body}>
+            <div style={iconCircle}>✉️</div>
+
+            <Text style={title}>Verify your email address</Text>
+
+            <Text style={bodyText}>
+              You're almost there! Click the button below to verify your email and activate your IR PVC System account.
             </Text>
-            
-            <Text style={paragraph}>
-              Email: <strong>{userEmail}</strong>
-            </Text>
-            
-            <Section style={buttonContainer}>
-              <Button style={button} href={verificationUrl}>
+
+            <Section style={highlightBox}>
+              <Text style={highlightLabel}>Verifying account for</Text>
+              <Text style={highlightEmail}>{userEmail}</Text>
+            </Section>
+
+            <Section style={buttonWrap}>
+              <Button style={ctaButton} href={verificationUrl}>
                 Verify Email Address
               </Button>
             </Section>
-            
-            <Text style={paragraph}>
-              Or copy and paste this URL into your browser:
-            </Text>
-            
-            <Text style={link}>{verificationUrl}</Text>
-            
+
+            <Text style={expiry}>⏱ This link expires in <strong>24 hours</strong></Text>
+
             <Hr style={divider} />
-            
-            <Text style={footer}>
-              If you didn't create an account with Railway PVC System, you can safely ignore this email.
+
+            <Text style={altLinkLabel}>Button not working? Copy and paste this URL into your browser:</Text>
+            <Link href={verificationUrl} style={altLink}>{verificationUrl}</Link>
+          </Section>
+
+          {/* Footer */}
+          <Section style={footer}>
+            <Hr style={footerDivider} />
+            <Text style={footerText}>
+              If you didn't create an account with IR PVC System, you can safely ignore this email — no action is needed.
             </Text>
-            
-            <Text style={footer}>
-              This verification link will expire in 24 hours.
-            </Text>
+            <Text style={footerCopy}>© {new Date().getFullYear()} IR PVC System · All rights reserved</Text>
           </Section>
         </Container>
       </Body>
@@ -71,79 +83,164 @@ export const VerificationEmail = ({
 
 export default VerificationEmail;
 
-const main = {
-  backgroundColor: '#f6f9fc',
-  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Ubuntu,sans-serif',
+const main: React.CSSProperties = {
+  backgroundColor: '#f0f4f8',
+  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  padding: '40px 0',
 };
 
-const container = {
+const wrapper: React.CSSProperties = {
   backgroundColor: '#ffffff',
   margin: '0 auto',
-  padding: '20px 0 48px',
-  marginBottom: '64px',
-  borderRadius: '8px',
-  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+  maxWidth: '560px',
+  borderRadius: '12px',
+  overflow: 'hidden',
+  boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
 };
 
-const header = {
-  backgroundColor: '#1e40af',
-  padding: '24px',
-  borderTopLeftRadius: '8px',
-  borderTopRightRadius: '8px',
+const header: React.CSSProperties = {
+  background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%)',
+  padding: '32px 24px 28px',
+  textAlign: 'center',
 };
 
-const heading = {
-  fontSize: '24px',
-  fontWeight: 'bold',
+const logoMark: React.CSSProperties = {
+  fontSize: '36px',
+  lineHeight: '1',
+  marginBottom: '8px',
+};
+
+const brandName: React.CSSProperties = {
+  fontSize: '22px',
+  fontWeight: '700',
   color: '#ffffff',
+  margin: '0 0 4px',
+  letterSpacing: '-0.3px',
+};
+
+const brandSub: React.CSSProperties = {
+  fontSize: '12px',
+  color: 'rgba(255,255,255,0.7)',
   margin: '0',
-  textAlign: 'center' as const,
+  letterSpacing: '0.5px',
+  textTransform: 'uppercase',
 };
 
-const content = {
-  padding: '24px 32px',
+const body: React.CSSProperties = {
+  padding: '40px 48px',
+  textAlign: 'center',
 };
 
-const paragraph = {
-  fontSize: '16px',
+const iconCircle: React.CSSProperties = {
+  width: '64px',
+  height: '64px',
+  borderRadius: '50%',
+  backgroundColor: '#eff6ff',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '28px',
+  margin: '0 auto 24px',
+  lineHeight: '64px',
+};
+
+const title: React.CSSProperties = {
+  fontSize: '24px',
+  fontWeight: '700',
+  color: '#111827',
+  margin: '0 0 12px',
+  letterSpacing: '-0.5px',
+};
+
+const bodyText: React.CSSProperties = {
+  fontSize: '15px',
   lineHeight: '24px',
-  color: '#525252',
-  margin: '16px 0',
+  color: '#4b5563',
+  margin: '0 0 28px',
 };
 
-const buttonContainer = {
-  textAlign: 'center' as const,
-  margin: '32px 0',
+const highlightBox: React.CSSProperties = {
+  backgroundColor: '#f8fafc',
+  border: '1px solid #e2e8f0',
+  borderRadius: '8px',
+  padding: '14px 20px',
+  margin: '0 0 32px',
 };
 
-const button = {
-  backgroundColor: '#1e40af',
-  borderRadius: '6px',
-  color: '#ffffff',
-  fontSize: '16px',
-  fontWeight: 'bold',
-  textDecoration: 'none',
-  textAlign: 'center' as const,
-  display: 'inline-block',
-  padding: '12px 32px',
+const highlightLabel: React.CSSProperties = {
+  fontSize: '11px',
+  fontWeight: '600',
+  color: '#94a3b8',
+  textTransform: 'uppercase',
+  letterSpacing: '0.8px',
+  margin: '0 0 4px',
 };
 
-const link = {
-  fontSize: '14px',
+const highlightEmail: React.CSSProperties = {
+  fontSize: '15px',
+  fontWeight: '600',
   color: '#1e40af',
+  margin: '0',
+};
+
+const buttonWrap: React.CSSProperties = {
+  margin: '0 0 20px',
+};
+
+const ctaButton: React.CSSProperties = {
+  backgroundColor: '#1d4ed8',
+  borderRadius: '8px',
+  color: '#ffffff',
+  fontSize: '15px',
+  fontWeight: '600',
   textDecoration: 'none',
-  wordBreak: 'break-all' as const,
-  margin: '16px 0',
+  padding: '14px 40px',
+  display: 'inline-block',
+  boxShadow: '0 2px 8px rgba(29,78,216,0.35)',
 };
 
-const divider = {
-  borderColor: '#e5e5e5',
-  margin: '32px 0',
+const expiry: React.CSSProperties = {
+  fontSize: '13px',
+  color: '#6b7280',
+  margin: '0 0 28px',
 };
 
-const footer = {
-  fontSize: '14px',
-  lineHeight: '20px',
-  color: '#737373',
-  margin: '8px 0',
+const divider: React.CSSProperties = {
+  borderColor: '#e5e7eb',
+  margin: '0 0 20px',
+};
+
+const altLinkLabel: React.CSSProperties = {
+  fontSize: '13px',
+  color: '#6b7280',
+  margin: '0 0 8px',
+};
+
+const altLink: React.CSSProperties = {
+  fontSize: '12px',
+  color: '#1d4ed8',
+  wordBreak: 'break-all',
+};
+
+const footer: React.CSSProperties = {
+  padding: '0 48px 32px',
+  textAlign: 'center',
+};
+
+const footerDivider: React.CSSProperties = {
+  borderColor: '#f1f5f9',
+  margin: '0 0 16px',
+};
+
+const footerText: React.CSSProperties = {
+  fontSize: '12px',
+  lineHeight: '18px',
+  color: '#9ca3af',
+  margin: '0 0 8px',
+};
+
+const footerCopy: React.CSSProperties = {
+  fontSize: '11px',
+  color: '#d1d5db',
+  margin: '0',
 };
