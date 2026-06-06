@@ -614,8 +614,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       });
 
       // Append index documents (same as detailed format)
+      let irFinalBytes: Uint8Array = irPdfBytes;
       try {
-        irPdfBytes = await embedComponentIndicesRange(irPdfBytes, {
+        irFinalBytes = await embedComponentIndicesRange(new Uint8Array(irPdfBytes), {
           startDate: new Date(bill.contract.baseMonth),
           endDate: new Date(bill.dateOfMeasurement),
         });
@@ -623,7 +624,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         console.error('IR PDF: error embedding index documents:', err);
       }
 
-      return new Response(irPdfBytes, {
+      return new Response(Buffer.from(irFinalBytes), {
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="IR_PVC_Statement_${bill.billNo.replace(/[^a-zA-Z0-9]/g, '_')}_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf"`,
