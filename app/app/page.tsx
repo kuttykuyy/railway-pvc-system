@@ -57,7 +57,7 @@ export default function HomePage() {
             <div className="flex-1 space-y-8 text-center lg:text-left z-10">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-sm font-medium text-slate-600 shadow-sm hover:shadow transition-shadow">
                 <span className="flex h-2 w-2 rounded-full bg-blue-600 animate-pulse" />
-                GCC Clause 17 · IR Standard PDF · Bulk Bills
+                GCC Clause 17 · IR Standard PDF · Free Preview
               </div>
 
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight text-slate-900 leading-[1.1]">
@@ -88,7 +88,7 @@ export default function HomePage() {
                 <span className="flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-500" /> Auto Indices</span>
                 <span className="flex items-center gap-2"><FileText className="w-5 h-5 text-blue-500" /> IR Standard PDF</span>
                 <span className="flex items-center gap-2"><Layers className="w-5 h-5 text-purple-500" /> Bulk Bills</span>
-                <span className="flex items-center gap-2"><Shield className="w-5 h-5 text-slate-400" /> Secure</span>
+                <span className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-emerald-500" /> Free Preview</span>
               </div>
             </div>
 
@@ -321,12 +321,12 @@ export default function HomePage() {
             <MiniFeature icon={<Layers />} title="Bulk Bill Creation" desc="Create and submit multiple bills simultaneously with one-time zone & fuel setup" badge="New" />
             <MiniFeature icon={<Download />} title="Bulk PDF Download" desc="Download Detailed or IR Standard PDFs for multiple bills merged into one file" badge="New" />
             <MiniFeature icon={<FileSpreadsheet />} title="Monthly Index History" desc="Complete month-by-month breakdown of all indices from base month to current quarter" badge="New" />
-<MiniFeature icon={<MessageSquare />} title="WhatsApp Integration" desc="Receive bills and critical alerts directly on WhatsApp" />
+            <MiniFeature icon={<ScanSearch />} title="Free PVC Preview" desc="See the full PVC breakdown before paying — no credits deducted for preview calculations" badge="New" />
+            <MiniFeature icon={<MessageSquare />} title="WhatsApp Integration" desc="Receive bills and critical alerts directly on WhatsApp" />
             <MiniFeature icon={<BarChart3 />} title="Deep Analytics" desc="Custom abstract reports and visual summaries across contracts" />
             <MiniFeature icon={<Users />} title="Team Access" desc="Role-based permissions for staff, admins, and railway officials" />
             <MiniFeature icon={<IndianRupee />} title="GST Billing" desc="18% GST applied transparently on credit top-ups with full invoice generation" />
             <MiniFeature icon={<Lock />} title="Extension Compliance" desc="17A / 17B rule engines with dedicated steel and cement PVC" />
-            <MiniFeature icon={<ScanSearch />} title="PVC Check Tool" desc="Instantly verify any PVC calculation before submission" />
             <MiniFeature icon={<Smartphone />} title="Mobile First" desc="Fully responsive design for on-site field access" />
           </div>
         </div>
@@ -340,6 +340,21 @@ export default function HomePage() {
             <p className="text-xl text-slate-500 font-light">Credit-based pay-as-you-go. Top up your wallet, use credits per bill. No subscriptions, no lock-in.</p>
           </div>
 
+          {/* First bill offer banner */}
+          <div className="max-w-4xl mx-auto mb-6">
+            <div className="flex items-center gap-4 bg-amber-50 border border-amber-200 rounded-2xl px-6 py-4">
+              <span className="text-3xl">🎉</span>
+              <div className="flex-1">
+                <p className="font-black text-amber-900 text-lg">Your first bill is only ₹99</p>
+                <p className="text-amber-700 text-sm font-light">New users get a one-time discount on their first PVC bill. No coupon needed — applied automatically.</p>
+              </div>
+              <div className="shrink-0 text-right hidden sm:block">
+                <p className="text-3xl font-black text-amber-600">₹99</p>
+                <p className="text-xs text-amber-500 line-through">₹199</p>
+              </div>
+            </div>
+          </div>
+
           {/* Main pricing card */}
           <div className="max-w-4xl mx-auto mb-12">
             <div className="bg-white rounded-3xl border-2 border-blue-500 shadow-2xl shadow-blue-900/10 overflow-hidden">
@@ -347,15 +362,17 @@ export default function HomePage() {
                 {/* Left: price */}
                 <div className="p-10 lg:p-12 flex flex-col justify-center border-b md:border-b-0 md:border-r border-slate-100">
                   <p className="text-sm font-semibold text-blue-600 uppercase tracking-widest mb-3">Per Bill Credit Cost</p>
-                  <div className="flex items-end gap-2 mb-3">
+                  <div className="flex items-end gap-2 mb-1">
                     <span className="text-7xl font-black text-slate-900">₹199</span>
                     <span className="text-slate-500 font-medium pb-2 text-lg">/ bill</span>
                   </div>
+                  <p className="text-xs text-amber-600 font-semibold mb-3">First bill ₹99 — automatically applied for new users</p>
                   <p className="text-slate-500 font-light text-sm leading-relaxed">
-                    Each PVC bill deducts ₹199 from your credit wallet. Top up any amount — credits never expire.
+                    Each PVC bill deducts credits from your wallet. Top up any amount — credits never expire.
                   </p>
                   <div className="mt-6 flex flex-col gap-2">
-                    <span className="flex items-center gap-2 text-sm text-slate-600 font-medium"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> All PDF formats included (Detailed + IR Standard)</span>
+                    <span className="flex items-center gap-2 text-sm text-slate-600 font-medium"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Free PVC preview before paying</span>
+                    <span className="flex items-center gap-2 text-sm text-slate-600 font-medium"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> All PDF formats (Detailed + IR Standard)</span>
                     <span className="flex items-center gap-2 text-sm text-slate-600 font-medium"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Bulk bill creation at same rate</span>
                     <span className="flex items-center gap-2 text-sm text-slate-600 font-medium"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> PVC check credit applied if checked recently</span>
                   </div>
@@ -383,7 +400,7 @@ export default function HomePage() {
                   </div>
                   <Link href="/auth/signin?mode=signup" className="mt-6 block">
                     <Button className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-600/20">
-                      Start with Free Trial <ArrowRight className="ml-2 w-4 h-4" />
+                      Get Started — First Bill ₹99 <ArrowRight className="ml-2 w-4 h-4" />
                     </Button>
                   </Link>
                 </div>
@@ -443,7 +460,7 @@ export default function HomePage() {
               </Button>
             </Link>
             <p className="mt-4 text-sm text-slate-400 font-medium text-center">
-              Unified billing system. Pay-as-you-go credit model. GST included transparently.
+              First bill ₹99 · Free PVC preview · Pay-as-you-go credits · GST invoices included
             </p>
           </div>
         </div>
