@@ -584,6 +584,24 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       const allIdxNames = ['Labour', 'RBI Plant Machinery', fuelIdxName, 'RBI Other Materials', 'RBI Cement', 'RBI Explosives', ...steelIdxNames];
       const irQuarterlyAverages = await getQuarterlyAverages(bill.quarter, allIdxNames, baseMonth, 'auto');
 
+      // Fetch all monthly values from base month to end of current quarter for the monthly indices table
+      const currentQtrMonths = getQuarterMonths(bill.quarter, baseMonth);
+      const qtrEndMonth = currentQtrMonths[currentQtrMonths.length - 1];
+      const qtrEndDate = new Date(qtrEndMonth.getFullYear(), qtrEndMonth.getMonth() + 1, 1);
+      const irPriceIndexes = await prisma.priceIndex.findMany({ where: { name: { in: allIdxNames } } });
+      const irHistoricalRaw = await prisma.monthlyIndexValue.findMany({
+        where: {
+          priceIndexId: { in: irPriceIndexes.map((p: any) => p.id) },
+          month: { gte: new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1), lt: qtrEndDate }
+        },
+        include: { priceIndex: true }
+      });
+      const allHistoricalMonthlyData = irHistoricalRaw.map((mv: any) => ({
+        indexName: mv.priceIndex.name,
+        month: new Date(mv.month).toISOString().slice(0, 7),
+        value: mv.value
+      }));
+
       const irPdfBuffer = await generateIRStandardReport({
         bill: bill as any,
         quarterlyAverages: irQuarterlyAverages,
@@ -593,6 +611,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         steelIndexNames: steelIdxNames,
         isProvisional: indicesStatusForIR.isProvisional,
         provisionalIndices: indicesStatusForIR.provisionalIndices,
+        allHistoricalMonthlyData,
       });
 
       return new Response(irPdfBuffer, {

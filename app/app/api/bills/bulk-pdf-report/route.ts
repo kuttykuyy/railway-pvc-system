@@ -322,6 +322,23 @@ export async function POST(request: NextRequest) {
         const qaverages = await getQuarterlyAverages(bill.quarter, allIdxNames, baseMonth, 'auto');
         const indicesStatus = await getStatus(bill.id);
 
+        const bulkQtrMonths = getQuarterMonths(bill.quarter, baseMonth);
+        const bulkQtrEnd = bulkQtrMonths[bulkQtrMonths.length - 1];
+        const bulkQtrEndDate = new Date(bulkQtrEnd.getFullYear(), bulkQtrEnd.getMonth() + 1, 1);
+        const bulkPriceIndexes = await prisma.priceIndex.findMany({ where: { name: { in: allIdxNames } } });
+        const bulkHistoricalRaw = await prisma.monthlyIndexValue.findMany({
+          where: {
+            priceIndexId: { in: bulkPriceIndexes.map((p: any) => p.id) },
+            month: { gte: new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1), lt: bulkQtrEndDate }
+          },
+          include: { priceIndex: true }
+        });
+        const allHistoricalMonthlyData = bulkHistoricalRaw.map((mv: any) => ({
+          indexName: mv.priceIndex.name,
+          month: new Date(mv.month).toISOString().slice(0, 7),
+          value: mv.value
+        }));
+
         const billPdfBuf = await generateIRStandardReport({
           bill: bill as any,
           quarterlyAverages: qaverages,
@@ -330,6 +347,7 @@ export async function POST(request: NextRequest) {
           steelIndexNames: steelIdxNames,
           isProvisional: indicesStatus.isProvisional,
           provisionalIndices: indicesStatus.provisionalIndices,
+          allHistoricalMonthlyData,
         });
 
         const billPdfDoc = await PDFDocument.load(billPdfBuf);

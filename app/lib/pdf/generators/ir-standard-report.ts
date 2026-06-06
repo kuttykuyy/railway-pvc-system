@@ -96,6 +96,7 @@ interface IRStandardReportOptions {
   steelIndexNames?: string[];
   isProvisional?: boolean;
   provisionalIndices?: string[];
+  allHistoricalMonthlyData?: { indexName: string; month: string; value: number }[];
 }
 
 // jsPDF Helvetica does not support Rs. symbol, use "Rs." instead
@@ -161,6 +162,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     steelIndexNames = ['Steel TMT Bars'],
     isProvisional = false,
     provisionalIndices = [],
+    allHistoricalMonthlyData = [],
   } = opts;
 
   // A4 Landscape: 297 x 210 mm
@@ -406,15 +408,15 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     margin: { left: mL, right: mR },
     tableWidth: contentW,
     columnStyles: {
-      0: { cellWidth: 10,  halign: 'center' },
-      1: { cellWidth: 52,  halign: 'left'   },
-      2: { cellWidth: 22,  halign: 'center' },
-      3: { cellWidth: 38,  halign: 'right'  },
-      4: { cellWidth: 22,  halign: 'center' },
-      5: { cellWidth: 35,  halign: 'center' },
-      6: { cellWidth: 26,  halign: 'center' },
-      7: { cellWidth: 38,  halign: 'right'  },
-    },
+      0: { cellWidth: 10,  halign: 'center' },  // Sl
+      1: { cellWidth: 60,  halign: 'left'   },  // Component
+      2: { cellWidth: 24,  halign: 'center' },  // % Age
+      3: { cellWidth: 45,  halign: 'right'  },  // Component Amt
+      4: { cellWidth: 26,  halign: 'center' },  // Base Index
+      5: { cellWidth: 38,  halign: 'center' },  // Quarter Avg
+      6: { cellWidth: 28,  halign: 'center' },  // Variation
+      7: { cellWidth: 42,  halign: 'right'  },  // PVC Amount
+    }, // Total: 10+60+24+45+26+38+28+42 = 273mm
     didParseCell: (data: any) => {
       if (data.section === 'body' && data.row.index === tableBody.length - 1) {
         data.cell.styles.fontStyle = 'bold';
@@ -592,6 +594,166 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     pdf.setTextColor(80, 80, 80);
     pdf.text('* Indices as published by Ministry of Statistics & PI (Labour), RBI (WPI), and MPNG (Fuel). Quarter average = arithmetic mean of monthly values shown above.', mL, y);
     pdf.setTextColor(0, 0, 0);
+  }
+
+  // ── MONTHLY PRICE INDICES TABLE (full history) ─────────────────────────────
+  if (allHistoricalMonthlyData.length > 0) {
+    // Only show indices that are actually used
+    const histFiltered = allHistoricalMonthlyData.filter(d => usedIndexNames.has(d.indexName));
+    if (histFiltered.length > 0) {
+      pdf.addPage();
+      y = mT;
+
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('MONTHLY PRICE INDICES', pageW / 2, y, { align: 'center' });
+      y += 4;
+      pdf.setLineWidth(0.5);
+      pdf.setDrawColor(0, 0, 0);
+      const titleW = pdf.getTextWidth('MONTHLY PRICE INDICES');
+      pdf.line(pageW / 2 - titleW / 2, y, pageW / 2 + titleW / 2, y);
+      y += 5;
+
+      // Build sorted list of used index names (preserving display order)
+      const orderedIdxNames = ['Labour', 'RBI Plant Machinery', fuelIndexName,
+        'RBI Other Materials', 'RBI Cement', 'RBI Explosives', ...steelIndexNames]
+        .filter(n => usedIndexNames.has(n));
+
+      // Collect all months in order
+      const allHistMonths = Array.from(new Set(histFiltered.map(d => d.month))).sort();
+
+      // Build lookup: indexName → month → value
+      const histLookup = new Map<string, Map<string, number>>();
+      for (const d of histFiltered) {
+        if (!histLookup.has(d.indexName)) histLookup.set(d.indexName, new Map());
+        histLookup.get(d.indexName)!.set(d.month, d.value);
+      }
+
+      // Build base values from quarterlyAverages
+      const baseValLookup = new Map(affectedAverages.map(qa => [qa.indexName, qa.baseValue]));
+
+      // Group months by quarter (3 months each starting from month after base)
+      // Quarter N covers 3 months starting from offset 3(N-1)+1 from base month
+      const baseYear = baseMonth.getFullYear();
+      const baseMon  = baseMonth.getMonth(); // 0-indexed
+
+      function getMonthOffset(mk: string): number {
+        const [yr, mo] = mk.split('-').map(Number);
+        return (yr - baseYear) * 12 + (mo - 1) - baseMon;
+      }
+
+      function getQuarterLabel(offset: number): string {
+        if (offset <= 0) return 'BASE';
+        const qNum = Math.ceil(offset / 3);
+        return `Q${qNum}-${baseYear + Math.floor((baseMon + offset) / 12)}`;
+      }
+
+      // Build table rows
+      // Columns: Period | idx1 | idx2 | ...
+      const histHead = [['Period', ...orderedIdxNames]];
+
+      // Build rows: base row, then grouped by quarter with average row
+      const histRows: any[][] = [];
+
+      // Base month row
+      const baseMK = `${String(baseYear).padStart(4,'0')}-${String(baseMon + 1).padStart(2,'0')}`;
+      const baseRowLabel = `BASE (${format(baseMonth, 'MMM yyyy')}) [Base Month]`;
+      histRows.push([
+        { content: baseRowLabel, styles: { fontStyle: 'bold' as const, fillColor: [230, 230, 230] as [number,number,number] } },
+        ...orderedIdxNames.map(n => {
+          const bv = baseValLookup.get(n) ?? histLookup.get(n)?.get(baseMK) ?? 0;
+          return { content: fmtIdx(bv), styles: { fontStyle: 'bold' as const, fillColor: [230, 230, 230] as [number,number,number], halign: 'center' as const } };
+        })
+      ]);
+
+      // Group non-base months by quarter
+      const nonBaseMonths = allHistMonths.filter(mk => {
+        const off = getMonthOffset(mk);
+        return off > 0;
+      });
+
+      // Group into quarters
+      const quarterGroups = new Map<string, string[]>();
+      for (const mk of nonBaseMonths) {
+        const off = getMonthOffset(mk);
+        const ql = getQuarterLabel(off);
+        if (!quarterGroups.has(ql)) quarterGroups.set(ql, []);
+        quarterGroups.get(ql)!.push(mk);
+      }
+
+      for (const [qLabel, qMonths] of quarterGroups) {
+        // Quarter header row
+        histRows.push([
+          { content: `QUARTER ${qLabel}`, colSpan: 1 + orderedIdxNames.length,
+            styles: { fontStyle: 'bold' as const, fillColor: [220, 235, 220] as [number,number,number] } }
+        ]);
+
+        // Monthly rows
+        for (const mk of qMonths.sort()) {
+          const [yr, mo] = mk.split('-').map(Number);
+          const mLabel = format(new Date(yr, mo - 1, 1), 'MMM yyyy');
+          histRows.push([
+            mLabel,
+            ...orderedIdxNames.map(n => {
+              const v = histLookup.get(n)?.get(mk);
+              return { content: v !== undefined ? fmtIdx(v) : '-', styles: { halign: 'center' as const } };
+            })
+          ]);
+        }
+
+        // Quarter average row
+        const qAvgVals = orderedIdxNames.map(n => {
+          const vals = qMonths.map(mk => histLookup.get(n)?.get(mk)).filter((v): v is number => v !== undefined);
+          return vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+        });
+        const [qStart, qEnd] = [qMonths[0], qMonths[qMonths.length - 1]];
+        const [ys, ms] = qStart.split('-').map(Number);
+        const [ye, me] = qEnd.split('-').map(Number);
+        const qAvgLabel = `${format(new Date(ys, ms - 1, 1), 'MMM yyyy')}-${format(new Date(ye, me - 1, 1), 'MMM yyyy')} AVG`;
+        histRows.push([
+          { content: qAvgLabel, styles: { fontStyle: 'bold' as const, fillColor: [240, 248, 240] as [number,number,number] } },
+          ...qAvgVals.map(v => ({
+            content: v !== null ? fmtIdx(v) : '-',
+            styles: { fontStyle: 'bold' as const, halign: 'center' as const, fillColor: [240, 248, 240] as [number,number,number] }
+          }))
+        ]);
+      }
+
+      // Column widths: Period(65) + equal split for each index
+      const idxCols = orderedIdxNames.length;
+      const periodColW = 65;
+      const idxColEach = Math.floor((contentW - periodColW) / idxCols);
+      const histColStyles: Record<number, any> = {
+        0: { cellWidth: periodColW, halign: 'left' },
+      };
+      orderedIdxNames.forEach((_, i) => {
+        histColStyles[1 + i] = { cellWidth: idxColEach, halign: 'center' };
+      });
+
+      autoTable(pdf, {
+        startY: y,
+        head: histHead,
+        body: histRows,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [0, 150, 130],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 8.5,
+          halign: 'center',
+          cellPadding: 2.5,
+        },
+        bodyStyles: {
+          fontSize: 8.5,
+          cellPadding: { top: 2, right: 3, bottom: 2, left: 3 },
+          textColor: [0, 0, 0],
+        },
+        styles: { lineColor: [200, 200, 200], lineWidth: 0.25 },
+        margin: { left: mL, right: mR },
+        tableWidth: contentW,
+        columnStyles: histColStyles,
+      });
+    }
   }
 
   return Buffer.from(pdf.output('arraybuffer'));
