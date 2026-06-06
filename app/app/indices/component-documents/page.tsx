@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { PDFDocument } from "pdf-lib";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -134,6 +135,39 @@ const handleApiResponse = async (response: Response, defaultError: string) => {
     errorMessage = `${defaultError} (Status ${response.status})`;
   }
   throw new Error(errorMessage);
+};
+
+const optimizeAndCompressPdf = async (
+  file: File
+): Promise<{ file: File; originalSize: number; compressedSize: number; success: boolean }> => {
+  const originalSize = file.size;
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfDoc = await PDFDocument.load(arrayBuffer);
+    
+    // Copy pages to a new document to remove unused metadata/objects and rebuild structures
+    const compressedDoc = await PDFDocument.create();
+    const copiedPages = await compressedDoc.copyPages(pdfDoc, pdfDoc.getPageIndices());
+    copiedPages.forEach((page) => compressedDoc.addPage(page));
+    
+    // Save with object streams compression enabled
+    const compressedBytes = await compressedDoc.save({
+      useObjectStreams: true,
+    });
+    
+    const compressedSize = compressedBytes.length;
+    
+    // Only return the compressed file if it actually reduced the size
+    if (compressedSize < originalSize) {
+      const compressedFile = new File([compressedBytes], file.name, {
+        type: "application/pdf",
+      });
+      return { file: compressedFile, originalSize, compressedSize, success: true };
+    }
+  } catch (error) {
+    console.error("Client-side PDF compression failed:", error);
+  }
+  return { file, originalSize, compressedSize: originalSize, success: false };
 };
 
 export default function ComponentDocumentsPage() {
@@ -301,9 +335,40 @@ export default function ComponentDocumentsPage() {
 
     try {
       setIsUploading(true);
+      
+      let fileToUpload = selectedFile;
+      const LIMIT_MB = 3.3;
+      const LIMIT_BYTES = LIMIT_MB * 1024 * 1024;
+      
+      if (selectedFile.size > LIMIT_BYTES) {
+        const toastId = toast.loading("Optimizing PDF size client-side to fit within server payload limit...");
+        try {
+          const optimization = await optimizeAndCompressPdf(selectedFile);
+          
+          if (optimization.success && optimization.file.size <= LIMIT_BYTES) {
+            fileToUpload = optimization.file;
+            const originalMB = (optimization.originalSize / (1024 * 1024)).toFixed(2);
+            const compressedMB = (optimization.compressedSize / (1024 * 1024)).toFixed(2);
+            toast.dismiss(toastId);
+            toast.success(`PDF successfully optimized from ${originalMB} MB to ${compressedMB} MB`);
+          } else {
+            const finalMB = (optimization.compressedSize / (1024 * 1024)).toFixed(2);
+            toast.dismiss(toastId);
+            toast.error(
+              `Vercel enforces a strict 4.5 MB request payload limit. Your file size is ${finalMB} MB (after browser optimization). Please compress your PDF using an online tool (e.g. Smallpdf) to get it below 3.3 MB before uploading.`,
+              { duration: 10000 }
+            );
+            setIsUploading(false);
+            return;
+          }
+        } catch (compressErr) {
+          console.error("Compression failed, trying raw upload:", compressErr);
+          toast.dismiss(toastId);
+        }
+      }
 
       const formData = new FormData();
-      formData.append("file", selectedFile);
+      formData.append("file", fileToUpload);
       formData.append("year", uploadYear);
       formData.append("months", JSON.stringify(selectedMonths));
       formData.append("componentType", uploadComponentType);
