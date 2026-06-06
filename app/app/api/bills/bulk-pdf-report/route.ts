@@ -57,7 +57,8 @@ export async function POST(request: NextRequest) {
           throw new Error('jsPDF is not available');
         }
         
-        const { billIds } = await request.json();
+        const body = await request.json();
+        const { billIds, format: pdfFormat } = body;
     
     if (!billIds || !Array.isArray(billIds) || billIds.length === 0) {
       return NextResponse.json(
@@ -303,6 +304,50 @@ export async function POST(request: NextRequest) {
     const getBillPvc = (bill: any): number => {
       return precomputedBillPvc.get(bill.id) ?? calculateBillPvcFromEntries(bill);
     };
+
+    // ── IR STANDARD FORMAT BRANCH (bulk) ─────────────────────────────────────
+    if (pdfFormat === 'ir_standard') {
+      const { generateIRStandardReport } = await import('@/lib/pdf/generators/ir-standard-report');
+      const { PDFDocument } = await import('pdf-lib');
+      const { getBillIndicesStatus: getStatus } = await import('@/lib/index-status');
+      const { getSteelIndexNamesForZone: getSteelNames, getFuelIndexNameForBill: getFuelName } = await import('@/lib/zone-steel-city-mapping');
+
+      const mergedPdf = await PDFDocument.create();
+
+      for (const bill of bills) {
+        const baseMonth = new Date(bill.contract.baseMonth);
+        const fuelIdxName = getFuelName(bill.zone, bill.fuelPriceType);
+        const steelIdxNames = getSteelNames(bill.zone);
+        const allIdxNames = ['Labour', 'RBI Plant Machinery', fuelIdxName, 'RBI Other Materials', 'RBI Cement', 'RBI Explosives', ...steelIdxNames];
+        const qaverages = await getQuarterlyAverages(bill.quarter, allIdxNames, baseMonth, 'auto');
+        const indicesStatus = await getStatus(bill.id);
+
+        const billPdfBuf = await generateIRStandardReport({
+          bill: bill as any,
+          quarterlyAverages: qaverages,
+          baseMonth,
+          fuelIndexName: fuelIdxName,
+          steelIndexNames: steelIdxNames,
+          isProvisional: indicesStatus.isProvisional,
+          provisionalIndices: indicesStatus.provisionalIndices,
+        });
+
+        const billPdfDoc = await PDFDocument.load(billPdfBuf);
+        const copiedPages = await mergedPdf.copyPages(billPdfDoc, billPdfDoc.getPageIndices());
+        for (const page of copiedPages) mergedPdf.addPage(page);
+      }
+
+      const mergedBytes = await mergedPdf.save();
+      const mergedBuffer = Buffer.from(mergedBytes);
+
+      return new Response(mergedBuffer, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="IR_PVC_Statements_${bills.length}_Bills_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf"`,
+        },
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Create PDF in A3 Landscape format with proper margins
     const pdf = new jsPDF('l', 'mm', 'a3'); // 'l' for landscape, 'a3' for A3 size

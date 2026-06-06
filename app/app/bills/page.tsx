@@ -152,6 +152,7 @@ export default function BillsPage() {
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [selectedBillForWhatsApp, setSelectedBillForWhatsApp] = useState<{ id: string; billNo: string; contractorName: string; contractorPhone?: string | null } | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('default');
+  const [pdfFormat, setPdfFormat] = useState<'detailed' | 'ir_standard'>('detailed');
 
   // Delete permissions state
   const [deletableBillIds, setDeletableBillIds] = useState<Set<string>>(new Set());
@@ -772,7 +773,7 @@ export default function BillsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ billIds: selectedBills }),
+        body: JSON.stringify({ billIds: selectedBills, format: pdfFormat }),
       });
 
       if (!response.ok) {
@@ -784,7 +785,8 @@ export default function BillsPage() {
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `Bulk_PVC_Report_${selectedBills.length}_Bills_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf`;
+      const formatSuffix = pdfFormat === 'ir_standard' ? 'IR_Standard' : 'Detailed';
+      a.download = `Bulk_PVC_${formatSuffix}_${selectedBills.length}_Bills_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -940,9 +942,10 @@ export default function BillsPage() {
     try {
       // Build URL with template parameter if not default
       let url = `/api/bills/${billId}/pdf-report`;
-      if (selectedTemplateId && selectedTemplateId !== 'default') {
-        url += `?templateId=${selectedTemplateId}`;
-      }
+      const params = new URLSearchParams();
+      if (selectedTemplateId && selectedTemplateId !== 'default') params.set('templateId', selectedTemplateId);
+      if (pdfFormat === 'ir_standard') params.set('format', 'ir_standard');
+      if (params.toString()) url += `?${params.toString()}`;
       
       const response = await fetch(url);
       if (!response.ok) {
@@ -2423,7 +2426,30 @@ export default function BillsPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {/* PDF Format Selector */}
             <div className="space-y-2">
+              <Label>Report Format</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPdfFormat('detailed')}
+                  className={`flex flex-col items-start p-3 rounded-lg border-2 text-left transition-colors ${pdfFormat === 'detailed' ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+                >
+                  <span className="font-semibold text-sm">Detailed Report</span>
+                  <span className="text-xs text-muted-foreground mt-1">Full A3 landscape with indices, calculation steps & branding</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfFormat('ir_standard')}
+                  className={`flex flex-col items-start p-3 rounded-lg border-2 text-left transition-colors ${pdfFormat === 'ir_standard' ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+                >
+                  <span className="font-semibold text-sm">IR Standard Format</span>
+                  <span className="text-xs text-muted-foreground mt-1">Official A4 proforma per GCC Clause 17 with signature block</span>
+                </button>
+              </div>
+            </div>
+
+            {pdfFormat === 'detailed' && <div className="space-y-2">
               <Label htmlFor="template-select">Report Template</Label>
               <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
                 <SelectTrigger id="template-select">
@@ -2454,9 +2480,9 @@ export default function BillsPage() {
                   No custom templates found. <Link href="/report-templates" className="text-blue-600 hover:underline">Create one</Link>
                 </p>
               )}
-            </div>
+            </div>}
 
-            {selectedTemplateId !== 'default' && templates.find(t => t.id === selectedTemplateId)?.description && (
+            {pdfFormat === 'detailed' && selectedTemplateId !== 'default' && templates.find(t => t.id === selectedTemplateId)?.description && (
               <div className="rounded-md bg-muted p-3">
                 <p className="text-sm text-muted-foreground">
                   {templates.find(t => t.id === selectedTemplateId)?.description}

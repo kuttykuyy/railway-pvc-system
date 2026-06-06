@@ -648,6 +648,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
   const [defaultTemplate, setDefaultTemplate] = useState<any>(null);
   const [templates, setTemplates] = useState<any[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [pdfFormat, setPdfFormat] = useState<'detailed' | 'ir_standard'>('detailed');
   const [whatsAppDialogOpen, setWhatsAppDialogOpen] = useState(false);
 
   // Fetch templates on mount
@@ -678,9 +679,10 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
       setIsDownloading(true);
       
       let url = `/api/bills/${bill.id}/pdf-report`;
-      if (selectedTemplateId && selectedTemplateId !== defaultTemplate?.id) {
-        url += `?templateId=${selectedTemplateId}`;
-      }
+      const params = new URLSearchParams();
+      if (selectedTemplateId && selectedTemplateId !== defaultTemplate?.id) params.set('templateId', selectedTemplateId);
+      if (pdfFormat === 'ir_standard') params.set('format', 'ir_standard');
+      if (params.toString()) url += `?${params.toString()}`;
       
       const response = await fetch(url);
       
@@ -776,7 +778,18 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
             </>
           )}
 
-          {templates.length > 0 && (
+          {/* PDF Format selector */}
+          <Select value={pdfFormat} onValueChange={(v) => setPdfFormat(v as 'detailed' | 'ir_standard')}>
+            <SelectTrigger className="w-[170px] h-11 rounded-xl shadow-sm border-slate-200 dark:border-slate-800">
+              <SelectValue placeholder="PDF Format" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="detailed" className="text-xs">Detailed Report</SelectItem>
+              <SelectItem value="ir_standard" className="text-xs">IR Standard Format</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {pdfFormat === 'detailed' && templates.length > 0 && (
             <Select value={selectedTemplateId || 'default'} onValueChange={setSelectedTemplateId}>
               <SelectTrigger className="w-[180px] h-11 rounded-xl shadow-sm border-slate-200 dark:border-slate-800">
                 <SelectValue placeholder="Report Template" />
@@ -791,8 +804,8 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
             </Select>
           )}
 
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="gap-2 rounded-xl h-11 border-slate-200 dark:border-slate-800 hover:bg-slate-50 shadow-sm"
             onClick={handleDownloadPDF}
             disabled={isDownloading}

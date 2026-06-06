@@ -571,6 +571,39 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return false;
     };
 
+    // ── IR STANDARD FORMAT BRANCH ─────────────────────────────────────────────
+    const pdfFormat = searchParams.get('format');
+    if (pdfFormat === 'ir_standard') {
+      const { generateIRStandardReport } = await import('@/lib/pdf/generators/ir-standard-report');
+      const { getBillIndicesStatus: getStatus } = await import('@/lib/index-status');
+      const indicesStatusForIR = await getStatus(billId);
+
+      // Build quarterlyAverages in the format expected by ir-standard-report
+      const fuelIdxName = getFuelIndexNameForBill(bill.zone, bill.fuelPriceType);
+      const steelIdxNames = getSteelIndexNamesForZone(bill.zone);
+      const allIdxNames = ['Labour', 'RBI Plant Machinery', fuelIdxName, 'RBI Other Materials', 'RBI Cement', 'RBI Explosives', ...steelIdxNames];
+      const irQuarterlyAverages = await getQuarterlyAverages(bill.quarter, allIdxNames, baseMonth, 'auto');
+
+      const irPdfBuffer = await generateIRStandardReport({
+        bill: bill as any,
+        quarterlyAverages: irQuarterlyAverages,
+        baseMonth,
+        organizationName: brandingSettings.reportHeaderText || 'INDIAN RAILWAYS',
+        fuelIndexName: fuelIdxName,
+        steelIndexNames: steelIdxNames,
+        isProvisional: indicesStatusForIR.isProvisional,
+        provisionalIndices: indicesStatusForIR.provisionalIndices,
+      });
+
+      return new Response(irPdfBuffer, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="IR_PVC_Statement_${bill.billNo.replace(/[^a-zA-Z0-9]/g, '_')}_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf"`,
+        },
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Header with Logo and Branding - Add extra space above
     let headerYStart = 20;
     
