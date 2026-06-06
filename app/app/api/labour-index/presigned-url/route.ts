@@ -29,17 +29,28 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { fileName, fileType, componentType, year, months } = await request.json();
+    const body = await request.json();
+    const { fileName, fileType, year, months } = body;
+    const componentTypesParam = body.componentTypes as string[] | null;
+    const componentTypeParam = body.componentType as string | null;
 
-    if (!fileName || !fileType || !componentType || !year || !months) {
+    let componentTypes: string[] = [];
+    if (componentTypesParam && Array.isArray(componentTypesParam) && componentTypesParam.length > 0) {
+      componentTypes = componentTypesParam;
+    } else if (componentTypeParam) {
+      componentTypes = [componentTypeParam];
+    }
+
+    if (!fileName || !fileType || componentTypes.length === 0 || !year || !months) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // Generate S3 key with component type and timestamp
+    // Generate S3 key with component type folder (use the first one or 'multi' if multiple)
+    const folderName = componentTypes.length === 1 ? componentTypes[0].toLowerCase() : "multi";
     const timestamp = Date.now();
     const monthsStr = months.sort((a: number, b: number) => a - b).join('-');
-    const generatedFileName = `${componentType.toLowerCase()}-${year}-${monthsStr}-${timestamp}.pdf`;
-    const s3Key = `component-indices/${componentType.toLowerCase()}/${generatedFileName}`;
+    const generatedFileName = `${folderName}-${year}-${monthsStr}-${timestamp}.pdf`;
+    const s3Key = `component-indices/${folderName}/${generatedFileName}`;
 
     // Generate presigned URL
     const presignedUrl = await getUploadPresignedUrl(s3Key, fileType);

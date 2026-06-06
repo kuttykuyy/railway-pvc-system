@@ -335,7 +335,15 @@ export default function ComponentDocumentsPage() {
   const [uploadYear, setUploadYear] = useState<string>(
     new Date().getFullYear().toString()
   );
-  const [uploadComponentType, setUploadComponentType] = useState<string>("LABOUR");
+  const [selectedComponentTypes, setSelectedComponentTypes] = useState<string[]>(["LABOUR"]);
+  
+  const toggleComponentType = (type: string) => {
+    setSelectedComponentTypes(prev =>
+      prev.includes(type)
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
+    );
+  };
   const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
   const [isProvisionalUpload, setIsProvisionalUpload] = useState<boolean>(true);
   const [uploadRemarks, setUploadRemarks] = useState<string>("");
@@ -468,6 +476,10 @@ export default function ComponentDocumentsPage() {
       toast.error("Please select at least one month");
       return;
     }
+    if (selectedComponentTypes.length === 0) {
+      toast.error("Please select at least one component type");
+      return;
+    }
 
     try {
       setIsUploading(true);
@@ -489,7 +501,7 @@ export default function ComponentDocumentsPage() {
           body: JSON.stringify({
             fileName: selectedFile.name,
             fileType: selectedFile.type,
-            componentType: uploadComponentType,
+            componentTypes: selectedComponentTypes,
             year: parseInt(uploadYear),
             months: selectedMonths,
           }),
@@ -510,8 +522,6 @@ export default function ComponentDocumentsPage() {
       }
 
       // Step 2: Handle PDF compression/optimization
-      // If S3 is available, we still run compression to optimize size but do NOT block if it fails to get below 3.3MB!
-      // If S3 is NOT available, we MUST block if it exceeds the limit.
       if (selectedFile.size > LIMIT_BYTES) {
         const toastId = toast.loading("Optimizing PDF size client-side...");
         try {
@@ -530,11 +540,9 @@ export default function ComponentDocumentsPage() {
             toast.dismiss(toastId);
             
             if (s3Available) {
-              // S3 is available, so we can upload the large file direct to S3 anyway!
               fileToUpload = optimization.file;
               toast.success(`PDF compression completed (${finalMB} MB). Uploading directly to cloud storage...`);
             } else {
-              // No S3, so we must block
               toast.error(
                 `Vercel enforces a strict 4.5 MB request payload limit. Your file size is ${finalMB} MB (after browser optimization). Please compress your PDF using an online tool (e.g. Smallpdf) to get it below 3.3 MB before uploading.`,
                 { duration: 10000 }
@@ -576,9 +584,8 @@ export default function ComponentDocumentsPage() {
           console.error("S3 Direct upload failed, falling back to database upload:", s3Err);
           toast.dismiss(uploadToastId);
           toast.error("S3 direct upload failed. Trying to fall back to serverless database upload...");
-          s3Available = false; // Fallback
+          s3Available = false;
           
-          // If we fell back, check if the file size is within limits
           if (fileToUpload.size > LIMIT_BYTES) {
             toast.error("File is too large for database fallback. Please reduce file size.");
             setIsUploading(false);
@@ -590,7 +597,7 @@ export default function ComponentDocumentsPage() {
       const formData = new FormData();
       formData.append("year", uploadYear);
       formData.append("months", JSON.stringify(selectedMonths));
-      formData.append("componentType", uploadComponentType);
+      formData.append("componentTypes", JSON.stringify(selectedComponentTypes));
 
       if (s3Available && cloudStoragePath) {
         formData.append("cloudStoragePath", cloudStoragePath);
@@ -605,21 +612,25 @@ export default function ComponentDocumentsPage() {
 
       const data = await handleApiResponse(response, "Upload failed");
       
-      // Update provisional status if marked as provisional (default upload creates provisional, let's align database setting if needed)
-      if (data.document && data.document.id && isProvisionalUpload === false) {
-        const updateRes = await fetch("/api/labour-index/update", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: data.document.id, isProvisional: false, remarks: uploadRemarks.trim() || undefined })
-        });
-        await handleApiResponse(updateRes, "Failed to update provisional status");
-      } else if (data.document && data.document.id && uploadRemarks.trim()) {
-        const updateRes = await fetch("/api/labour-index/update", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: data.document.id, remarks: uploadRemarks.trim() })
-        });
-        await handleApiResponse(updateRes, "Failed to save remarks");
+      // Update provisional status or remarks for all created documents
+      if (data.documents && Array.isArray(data.documents)) {
+        for (const doc of data.documents) {
+          if (isProvisionalUpload === false) {
+            const updateRes = await fetch("/api/labour-index/update", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: doc.id, isProvisional: false, remarks: uploadRemarks.trim() || undefined })
+            });
+            await handleApiResponse(updateRes, "Failed to update provisional status");
+          } else if (uploadRemarks.trim()) {
+            const updateRes = await fetch("/api/labour-index/update", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: doc.id, remarks: uploadRemarks.trim() })
+            });
+            await handleApiResponse(updateRes, "Failed to save remarks");
+          }
+        }
       }
 
       toast.success("Document metadata registered successfully");
@@ -627,6 +638,7 @@ export default function ComponentDocumentsPage() {
       // Reset form
       setSelectedFile(null);
       setSelectedMonths([]);
+      setSelectedComponentTypes(["LABOUR"]);
       setUploadRemarks("");
       setUploadDialogOpen(false);
       fetchDocuments();
@@ -1214,35 +1226,71 @@ export default function ComponentDocumentsPage() {
                 </div>
               </div>
 
-              {/* Component & Year Selection side-by-side */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="uploadComponent" className="text-xs font-bold text-gray-500 uppercase tracking-wider">Component</Label>
-                  <Select value={uploadComponentType} onValueChange={setUploadComponentType}>
-                    <SelectTrigger id="uploadComponent">
-                      <SelectValue placeholder="Select component" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COMPONENT_TYPES.map(c => (
-                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {/* Component selection grid with shortcuts */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Components</Label>
+                  <div className="flex gap-2">
+                    <button 
+                      type="button" 
+                      onClick={() => setSelectedComponentTypes(["TMT_BARS", "ANGLE_CHANNEL", "PLATES", "OTHER_SECTIONS"])} 
+                      className="text-[10px] text-blue-600 hover:underline font-bold"
+                    >
+                      Select All Steel
+                    </button>
+                    <span className="text-gray-300 text-[10px]">|</span>
+                    <button 
+                      type="button" 
+                      onClick={() => setSelectedComponentTypes(COMPONENT_TYPES.map(c => c.value))} 
+                      className="text-[10px] text-blue-600 hover:underline font-bold"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-gray-300 text-[10px]">|</span>
+                    <button 
+                      type="button" 
+                      onClick={() => setSelectedComponentTypes([])} 
+                      className="text-[10px] text-blue-600 hover:underline font-bold"
+                    >
+                      Clear
+                    </button>
+                  </div>
                 </div>
+                <div className="grid grid-cols-2 gap-2 bg-gray-50/50 border rounded-xl p-3 max-h-[160px] overflow-y-auto">
+                  {COMPONENT_TYPES.map(c => {
+                    const isSelected = selectedComponentTypes.includes(c.value);
+                    return (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onClick={() => toggleComponentType(c.value)}
+                        className={`py-1.5 px-3 text-left text-xs font-semibold rounded-lg border transition-all duration-200 flex items-center justify-between ${
+                          isSelected
+                            ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                            : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span className="truncate mr-1">{c.label}</span>
+                        {isSelected && <CheckCircle className="h-4 w-4 text-white shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="uploadYear" className="text-xs font-bold text-gray-500 uppercase tracking-wider">Year</Label>
-                  <Select value={uploadYear} onValueChange={setUploadYear}>
-                    <SelectTrigger id="uploadYear">
-                      <SelectValue placeholder="Select year" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {years.map(y => (
-                        <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Year Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="uploadYear" className="text-xs font-bold text-gray-500 uppercase tracking-wider">Year</Label>
+                <Select value={uploadYear} onValueChange={setUploadYear}>
+                  <SelectTrigger id="uploadYear">
+                    <SelectValue placeholder="Select year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {years.map(y => (
+                      <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Month Pills Selector */}
@@ -1312,7 +1360,7 @@ export default function ComponentDocumentsPage() {
               </Button>
               <Button 
                 onClick={handleUpload} 
-                disabled={isUploading || !selectedFile || selectedMonths.length === 0}
+                disabled={isUploading || !selectedFile || selectedMonths.length === 0 || selectedComponentTypes.length === 0}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
               >
                 {isUploading ? (

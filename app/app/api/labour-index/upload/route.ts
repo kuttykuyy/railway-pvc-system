@@ -33,7 +33,24 @@ export async function POST(request: NextRequest) {
     const cloudStoragePathParam = formData.get("cloudStoragePath") as string | null;
     const year = parseInt(formData.get("year") as string);
     const monthsString = formData.get("months") as string;
-    const componentType = formData.get("componentType") as ComponentType;
+    
+    // Support multiple component types or single component type
+    const componentTypesString = formData.get("componentTypes") as string | null;
+    const componentTypeSingle = formData.get("componentType") as ComponentType | null;
+
+    let componentTypes: ComponentType[] = [];
+    try {
+      if (componentTypesString) {
+        componentTypes = JSON.parse(componentTypesString);
+      } else if (componentTypeSingle) {
+        componentTypes = [componentTypeSingle];
+      }
+    } catch (e) {
+      return NextResponse.json(
+        { error: "Invalid componentTypes format" },
+        { status: 400 }
+      );
+    }
 
     if (!file && !cloudStoragePathParam) {
       return NextResponse.json(
@@ -67,20 +84,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!componentType || !Object.values(ComponentType).includes(componentType)) {
+    if (componentTypes.length === 0) {
       return NextResponse.json(
-        { error: "Invalid component type" },
+        { error: "No component type selected" },
         { status: 400 }
       );
     }
 
+    // Validate component types
+    for (const cType of componentTypes) {
+      if (!Object.values(ComponentType).includes(cType)) {
+        return NextResponse.json(
+          { error: `Invalid component type: ${cType}` },
+          { status: 400 }
+        );
+      }
+    }
+
+    const firstComponentType = componentTypes[0];
+    const folderName = componentTypes.length === 1 ? firstComponentType.toLowerCase() : "multi";
+    
     let cloudStoragePath = "";
     let fileName = "";
     let remarksValue: string | undefined = undefined;
 
     if (cloudStoragePathParam) {
       cloudStoragePath = cloudStoragePathParam;
-      fileName = cloudStoragePathParam.split("/").pop() || `${componentType.toLowerCase()}-${year}-${months.join("-")}.pdf`;
+      fileName = cloudStoragePathParam.split("/").pop() || `${folderName}-${year}-${months.join("-")}.pdf`;
     } else if (file) {
       // Check if file is PDF
       if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
@@ -93,33 +123,38 @@ export async function POST(request: NextRequest) {
       // Convert file to buffer
       const buffer = Buffer.from(await file.arrayBuffer());
 
-      // Generate S3 key with component type and timestamp
+      // Generate S3 key
       const timestamp = Date.now();
       const monthsStr = months.sort((a, b) => a - b).join('-');
-      fileName = `${componentType.toLowerCase()}-${year}-${monthsStr}-${timestamp}.pdf`;
-      const s3Key = `component-indices/${componentType.toLowerCase()}/${fileName}`;
+      fileName = `${folderName}-${year}-${monthsStr}-${timestamp}.pdf`;
+      const s3Key = `component-indices/${folderName}/${fileName}`;
 
       // Upload to S3 (returns db://... virtual path in serverless mode)
       cloudStoragePath = await uploadFile(buffer, s3Key);
       remarksValue = cloudStoragePath.startsWith('db://') ? `base64:${buffer.toString('base64')}` : undefined;
     }
 
-    // Create new document (storing PDF as Base64 in remarks if database-backed)
-    const newDoc = await prisma.labourIndexDocument.create({
-      data: {
-        componentType,
-        year,
-        months,
-        fileName,
-        cloudStoragePath,
-        uploadedBy: user.id,
-        remarks: remarksValue,
-      },
-    });
+    // Create database records inside a loop for each selected component type
+    const createdDocs = [];
+    for (const cType of componentTypes) {
+      const newDoc = await prisma.labourIndexDocument.create({
+        data: {
+          componentType: cType,
+          year,
+          months,
+          fileName,
+          cloudStoragePath,
+          uploadedBy: user.id,
+          remarks: remarksValue,
+        },
+      });
+      createdDocs.push(newDoc);
+    }
 
     return NextResponse.json({
       message: "Component index document uploaded successfully",
-      document: newDoc,
+      document: createdDocs[0],
+      documents: createdDocs,
     });
   } catch (error) {
     console.error("Error uploading component index:", error);
