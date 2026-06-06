@@ -426,14 +426,20 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
 
   y = pdf.lastAutoTable.finalY + 4;
 
-  // ── SUMMARY + CERTIFICATION side by side ──────────────────────────────────
-  // No ensureSpace here — let summary flow naturally; if PVC table is tall it
-  // may overflow, but we handle it by just placing at y and letting autoTable decide.
+  // ── SUMMARY TABLE ─────────────────────────────────────────────────────────
+  // Summary needs ~35mm. If it won't fit on this page, start a new page.
+  const summaryNeeded = 35;
+  if (y + summaryNeeded > pageH - mT) {
+    pdf.addPage();
+    y = mT;
+  }
 
-  // Summary table (right-aligned, 120mm wide)
+  // Draw summary right-aligned (120mm wide), certification note on the left
   const summaryX = pageW - mR - 120;
+  const summaryStartY = y;
+
   autoTable(pdf, {
-    startY: y,
+    startY: summaryStartY,
     body: [
       ['Net PVC Amount for this Bill', 'Rs. ' + fmt(totalPvcAmt)],
       ['Previous Cumulative PVC',      'Rs. ' + fmt(pvc?.previousPvcTotal ?? 0)],
@@ -452,53 +458,28 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     },
   });
 
-  const summaryEndY = pdf.lastAutoTable.finalY;
-
-  // Certification note (left side, same y)
+  // Certification note on the left at same height (drawn on same page as summary start)
+  const pagesAfterSummary = (pdf as any).internal.getCurrentPageInfo().pageNumber;
+  // Go back to the page where summary started to draw cert text
+  const summaryPage = pagesAfterSummary - (pdf.lastAutoTable.finalY < summaryStartY ? 1 : 0);
+  pdf.setPage(summaryPage);
   pdf.setFontSize(8);
   pdf.setFont('helvetica', 'normal');
-  const certText = 'Certified that the above Price Variation Clause has been calculated as per the\ncontract conditions and the indices published by the competent authority.';
-  pdf.text(certText, mL, y + 4);
+  const certText = 'Certified that the above Price Variation Clause has been calculated\nas per the contract conditions and the indices published by the\ncompetent authority.';
+  pdf.text(certText, mL, summaryStartY + 4);
 
-  // Provisional note
   if (isProvisional && provisionalIndices.length > 0) {
     pdf.setFontSize(7.5);
     pdf.setFont('helvetica', 'italic');
     pdf.setTextColor(180, 0, 0);
     const note = `Note: Provisional indices used: ${provisionalIndices.join(', ')}`;
     const noteLines = pdf.splitTextToSize(note, summaryX - mL - 5);
-    pdf.text(noteLines, mL, y + 14);
+    pdf.text(noteLines, mL, summaryStartY + 22);
     pdf.setTextColor(0, 0, 0);
   }
 
-  y = summaryEndY + 6;
-
-  // ── SIGNATURE BLOCK — only if it fits on current page ──────────────────────
-  const sigNeeded = 22;
-  const currentPageNum = (pdf as any).internal.getCurrentPageInfo().pageNumber;
-  const currentPageH = pageH;
-  if (y + sigNeeded <= currentPageH - mT) {
-    y += 2;
-    const sigW = contentW / 3;
-    const sigLabels = ['Prepared by', 'Checked by', 'Approved by'];
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(8.5);
-    for (let i = 0; i < 3; i++) {
-      const sx = mL + i * sigW;
-      pdf.text(sigLabels[i], sx + sigW / 2, y, { align: 'center' });
-    }
-    y += 10;
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    for (let i = 0; i < 3; i++) {
-      const sx = mL + i * sigW;
-      pdf.setDrawColor(0, 0, 0);
-      pdf.setLineWidth(0.3);
-      pdf.line(sx + 8, y, sx + sigW - 8, y);
-      pdf.text('(Name & Designation)', sx + sigW / 2, y + 4, { align: 'center' });
-      pdf.text('Date: _______________', sx + sigW / 2, y + 9, { align: 'center' });
-    }
-  }
+  // Return to last page for indices rendering
+  pdf.setPage(pagesAfterSummary);
 
   // ── PAGE 2: AFFECTED PRICE INDICES WITH MONTHLY BREAKDOWN ─────────────────
   // Build set of index names actually used in this PVC calculation
