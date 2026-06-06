@@ -601,7 +601,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         value: mv.value
       }));
 
-      const irPdfBuffer = await generateIRStandardReport({
+      let irPdfBytes = await generateIRStandardReport({
         bill: bill as any,
         quarterlyAverages: irQuarterlyAverages,
         baseMonth,
@@ -613,7 +613,17 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         allHistoricalMonthlyData,
       });
 
-      return new Response(irPdfBuffer, {
+      // Append index documents (same as detailed format)
+      try {
+        irPdfBytes = await embedComponentIndicesRange(irPdfBytes, {
+          startDate: new Date(bill.contract.baseMonth),
+          endDate: new Date(bill.dateOfMeasurement),
+        });
+      } catch (err) {
+        console.error('IR PDF: error embedding index documents:', err);
+      }
+
+      return new Response(irPdfBytes, {
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="IR_PVC_Statement_${bill.billNo.replace(/[^a-zA-Z0-9]/g, '_')}_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf"`,
