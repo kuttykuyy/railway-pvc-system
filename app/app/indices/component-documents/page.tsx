@@ -137,8 +137,61 @@ const handleApiResponse = async (response: Response, defaultError: string) => {
   throw new Error(errorMessage);
 };
 
+const renderRasterPdf = async (
+  pdf: any,
+  scale: number,
+  quality: number,
+  onProgress?: (message: string) => void
+): Promise<Uint8Array> => {
+  const numPages = pdf.numPages;
+  const rasterDoc = await PDFDocument.create();
+  
+  for (let i = 1; i <= numPages; i++) {
+    if (onProgress) {
+      onProgress(`Rendering page ${i} of ${numPages} (scale: ${scale.toFixed(2)}, quality: ${quality.toFixed(2)})...`);
+    }
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale });
+    
+    const canvas = document.createElement("canvas");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const context = canvas.getContext("2d");
+    
+    if (!context) throw new Error("Could not create canvas context");
+    
+    await page.render({
+      canvasContext: context,
+      viewport: viewport,
+    }).promise;
+    
+    const jpegDataUrl = canvas.toDataURL("image/jpeg", quality);
+    const base64Jpeg = jpegDataUrl.split(",")[1];
+    
+    const binaryString = atob(base64Jpeg);
+    const jpegBytes = new Uint8Array(binaryString.length);
+    for (let j = 0; j < binaryString.length; j++) {
+      jpegBytes[j] = binaryString.charCodeAt(j);
+    }
+    
+    const img = await rasterDoc.embedJpg(jpegBytes);
+    const newPage = rasterDoc.addPage([img.width, img.height]);
+    newPage.drawImage(img, {
+      x: 0,
+      y: 0,
+      width: img.width,
+      height: img.height,
+    });
+  }
+  
+  return await rasterDoc.save({
+    useObjectStreams: true,
+  });
+};
+
 const optimizeAndCompressPdf = async (
-  file: File
+  file: File,
+  onProgress?: (message: string) => void
 ): Promise<{ file: File; originalSize: number; compressedSize: number; success: boolean }> => {
   const originalSize = file.size;
   try {
@@ -177,57 +230,64 @@ const optimizeAndCompressPdf = async (
     const pdf = await loadingTask.promise;
     const numPages = pdf.numPages;
     
-    const rasterDoc = await PDFDocument.create();
-    
-    for (let i = 1; i <= numPages; i++) {
-      const page = await pdf.getPage(i);
-      const scale = 1.2; // Balanced resolution (approx 120-150 DPI) for good text legibility
-      const viewport = page.getViewport({ scale });
-      
-      const canvas = document.createElement("canvas");
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const context = canvas.getContext("2d");
-      
-      if (!context) throw new Error("Could not create canvas context");
-      
-      await page.render({
-        canvasContext: context,
-        viewport: viewport,
-      }).promise;
-      
-      // Convert page canvas to highly compressed JPEG
-      const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.5); // 50% quality JPEG
-      const base64Jpeg = jpegDataUrl.split(",")[1];
-      
-      // Decode base64 using browser-native atob to ensure maximum compatibility in client runtime
-      const binaryString = atob(base64Jpeg);
-      const jpegBytes = new Uint8Array(binaryString.length);
-      for (let j = 0; j < binaryString.length; j++) {
-        jpegBytes[j] = binaryString.charCodeAt(j);
-      }
-      
-      const img = await rasterDoc.embedJpg(jpegBytes);
-      const newPage = rasterDoc.addPage([img.width, img.height]);
-      newPage.drawImage(img, {
-        x: 0,
-        y: 0,
-        width: img.width,
-        height: img.height,
-      });
+    // Define descending tiers of compression settings based on page count
+    interface CompressionTier {
+      scale: number;
+      quality: number;
     }
     
-    compressedBytes = await rasterDoc.save({
-      useObjectStreams: true,
-    });
+    let tiers: CompressionTier[] = [];
     
-    compressedSize = compressedBytes.length;
+    if (numPages > 15) {
+      tiers = [
+        { scale: 0.65, quality: 0.2 },
+        { scale: 0.5, quality: 0.15 },
+        { scale: 0.38, quality: 0.1 }
+      ];
+    } else if (numPages > 5) {
+      tiers = [
+        { scale: 0.8, quality: 0.25 },
+        { scale: 0.6, quality: 0.18 },
+        { scale: 0.45, quality: 0.12 }
+      ];
+    } else {
+      tiers = [
+        { scale: 0.95, quality: 0.3 },
+        { scale: 0.75, quality: 0.2 },
+        { scale: 0.55, quality: 0.12 }
+      ];
+    }
     
-    if (compressedSize < originalSize) {
-      const compressedFile = new File([compressedBytes], file.name, {
+    let finalBytes = new Uint8Array();
+    let finalSize = originalSize;
+    let success = false;
+    
+    for (let attempt = 0; attempt < tiers.length; attempt++) {
+      const { scale: currentScale, quality: currentQuality } = tiers[attempt];
+      if (onProgress) {
+        onProgress(`Optimization attempt ${attempt + 1}/${tiers.length} (scale: ${currentScale.toFixed(2)}, quality: ${currentQuality.toFixed(2)})...`);
+      }
+      
+      try {
+        finalBytes = await renderRasterPdf(pdf, currentScale, currentQuality, onProgress);
+        finalSize = finalBytes.length;
+        
+        console.log(`Attempt ${attempt + 1} produced size: ${(finalSize / (1024 * 1024)).toFixed(2)} MB`);
+        
+        if (finalSize <= LIMIT_BYTES) {
+          success = true;
+          break;
+        }
+      } catch (err) {
+        console.error(`Attempt ${attempt + 1} failed:`, err);
+      }
+    }
+    
+    if (finalBytes.length > 0) {
+      const compressedFile = new File([finalBytes], file.name, {
         type: "application/pdf",
       });
-      return { file: compressedFile, originalSize, compressedSize, success: true };
+      return { file: compressedFile, originalSize, compressedSize: finalSize, success };
     }
   } catch (error) {
     console.error("Client-side PDF compression failed:", error);
@@ -408,7 +468,9 @@ export default function ComponentDocumentsPage() {
       if (selectedFile.size > LIMIT_BYTES) {
         const toastId = toast.loading("Optimizing PDF size client-side to fit within server payload limit...");
         try {
-          const optimization = await optimizeAndCompressPdf(selectedFile);
+          const optimization = await optimizeAndCompressPdf(selectedFile, (msg) => {
+            toast.loading(msg, { id: toastId });
+          });
           
           if (optimization.success && optimization.file.size <= LIMIT_BYTES) {
             fileToUpload = optimization.file;
