@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 import { getFileUrl } from "@/lib/s3";
 import { prisma } from "@/lib/db";
@@ -92,7 +92,7 @@ export async function embedComponentIndices(
         // Get PDF bytes from database (Base64) or fallback to S3/URL download
         let indexBytes: ArrayBuffer;
         if (doc.cloudStoragePath.startsWith('db://') && doc.remarks?.startsWith('base64:')) {
-          const base64Data = doc.remarks.substring(7);
+          const base64Data = doc.remarks.substring(7).split('|')[0];
           indexBytes = Buffer.from(base64Data, 'base64').buffer;
         } else {
           const indexUrl = await getFileUrl(doc.cloudStoragePath);
@@ -219,7 +219,7 @@ export async function embedComponentIndicesRange(
           // Get PDF bytes from database (Base64) or fallback to S3/URL download
           let indexBytes: ArrayBuffer;
           if (doc.cloudStoragePath.startsWith('db://') && doc.remarks?.startsWith('base64:')) {
-            const base64Data = doc.remarks.substring(7);
+            const base64Data = doc.remarks.substring(7).split('|')[0];
             indexBytes = Buffer.from(base64Data, 'base64').buffer;
           } else {
             const indexUrl = await getFileUrl(doc.cloudStoragePath);

@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       return new NextResponse("File not found", { status: 404 });
     }
 
-    const base64Data = doc.remarks.substring(7); // Remove 'base64:' prefix
+    const base64Data = doc.remarks.substring(7).split('|')[0]; // Remove 'base64:' prefix and remarks suffix
     const fileBuffer = Buffer.from(base64Data, 'base64');
 
     return new NextResponse(fileBuffer, {

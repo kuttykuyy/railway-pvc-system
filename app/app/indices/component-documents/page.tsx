@@ -900,6 +900,7 @@ export default function ComponentDocumentsPage() {
                     type="file"
                     accept=".pdf"
                     onChange={handleFileChange}
+                    onClick={(e) => e.stopPropagation()}
                     className="hidden"
                   />
                   {selectedFile ? (

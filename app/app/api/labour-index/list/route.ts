@@ -46,11 +46,18 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    // Strip out base64 string from remarks to keep UI clean
-    const cleanedDocuments = documents.map(doc => ({
-      ...doc,
-      remarks: doc.remarks?.startsWith('base64:') ? null : doc.remarks
-    }));
+    // Strip out base64 string from remarks to keep UI clean, extracting the text remarks if present
+    const cleanedDocuments = documents.map(doc => {
+      let remarks = doc.remarks;
+      if (doc.remarks?.startsWith('base64:')) {
+        const parts = doc.remarks.substring(7).split('|');
+        remarks = parts[1] || null;
+      }
+      return {
+        ...doc,
+        remarks
+      };
+    });
 
     return NextResponse.json({ documents: cleanedDocuments });
   } catch (error) {

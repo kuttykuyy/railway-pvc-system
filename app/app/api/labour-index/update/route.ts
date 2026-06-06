@@ -62,7 +62,19 @@ export async function PUT(request: NextRequest) {
       updateData.isProvisional = isProvisional;
     }
     if (remarks !== undefined) {
-      updateData.remarks = remarks;
+      if (document.cloudStoragePath.startsWith('db://')) {
+        // Retrieve the existing base64 data
+        const currentRemarks = document.remarks || "";
+        const base64Part = currentRemarks.startsWith('base64:')
+          ? currentRemarks.substring(7).split('|')[0]
+          : "";
+        
+        // Save back with the new remarks text
+        const newRemarksText = remarks ? remarks.trim() : "";
+        updateData.remarks = `base64:${base64Part}${newRemarksText ? `|${newRemarksText}` : ""}`;
+      } else {
+        updateData.remarks = remarks;
+      }
     }
     if (months && Array.isArray(months) && months.length > 0) {
       // Validate month values
