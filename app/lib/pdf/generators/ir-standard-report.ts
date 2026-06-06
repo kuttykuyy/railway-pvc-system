@@ -83,6 +83,7 @@ interface QuarterlyAverage {
   indexName: string;
   average: number;
   baseValue: number;
+  monthlyValues?: { month: string; value: number }[];
 }
 
 interface IRStandardReportOptions {
@@ -472,29 +473,48 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
 
   y = summaryEndY + 6;
 
-  // ── SIGNATURE BLOCK ────────────────────────────────────────────────────────
-  const sigW = contentW / 3;
-  const sigLabels = ['Prepared by', 'Checked by', 'Approved by'];
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(8.5);
-  for (let i = 0; i < 3; i++) {
-    const sx = mL + i * sigW;
-    pdf.text(sigLabels[i], sx + sigW / 2, y, { align: 'center' });
-  }
-  y += 10;
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(8);
-  for (let i = 0; i < 3; i++) {
-    const sx = mL + i * sigW;
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.3);
-    pdf.line(sx + 8, y, sx + sigW - 8, y);
-    pdf.text('(Name & Designation)', sx + sigW / 2, y + 4, { align: 'center' });
-    pdf.text('Date: _______________', sx + sigW / 2, y + 9, { align: 'center' });
+  // ── SIGNATURE BLOCK — only if it fits on current page ──────────────────────
+  const sigNeeded = 22;
+  const currentPageNum = (pdf as any).internal.getCurrentPageInfo().pageNumber;
+  const currentPageH = pageH;
+  if (y + sigNeeded <= currentPageH - mT) {
+    y += 2;
+    const sigW = contentW / 3;
+    const sigLabels = ['Prepared by', 'Checked by', 'Approved by'];
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(8.5);
+    for (let i = 0; i < 3; i++) {
+      const sx = mL + i * sigW;
+      pdf.text(sigLabels[i], sx + sigW / 2, y, { align: 'center' });
+    }
+    y += 10;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    for (let i = 0; i < 3; i++) {
+      const sx = mL + i * sigW;
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.3);
+      pdf.line(sx + 8, y, sx + sigW - 8, y);
+      pdf.text('(Name & Designation)', sx + sigW / 2, y + 4, { align: 'center' });
+      pdf.text('Date: _______________', sx + sigW / 2, y + 9, { align: 'center' });
+    }
   }
 
-  // ── PAGE 2: PRICE INDICES TABLE ────────────────────────────────────────────
-  if (quarterlyAverages.length > 0) {
+  // ── PAGE 2: AFFECTED PRICE INDICES WITH MONTHLY BREAKDOWN ─────────────────
+  // Build set of index names actually used in this PVC calculation
+  const usedIndexNames = new Set<string>();
+  for (const c of allComponents) {
+    if (c.name === 'Labour')           usedIndexNames.add('Labour');
+    if (c.name === 'Plant & Machinery') usedIndexNames.add('RBI Plant Machinery');
+    if (c.name === 'Fuel / Power')     usedIndexNames.add(fuelIndexName);
+    if (c.name === 'Cement')           usedIndexNames.add('RBI Cement');
+    if (c.name === 'Steel')            steelIndexNames.forEach(n => usedIndexNames.add(n));
+    if (c.name === 'Other Materials')  usedIndexNames.add('RBI Other Materials');
+    if (c.name === 'Explosives')       usedIndexNames.add('RBI Explosives');
+  }
+  const affectedAverages = quarterlyAverages.filter(qa => usedIndexNames.has(qa.indexName));
+
+  if (affectedAverages.length > 0) {
     pdf.addPage();
     y = mT;
 
@@ -514,24 +534,54 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     pdf.line(mL, y, pageW - mR, y);
     y += 5;
 
+    // Collect all month keys across affected indices (sorted)
+    const allMonthKeys = Array.from(
+      new Set(affectedAverages.flatMap(qa => (qa.monthlyValues || []).map(mv => mv.month)))
+    ).sort();
+
+    // Month labels: "Jan 2025", "Feb 2025", "Mar 2025"
+    const monthLabels = allMonthKeys.map(mk => {
+      const [yr, mo] = mk.split('-');
+      return format(new Date(parseInt(yr), parseInt(mo) - 1, 1), 'MMM yyyy');
+    });
+
+    // Column widths: Index(70) + I0(28) + months(28 each) + Avg(32) + Var%(24) = varies
+    // For 3 months: 70+28+28+28+28+32+24 = 238; remaining 35mm → add to Index col
+    const monthColW = 28;
+    const idxColW = Math.max(70, contentW - 28 - monthColW * allMonthKeys.length - 32 - 24);
+
     const idxHead = [[
       'Index Name',
-      'Base Month Value (I0)',
-      `Quarter Average (I1) [${bill.quarter}]`,
-      'Variation (I1-I0)/I0',
+      'Base Value\n(I0)',
+      ...monthLabels,
+      `Quarter Avg\n(I1) [${bill.quarter}]`,
       'Variation %',
     ]];
 
-    const idxBody = quarterlyAverages.map(qa => {
+    const idxBody = affectedAverages.map(qa => {
       const variation = qa.baseValue > 0 ? (qa.average - qa.baseValue) / qa.baseValue : 0;
+      const monthVals = allMonthKeys.map(mk => {
+        const mv = (qa.monthlyValues || []).find(m => m.month === mk);
+        return mv ? fmtIdx(mv.value) : '-';
+      });
       return [
         qa.indexName,
         fmtIdx(qa.baseValue),
+        ...monthVals,
         fmtIdx(qa.average),
-        variation.toFixed(4),
         (variation * 100).toFixed(2) + '%',
       ];
     });
+
+    const colStyles: Record<number, any> = {
+      0: { cellWidth: idxColW, halign: 'left' },
+      1: { cellWidth: 28, halign: 'center' },
+    };
+    allMonthKeys.forEach((_, i) => {
+      colStyles[2 + i] = { cellWidth: monthColW, halign: 'center' };
+    });
+    colStyles[2 + allMonthKeys.length]     = { cellWidth: 32, halign: 'center' };
+    colStyles[2 + allMonthKeys.length + 1] = { cellWidth: 24, halign: 'center' };
 
     autoTable(pdf, {
       startY: y,
@@ -542,42 +592,24 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         fillColor: [20, 20, 20],
         textColor: [255, 255, 255],
         fontStyle: 'bold',
-        fontSize: 9,
+        fontSize: 8.5,
         halign: 'center',
-        cellPadding: 3,
+        valign: 'middle',
+        cellPadding: 2.5,
       },
-      bodyStyles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0] },
+      bodyStyles: { fontSize: 9, cellPadding: { top: 2.5, right: 3, bottom: 2.5, left: 3 }, textColor: [0, 0, 0] },
       alternateRowStyles: { fillColor: [248, 248, 248] },
       styles: { lineColor: [180, 180, 180], lineWidth: 0.3 },
       margin: { left: mL, right: mR },
       tableWidth: contentW,
-      columnStyles: {
-        0: { cellWidth: 90,  halign: 'left'   },
-        1: { cellWidth: 50,  halign: 'center' },
-        2: { cellWidth: 65,  halign: 'center' },
-        3: { cellWidth: 40,  halign: 'center' },
-        4: { cellWidth: 28,  halign: 'center' },
-      },
+      columnStyles: colStyles,
     });
 
     y = pdf.lastAutoTable.finalY + 5;
     pdf.setFontSize(7.5);
     pdf.setFont('helvetica', 'italic');
     pdf.setTextColor(80, 80, 80);
-    pdf.text('* Indices as published by Ministry of Statistics & PI (Labour), RBI (WPI), and MPNG (Fuel). Quarter average = arithmetic mean of 3 monthly values.', mL, y);
-    pdf.setTextColor(0, 0, 0);
-  }
-
-  // ── PAGE NUMBERS ────────────────────────────────────────────────────────────
-  const totalPages = (pdf as any).internal.getNumberOfPages();
-  for (let p = 1; p <= totalPages; p++) {
-    pdf.setPage(p);
-    pdf.setFontSize(7.5);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(100, 100, 100);
-    pdf.text(`PVC No.: ${bill.pvcNumber || 'N/A'}`, mL, pageH - 5, { align: 'left' });
-    pdf.text(`Page ${p} of ${totalPages}`, pageW / 2, pageH - 5, { align: 'center' });
-    pdf.text(`Generated: ${format(new Date(), 'dd-MM-yyyy HH:mm')}`, pageW - mR, pageH - 5, { align: 'right' });
+    pdf.text('* Indices as published by Ministry of Statistics & PI (Labour), RBI (WPI), and MPNG (Fuel). Quarter average = arithmetic mean of monthly values shown above.', mL, y);
     pdf.setTextColor(0, 0, 0);
   }
 

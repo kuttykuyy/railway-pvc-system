@@ -154,7 +154,11 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
         baseValue: actualBaseValue,
         monthsUsed: monthlyValues.length,
         includesFutureMonths: false,
-        usesPreviousMonthFallback: monthlyValues.some((mv: any) => typeof mv.id === 'string' && mv.id.startsWith('fallback-'))
+        usesPreviousMonthFallback: monthlyValues.some((mv: any) => typeof mv.id === 'string' && mv.id.startsWith('fallback-')),
+        monthlyValues: monthlyValues.map((mv: any) => ({
+          month: new Date(mv.month).toISOString().slice(0, 7),
+          value: mv.value
+        }))
       });
     }
   }
