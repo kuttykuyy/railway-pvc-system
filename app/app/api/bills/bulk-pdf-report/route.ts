@@ -312,6 +312,16 @@ export async function POST(request: NextRequest) {
       const { getBillIndicesStatus: getStatus } = await import('@/lib/index-status');
       const { getSteelIndexNamesForZone: getSteelNames, getFuelIndexNameForBill: getFuelName } = await import('@/lib/zone-steel-city-mapping');
 
+      // Fetch branding for the contract owner of the first bill
+      let irOrgName = 'INDIAN RAILWAYS';
+      if (bills.length > 0 && bills[0].contract?.userId) {
+        const brandUser = await prisma.user.findUnique({
+          where: { id: bills[0].contract.userId },
+          select: { reportHeaderText: true },
+        });
+        if (brandUser?.reportHeaderText) irOrgName = brandUser.reportHeaderText;
+      }
+
       const mergedPdf = await PDFDocument.create();
 
       for (const bill of bills) {
@@ -343,6 +353,7 @@ export async function POST(request: NextRequest) {
           bill: bill as any,
           quarterlyAverages: qaverages,
           baseMonth,
+          organizationName: irOrgName,
           fuelIndexName: fuelIdxName,
           steelIndexNames: steelIdxNames,
           isProvisional: indicesStatus.isProvisional,
