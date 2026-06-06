@@ -117,6 +117,24 @@ const MONTHS = [
 
 type SortField = "componentType" | "year" | "createdAt" | "updatedAt" | "isProvisional";
 type SortOrder = "asc" | "desc";
+const handleApiResponse = async (response: Response, defaultError: string) => {
+  if (response.ok) return await response.json();
+  
+  let errorMessage = defaultError;
+  try {
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      const data = await response.json();
+      errorMessage = data.error || errorMessage;
+    } else {
+      const text = await response.text();
+      errorMessage = `${defaultError} (Status ${response.status}): ${text.substring(0, 150)}`;
+    }
+  } catch (e) {
+    errorMessage = `${defaultError} (Status ${response.status})`;
+  }
+  throw new Error(errorMessage);
+};
 
 export default function ComponentDocumentsPage() {
   const { data: session, status } = useSession();
@@ -180,13 +198,11 @@ export default function ComponentDocumentsPage() {
     try {
       setIsLoading(true);
       const response = await fetch(`/api/labour-index/list`);
-      if (!response.ok) throw new Error("Failed to fetch documents");
-
-      const data = await response.json();
+      const data = await handleApiResponse(response, "Failed to load documents");
       setDocuments(data.documents);
     } catch (error) {
       console.error("Error fetching documents:", error);
-      toast.error("Failed to load documents");
+      toast.error(error instanceof Error ? error.message : "Failed to load documents");
     } finally {
       setIsLoading(false);
     }
@@ -264,7 +280,8 @@ export default function ComponentDocumentsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.type !== "application/pdf") {
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      if (!isPdf) {
         toast.error("Please upload a PDF document");
         return;
       }
@@ -296,27 +313,24 @@ export default function ComponentDocumentsPage() {
         body: formData,
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Upload failed");
-      }
-
-      const data = await response.json();
+      const data = await handleApiResponse(response, "Upload failed");
       
       // Update provisional status if marked as provisional (default upload creates provisional, let's align database setting if needed)
       // The API currently creates it, so let's update isProvisional if it matches the selector
       if (data.document && data.document.id && isProvisionalUpload === false) {
-        await fetch("/api/labour-index/update", {
+        const updateRes = await fetch("/api/labour-index/update", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: data.document.id, isProvisional: false, remarks: uploadRemarks.trim() || undefined })
         });
+        await handleApiResponse(updateRes, "Failed to update provisional status");
       } else if (data.document && data.document.id && uploadRemarks.trim()) {
-        await fetch("/api/labour-index/update", {
+        const updateRes = await fetch("/api/labour-index/update", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: data.document.id, remarks: uploadRemarks.trim() })
         });
+        await handleApiResponse(updateRes, "Failed to save remarks");
       }
 
       toast.success("Document uploaded successfully");
@@ -345,10 +359,7 @@ export default function ComponentDocumentsPage() {
         method: "DELETE",
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Delete failed");
-      }
+      await handleApiResponse(response, "Delete failed");
 
       toast.success("Document deleted successfully");
       fetchDocuments();
@@ -366,16 +377,13 @@ export default function ComponentDocumentsPage() {
         body: JSON.stringify({ id: doc.id, isProvisional: !doc.isProvisional }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to update status");
-      }
+      await handleApiResponse(response, "Failed to update status");
 
       toast.success(`Marked as ${!doc.isProvisional ? "Provisional" : "Final"}`);
       fetchDocuments();
     } catch (error) {
       console.error("Status update error:", error);
-      toast.error("Failed to update status");
+      toast.error(error instanceof Error ? error.message : "Failed to update status");
     }
   };
 
@@ -409,17 +417,14 @@ export default function ComponentDocumentsPage() {
         }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Update failed");
-      }
+      await handleApiResponse(response, "Update failed");
 
       toast.success("Document updated successfully");
       setEditDialogOpen(false);
       fetchDocuments();
     } catch (error) {
       console.error("Update error:", error);
-      toast.error("Failed to update document");
+      toast.error(error instanceof Error ? error.message : "Failed to update document");
     } finally {
       setIsUpdating(false);
     }
@@ -887,7 +892,8 @@ export default function ComponentDocumentsPage() {
                     e.preventDefault();
                     setDragActive(false);
                     const file = e.dataTransfer.files?.[0];
-                    if (file && file.type === "application/pdf") {
+                    const isPdf = file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
+                    if (file && isPdf) {
                       setSelectedFile(file);
                     } else {
                       toast.error("Please upload a PDF file");

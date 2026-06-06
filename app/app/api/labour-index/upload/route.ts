@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if file is PDF
-    if (file.type !== "application/pdf") {
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
       return NextResponse.json(
         { error: "Only PDF files are allowed" },
         { status: 400 }
