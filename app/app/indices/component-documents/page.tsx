@@ -191,6 +191,7 @@ const renderRasterPdf = async (
 
 const optimizeAndCompressPdf = async (
   file: File,
+  s3Available: boolean,
   onProgress?: (message: string) => void
 ): Promise<{ file: File; originalSize: number; compressedSize: number; success: boolean }> => {
   const originalSize = file.size;
@@ -211,7 +212,20 @@ const optimizeAndCompressPdf = async (
     let compressedSize = compressedBytes.length;
     const LIMIT_BYTES = 3.3 * 1024 * 1024;
     
-    // If lossless optimization brings it under the limit, return immediately
+    // If S3 is active, we completely avoid lossy rasterization. 
+    // Lossless is 100% safe, so if it is smaller than original, we return it. Otherwise we return the original.
+    if (s3Available) {
+      if (compressedSize < originalSize) {
+        const compressedFile = new File([compressedBytes], file.name, {
+          type: "application/pdf",
+        });
+        return { file: compressedFile, originalSize, compressedSize, success: true };
+      } else {
+        return { file, originalSize, compressedSize: originalSize, success: true };
+      }
+    }
+
+    // If lossless optimization brings it under the limit (for database fallback), return immediately
     if (compressedSize <= LIMIT_BYTES) {
       const compressedFile = new File([compressedBytes], file.name, {
         type: "application/pdf",
@@ -219,7 +233,7 @@ const optimizeAndCompressPdf = async (
       return { file: compressedFile, originalSize, compressedSize, success: true };
     }
     
-    // If lossless is not enough, perform raster image compression (lossy fallback for scanned files)
+    // If lossless is not enough and we have no S3, perform raster image compression (lossy fallback for scanned files)
     console.log("Lossless optimization insufficient. Running browser raster JPEG compression...");
     
     // Dynamically import PDF.js to avoid SSR/prerender errors during Next.js build
@@ -230,7 +244,7 @@ const optimizeAndCompressPdf = async (
     const pdf = await loadingTask.promise;
     const numPages = pdf.numPages;
     
-    // Define descending tiers of compression settings based on page count
+    // Define descending tiers of compression settings based on page count with higher quality setting for legibility
     interface CompressionTier {
       scale: number;
       quality: number;
@@ -240,21 +254,18 @@ const optimizeAndCompressPdf = async (
     
     if (numPages > 15) {
       tiers = [
-        { scale: 0.65, quality: 0.2 },
-        { scale: 0.5, quality: 0.15 },
-        { scale: 0.38, quality: 0.1 }
+        { scale: 0.85, quality: 0.45 },
+        { scale: 0.75, quality: 0.35 }
       ];
     } else if (numPages > 5) {
       tiers = [
-        { scale: 0.8, quality: 0.25 },
-        { scale: 0.6, quality: 0.18 },
-        { scale: 0.45, quality: 0.12 }
+        { scale: 1.0, quality: 0.5 },
+        { scale: 0.85, quality: 0.4 }
       ];
     } else {
       tiers = [
-        { scale: 0.95, quality: 0.3 },
-        { scale: 0.75, quality: 0.2 },
-        { scale: 0.55, quality: 0.12 }
+        { scale: 1.2, quality: 0.65 },
+        { scale: 1.0, quality: 0.5 }
       ];
     }
     
@@ -504,7 +515,7 @@ export default function ComponentDocumentsPage() {
       if (selectedFile.size > LIMIT_BYTES) {
         const toastId = toast.loading("Optimizing PDF size client-side...");
         try {
-          const optimization = await optimizeAndCompressPdf(selectedFile, (msg) => {
+          const optimization = await optimizeAndCompressPdf(selectedFile, s3Available, (msg) => {
             toast.loading(msg, { id: toastId });
           });
           
