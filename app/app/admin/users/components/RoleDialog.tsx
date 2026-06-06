@@ -71,12 +71,13 @@ export function RoleDialog({ user, open, onOpenChange, onSubmit }: RoleDialogPro
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="CONTRACTOR">Contractor</SelectItem>
+                <SelectItem value="PENDING_RAILWAY_OFFICIAL">Pending Railway Official</SelectItem>
                 <SelectItem value="RAILWAY_OFFICIAL">Railway Official</SelectItem>
                 <SelectItem value="ADMIN">Admin</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-sm text-muted-foreground">
-              Select the new role for this user. This will update their access permissions.
+              Select the new role for this user. Choose Railway Official only after verifying their official email and identity.
             </p>
           </div>
         </div>

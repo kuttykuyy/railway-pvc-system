@@ -10,10 +10,12 @@ import { validatePhoneNumber, sendUserSignupWelcome, sendWelcomeMessageToUser, g
 import { isEmailVerificationRequired } from '@/lib/admin-settings';
 import { validatePassword } from '@/lib/password-strength';
 import { RAILWAY_ZONE_STEEL_CITY_MAP } from '@/lib/zone-steel-city-mapping';
+import { getOfficialRailwayEmailDomainHelp, isOfficialRailwayEmail } from '@/lib/official-email';
 
 export async function POST(request: NextRequest) {
   try {
     const { email, password, fullName, whatsappNumber, accountType, railwayZone } = await request.json();
+    const normalizedEmail = email?.toLowerCase()?.trim();
 
 
     if (!email || !password || !fullName || !whatsappNumber) {
@@ -33,6 +35,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (resolvedAccountType === 'railway_official') {
+      if (!isOfficialRailwayEmail(normalizedEmail || '')) {
+        return NextResponse.json(
+          { error: `Department users must sign up with an official railway email ending in ${getOfficialRailwayEmailDomainHelp()}` },
+          { status: 400 }
+        );
+      }
+
       if (!railwayZone) {
         return NextResponse.json(
           { error: 'Railway zone is required for department users' },
@@ -75,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() }
+      where: { email: normalizedEmail }
     });
 
     if (existingUser) {
@@ -101,11 +110,11 @@ export async function POST(request: NextRequest) {
       // Create user (emailVerified set based on admin setting)
       const user = await prisma.user.create({
         data: {
-          email: email.toLowerCase(),
+          email: normalizedEmail,
           password: hashedPassword,
           name: fullName,
           phone: whatsappNumber,
-          role: resolvedAccountType,
+          role: resolvedAccountType === 'railway_official' ? 'pending_railway_official' : 'contractor',
           railwayZone: resolvedAccountType === 'railway_official' ? railwayZone : null,
           railwayZoneName: resolvedAccountType === 'railway_official' ? (RAILWAY_ZONE_STEEL_CITY_MAP[railwayZone]?.name || null) : null,
           emailVerified: emailVerificationRequired ? null : new Date(), // Auto-verify if not required
@@ -238,7 +247,7 @@ export async function POST(request: NextRequest) {
           subject: `Welcome to IR-PVC, ${fullName}! Here's how to get started`,
           body: welcomeHtml,
           is_html: true,
-          recipient_email: email.toLowerCase(),
+          recipient_email: normalizedEmail,
           sender_email: `noreply@${appHost}`,
           sender_alias: 'IR-PVC System',
         }),

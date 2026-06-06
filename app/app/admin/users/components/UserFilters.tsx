@@ -51,6 +51,7 @@ export function UserFilters({
           <SelectContent className="bg-white border border-slate-200 text-slate-700 rounded-2xl shadow-xl">
             <SelectItem value="all" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">All System Roles</SelectItem>
             <SelectItem value="contractor" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Contractors</SelectItem>
+            <SelectItem value="pending_railway_official" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Pending Officials</SelectItem>
             <SelectItem value="railway_official" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Railway Officials</SelectItem>
             <SelectItem value="admin" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Administrators</SelectItem>
           </SelectContent>
@@ -77,4 +78,3 @@ export function UserFilters({
     </div>
   );
 }
-

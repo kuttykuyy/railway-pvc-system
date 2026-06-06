@@ -39,6 +39,8 @@ interface GstInvoice {
   description: string;
   isInterstate: boolean;
   status: string;
+  razorpayOrderId?: string;
+  razorpayTransactionId?: string;
   createdAt: string;
   user: {
     id: string;
@@ -416,6 +418,13 @@ export default function AdminGstInvoicesPage() {
               >
                 Sent
               </Button>
+              <Button
+                variant={filterStatus === 'pending_billing_details' ? 'default' : 'outline'}
+                onClick={() => setFilterStatus('pending_billing_details')}
+                size="sm"
+              >
+                Pending Details
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -453,6 +462,9 @@ export default function AdminGstInvoicesPage() {
                             {invoice.invoiceNumber}
                           </h3>
                           <Badge variant="outline">{invoice.status}</Badge>
+                          {invoice.status === 'pending_billing_details' && (
+                            <Badge variant="secondary">Paid - Details Pending</Badge>
+                          )}
                           {invoice.isInterstate && (
                             <Badge variant="secondary">Interstate</Badge>
                           )}
@@ -460,6 +472,11 @@ export default function AdminGstInvoicesPage() {
                         <p className="text-sm text-gray-600">
                           {invoice.description}
                         </p>
+                        {invoice.status === 'pending_billing_details' && (
+                          <p className="text-sm text-amber-700 mt-1">
+                            Payment is successful, but the customer has not submitted GST billing details yet.
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -486,6 +503,16 @@ export default function AdminGstInvoicesPage() {
                             </span>
                             <span className="text-gray-600">
                               {invoice.customerGstin}
+                            </span>
+                          </div>
+                        )}
+                        {invoice.razorpayOrderId && (
+                          <div className="flex items-center gap-2 text-sm ml-6">
+                            <span className="font-medium text-gray-700">
+                              Order:
+                            </span>
+                            <span className="text-gray-600">
+                              {invoice.razorpayOrderId}
                             </span>
                           </div>
                         )}
@@ -555,25 +582,34 @@ export default function AdminGstInvoicesPage() {
 
                   {/* Action Buttons */}
                   <div className="flex lg:flex-col gap-2">
-                    <Button
-                      onClick={() => handleViewInvoice(invoice.id)}
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 lg:flex-none"
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View
-                    </Button>
-                    <Button
-                      onClick={() =>
-                        handleDownloadInvoice(invoice.id, invoice.invoiceNumber)
-                      }
-                      size="sm"
-                      className="flex-1 lg:flex-none"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download
-                    </Button>
+                    {invoice.status === 'pending_billing_details' ? (
+                      <Button variant="outline" size="sm" disabled className="flex-1 lg:flex-none">
+                        <AlertCircle className="h-4 w-4 mr-2" />
+                        Awaiting Details
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          onClick={() => handleViewInvoice(invoice.id)}
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 lg:flex-none"
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          View
+                        </Button>
+                        <Button
+                          onClick={() =>
+                            handleDownloadInvoice(invoice.id, invoice.invoiceNumber)
+                          }
+                          size="sm"
+                          className="flex-1 lg:flex-none"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Download
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </CardContent>

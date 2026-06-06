@@ -12,6 +12,8 @@ export function formatRoleLabel(role: string): string {
   switch (role?.toLowerCase()) {
     case 'admin':
       return 'Admin';
+    case 'pending_railway_official':
+      return 'Pending Railway Official';
     case 'railway_official':
       return 'Railway Official';
     case 'contractor':
@@ -42,6 +44,8 @@ export function getRoleBadgeVariant(role: string): "default" | "secondary" | "de
   switch (role?.toLowerCase()) {
     case 'admin':
       return 'destructive';
+    case 'pending_railway_official':
+      return 'outline';
     case 'railway_official':
       return 'default';
     case 'contractor':

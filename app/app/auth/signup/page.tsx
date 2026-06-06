@@ -12,6 +12,7 @@ import { PasswordStrengthIndicator } from '@/components/password-strength-indica
 import { validatePhoneNumber } from '@/lib/whatsapp-mydreams';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
+import { getOfficialRailwayEmailDomainHelp, isOfficialRailwayEmail } from '@/lib/official-email';
 
 export default function SignUpPage() {
   const [whatsappNumber, setWhatsappNumber] = useState('');
@@ -52,6 +53,11 @@ export default function SignUpPage() {
     }
     if (accountType === 'railway_official' && !railwayZone) {
       setFieldErrors({ railwayZone: 'Railway zone is required for department users' });
+      setLoading(false);
+      return;
+    }
+    if (accountType === 'railway_official' && !isOfficialRailwayEmail(email)) {
+      setFieldErrors({ email: `Use an official railway email ending in ${getOfficialRailwayEmailDomainHelp()}` });
       setLoading(false);
       return;
     }
@@ -195,11 +201,25 @@ export default function SignUpPage() {
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setFieldErrors((prev) => ({ ...prev, email: '' }));
+                  }}
                   required
-                  placeholder="you@example.com"
-                  className="h-11 px-4 bg-gray-50 border-gray-200 focus:bg-white transition-colors"
+                  placeholder={accountType === 'railway_official' ? 'name@sr.railnet.gov.in' : 'you@example.com'}
+                  className={`h-11 px-4 bg-gray-50 border-gray-200 focus:bg-white transition-colors ${
+                    fieldErrors.email ? 'border-red-500' : ''
+                  }`}
                 />
+                {accountType === 'railway_official' && (
+                  <p className="text-xs text-gray-500">
+                    Department users must use an official railway email ending in {getOfficialRailwayEmailDomainHelp()}.
+                    Admin approval is required after email verification.
+                  </p>
+                )}
+                {fieldErrors.email && (
+                  <p className="text-sm text-red-600">{fieldErrors.email}</p>
+                )}
               </div>
               
               <div className="space-y-2">

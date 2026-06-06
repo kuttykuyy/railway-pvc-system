@@ -82,6 +82,8 @@ export default function MobileNavigation() {
     switch (role) {
       case 'admin':
         return 'Admin';
+      case 'pending_railway_official':
+        return 'Pending Official';
       case 'railway_official':
         return 'Railway Official';
       case 'contractor':
