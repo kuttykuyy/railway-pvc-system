@@ -121,6 +121,7 @@ export default function BillsPage() {
   const [deleting, setDeleting] = useState(false);
   const [recalculating, setRecalculating] = useState<string | null>(null); // Bill ID being recalculated
   const [generatingBulkReport, setGeneratingBulkReport] = useState(false);
+  const [generatingCombinedPDF, setGeneratingCombinedPDF] = useState<string | null>(null); // stores batchId being generated
   const [submittingForApproval, setSubmittingForApproval] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
@@ -802,17 +803,15 @@ export default function BillsPage() {
     }
   };
 
-  const generateBatchCombinedPDF = async (batchBills: Bill[], batchName: string) => {
+  const generateBatchCombinedPDF = async (batchBills: Bill[], batchName: string, batchId: string) => {
     const billIds = batchBills.map(b => b.id);
-    
-    setGeneratingBulkReport(true);
+
+    setGeneratingCombinedPDF(batchId);
     try {
       const response = await fetch('/api/bills/bulk-pdf-report', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ billIds }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ billIds, format: pdfFormat }),
       });
 
       if (!response.ok) {
@@ -824,9 +823,9 @@ export default function BillsPage() {
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      // Sanitize batch name for filename
       const sanitizedBatchName = batchName.replace(/[^a-zA-Z0-9]/g, '_');
-      a.download = `${sanitizedBatchName}_Combined_Report_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf`;
+      const formatSuffix = pdfFormat === 'ir_standard' ? 'IR_Standard' : 'Detailed';
+      a.download = `${sanitizedBatchName}_${formatSuffix}_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -838,7 +837,7 @@ export default function BillsPage() {
       const message = error instanceof Error ? error.message : 'Failed to generate combined PDF';
       toast.error(message);
     } finally {
-      setGeneratingBulkReport(false);
+      setGeneratingCombinedPDF(null);
     }
   };
 
@@ -1464,9 +1463,25 @@ export default function BillsPage() {
             </Button>
           </div>
           
-          <div className="flex flex-wrap gap-2">
-            <Button 
-              onClick={generateBulkReport} 
+          <div className="flex flex-wrap gap-2 items-center">
+            {/* Format selector inline in bulk action bar */}
+            <div className="flex items-center gap-1 border border-slate-200 rounded-xl px-2 h-10 bg-white shadow-sm">
+              <span className="text-xs text-slate-500 mr-1">Format:</span>
+              <button
+                onClick={() => setPdfFormat('detailed')}
+                className={`text-xs px-2 py-1 rounded-lg transition-colors ${pdfFormat === 'detailed' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                Detailed
+              </button>
+              <button
+                onClick={() => setPdfFormat('ir_standard')}
+                className={`text-xs px-2 py-1 rounded-lg transition-colors ${pdfFormat === 'ir_standard' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                IR Standard
+              </button>
+            </div>
+            <Button
+              onClick={generateBulkReport}
               disabled={generatingBulkReport || selectedBills.length < 2}
               variant="outline"
               size="sm"
@@ -1867,12 +1882,15 @@ export default function BillsPage() {
                             className="h-7"
                             onClick={(e: React.MouseEvent) => {
                               e.stopPropagation();
-                              generateBatchCombinedPDF(group.bills, group.batchName || 'Batch');
+                              generateBatchCombinedPDF(group.bills, group.batchName || 'Batch', batchId);
                             }}
-                            disabled={generatingBulkReport}
+                            disabled={generatingCombinedPDF === batchId}
                           >
-                            <Download className="h-3 w-3 mr-1" />
-                            Combined PDF
+                            {generatingCombinedPDF === batchId ? (
+                              <><LoadingSpinner size="sm" className="mr-1" />Generating...</>
+                            ) : (
+                              <><Download className="h-3 w-3 mr-1" />Combined PDF</>
+                            )}
                           </Button>
                           <Button
                             variant="outline"
@@ -2301,13 +2319,16 @@ export default function BillsPage() {
                           size="sm"
                           onClick={(e: React.MouseEvent) => {
                             e.stopPropagation();
-                            generateBatchCombinedPDF(group.bills, group.batchName || 'Batch');
+                            generateBatchCombinedPDF(group.bills, group.batchName || 'Batch', batchId);
                           }}
-                          disabled={generatingBulkReport}
+                          disabled={generatingCombinedPDF === batchId}
                           className="bg-purple-600 hover:bg-purple-750 text-white font-semibold rounded-xl px-4 py-2 h-9 shadow-sm hover:shadow transition-all duration-200 gap-1.5"
                         >
-                          <Download className="h-4 w-4" />
-                          <span>Combined PDF</span>
+                          {generatingCombinedPDF === batchId ? (
+                            <><LoadingSpinner size="sm" className="mr-1" /><span>Generating...</span></>
+                          ) : (
+                            <><Download className="h-4 w-4" /><span>Combined PDF</span></>
+                          )}
                         </Button>
                         <Button 
                           variant="outline"
