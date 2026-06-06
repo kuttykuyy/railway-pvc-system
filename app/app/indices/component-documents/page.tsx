@@ -66,7 +66,7 @@ import {
   Eye,
   Info
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "react-hot-toast";
 import { BackButton } from "@/components/ui/back-button";
 import { getClientRoleInfo } from "@/lib/role-auth";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
