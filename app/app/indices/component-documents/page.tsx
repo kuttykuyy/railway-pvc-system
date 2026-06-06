@@ -151,13 +151,78 @@ const optimizeAndCompressPdf = async (
     copiedPages.forEach((page) => compressedDoc.addPage(page));
     
     // Save with object streams compression enabled
-    const compressedBytes = await compressedDoc.save({
+    let compressedBytes = await compressedDoc.save({
       useObjectStreams: true,
     });
     
-    const compressedSize = compressedBytes.length;
+    let compressedSize = compressedBytes.length;
+    const LIMIT_BYTES = 3.3 * 1024 * 1024;
     
-    // Only return the compressed file if it actually reduced the size
+    // If lossless optimization brings it under the limit, return immediately
+    if (compressedSize <= LIMIT_BYTES) {
+      const compressedFile = new File([compressedBytes], file.name, {
+        type: "application/pdf",
+      });
+      return { file: compressedFile, originalSize, compressedSize, success: true };
+    }
+    
+    // If lossless is not enough, perform raster image compression (lossy fallback for scanned files)
+    console.log("Lossless optimization insufficient. Running browser raster JPEG compression...");
+    
+    // Dynamically import PDF.js to avoid SSR/prerender errors during Next.js build
+    const pdfjs = (await import("pdfjs-dist")) as any;
+    pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+    
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) });
+    const pdf = await loadingTask.promise;
+    const numPages = pdf.numPages;
+    
+    const rasterDoc = await PDFDocument.create();
+    
+    for (let i = 1; i <= numPages; i++) {
+      const page = await pdf.getPage(i);
+      const scale = 1.2; // Balanced resolution (approx 120-150 DPI) for good text legibility
+      const viewport = page.getViewport({ scale });
+      
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const context = canvas.getContext("2d");
+      
+      if (!context) throw new Error("Could not create canvas context");
+      
+      await page.render({
+        canvasContext: context,
+        viewport: viewport,
+      }).promise;
+      
+      // Convert page canvas to highly compressed JPEG
+      const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.5); // 50% quality JPEG
+      const base64Jpeg = jpegDataUrl.split(",")[1];
+      
+      // Decode base64 using browser-native atob to ensure maximum compatibility in client runtime
+      const binaryString = atob(base64Jpeg);
+      const jpegBytes = new Uint8Array(binaryString.length);
+      for (let j = 0; j < binaryString.length; j++) {
+        jpegBytes[j] = binaryString.charCodeAt(j);
+      }
+      
+      const img = await rasterDoc.embedJpg(jpegBytes);
+      const newPage = rasterDoc.addPage([img.width, img.height]);
+      newPage.drawImage(img, {
+        x: 0,
+        y: 0,
+        width: img.width,
+        height: img.height,
+      });
+    }
+    
+    compressedBytes = await rasterDoc.save({
+      useObjectStreams: true,
+    });
+    
+    compressedSize = compressedBytes.length;
+    
     if (compressedSize < originalSize) {
       const compressedFile = new File([compressedBytes], file.name, {
         type: "application/pdf",
