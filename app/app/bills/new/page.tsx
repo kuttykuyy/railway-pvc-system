@@ -195,6 +195,9 @@ function NewBillPageContent() {
   const [creditBalance, setCreditBalance] = useState<number>(0);
   const [subscribing, setSubscribing] = useState<boolean>(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState<boolean>(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewResult, setPreviewResult] = useState<any>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   useEffect(() => {
     checkMaintenanceMode();
@@ -654,6 +657,45 @@ function NewBillPageContent() {
       setError(err.message || 'PVC check failed');
     } finally {
       setIsPvcChecking(false);
+    }
+  };
+
+  const handlePreview = async () => {
+    if (!formData.contractId || !formData.zone || !formData.dateOfMeasurement) {
+      toast.error('Please fill Contract, Zone, and Date of Measurement before previewing');
+      return;
+    }
+    setIsPreviewLoading(true);
+    try {
+      const grossAmount = classificationEntries.reduce((sum, e) => {
+        const amt = e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount;
+        return sum + amt;
+      }, 0);
+      const nonScheduleTotal = nonScheduleItems
+        .filter(i => i.description && i.amount)
+        .reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+      const res = await fetch('/api/bills/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contractId: formData.contractId,
+          grossBillAmount: grossAmount,
+          billAmount: grossAmount - nonScheduleTotal,
+          dateOfMeasurement: formData.dateOfMeasurement,
+          zone: formData.zone,
+          fuelPriceType: formData.fuelPriceType,
+          calculationMethod: (formData as any).calculationMethod || 'auto',
+          classificationEntries,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Preview failed'); return; }
+      setPreviewResult(data);
+      setShowPreviewModal(true);
+    } catch {
+      toast.error('Preview failed. Please try again.');
+    } finally {
+      setIsPreviewLoading(false);
     }
   };
 
@@ -1449,6 +1491,26 @@ function NewBillPageContent() {
                         Quick check if PVC is positive/negative without creating a bill
                       </p>
                     </div>
+                    <div className="flex flex-col items-center gap-1">
+                      <Button
+                        type="button"
+                        onClick={handlePreview}
+                        disabled={isPreviewLoading || isSaving || !formData.contractId || !formData.zone || !formData.dateOfMeasurement || classificationEntries.length === 0}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-emerald-500/10 font-semibold h-10"
+                      >
+                        {isPreviewLoading ? (
+                          <LoadingSpinner size="sm" text="Calculating..." />
+                        ) : (
+                          <>
+                            <Calculator className="h-4 w-4 mr-2" />
+                            Preview PVC
+                          </>
+                        )}
+                      </Button>
+                      <p className="text-[10px] text-slate-400 text-center max-w-[160px]">
+                        See PVC result free — pay only to generate the bill
+                      </p>
+                    </div>
                     <Button
                       type="submit"
                       disabled={isSaving || !formData.contractId || !formData.billNo || !formData.zone || !formData.dateOfMeasurement}
@@ -1628,6 +1690,106 @@ function NewBillPageContent() {
               </Button>
             </div>
           </Card>
+        </div>
+      )}
+      {/* Preview Modal */}
+      {showPreviewModal && previewResult && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden my-4">
+            {/* SAMPLE watermark header */}
+            <div className="relative bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-5 text-white">
+              <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none select-none">
+                <span className="text-6xl font-black tracking-widest rotate-[-20deg] text-white">SAMPLE</span>
+              </div>
+              <div className="relative">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-full">Preview — Not for Submission</span>
+                  {previewResult.isProvisional && (
+                    <span className="text-xs font-bold bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full">Provisional Indices</span>
+                  )}
+                </div>
+                <h2 className="text-xl font-black mt-2">PVC Calculation Preview</h2>
+                <p className="text-emerald-100 text-sm">Quarter: {previewResult.quarter}</p>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Total PVC */}
+              <div className="text-center py-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wider mb-1">Total PVC Amount</p>
+                <p className="text-4xl font-black text-emerald-700">
+                  ₹{previewResult.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                </p>
+                {previewResult.previousCumulativePvc > 0 && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    Cumulative PVC: ₹{previewResult.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    <span className="text-slate-400"> (prev: ₹{previewResult.previousCumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })})</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Component breakdown */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Component Breakdown</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  {[
+                    ['Labour', previewResult.components.labourPvc],
+                    ['Plant & Machinery', previewResult.components.plantPvc],
+                    ['Fuel / Power', previewResult.components.fuelPvc],
+                    ['Other Materials', previewResult.components.materialsPvc],
+                    ['Cement', previewResult.components.cementPvc],
+                    ['Steel', previewResult.components.steelPvc],
+                    ['Explosives', previewResult.components.explosivesPvc],
+                  ].filter(([, v]) => (v as number) !== 0).map(([label, value]) => (
+                    <div key={label as string} className="flex justify-between items-center px-3 py-2 bg-slate-50 rounded-lg">
+                      <span className="text-slate-600">{label}</span>
+                      <span className="font-semibold text-slate-900">₹{(value as number).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* First bill pricing CTA */}
+              <div className={`rounded-xl p-4 border ${previewResult.isFirstBill ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    {previewResult.isFirstBill ? (
+                      <>
+                        <p className="font-bold text-amber-800 flex items-center gap-1.5">
+                          🎉 First bill offer — only <span className="text-2xl text-amber-700">₹{previewResult.billCost}</span>
+                        </p>
+                        <p className="text-xs text-amber-600 mt-0.5">
+                          Regular price ₹{previewResult.fullCost}. One-time new user discount.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-slate-700">Create this bill for <span className="text-xl font-black">₹{previewResult.billCost}</span></p>
+                        <p className="text-xs text-slate-500 mt-0.5">Deducted from your credit wallet</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-center text-xs text-slate-400">
+                This is a preview. The actual PDF will be generated after you create the bill.
+              </p>
+            </div>
+
+            <div className="flex gap-3 px-6 pb-6">
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setShowPreviewModal(false)}>
+                Edit Bill
+              </Button>
+              <Button
+                className="flex-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold"
+                onClick={() => { setShowPreviewModal(false); (document.querySelector('form') as HTMLFormElement)?.requestSubmit(); }}
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {previewResult.isFirstBill ? `Create for ₹${previewResult.billCost}` : 'Create Bill'}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

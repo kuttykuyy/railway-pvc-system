@@ -11,6 +11,7 @@ export interface PaymentValidationResult {
   transaction?: any;
   requiredPayment?: number;
   isFree?: boolean;
+  isFirstBill?: boolean;
 }
 
 /**
@@ -83,16 +84,24 @@ export async function validateBillProcessing(
     // For paid contractor bills, use a fixed per-bill charge with no discounts.
     const { getBillingSettings } = await import('./admin-settings');
     const billingSettings = await getBillingSettings();
-    const billCost = billingSettings.billCost || 199;
-    
+    const fullCost = billingSettings.billCost || 199;
+
+    // First-bill discount: ₹99 if this user has never created a bill before
+    const userBillCount = await prisma.bill.count({ where: { contract: { userId: user.id } } });
+    const isFirstBill = userBillCount === 0;
+    const billCost = isFirstBill ? 99 : fullCost;
+
     // Check if user has sufficient balance in their customer account
     const currentBalance = user.customerAccount?.creditBalance || 0;
-    
+
     if (currentBalance >= billCost) {
       return {
         canProcess: true,
         requiredPayment: billCost,
-        reason: `Payment of ₹${billCost} will be deducted from account balance (₹${currentBalance} available)`
+        reason: isFirstBill
+          ? `First bill discount! ₹${billCost} will be deducted (normally ₹${fullCost})`
+          : `Payment of ₹${billCost} will be deducted from account balance (₹${currentBalance} available)`,
+        isFirstBill,
       };
     }
 
@@ -100,7 +109,10 @@ export async function validateBillProcessing(
     return {
       canProcess: false,
       requiredPayment: billCost,
-      reason: `Insufficient balance. Required: ₹${billCost}, Available: ₹${currentBalance}. Please add credits to continue.`
+      reason: isFirstBill
+        ? `First bill is only ₹${billCost}! Add ₹${billCost - currentBalance} more credits to get started.`
+        : `Insufficient balance. Required: ₹${billCost}, Available: ₹${currentBalance}. Please add credits to continue.`,
+      isFirstBill,
     };
 
   } catch (error) {
