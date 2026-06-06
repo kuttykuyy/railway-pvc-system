@@ -8,6 +8,7 @@ import { checkUserContractAccess } from '@/lib/permissions';
 import { handleApiError, AppError } from '@/lib/error-handler';
 import { recalculateCumulativePvcForContract } from '@/lib/recalculateCumulativePvc';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
+import { getBillingSettings } from '@/lib/admin-settings';
 
 export const dynamic = "force-dynamic";
 
@@ -86,10 +87,6 @@ export async function POST(request: NextRequest) {
     // Get base month
     const baseMonth = new Date(contract.baseMonth);
 
-    // Calculate total processing fee for all bills
-    const processingFeePerBill = bills[0]?.processingFee || 0;
-    const totalProcessingFee = processingFeePerBill * bills.length;
-
     // Get user with account info
     const userWithAccount = await prisma.user.findUnique({
       where: { id: user.id },
@@ -107,6 +104,9 @@ export async function POST(request: NextRequest) {
 
     // Check if user has a free account or sufficient balance
     const isFreeAccount = userWithAccount.customProcessingFee === 0 || userWithAccount.isFreeAccount || userWithAccount.role === 'superadmin' || userWithAccount.role === 'railway_official';
+    const billingSettings = await getBillingSettings();
+    const processingFeePerBill = isFreeAccount ? 0 : billingSettings.billCost || 199;
+    const totalProcessingFee = processingFeePerBill * bills.length;
     
     if (!isFreeAccount) {
       const currentBalance = userWithAccount.customerAccount?.creditBalance || 0;
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
           pvcNumber: autoPvcNumber, // Add PVC auto-number
           zone: billInput.zone || null,
           fuelPriceType: billInput.fuelPriceType || 'four_city_avg',
-          processingFee: billInput.processingFee || 0,
+          processingFee: processingFeePerBill,
           isChargeable: true,
           batchId, // Assign batch ID for grouping
           batchName, // Assign batch name for display

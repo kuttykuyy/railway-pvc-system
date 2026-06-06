@@ -80,32 +80,10 @@ export async function validateBillProcessing(
       // bypassed
     }
 
-    // For paid bills, calculate cost with daily volume discount
+    // For paid contractor bills, use a fixed per-bill charge with no discounts.
     const { getBillingSettings } = await import('./admin-settings');
     const billingSettings = await getBillingSettings();
-    const baseBillCost = billingSettings.billCost || 10;
-    
-    // Count bills created by this user today (for daily tiered discount)
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const dailyBillCount = await prisma.billTransaction.count({
-      where: {
-        userId: user.id,
-        createdAt: { gte: todayStart },
-        status: { in: ['pending', 'paid'] }
-      }
-    });
-
-    // Apply daily tiered discount: 1-5 full price, 6-10 20% off, 11+ 40% off
-    let billCost = baseBillCost;
-    let dailyDiscountInfo = '';
-    if (dailyBillCount >= 10) {
-      billCost = Math.round(baseBillCost * 0.6); // 40% off
-      dailyDiscountInfo = ` (40% daily volume discount applied - bill #${dailyBillCount + 1} today)`;
-    } else if (dailyBillCount >= 5) {
-      billCost = Math.round(baseBillCost * 0.8); // 20% off
-      dailyDiscountInfo = ` (20% daily volume discount applied - bill #${dailyBillCount + 1} today)`;
-    }
+    const billCost = billingSettings.billCost || 199;
     
     // Check if user has sufficient balance in their customer account
     const currentBalance = user.customerAccount?.creditBalance || 0;
@@ -114,7 +92,7 @@ export async function validateBillProcessing(
       return {
         canProcess: true,
         requiredPayment: billCost,
-        reason: `Payment of ₹${billCost} will be deducted from account balance (₹${currentBalance} available)${dailyDiscountInfo}`
+        reason: `Payment of ₹${billCost} will be deducted from account balance (₹${currentBalance} available)`
       };
     }
 
@@ -122,7 +100,7 @@ export async function validateBillProcessing(
     return {
       canProcess: false,
       requiredPayment: billCost,
-      reason: `Insufficient balance. Required: ₹${billCost}, Available: ₹${currentBalance}. Please add credits to continue.${dailyDiscountInfo}`
+      reason: `Insufficient balance. Required: ₹${billCost}, Available: ₹${currentBalance}. Please add credits to continue.`
     };
 
   } catch (error) {
@@ -166,41 +144,14 @@ export async function processPaymentForBill(
     // Calculate pricing — fetch settings ONCE up front
     const { getBillingSettings } = await import('./admin-settings');
     const billingSettings = await getBillingSettings();
-    const baseAmount = billingSettings.billCost || 10;
+    const baseAmount = billingSettings.billCost || 199;
     const freeTrialLimit = billingSettings.freeTrialBills || 1;
 
-    const currentDate = new Date();
-    const startOfDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
-    const todayBillCount = await prisma.billTransaction.count({
-      where: {
-        userId,
-        createdAt: { gte: startOfDay },
-        status: { in: ['pending', 'paid'] }
-      }
-    });
-    let finalAmount = baseAmount;
+    const finalAmount = baseAmount;
     let discount = 0;
     let discountType: string | null = null;
-    const discountParts: string[] = [];
-
-    // Daily tiered discount: Bills 1-5 full price, 6-10 get 20% off, 11+ get 40% off
-    const billNumber = todayBillCount + 1; // This bill's position today
-    if (billNumber > 10) {
-      finalAmount = Math.round(baseAmount * 0.6); // 40% off
-      discountParts.push('daily_tier_40');
-    } else if (billNumber > 5) {
-      finalAmount = Math.round(baseAmount * 0.8); // 20% off
-      discountParts.push('daily_tier_20');
-    }
-
-    // Negative PVC discount: 50% off when total PVC is negative
-    if (totalPvc !== undefined && totalPvc < 0) {
-      finalAmount = Math.round(finalAmount * 0.5);
-      discountParts.push('negative_pvc_50');
-    }
 
     discount = baseAmount - finalAmount;
-    discountType = discountParts.length > 0 ? discountParts.join('+') : null;
 
     // Check for free account first (highest priority) — reuses freeTrialLimit from above
     let isFree = false;

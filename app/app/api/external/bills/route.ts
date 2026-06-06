@@ -260,7 +260,7 @@ export async function POST(request: NextRequest) {
     
     // ===== Step 6: Payment Validation (inline for external API) =====
     const billingSettings = await getBillingSettings();
-    const billCost = billingSettings.billCost || 10;
+    const billCost = billingSettings.billCost || 199;
     
     // Get user with account info
     const user = await prisma.user.findUnique({
@@ -277,13 +277,6 @@ export async function POST(request: NextRequest) {
     
     // Check if user has free account
     let isFreeAccount = user.isFreeAccount || (user.customProcessingFee === 0) || user.role === 'superadmin' || user.role === 'railway_official';
-    
-    // Check free trial
-    const freeTrialLimit = billingSettings.freeTrialBills || 1;
-    const freeTrialRemaining = Math.max(0, freeTrialLimit - user.freeTrialUsed);
-    if (user.isTrialActive && freeTrialRemaining > 0) {
-      isFreeAccount = true;
-    }
     
     // Check balance for paid accounts
     if (!isFreeAccount) {

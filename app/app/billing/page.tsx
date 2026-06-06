@@ -262,7 +262,7 @@ export default function BillingPage() {
     ? 0 
     : billingSettings?.customProcessingFee !== null && billingSettings?.customProcessingFee !== undefined
       ? billingSettings.customProcessingFee
-      : billingSettings?.billCost || 10;
+      : billingSettings?.billCost || 199;
 
   // Format date
   const formatDate = (dateString: string) => {

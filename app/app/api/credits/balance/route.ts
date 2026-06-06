@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     const isRailwayOfficial = user.role === 'railway_official';
     const isFree = user.isFreeAccount || isSuperadmin || isAdmin || isRailwayOfficial || user.customProcessingFee === 0;
     
-    const billCost = isFree ? 0 : (billingSettings.billCost || 10); // ₹0 cost if user is free/admin/superadmin/official
+    const billCost = isFree ? 0 : (billingSettings.billCost || 199); // ₹0 cost if user is free/admin/superadmin/official
     const freeTrialLimit = 0;
     
     // Calculate free trial info

@@ -80,7 +80,7 @@ export default function TermsAndConditionsPage() {
               </p>
               <ul className="list-disc pl-6 space-y-1 text-slate-600 text-sm">
                 <li><strong className="text-slate-800">Free Trial:</strong> New accounts receive one free bill credit upon registration.</li>
-                <li><strong className="text-slate-800">Rates per Bill:</strong> Pricing operates on a volume scale: ₹199 per bill for Standard Volume, ₹159 per bill for Medium Volume, and ₹119 per bill for High Volume.</li>
+                <li><strong className="text-slate-800">Rates per Bill:</strong> Contractors are charged a fixed ₹199 per bill with no volume discount.</li>
                 <li><strong className="text-slate-800">Exempt Tiers:</strong> Verified Railway Officials receive fully exempt, zero-charge calculation and oversight plans.</li>
                 <li><strong className="text-slate-800">Manual Top-ups:</strong> Credits are added manually after payment verification by our divisional administrator.</li>
               </ul>

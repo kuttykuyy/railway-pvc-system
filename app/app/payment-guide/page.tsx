@@ -56,7 +56,7 @@ export default function PaymentGuidePage() {
     ? 0 
     : billingSettings?.customProcessingFee !== null && billingSettings?.customProcessingFee !== undefined
       ? billingSettings.customProcessingFee
-      : billingSettings?.billCost || 10; // Default matches BILL_PROCESSING_COST in admin settings
+      : billingSettings?.billCost || 199; // Default matches BILL_PROCESSING_COST in admin settings
 
   const freeTrialText = billingSettings?.freeTrialBills === 1 
     ? 'First 1 bill is free' 

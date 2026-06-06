@@ -105,7 +105,7 @@ export async function getBillingSettings() {
   };
 
   return {
-    billCost:                       Number(parse('BILL_PROCESSING_COST', 99)),
+    billCost:                       Number(parse('BILL_PROCESSING_COST', 199)),
     paymentEnabled:                 Boolean(parse('PAYMENT_PROCESSING_ENABLED', true)),
     freeTrialBills:                 Number(parse('FREE_TRIAL_BILLS', 1)),
     lowCreditThreshold:             Number(parse('LOW_CREDIT_THRESHOLD', 50)),

@@ -370,7 +370,7 @@ export async function POST(request: NextRequest) {
     
     // ===== STEP 9: Create Bill Record with Steel Types =====
     const billingSettings = await getBillingSettings();
-    const billCost = billingSettings.billCost || 10; // Default matches BILL_PROCESSING_COST in admin settings
+    const billCost = billingSettings.billCost || 199; // Default matches BILL_PROCESSING_COST in admin settings
     
     const bill = await prisma.bill.create({
       data: {
@@ -782,4 +782,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message, code }, { status: statusCode });
   }
 }
-
