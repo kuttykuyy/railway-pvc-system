@@ -19,6 +19,7 @@ import rateLimiter, { RATE_LIMITS, getIdentifier } from '@/lib/rate-limiter';
 import { embedLabourIndex, embedComponentIndicesRange } from '@/lib/pdf/utils/labour-index-embedder';
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300; // 5 minutes for bulk PDF generation
 
 // Extend jsPDF type to include autoTable
 declare module 'jspdf' {
@@ -2674,7 +2675,7 @@ export async function POST(request: NextRequest) {
       });
     }
       })(),
-      TIMEOUT_DEFAULTS.VERY_LONG,
+      TIMEOUT_DEFAULTS.BULK_PDF,
       'bulk-pdf-generation'
     );
 

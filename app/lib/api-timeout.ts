@@ -45,11 +45,12 @@ export async function withTimeout<T>(
  * Default timeout values for different operation types
  */
 export const TIMEOUT_DEFAULTS = {
-  QUICK: 5000, // 5 seconds - Simple queries, data fetches
-  STANDARD: 15000, // 15 seconds - Standard operations
-  LONG: 30000, // 30 seconds - Complex calculations
-  VERY_LONG: 60000, // 60 seconds - PDF generation, bulk operations
-  EXTERNAL: 10000, // 10 seconds - External API calls
+  QUICK: 5000,      // 5 seconds  - Simple queries, data fetches
+  STANDARD: 15000,  // 15 seconds - Standard operations
+  LONG: 30000,      // 30 seconds - Complex calculations
+  VERY_LONG: 60000, // 60 seconds - Single PDF generation
+  BULK_PDF: 300000, // 5 minutes  - Bulk PDF generation (multiple bills, DB queries, merging)
+  EXTERNAL: 10000,  // 10 seconds - External API calls
 } as const;
 
 /**
