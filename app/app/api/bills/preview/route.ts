@@ -93,8 +93,6 @@ export async function POST(request: NextRequest) {
     let labourPvc = 0, plantPvc = 0, fuelPvc = 0, materialsPvc = 0;
     let cementPvc = 0, steelPvc = 0, explosivesPvc = 0, totalPvc = 0;
 
-    const entryResults: any[] = [];
-
     for (const entry of classificationEntries) {
       const hasAmount = entry.amount !== '' && entry.amount !== null && entry.amount !== undefined && parseFloat(entry.amount) > 0;
       if (!hasAmount || (!entry.subClassificationId && !entry.classificationId)) continue;
@@ -126,7 +124,6 @@ export async function POST(request: NextRequest) {
       explosivesPvc += pvc.explosivesPvc;
       totalPvc += pvc.totalPvc;
 
-      entryResults.push({ amount: parseFloat(entry.amount), ...pvc });
     }
 
     // Previous cumulative PVC (for new bill display)
