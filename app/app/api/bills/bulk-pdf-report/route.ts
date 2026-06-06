@@ -2651,15 +2651,20 @@ export async function POST(request: NextRequest) {
     // Generate initial PDF buffer
     const initialPdfBytes = new Uint8Array(pdf.output('arraybuffer'));
 
-    // Embed labour index for the first bill's measurement month
-    // (for bulk reports, we use the first bill's date)
+    // Embed component index documents covering earliest base month → latest measurement date
     if (bills.length > 0) {
       const firstBill = bills[0];
-      // Get base month from contract
-      const componentIndexStartDate = firstBill.contract.baseMonth 
-        ? new Date(firstBill.contract.baseMonth) 
-        : addMonths(new Date(firstBill.contract.dateOfOpening), -1);
-      
+
+      // Use the EARLIEST base month across all bills so all index years are covered
+      const componentIndexStartDate = bills.reduce((earliest, bill) => {
+        const bm = bill.contract.baseMonth
+          ? new Date(bill.contract.baseMonth)
+          : addMonths(new Date(bill.contract.dateOfOpening), -1);
+        return bm < earliest ? bm : earliest;
+      }, firstBill.contract.baseMonth
+        ? new Date(firstBill.contract.baseMonth)
+        : addMonths(new Date(firstBill.contract.dateOfOpening), -1));
+
       // Find the latest measurement date among all bills
       const componentIndexEndDate = bills.reduce((latest, bill) => {
         const measurementDate = new Date(bill.dateOfMeasurement);
