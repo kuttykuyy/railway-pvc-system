@@ -38,7 +38,6 @@ import {
   Receipt,
   Wallet,
   Plus,
-  Key,
   AlertCircle,
   MessageSquare,
   TrendingUp
@@ -389,12 +388,6 @@ export default function Navigation() {
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
-                        <Link href="/settings/api-keys" className="flex items-center cursor-pointer">
-                          <Key className="mr-2 h-4 w-4" />
-                          <span>API Keys</span>
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
                         <Link href="/billing" className="flex items-center cursor-pointer">
                           <CreditCard className="mr-2 h-4 w-4" />
                           <span>Billing</span>
@@ -589,17 +582,6 @@ export default function Navigation() {
                       <Link href="/profile" onClick={() => setIsOpen(false)}>
                         <User className="h-4 w-4" />
                         <span className="ml-2">Profile & Settings</span>
-                      </Link>
-                    </Button>
-                    <Button
-                      asChild
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start text-gray-700 hover:bg-gray-100"
-                    >
-                      <Link href="/settings/api-keys" onClick={() => setIsOpen(false)}>
-                        <Key className="h-4 w-4" />
-                        <span className="ml-2">API Keys</span>
                       </Link>
                     </Button>
                     <Button
