@@ -220,28 +220,46 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   y += 4;
 
   // ── A. CONTRACT & B. BILL DETAILS in a single info table ──────────────────
-  // Use autoTable for the info block to avoid any manual text overlap issues
+  // Column widths: label(52) | value(84) | label(52) | value(85) = 273mm
+  const C0 = 52;   // label
+  const C1 = 84;   // value (left pair)
+  const C2 = 52;   // label (right pair)
+  const C3 = 85;   // value (right pair)
 
-  // Row builder: [label, value, label, value] in a 4-column table
-  const infoData: string[][] = [];
+  const sectionHeader = (text: string) => [
+    { content: text, colSpan: 4, styles: { fontStyle: 'bold' as const, textColor: [0, 0, 150] as [number,number,number], fontSize: 9, cellPadding: { top: 3, right: 2, bottom: 1, left: 2 } } },
+  ];
+  const lv = (l: string, v: string, l2: string, v2: string) => [
+    { content: l,  styles: { fontStyle: 'bold' as const, textColor: [30, 30, 30] as [number,number,number] } },
+    { content: v  },
+    { content: l2, styles: { fontStyle: 'bold' as const, textColor: [30, 30, 30] as [number,number,number] } },
+    { content: v2 },
+  ];
 
-  // Work description — full width (merge cols 1-4 visually by putting in col 2 spanning wide)
-  infoData.push(['Name of Work:', bill.contract.workDescription || '-', '', '']);
-
-  infoData.push(['Agreement No.:', bill.contract.agreementNo || '-', 'Date of Opening:', format(new Date(bill.contract.dateOfOpening), 'dd MMM yyyy')]);
-  infoData.push(['Contractor:', bill.contract.contractorName || '-', 'Base Month (T0):', format(baseMonth, 'MMM yyyy')]);
-  infoData.push(['Contract Value:', bill.contract.contractValue ? 'Rs. ' + bill.contract.contractValue.toLocaleString('en-IN') : 'N/A', 'Completion Period:', bill.contract.completionPeriodMonths ? `${bill.contract.completionPeriodMonths} Months` : 'N/A']);
-  infoData.push(['LOA No.:', bill.contract.loaNo || 'N/A', 'Railway Zone:', bill.zone || 'N/A']);
-
-  // Separator label row
-  infoData.push(['B. BILL DETAILS', '', '', '']);
-
-  infoData.push(['Bill No.:', bill.billNo || '-', 'Date of Measurement:', format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy')]);
-  infoData.push(['Gross Bill Amount (W):', 'Rs. ' + fmt(billAmount), 'Quarter:', bill.quarter || '-']);
-  infoData.push(['PVC No.:', bill.pvcNumber || 'Not Assigned', 'Fuel Pricing:', bill.fuelPriceType === 'zone_city' ? 'Zone City Price' : '4-City Average']);
-  infoData.push(['Indices Status:', isProvisional ? 'PROVISIONAL' : 'FINAL', 'Extension Type:', bill.contract.isExtended ? (bill.contract.extensionType || 'Extended') : 'None']);
-
-  const colW = contentW / 4;
+  const infoData: any[][] = [
+    sectionHeader('A. CONTRACT DETAILS'),
+    [
+      { content: 'Name of Work:', styles: { fontStyle: 'bold' as const, textColor: [30,30,30] as [number,number,number] } },
+      { content: bill.contract.workDescription || '-', colSpan: 3 },
+    ],
+    lv('Agreement No.:',   bill.contract.agreementNo || '-',
+       'Date of Opening:', format(new Date(bill.contract.dateOfOpening), 'dd MMM yyyy')),
+    lv('Contractor:',      bill.contract.contractorName || '-',
+       'Base Month (T0):',  format(baseMonth, 'MMM yyyy')),
+    lv('Contract Value:',  bill.contract.contractValue ? 'Rs. ' + bill.contract.contractValue.toLocaleString('en-IN') : 'N/A',
+       'Completion Period:', bill.contract.completionPeriodMonths ? `${bill.contract.completionPeriodMonths} Months` : 'N/A'),
+    lv('LOA No.:',         bill.contract.loaNo || 'N/A',
+       'Railway Zone:',    bill.zone || 'N/A'),
+    sectionHeader('B. BILL DETAILS'),
+    lv('Bill No.:',              bill.billNo || '-',
+       'Date of Measurement:',   format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy')),
+    lv('Gross Bill Amount (W):', 'Rs. ' + fmt(billAmount),
+       'Quarter:',               bill.quarter || '-'),
+    lv('PVC No.:',               bill.pvcNumber || 'Not Assigned',
+       'Fuel Pricing:',          bill.fuelPriceType === 'zone_city' ? 'Zone City Price' : '4-City Average'),
+    lv('Indices Status:',        isProvisional ? 'PROVISIONAL' : 'FINAL',
+       'Extension Type:',        bill.contract.isExtended ? (bill.contract.extensionType || 'Extended') : 'None'),
+  ];
 
   autoTable(pdf, {
     startY: y,
@@ -249,41 +267,17 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     theme: 'plain',
     styles: {
       fontSize: 8.5,
-      cellPadding: { top: 1.5, right: 3, bottom: 1.5, left: 2 },
+      cellPadding: { top: 1.8, right: 3, bottom: 1.8, left: 2 },
       overflow: 'linebreak',
-      lineColor: [220, 220, 220],
       lineWidth: 0,
     },
     margin: { left: mL, right: mR },
     tableWidth: contentW,
     columnStyles: {
-      0: { cellWidth: colW * 0.90, fontStyle: 'bold', textColor: [30, 30, 30] },
-      1: { cellWidth: colW * 1.10, textColor: [0, 0, 0] },
-      2: { cellWidth: colW * 0.90, fontStyle: 'bold', textColor: [30, 30, 30] },
-      3: { cellWidth: colW * 1.10, textColor: [0, 0, 0] },
-    },
-    didParseCell: (data: any) => {
-      // Section A header row
-      if (data.row.index === 0) {
-        if (data.column.index === 0) {
-          data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.textColor = [0, 0, 150];
-        }
-      }
-      // Section B label row
-      if (data.row.index === 5) {
-        data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.textColor = [0, 0, 150];
-        data.cell.styles.fontSize = 9;
-      }
-      // Name of Work row — value spans wider
-      if (data.row.index === 1 && data.column.index === 1) {
-        data.cell.colSpan = 3;
-        data.cell.styles.cellWidth = colW * 3.10;
-      }
-      if (data.row.index === 1 && data.column.index > 1) {
-        data.cell.styles.minCellHeight = 0;
-      }
+      0: { cellWidth: C0 },
+      1: { cellWidth: C1 },
+      2: { cellWidth: C2 },
+      3: { cellWidth: C3 },
     },
   });
 
@@ -432,7 +426,8 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   y = pdf.lastAutoTable.finalY + 4;
 
   // ── SUMMARY + CERTIFICATION side by side ──────────────────────────────────
-  ensureSpace(35);
+  // No ensureSpace here — let summary flow naturally; if PVC table is tall it
+  // may overflow, but we handle it by just placing at y and letting autoTable decide.
 
   // Summary table (right-aligned, 120mm wide)
   const summaryX = pageW - mR - 120;
@@ -478,7 +473,6 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   y = summaryEndY + 6;
 
   // ── SIGNATURE BLOCK ────────────────────────────────────────────────────────
-  ensureSpace(25);
   const sigW = contentW / 3;
   const sigLabels = ['Prepared by', 'Checked by', 'Approved by'];
   pdf.setFont('helvetica', 'bold');
