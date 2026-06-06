@@ -1876,6 +1876,17 @@ export default function BillsPage() {
                       </td>
                       <td className="px-4 py-3 text-center" colSpan={3}>
                         <div className="flex items-center justify-center gap-2">
+                          {/* Inline format selector for this batch */}
+                          <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden text-[10px] h-7">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setPdfFormat('detailed'); }}
+                              className={`px-2 h-full transition-colors ${pdfFormat === 'detailed' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                            >Detailed</button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setPdfFormat('ir_standard'); }}
+                              className={`px-2 h-full transition-colors ${pdfFormat === 'ir_standard' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                            >IR Std</button>
+                          </div>
                           <Button
                             variant="outline"
                             size="sm"
@@ -2313,9 +2324,20 @@ export default function BillsPage() {
                         </div>
                       </div>
 
-                      <div className="flex gap-2 flex-wrap mb-1">
-                        <Button 
-                          variant="default" 
+                      <div className="flex gap-2 flex-wrap mb-1 items-center">
+                        {/* Format selector */}
+                        <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden text-xs h-9">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setPdfFormat('detailed'); }}
+                            className={`px-3 h-full font-medium transition-colors ${pdfFormat === 'detailed' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                          >Detailed</button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setPdfFormat('ir_standard'); }}
+                            className={`px-3 h-full font-medium transition-colors ${pdfFormat === 'ir_standard' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                          >IR Standard</button>
+                        </div>
+                        <Button
+                          variant="default"
                           size="sm"
                           onClick={(e: React.MouseEvent) => {
                             e.stopPropagation();
