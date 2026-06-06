@@ -1104,76 +1104,6 @@ export default function BillsPage() {
       {/* Indices Availability Indicator - Prominent display */}
       <IndicesAvailabilityIndicator />
 
-      {/* Bulk Action Buttons - Shown prominently when bills are selected */}
-      {selectedBills.length > 0 && (
-        <div className="border border-slate-200 bg-slate-50 p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-sm">
-              {selectedBills.length} Selected
-            </div>
-            <Button 
-              onClick={() => setSelectedBills([])} 
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs text-slate-500 hover:text-slate-900"
-            >
-              Clear All
-            </Button>
-          </div>
-          
-          <div className="flex flex-wrap gap-2">
-            <Button 
-              onClick={generateBulkReport} 
-              disabled={generatingBulkReport || selectedBills.length < 2}
-              variant="outline"
-              size="sm"
-              className="border-slate-200 hover:bg-slate-100 text-slate-700 h-10 rounded-xl px-4 font-medium transition-all shadow-sm"
-            >
-              {generatingBulkReport ? (
-                <>
-                  <LoadingSpinner size="sm" className="mr-2" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4 mr-2" />
-                  Bulk Report Download
-                </>
-              )}
-            </Button>
-            <Button 
-              onClick={bulkSubmitForApproval} 
-              disabled={submittingForApproval}
-              variant="outline"
-              size="sm"
-              className="border-green-200 text-green-700 bg-green-50/50 hover:bg-green-600 hover:text-white h-10 rounded-xl px-4 font-medium transition-all shadow-sm"
-            >
-              {submittingForApproval ? (
-                <>
-                  <LoadingSpinner size="sm" className="mr-2" />
-                  Submitting...
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4 mr-2" />
-                  Submit for Approval
-                </>
-              )}
-            </Button>
-            <Button 
-              onClick={bulkDeleteBills} 
-              disabled={deleting || !canDeleteSelected}
-              variant="destructive"
-              size="sm"
-              className="bg-red-600 hover:bg-red-700 h-10 rounded-xl px-4 font-medium transition-all shadow-sm"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Selected
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* Search & Filters Panel - Clean Layout */}
       <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl">
         <CardHeader className="p-5 sm:p-6 pb-2">
@@ -1500,6 +1430,76 @@ export default function BillsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Bulk Action Buttons - Shown prominently when bills are selected */}
+      {selectedBills.length > 0 && (
+        <div className="border border-slate-200 bg-slate-50 p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-sm">
+              {selectedBills.length} Selected
+            </div>
+            <Button 
+              onClick={() => setSelectedBills([])} 
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-slate-500 hover:text-slate-900"
+            >
+              Clear All
+            </Button>
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            <Button 
+              onClick={generateBulkReport} 
+              disabled={generatingBulkReport || selectedBills.length < 2}
+              variant="outline"
+              size="sm"
+              className="border-slate-200 hover:bg-slate-100 text-slate-700 h-10 rounded-xl px-4 font-medium transition-all shadow-sm"
+            >
+              {generatingBulkReport ? (
+                <>
+                  <LoadingSpinner size="sm" className="mr-2" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  Bulk Report Download
+                </>
+              )}
+            </Button>
+            <Button 
+              onClick={bulkSubmitForApproval} 
+              disabled={submittingForApproval}
+              variant="outline"
+              size="sm"
+              className="border-green-200 text-green-700 bg-green-50/50 hover:bg-green-600 hover:text-white h-10 rounded-xl px-4 font-medium transition-all shadow-sm"
+            >
+              {submittingForApproval ? (
+                <>
+                  <LoadingSpinner size="sm" className="mr-2" />
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Submit for Approval
+                </>
+              )}
+            </Button>
+            <Button 
+              onClick={bulkDeleteBills} 
+              disabled={deleting || !canDeleteSelected}
+              variant="destructive"
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 h-10 rounded-xl px-4 font-medium transition-all shadow-sm"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Selected
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Bills Display */}
       {bills.length === 0 ? (
