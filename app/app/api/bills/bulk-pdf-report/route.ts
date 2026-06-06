@@ -310,7 +310,7 @@ export async function POST(request: NextRequest) {
     if (pdfFormat === 'ir_standard') {
       const { generateIRStandardReport } = await import('@/lib/pdf/generators/ir-standard-report');
       const { PDFDocument } = await import('pdf-lib');
-      const { getBillIndicesStatus: getStatus } = await import('@/lib/index-status');
+      const { getBillIndicesStatus } = await import('@/lib/index-status');
       const { getSteelIndexNamesForZone: getSteelNames, getFuelIndexNameForBill: getFuelName } = await import('@/lib/zone-steel-city-mapping');
 
       // Fetch branding for the contract owner of the first bill
@@ -331,7 +331,7 @@ export async function POST(request: NextRequest) {
         const steelIdxNames = getSteelNames(bill.zone);
         const allIdxNames = ['Labour', 'RBI Plant Machinery', fuelIdxName, 'RBI Other Materials', 'RBI Cement', 'RBI Explosives', ...steelIdxNames];
         const qaverages = await getQuarterlyAverages(bill.quarter, allIdxNames, baseMonth, 'auto');
-        const indicesStatus = await getStatus(bill.id);
+        const indicesStatus = await getBillIndicesStatus(bill.quarter, baseMonth);
 
         const bulkQtrMonths = getQuarterMonths(bill.quarter, baseMonth);
         const bulkQtrEnd = bulkQtrMonths[bulkQtrMonths.length - 1];

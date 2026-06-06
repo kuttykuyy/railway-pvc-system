@@ -575,8 +575,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const pdfFormat = searchParams.get('format');
     if (pdfFormat === 'ir_standard') {
       const { generateIRStandardReport } = await import('@/lib/pdf/generators/ir-standard-report');
-      const { getBillIndicesStatus: getStatus } = await import('@/lib/index-status');
-      const indicesStatusForIR = await getStatus(billId);
+      const indicesStatusForIR = await getBillIndicesStatus(bill.quarter, baseMonth);
 
       // Build quarterlyAverages in the format expected by ir-standard-report
       const fuelIdxName = getFuelIndexNameForBill(bill.zone, bill.fuelPriceType);
