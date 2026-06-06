@@ -1,4 +1,4 @@
-﻿import { logger } from './logger';
+import { logger } from './logger';
 import fs from 'fs';
 import path from 'path';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
@@ -42,9 +42,45 @@ function uploadLocalFile(buffer: Buffer, key: string): string {
   }
 }
 
+export function isS3Configured(): boolean {
+  return s3Client !== null && !useLocalFallback && !!bucketName;
+}
+
+export async function getUploadPresignedUrl(key: string, contentType: string, expiresIn: number = 3600): Promise<string> {
+  if (useLocalFallback || !s3Client) {
+    throw new Error('S3 client not initialized or running in local fallback mode');
+  }
+  const command = new PutObjectCommand({
+    Bucket: bucketName,
+    Key: key,
+    ContentType: contentType,
+  });
+  
+  return await getSignedUrl(s3Client, command, { expiresIn });
+}
+
 export async function uploadFile(buffer: Buffer, fileName: string): Promise<string> {
-  // Bypasses S3 and local filesystem writes entirely in serverless environments
-  return `db://${fileName}`;
+  if (useLocalFallback || !s3Client) {
+    // If not using S3, return virtual db path for database storage fallback
+    return `db://${fileName}`;
+  }
+  
+  try {
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: fileName,
+      Body: buffer,
+      ContentType: getContentType(fileName),
+    });
+    
+    await s3Client.send(command);
+    logger.log(`✅ Uploaded file to S3 at: ${fileName}`);
+    return fileName;
+  } catch (error) {
+    console.error('❌ S3 upload failed:', error);
+    // If S3 upload fails, fall back to database storage in serverless environments
+    return `db://${fileName}`;
+  }
 }
 
 /**

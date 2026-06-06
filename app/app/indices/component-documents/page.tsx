@@ -465,8 +465,44 @@ export default function ComponentDocumentsPage() {
       const LIMIT_MB = 3.3;
       const LIMIT_BYTES = LIMIT_MB * 1024 * 1024;
       
+      // Step 1: Check if S3 is active by generating a presigned URL
+      let presignedUrl = "";
+      let cloudStoragePath = "";
+      let s3Available = false;
+
+      const presignedToastId = toast.loading("Checking storage configuration...");
+      try {
+        const checkRes = await fetch("/api/labour-index/presigned-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: selectedFile.name,
+            fileType: selectedFile.type,
+            componentType: uploadComponentType,
+            year: parseInt(uploadYear),
+            months: selectedMonths,
+          }),
+        });
+
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          if (checkData.s3Available) {
+            presignedUrl = checkData.presignedUrl;
+            cloudStoragePath = checkData.cloudStoragePath;
+            s3Available = true;
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to check/generate presigned URL, using DB storage fallback:", err);
+      } finally {
+        toast.dismiss(presignedToastId);
+      }
+
+      // Step 2: Handle PDF compression/optimization
+      // If S3 is available, we still run compression to optimize size but do NOT block if it fails to get below 3.3MB!
+      // If S3 is NOT available, we MUST block if it exceeds the limit.
       if (selectedFile.size > LIMIT_BYTES) {
-        const toastId = toast.loading("Optimizing PDF size client-side to fit within server payload limit...");
+        const toastId = toast.loading("Optimizing PDF size client-side...");
         try {
           const optimization = await optimizeAndCompressPdf(selectedFile, (msg) => {
             toast.loading(msg, { id: toastId });
@@ -481,24 +517,75 @@ export default function ComponentDocumentsPage() {
           } else {
             const finalMB = (optimization.compressedSize / (1024 * 1024)).toFixed(2);
             toast.dismiss(toastId);
-            toast.error(
-              `Vercel enforces a strict 4.5 MB request payload limit. Your file size is ${finalMB} MB (after browser optimization). Please compress your PDF using an online tool (e.g. Smallpdf) to get it below 3.3 MB before uploading.`,
-              { duration: 10000 }
-            );
+            
+            if (s3Available) {
+              // S3 is available, so we can upload the large file direct to S3 anyway!
+              fileToUpload = optimization.file;
+              toast.success(`PDF compression completed (${finalMB} MB). Uploading directly to cloud storage...`);
+            } else {
+              // No S3, so we must block
+              toast.error(
+                `Vercel enforces a strict 4.5 MB request payload limit. Your file size is ${finalMB} MB (after browser optimization). Please compress your PDF using an online tool (e.g. Smallpdf) to get it below 3.3 MB before uploading.`,
+                { duration: 10000 }
+              );
+              setIsUploading(false);
+              return;
+            }
+          }
+        } catch (compressErr) {
+          console.error("Compression failed:", compressErr);
+          toast.dismiss(toastId);
+          if (!s3Available) {
+            toast.error("Compression failed. Raw file is too large for database storage.");
             setIsUploading(false);
             return;
           }
-        } catch (compressErr) {
-          console.error("Compression failed, trying raw upload:", compressErr);
-          toast.dismiss(toastId);
+        }
+      }
+
+      // Step 3: Upload the file
+      if (s3Available && presignedUrl) {
+        const uploadToastId = toast.loading("Uploading document directly to Amazon S3...");
+        try {
+          const s3UploadRes = await fetch(presignedUrl, {
+            method: "PUT",
+            headers: {
+              "Content-Type": fileToUpload.type,
+            },
+            body: fileToUpload,
+          });
+
+          if (!s3UploadRes.ok) {
+            const errText = await s3UploadRes.text();
+            throw new Error(`S3 upload failed: ${s3UploadRes.statusText} ${errText.substring(0, 100)}`);
+          }
+          toast.dismiss(uploadToastId);
+          toast.success("Document uploaded to S3 successfully");
+        } catch (s3Err) {
+          console.error("S3 Direct upload failed, falling back to database upload:", s3Err);
+          toast.dismiss(uploadToastId);
+          toast.error("S3 direct upload failed. Trying to fall back to serverless database upload...");
+          s3Available = false; // Fallback
+          
+          // If we fell back, check if the file size is within limits
+          if (fileToUpload.size > LIMIT_BYTES) {
+            toast.error("File is too large for database fallback. Please reduce file size.");
+            setIsUploading(false);
+            return;
+          }
         }
       }
 
       const formData = new FormData();
-      formData.append("file", fileToUpload);
       formData.append("year", uploadYear);
       formData.append("months", JSON.stringify(selectedMonths));
       formData.append("componentType", uploadComponentType);
+
+      if (s3Available && cloudStoragePath) {
+        formData.append("cloudStoragePath", cloudStoragePath);
+      } else {
+        formData.append("file", fileToUpload);
+      }
 
       const response = await fetch("/api/labour-index/upload", {
         method: "POST",
@@ -508,7 +595,6 @@ export default function ComponentDocumentsPage() {
       const data = await handleApiResponse(response, "Upload failed");
       
       // Update provisional status if marked as provisional (default upload creates provisional, let's align database setting if needed)
-      // The API currently creates it, so let's update isProvisional if it matches the selector
       if (data.document && data.document.id && isProvisionalUpload === false) {
         const updateRes = await fetch("/api/labour-index/update", {
           method: "PUT",
@@ -525,7 +611,7 @@ export default function ComponentDocumentsPage() {
         await handleApiResponse(updateRes, "Failed to save remarks");
       }
 
-      toast.success("Document uploaded successfully");
+      toast.success("Document metadata registered successfully");
       
       // Reset form
       setSelectedFile(null);

@@ -29,14 +29,15 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
-    const file = formData.get("file") as File;
+    const file = formData.get("file") as File | null;
+    const cloudStoragePathParam = formData.get("cloudStoragePath") as string | null;
     const year = parseInt(formData.get("year") as string);
     const monthsString = formData.get("months") as string;
     const componentType = formData.get("componentType") as ComponentType;
 
-    if (!file) {
+    if (!file && !cloudStoragePathParam) {
       return NextResponse.json(
-        { error: "No file provided" },
+        { error: "No file or cloud storage path provided" },
         { status: 400 }
       );
     }
@@ -73,25 +74,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if file is PDF
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      return NextResponse.json(
-        { error: "Only PDF files are allowed" },
-        { status: 400 }
-      );
+    let cloudStoragePath = "";
+    let fileName = "";
+    let remarksValue: string | undefined = undefined;
+
+    if (cloudStoragePathParam) {
+      cloudStoragePath = cloudStoragePathParam;
+      fileName = cloudStoragePathParam.split("/").pop() || `${componentType.toLowerCase()}-${year}-${months.join("-")}.pdf`;
+    } else if (file) {
+      // Check if file is PDF
+      if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+        return NextResponse.json(
+          { error: "Only PDF files are allowed" },
+          { status: 400 }
+        );
+      }
+
+      // Convert file to buffer
+      const buffer = Buffer.from(await file.arrayBuffer());
+
+      // Generate S3 key with component type and timestamp
+      const timestamp = Date.now();
+      const monthsStr = months.sort((a, b) => a - b).join('-');
+      fileName = `${componentType.toLowerCase()}-${year}-${monthsStr}-${timestamp}.pdf`;
+      const s3Key = `component-indices/${componentType.toLowerCase()}/${fileName}`;
+
+      // Upload to S3 (returns db://... virtual path in serverless mode)
+      cloudStoragePath = await uploadFile(buffer, s3Key);
+      remarksValue = cloudStoragePath.startsWith('db://') ? `base64:${buffer.toString('base64')}` : undefined;
     }
-
-    // Convert file to buffer
-    const buffer = Buffer.from(await file.arrayBuffer());
-
-    // Generate S3 key with component type and timestamp
-    const timestamp = Date.now();
-    const monthsStr = months.sort((a, b) => a - b).join('-');
-    const fileName = `${componentType.toLowerCase()}-${year}-${monthsStr}-${timestamp}.pdf`;
-    const s3Key = `component-indices/${componentType.toLowerCase()}/${fileName}`;
-
-    // Upload to S3 (returns db://... virtual path in serverless mode)
-    const cloudStoragePath = await uploadFile(buffer, s3Key);
 
     // Create new document (storing PDF as Base64 in remarks if database-backed)
     const newDoc = await prisma.labourIndexDocument.create({
@@ -102,7 +113,7 @@ export async function POST(request: NextRequest) {
         fileName,
         cloudStoragePath,
         uploadedBy: user.id,
-        remarks: cloudStoragePath.startsWith('db://') ? `base64:${buffer.toString('base64')}` : undefined,
+        remarks: remarksValue,
       },
     });
 
