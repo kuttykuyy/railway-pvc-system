@@ -16,6 +16,20 @@ import { getSteelIndexNamesForZone, getFuelIndexNameForBill, getSteelCityForZone
 import rateLimiter, { RATE_LIMITS, getIdentifier } from '@/lib/rate-limiter';
 import { embedLabourIndex, embedComponentIndicesRange } from '@/lib/pdf/utils/labour-index-embedder';
 import { PDFDocument } from 'pdf-lib';
+import { ComponentType } from '@prisma/client';
+
+const STEEL_COMPONENT_TYPES = [ComponentType.TMT_BARS, ComponentType.ANGLE_CHANNEL, ComponentType.PLATES, ComponentType.OTHER_SECTIONS];
+const NON_STEEL_COMPONENT_TYPES = Object.values(ComponentType).filter(t => !STEEL_COMPONENT_TYPES.includes(t as any)) as ComponentType[];
+
+function billHasSteel(pvc: any): boolean {
+  if (!pvc) return false;
+  return (pvc.steelPvc ?? 0) > 0
+    || (pvc.dedicatedSteelPvc ?? 0) > 0
+    || (pvc.dedicatedSteelTmtBarsPvc ?? 0) > 0
+    || (pvc.dedicatedSteelAngleChannelPvc ?? 0) > 0
+    || (pvc.dedicatedSteelPlatesPvc ?? 0) > 0
+    || (pvc.dedicatedSteelOtherSectionsPvc ?? 0) > 0;
+}
 import jwt from 'jsonwebtoken';
 
 export const dynamic = "force-dynamic";
@@ -616,9 +630,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       // Append index documents (same as detailed format)
       let irFinalBytes: Uint8Array = irPdfBytes;
       try {
+        const irComponentTypes = billHasSteel(bill.pvcCalculation) ? undefined : NON_STEEL_COMPONENT_TYPES;
         irFinalBytes = await embedComponentIndicesRange(new Uint8Array(irPdfBytes), {
           startDate: new Date(bill.contract.baseMonth),
           endDate: new Date(bill.dateOfMeasurement),
+          componentTypes: irComponentTypes,
         });
       } catch (err) {
         console.error('IR PDF: error embedding index documents:', err);
@@ -4165,9 +4181,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         // Count documents before embedding
         const initialPageCount = PDFDocument.load(pdfWithFuelAverage).then(doc => doc.getPageCount());
         
+        const detailedComponentTypes = billHasSteel(bill.pvcCalculation) ? undefined : NON_STEEL_COMPONENT_TYPES;
         finalPdfBytes = await embedComponentIndicesRange(pdfWithFuelAverage, {
           startDate: componentIndexStartDate,
           endDate: componentIndexEndDate,
+          componentTypes: detailedComponentTypes,
         });
         
         // Count documents after embedding

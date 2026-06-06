@@ -17,6 +17,23 @@ import { withTimeout, TIMEOUT_DEFAULTS } from '@/lib/api-timeout';
 import { getSteelIndexNamesForZone, getSteelCityForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
 import rateLimiter, { RATE_LIMITS, getIdentifier } from '@/lib/rate-limiter';
 import { embedLabourIndex, embedComponentIndicesRange } from '@/lib/pdf/utils/labour-index-embedder';
+import { ComponentType } from '@prisma/client';
+
+const STEEL_COMPONENT_TYPES = [ComponentType.TMT_BARS, ComponentType.ANGLE_CHANNEL, ComponentType.PLATES, ComponentType.OTHER_SECTIONS];
+const NON_STEEL_COMPONENT_TYPES = Object.values(ComponentType).filter(t => !STEEL_COMPONENT_TYPES.includes(t as any)) as ComponentType[];
+
+function anyBillHasSteel(bills: any[]): boolean {
+  return bills.some(b => {
+    const pvc = b.pvcCalculation;
+    if (!pvc) return false;
+    return (pvc.steelPvc ?? 0) > 0
+      || (pvc.dedicatedSteelPvc ?? 0) > 0
+      || (pvc.dedicatedSteelTmtBarsPvc ?? 0) > 0
+      || (pvc.dedicatedSteelAngleChannelPvc ?? 0) > 0
+      || (pvc.dedicatedSteelPlatesPvc ?? 0) > 0
+      || (pvc.dedicatedSteelOtherSectionsPvc ?? 0) > 0;
+  });
+}
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes for bulk PDF generation
@@ -2649,9 +2666,11 @@ export async function POST(request: NextRequest) {
         return measurementDate > latest ? measurementDate : latest;
       }, new Date(firstBill.dateOfMeasurement));
 
+      const bulkComponentTypes = anyBillHasSteel(bills) ? undefined : NON_STEEL_COMPONENT_TYPES;
       const finalPdfBytes = await embedComponentIndicesRange(initialPdfBytes, {
         startDate: componentIndexStartDate,
         endDate: componentIndexEndDate,
+        componentTypes: bulkComponentTypes,
       });
 
       const pdfBuffer = Buffer.from(finalPdfBytes);
