@@ -1085,6 +1085,19 @@ export default function BillsPage() {
               </div>
             </div>
           )}
+          {canCreateBulkBills() ? (
+            <Button asChild variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50 font-semibold rounded-xl w-full sm:w-auto" size="lg">
+              <Link href="/bills/bulk-new">
+                <Plus className="h-5 w-5 mr-2" />
+                Bulk Bills
+              </Link>
+            </Button>
+          ) : (
+            <Button disabled variant="outline" className="border-gray-300 text-gray-400 font-semibold rounded-xl w-full sm:w-auto cursor-not-allowed opacity-60" size="lg">
+              <Plus className="h-5 w-5 mr-2" />
+              Bulk Bills
+            </Button>
+          )}
           {canCreateSingleBill() ? (
             <Button asChild className="bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-md shadow-purple-500/10 rounded-xl w-full sm:w-auto" size="lg">
               <Link href="/bills/new">

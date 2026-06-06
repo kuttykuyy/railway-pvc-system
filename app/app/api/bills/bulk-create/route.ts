@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user has a free account or sufficient balance
-    const isFreeAccount = userWithAccount.customProcessingFee === 0 || userWithAccount.isFreeAccount || userWithAccount.role === 'superadmin' || userWithAccount.role === 'railway_official';
+    const isFreeAccount = userWithAccount.customProcessingFee === 0 || userWithAccount.isFreeAccount || userWithAccount.role === 'superadmin' || userWithAccount.role === 'admin' || userWithAccount.role === 'railway_official';
     const billingSettings = await getBillingSettings();
     const processingFeePerBill = isFreeAccount ? 0 : billingSettings.billCost || 199;
     const totalProcessingFee = processingFeePerBill * bills.length;
@@ -155,6 +155,20 @@ export async function POST(request: NextRequest) {
       } else if (measurementDate <= baseMonth) {
         validationErrors.push(`Bill ${billInput.billNo}: Measurement date must be after the contract base month`);
       }
+
+      const classificationTotal = billInput.classificationEntries.reduce(
+        (sum, entry) => sum + (Number(entry.amount) || 0),
+        0
+      );
+      const declaredBillAmount = Number(billInput.grossBillAmount || billInput.billAmount || 0);
+
+      if (declaredBillAmount <= 0) {
+        validationErrors.push(`Bill ${billInput.billNo}: Bill amount is required`);
+      } else if (Math.abs(declaredBillAmount - classificationTotal) > 0.01) {
+        validationErrors.push(
+          `Bill ${billInput.billNo}: Classification total (${classificationTotal.toFixed(2)}) must match bill amount (${declaredBillAmount.toFixed(2)})`
+        );
+      }
     }
 
     // If there are any validation errors or duplicates, return them all at once
@@ -200,11 +214,12 @@ export async function POST(request: NextRequest) {
       const measurementDate = new Date(billInput.dateOfMeasurement);
       const quarter = getQuarterFromDate(measurementDate, baseMonth);
 
-      // Calculate gross bill amount
-      const grossBillAmount = billInput.classificationEntries.reduce(
+      // Validate declared amount above, then preserve it for the bill total.
+      const classificationTotal = billInput.classificationEntries.reduce(
         (sum, entry) => sum + entry.amount,
         0
       );
+      const grossBillAmount = Number(billInput.grossBillAmount || billInput.billAmount || classificationTotal);
 
       // Generate PVC auto-number
       const sequenceNumber = String(billCountForContract + i + 1).padStart(3, '0');

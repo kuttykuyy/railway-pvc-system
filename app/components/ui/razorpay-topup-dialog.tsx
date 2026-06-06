@@ -25,8 +25,6 @@ declare global {
   }
 }
 
-type GstOption = 'include' | 'exclude' | 'without';
-
 const MIN_TOPUP_AMOUNT = 1000;
 
 export function RazorpayTopupDialog({ 
@@ -35,7 +33,6 @@ export function RazorpayTopupDialog({
   onSuccess 
 }: RazorpayTopupDialogProps) {
   const [creditAmount, setCreditAmount] = useState<string>('1000');
-  const [gstOption, setGstOption] = useState<GstOption>('include');
   const [loading, setLoading] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
   const [config, setConfig] = useState<{ enabled: boolean; keyId: string | null } | null>(null);
@@ -88,28 +85,21 @@ export function RazorpayTopupDialog({
       // Reset states when dialog opens
       setLoading(false);
       setCreditAmount('1000');
-      setGstOption('include');
       setConfigError(null);
       fetchConfig();
     }
   }, [open]);
 
   const calculateTotalAmount = () => {
-    const enteredAmount = parseFloat(creditAmount) || 0;
-    
-    // GST is always included - Full amount (including GST) goes to wallet
-    // Calculate GST component: enteredAmount = baseAmount * 1.18
-    // So baseAmount = enteredAmount / 1.18
-    // And GST = enteredAmount - baseAmount
-    const baseAmount = enteredAmount / 1.18;
-    const gst = enteredAmount - baseAmount;
-    
-    return { 
-      enteredAmount,           // What user enters
-      baseAmount,              // Base amount before GST
-      creditToReceive: enteredAmount, // Full amount including GST goes to wallet
-      gst,                     // GST component (18%)
-      totalToPay: enteredAmount // What user pays
+    const baseAmount = parseFloat(creditAmount) || 0;
+    const gst = baseAmount * 0.18;
+    const totalToPay = baseAmount + gst;
+
+    return {
+      baseAmount,
+      gst,
+      creditToReceive: baseAmount,
+      totalToPay,
     };
   };
 
@@ -124,13 +114,12 @@ export function RazorpayTopupDialog({
       return;
     }
 
-    const amount = parseFloat(creditAmount);
-    if (!amount || amount <= 0) {
+    if (!baseAmount || baseAmount <= 0) {
       toast.error('Please enter a valid amount');
       return;
     }
 
-    if (amount < MIN_TOPUP_AMOUNT) {
+    if (baseAmount < MIN_TOPUP_AMOUNT) {
       toast.error(`Minimum top-up amount is ₹${MIN_TOPUP_AMOUNT.toLocaleString('en-IN')}`);
       return;
     }
@@ -145,11 +134,10 @@ export function RazorpayTopupDialog({
       const orderRes = await fetch('/api/razorpay/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           creditAmount: creditToReceive,
           totalAmount: totalToPay,
           gstAmount: gst,
-          gstOption: gstOption 
         }),
         signal: controller.signal,
       });
@@ -174,7 +162,7 @@ export function RazorpayTopupDialog({
         amount: orderData.amount * 100, // Convert to paise
         currency: orderData.currency,
         name: 'Railway PVC System',
-        description: `Credit Top-up - ₹${amount}`,
+        description: `Credit Top-up - ₹${baseAmount}`,
         order_id: orderData.orderId,
         handler: async function (response: any) {
           console.log('[Razorpay] Payment successful, verifying...', {
@@ -254,7 +242,7 @@ export function RazorpayTopupDialog({
           contact: '',
         },
         notes: {
-          creditAmount: amount,
+          creditAmount: baseAmount,
         },
         theme: {
           color: '#3B82F6',
@@ -335,7 +323,7 @@ export function RazorpayTopupDialog({
     }
   };
 
-  const { enteredAmount, baseAmount, creditToReceive, gst, totalToPay } = calculateTotalAmount();
+  const { baseAmount, gst, creditToReceive, totalToPay } = calculateTotalAmount();
 
   return (
     <>
@@ -412,21 +400,6 @@ export function RazorpayTopupDialog({
               </p>
             </div>
 
-            {/* GST Information - Include GST Only */}
-            <div className="space-y-2">
-              <Label>GST Information</Label>
-              <div className="flex items-center space-x-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">
-                    GST (18%) is included in your payment
-                  </p>
-                  <p className="text-xs text-gray-600 mt-1">
-                    The full amount you pay (including GST) will be added to your wallet
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* Price Breakdown */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
@@ -450,7 +423,7 @@ export function RazorpayTopupDialog({
             <Alert>
               <CheckCircle className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-xs">
-                After successful payment, the full amount (including GST) will be added to your wallet instantly. 
+                After successful payment, ₹{creditToReceive.toFixed(2)} credits will be added to your wallet instantly.
                 You'll then be asked to provide billing details to generate the GST invoice.
               </AlertDescription>
             </Alert>
@@ -470,7 +443,7 @@ export function RazorpayTopupDialog({
             </Button>
             <Button
               onClick={handlePayment}
-              disabled={loading || !razorpayLoaded || !config?.enabled || configLoading || !!configError || enteredAmount < MIN_TOPUP_AMOUNT}
+              disabled={loading || !razorpayLoaded || !config?.enabled || configLoading || !!configError || baseAmount < MIN_TOPUP_AMOUNT}
               className="w-full sm:w-auto"
             >
               {loading ? (
