@@ -470,16 +470,40 @@ function NewBillPageContent() {
         setPreviousBills([]);
         return;
       }
-      
+
       const result = await response.json();
-      // API returns paginated response: { data: [...], pagination: {...} }
-      setPreviousBills(result.data || []);
+      const bills = result.data || [];
+      setPreviousBills(bills);
+
+      // Auto carry-forward zone, fuel, and suggested bill number from the latest bill
+      if (bills.length > 0) {
+        const latest = bills[0];
+        setFormData(prev => ({
+          ...prev,
+          zone: latest.zone || prev.zone,
+          fuelPriceType: latest.fuelPriceType || prev.fuelPriceType,
+          billNo: suggestNextBillNo(latest.billNo),
+        }));
+        toast.success(`Carried forward zone, fuel & bill number from ${latest.billNo || 'previous bill'}`, { duration: 3000, icon: '📋' });
+      }
     } catch (error) {
       console.error('Error fetching previous bills:', error);
       setPreviousBills([]);
     } finally {
       setIsLoadingPreviousBills(false);
     }
+  };
+
+  const suggestNextBillNo = (prevBillNo: string): string => {
+    if (!prevBillNo) return '';
+    // Increment trailing integer: "RA/001/2024" → "RA/002/2024", "Bill-5" → "Bill-6"
+    const match = prevBillNo.match(/^(.*?)(\d+)(\D*)$/);
+    if (match) {
+      const [, prefix, numStr, suffix] = match;
+      const next = String(parseInt(numStr, 10) + 1).padStart(numStr.length, '0');
+      return `${prefix}${next}${suffix}`;
+    }
+    return '';
   };
 
   const fetchPreviousBillClassification = async () => {
@@ -988,6 +1012,26 @@ function NewBillPageContent() {
                           Select the contract this bill belongs to. If you haven&apos;t added one yet, go to Contracts &rarr; New Contract first.
                         </p>
                       </div>
+
+                      {/* Carry-forward summary banner */}
+                      {previousBills.length > 0 && (() => {
+                        const latest = previousBills[0];
+                        const cumPvc = latest.pvcCalculation?.cumulativePvc;
+                        return (
+                          <div className="flex items-start gap-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                              <p className="font-semibold text-emerald-900">Carried forward from {latest.billNo || 'previous bill'}</p>
+                              <p className="text-emerald-700">Zone, fuel basis, and bill number auto-filled. Edit below if needed.</p>
+                              {cumPvc != null && (
+                                <p className="text-emerald-800 font-medium">
+                                  Previous cumulative PVC: ₹{cumPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       <div className="space-y-2">
                         <Label htmlFor="billNo">
