@@ -25,7 +25,8 @@ import {
   CreditHistoryDialog,
   ProcessingFeeDialog,
   RoleDialog,
-  DeleteUserDialog
+  DeleteUserDialog,
+  ContractLimitDialog,
 } from './components';
 
 // Import utilities and types
@@ -47,6 +48,7 @@ export default function AdminUsersPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [processingFeeDialogOpen, setProcessingFeeDialogOpen] = useState(false);
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
+  const [contractLimitDialogOpen, setContractLimitDialogOpen] = useState(false);
   const [deletingUser, setDeletingUser] = useState(false);
 
   // Filter state
@@ -101,6 +103,20 @@ export default function AdminUsersPage() {
   const openDeleteDialog = (user: User) => {
     setSelectedUser(user);
     setDeleteDialogOpen(true);
+  };
+
+  const openContractLimitDialog = (user: User) => {
+    setSelectedUser(user);
+    setContractLimitDialogOpen(true);
+  };
+
+  const handleContractLimitSubmit = async (userId: string, contractLimitOverride: number | null) => {
+    await fetch(`/api/admin/users/${userId}/contract-limit`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contractLimitOverride }),
+    });
+    await fetchUsers();
   };
 
   // Form submission handlers
@@ -248,6 +264,7 @@ export default function AdminUsersPage() {
                 onOpenProcessingFeeDialog={openProcessingFeeDialog}
                 onOpenRoleDialog={openRoleDialog}
                 onOpenDeleteDialog={openDeleteDialog}
+                onOpenContractLimitDialog={openContractLimitDialog}
               />
             ))}
           </div>
@@ -290,6 +307,13 @@ export default function AdminUsersPage() {
         onOpenChange={setDeleteDialogOpen}
         onConfirm={handleDeleteUser}
         deleting={deletingUser}
+      />
+
+      <ContractLimitDialog
+        user={selectedUser}
+        open={contractLimitDialogOpen}
+        onOpenChange={setContractLimitDialogOpen}
+        onSubmit={handleContractLimitSubmit}
       />
     </div>
   );

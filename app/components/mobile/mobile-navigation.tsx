@@ -56,7 +56,7 @@ const mobileNavSections = [
     title: 'Account',
     items: [
       { name: 'Profile', href: '/profile', icon: UserCircle, adminOnly: false },
-      { name: 'Billing', href: '/billing', icon: CreditCard, adminOnly: false },
+      { name: 'Profile & Billing', href: '/profile', icon: CreditCard, adminOnly: false },
       { name: 'PVC Check Analytics', href: '/admin/analytics', icon: TrendingUp, adminOnly: true },
       { name: 'User Management', href: '/admin/users', icon: User, adminOnly: true },
       { name: 'User Permissions', href: '/admin/user-permissions', icon: Settings, adminOnly: true },

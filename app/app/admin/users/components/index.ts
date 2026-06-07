@@ -11,3 +11,4 @@ export { CreditHistoryDialog } from './CreditHistoryDialog';
 export { ProcessingFeeDialog } from './ProcessingFeeDialog';
 export { RoleDialog } from './RoleDialog';
 export { DeleteUserDialog } from './DeleteUserDialog';
+export { ContractLimitDialog } from './ContractLimitDialog';

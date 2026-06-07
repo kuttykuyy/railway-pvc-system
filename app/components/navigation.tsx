@@ -388,12 +388,6 @@ export default function Navigation() {
                           <span>Profile & Settings</span>
                         </Link>
                       </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link href="/billing" className="flex items-center cursor-pointer">
-                          <CreditCard className="mr-2 h-4 w-4" />
-                          <span>Billing</span>
-                        </Link>
-                      </DropdownMenuItem>
                       <DropdownMenuItem 
                         onClick={handleSignOut}
                         className="text-red-600 hover:text-red-700 focus:text-red-700 cursor-pointer"
@@ -591,9 +585,9 @@ export default function Navigation() {
                       size="sm"
                       className="w-full justify-start text-gray-700 hover:bg-gray-100"
                     >
-                      <Link href="/billing" onClick={() => setIsOpen(false)}>
+                      <Link href="/profile" onClick={() => setIsOpen(false)}>
                         <CreditCard className="h-4 w-4" />
-                        <span className="ml-2">Billing</span>
+                        <span className="ml-2">Profile & Billing</span>
                       </Link>
                     </Button>
                     <Button

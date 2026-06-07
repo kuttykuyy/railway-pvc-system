@@ -56,7 +56,7 @@ export default function QuickActions({ stats }: QuickActionsProps) {
     },
     {
       name: 'Billing',
-      href: '/billing',
+      href: '/profile',
       icon: CreditCard,
       color: 'bg-orange-500 hover:bg-orange-600',
       description: 'Billing & payments'

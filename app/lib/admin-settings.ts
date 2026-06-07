@@ -158,56 +158,13 @@ export async function isEmailVerificationRequired(): Promise<boolean> {
 
 /**
  * Get Railway Official free-account limits
- * RAILWAY_OFFICIAL_MONTHLY_BILL_LIMIT  – max bills per calendar month (0 = unlimited)
- * RAILWAY_OFFICIAL_CONTRACT_LIMIT      – max contracts total (0 = unlimited)
+ * RAILWAY_OFFICIAL_CONTRACT_LIMIT – max contracts total (0 = unlimited)
  */
 export async function getRailwayOfficialLimits(): Promise<{
-  monthlyBillLimit: number;
   contractLimit: number;
 }> {
-  const [monthlyBillLimit, contractLimit] = await Promise.all([
-    getAdminSetting('RAILWAY_OFFICIAL_MONTHLY_BILL_LIMIT', 10),
-    getAdminSetting('RAILWAY_OFFICIAL_CONTRACT_LIMIT', 5),
-  ]);
-  return {
-    monthlyBillLimit: Number(monthlyBillLimit),
-    contractLimit: Number(contractLimit),
-  };
-}
-
-/**
- * Check Railway Official monthly bill usage for the current calendar month
- */
-export async function checkRailwayOfficialBillQuota(userId: string): Promise<{
-  allowed: boolean;
-  used: number;
-  limit: number;
-  remaining: number;
-}> {
-  const { monthlyBillLimit } = await getRailwayOfficialLimits();
-
-  // 0 means unlimited
-  if (monthlyBillLimit === 0) {
-    return { allowed: true, used: 0, limit: 0, remaining: Infinity };
-  }
-
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-  const used = await prisma.bill.count({
-    where: {
-      contract: { userId },
-      createdAt: { gte: monthStart, lt: monthEnd },
-    },
-  });
-
-  return {
-    allowed: used < monthlyBillLimit,
-    used,
-    limit: monthlyBillLimit,
-    remaining: Math.max(0, monthlyBillLimit - used),
-  };
+  const contractLimit = await getAdminSetting('RAILWAY_OFFICIAL_CONTRACT_LIMIT', 5);
+  return { contractLimit: Number(contractLimit) };
 }
 
 /**
@@ -219,18 +176,25 @@ export async function checkRailwayOfficialContractQuota(userId: string): Promise
   limit: number;
   remaining: number;
 }> {
-  const { contractLimit } = await getRailwayOfficialLimits();
+  const { contractLimit: globalLimit } = await getRailwayOfficialLimits();
 
-  if (contractLimit === 0) {
+  // Per-user override takes precedence over global limit
+  const userRecord = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { contractLimitOverride: true },
+  });
+  const effectiveLimit = userRecord?.contractLimitOverride ?? globalLimit;
+
+  if (effectiveLimit === 0) {
     return { allowed: true, used: 0, limit: 0, remaining: Infinity };
   }
 
   const used = await prisma.contract.count({ where: { userId } });
 
   return {
-    allowed: used < contractLimit,
+    allowed: used < effectiveLimit,
     used,
-    limit: contractLimit,
-    remaining: Math.max(0, contractLimit - used),
+    limit: effectiveLimit,
+    remaining: Math.max(0, effectiveLimit - used),
   };
 }

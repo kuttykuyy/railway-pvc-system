@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
         isTrialActive: true,
         customProcessingFee: true,
         isFreeAccount: true,
+        contractLimitOverride: true,
         createdAt: true,
         customerAccount: {
           select: {

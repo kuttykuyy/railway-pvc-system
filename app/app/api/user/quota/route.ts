@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import {
-  checkRailwayOfficialBillQuota,
-  checkRailwayOfficialContractQuota,
-} from '@/lib/admin-settings';
+import { checkRailwayOfficialContractQuota } from '@/lib/admin-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,17 +35,13 @@ export async function GET(_req: NextRequest) {
     if (!user.railwayZone) missingPostingFields.push('Railway Zone');
     if (!user.division)    missingPostingFields.push('Division');
 
-    const [billQuota, contractQuota] = await Promise.all([
-      checkRailwayOfficialBillQuota(user.id),
-      checkRailwayOfficialContractQuota(user.id),
-    ]);
+    const contractQuota = await checkRailwayOfficialContractQuota(user.id);
 
     return NextResponse.json({
       applicable: true,
       zone: user.railwayZone || null,
       postingComplete: missingPostingFields.length === 0,
       missingPostingFields,
-      bills: billQuota,
       contracts: contractQuota,
     });
   } catch (err: any) {

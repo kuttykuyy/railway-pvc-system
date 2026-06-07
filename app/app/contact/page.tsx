@@ -188,7 +188,7 @@ export default function ContactPage() {
                 </Button>
 
                 <Button asChild size="lg" variant="outline">
-                  <Link href="/billing">
+                  <Link href="/profile">
                     <Mail className="h-5 w-5 mr-2" />
                     Billing Info
                   </Link>

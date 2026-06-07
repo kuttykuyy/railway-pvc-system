@@ -21,7 +21,6 @@ export default function RailwayOfficialSettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [monthlyBillLimit, setMonthlyBillLimit] = useState('10');
   const [contractLimit, setContractLimit] = useState('5');
 
   useEffect(() => {
@@ -32,20 +31,17 @@ export default function RailwayOfficialSettingsPage() {
       })
       .then((settings: Setting[] | null) => {
         if (!settings) return;
-        const billLimit = settings.find((s) => s.key === 'RAILWAY_OFFICIAL_MONTHLY_BILL_LIMIT');
-        const ctLimit   = settings.find((s) => s.key === 'RAILWAY_OFFICIAL_CONTRACT_LIMIT');
-        if (billLimit) setMonthlyBillLimit(billLimit.value);
-        if (ctLimit)   setContractLimit(ctLimit.value);
+        const ctLimit = settings.find((s) => s.key === 'RAILWAY_OFFICIAL_CONTRACT_LIMIT');
+        if (ctLimit) setContractLimit(ctLimit.value);
       })
       .catch(() => toast.error('Failed to load settings'))
       .finally(() => setLoading(false));
   }, [router]);
 
   const handleSave = async () => {
-    const mbl = parseInt(monthlyBillLimit, 10);
-    const cl  = parseInt(contractLimit, 10);
-    if (isNaN(mbl) || mbl < 0 || isNaN(cl) || cl < 0) {
-      toast.error('Values must be 0 or greater (0 = unlimited)');
+    const cl = parseInt(contractLimit, 10);
+    if (isNaN(cl) || cl < 0) {
+      toast.error('Value must be 0 or greater (0 = unlimited)');
       return;
     }
 
@@ -56,13 +52,12 @@ export default function RailwayOfficialSettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           settings: [
-            { key: 'RAILWAY_OFFICIAL_MONTHLY_BILL_LIMIT', value: String(mbl), dataType: 'number' },
-            { key: 'RAILWAY_OFFICIAL_CONTRACT_LIMIT',     value: String(cl),  dataType: 'number' },
+            { key: 'RAILWAY_OFFICIAL_CONTRACT_LIMIT', value: String(cl), dataType: 'number' },
           ],
         }),
       });
       if (!res.ok) throw new Error('Failed to save');
-      toast.success('Railway Official limits updated');
+      toast.success('Railway Official contract limit updated');
     } catch {
       toast.error('Failed to save settings');
     } finally {
@@ -94,34 +89,12 @@ export default function RailwayOfficialSettingsPage() {
 
       <Card className="rounded-2xl border-slate-200 shadow-sm">
         <CardHeader className="border-b border-slate-100 pb-4">
-          <CardTitle className="text-base">Usage limits</CardTitle>
+          <CardTitle className="text-base">Contract limit</CardTitle>
           <CardDescription>
-            Set to <strong>0</strong> for unlimited. Changes take effect immediately for new bill/contract creation.
+            Set to <strong>0</strong> for unlimited. Changes take effect immediately for new contract creation.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
-          {/* Monthly bill limit */}
-          <div className="space-y-2">
-            <Label htmlFor="monthly-bill-limit" className="text-sm font-semibold text-slate-700">
-              Monthly bill limit
-            </Label>
-            <div className="flex items-center gap-3">
-              <Input
-                id="monthly-bill-limit"
-                type="number"
-                min="0"
-                value={monthlyBillLimit}
-                onChange={(e) => setMonthlyBillLimit(e.target.value)}
-                className="w-32 rounded-lg"
-              />
-              <span className="text-sm text-slate-500">bills per calendar month</span>
-            </div>
-            <p className="flex items-center gap-1.5 text-xs text-slate-400">
-              <Info className="h-3.5 w-3.5" />
-              Resets on the 1st of every month. Currently set to <strong>{monthlyBillLimit === '0' ? 'unlimited' : `${monthlyBillLimit} bills/month`}</strong>.
-            </p>
-          </div>
-
           {/* Contract limit */}
           <div className="space-y-2">
             <Label htmlFor="contract-limit" className="text-sm font-semibold text-slate-700">

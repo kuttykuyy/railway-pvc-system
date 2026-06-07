@@ -28,6 +28,7 @@ interface UserCardProps {
   onOpenProcessingFeeDialog: (user: User) => void;
   onOpenRoleDialog: (user: User) => void;
   onOpenDeleteDialog: (user: User) => void;
+  onOpenContractLimitDialog: (user: User) => void;
 }
 
 export function UserCard({
@@ -36,7 +37,8 @@ export function UserCard({
   onOpenHistoryDialog,
   onOpenProcessingFeeDialog,
   onOpenRoleDialog,
-  onOpenDeleteDialog
+  onOpenDeleteDialog,
+  onOpenContractLimitDialog,
 }: UserCardProps) {
   const canDelete = user.role !== 'admin' && user.email !== '30prasath93@gmail.com';
 
@@ -127,6 +129,12 @@ export function UserCard({
                     Railway Official (Free)
                   </Badge>
                 )}
+                {(user.role === 'railway_official' || user.role === 'RAILWAY_OFFICIAL') && user.contractLimitOverride !== null && user.contractLimitOverride !== undefined && (
+                  <Badge variant="outline" className="bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold rounded-lg px-2.5 py-0.5">
+                    <FolderOpen className="h-3 w-3 mr-1" />
+                    Limit: {user.contractLimitOverride === 0 ? '∞' : user.contractLimitOverride}
+                  </Badge>
+                )}
 
                 {user.role === 'superadmin' && (
                   <Badge variant="default" className="bg-purple-50 border border-purple-200 text-purple-700 text-[10px] font-bold hover:bg-purple-100 rounded-lg px-2.5 py-0.5">
@@ -197,6 +205,12 @@ export function UserCard({
                   <History className="h-4 w-4 mr-3 text-slate-500" />
                   Inspect Audit Logs
                 </DropdownMenuItem>
+                {(user.role === 'railway_official' || user.role === 'RAILWAY_OFFICIAL') && (
+                  <DropdownMenuItem onClick={() => onOpenContractLimitDialog(user)} className="focus:bg-slate-50 focus:text-slate-900 rounded-xl px-3.5 py-2 text-xs font-semibold cursor-pointer">
+                    <FolderOpen className="h-4 w-4 mr-3 text-cyan-500" />
+                    Set Contract Limit
+                  </DropdownMenuItem>
+                )}
                 {canDelete && (
                   <>
                     <DropdownMenuSeparator className="bg-slate-100" />

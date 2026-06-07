@@ -15,6 +15,7 @@ export interface User {
   isTrialActive: boolean;
   customProcessingFee: number | null;
   isFreeAccount: boolean;
+  contractLimitOverride: number | null;
   createdAt: string;
   customerAccount: {
     creditBalance: number;

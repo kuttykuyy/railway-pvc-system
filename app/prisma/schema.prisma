@@ -81,6 +81,7 @@ model User {
   railwayZone           String?
   railwayZoneName       String?
   section               String?
+  contractLimitOverride Int?
   resetToken            String?
   resetTokenExpiry      DateTime?
   accounts              Account[]

@@ -75,12 +75,6 @@ const DEFAULT_SETTINGS = [
     dataType: 'boolean'
   },
   {
-    key: 'RAILWAY_OFFICIAL_MONTHLY_BILL_LIMIT',
-    value: '10',
-    description: 'Maximum number of bills a Railway Official free account can create per calendar month. Set to 0 for unlimited.',
-    dataType: 'number'
-  },
-  {
     key: 'RAILWAY_OFFICIAL_CONTRACT_LIMIT',
     value: '5',
     description: 'Maximum number of contracts a Railway Official free account can create in total. Set to 0 for unlimited.',

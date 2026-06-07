@@ -980,7 +980,7 @@ export default function ClassAnalyzerPage() {
                 </p>
                 <Button 
                   variant="outline" 
-                  onClick={() => router.push('/billing')}
+                  onClick={() => router.push('/profile')}
                   className="w-full border-slate-200 text-slate-700 hover:bg-slate-50 text-xs rounded-xl h-10 font-bold"
                 >
                   Top Up Wallet Credits
