@@ -113,6 +113,7 @@ function NewBillPageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   const [showProvisionalNotification, setShowProvisionalNotification] = useState(false);
   
@@ -633,8 +634,17 @@ function NewBillPageContent() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleConfirmAndSubmit = async () => {
+    setShowConfirmDialog(false);
+    await handleSubmit();
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setShowConfirmDialog(true);
+  };
+
+  const handleSubmit = async () => {
     setSaving(true);
     setError('');
 
@@ -968,7 +978,7 @@ function NewBillPageContent() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-6">
-              <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              <form onSubmit={handleFormSubmit} className="space-y-4" noValidate>
                 {error && (
                   <div ref={errorRef}>
                     <StatusMessage type="error" title="Error" message={error} />
@@ -1480,6 +1490,58 @@ function NewBillPageContent() {
           </Card>
         </div>
       </div>
+
+      {/* Bill Confirmation Dialog */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-250">
+            {/* Header */}
+            <div className="bg-amber-50 border-b border-amber-100 px-6 py-5 flex items-start gap-4">
+              <div className="p-2.5 rounded-xl bg-amber-100 shrink-0">
+                <AlertTriangle className="h-6 w-6 text-amber-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Confirm Before Submitting</h2>
+                <p className="text-sm text-slate-500 mt-0.5">Bills cannot be edited after creation. Please verify all details.</p>
+              </div>
+            </div>
+
+            {/* Checklist */}
+            <div className="px-6 py-5 space-y-3">
+              {[
+                { label: 'Contract', value: contracts.find(c => c.id === formData.contractId)?.agreementNo || '—' },
+                { label: 'Bill No', value: formData.billNo || '—' },
+                { label: 'Zone', value: formData.zone || '—' },
+                { label: 'Date of Measurement', value: formData.dateOfMeasurement || '—' },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex items-center justify-between text-sm py-2 border-b border-slate-100 last:border-0">
+                  <span className="text-slate-500 font-medium">{label}</span>
+                  <span className="font-bold text-slate-800">{value}</span>
+                </div>
+              ))}
+              <p className="text-xs text-red-600 font-semibold pt-1">
+                ⚠ Once submitted, this bill cannot be edited. Delete and recreate if corrections are needed.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="px-6 pb-6 flex gap-3">
+              <button
+                onClick={() => setShowConfirmDialog(false)}
+                className="flex-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold py-2.5 transition-colors"
+              >
+                Go Back & Review
+              </button>
+              <button
+                onClick={handleConfirmAndSubmit}
+                className="flex-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2.5 transition-colors"
+              >
+                Yes, Submit Bill
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Provisional Date Notification */}
       <ProvisionalDateNotification
