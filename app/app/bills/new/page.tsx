@@ -198,12 +198,23 @@ function NewBillPageContent() {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState<any>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [roQuota, setRoQuota] = useState<{ applicable: boolean; bills?: { used: number; limit: number; remaining: number; allowed: boolean } } | null>(null);
+  const [roQuota, setRoQuota] = useState<{
+    applicable: boolean;
+    zone?: string | null;
+    bills?: { used: number; limit: number; remaining: number; allowed: boolean };
+  } | null>(null);
 
   useEffect(() => {
     fetch('/api/user/quota')
       .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data) setRoQuota(data); })
+      .then((data) => {
+        if (!data) return;
+        setRoQuota(data);
+        // Auto-fill and lock zone for railway officials
+        if (data.applicable && data.zone) {
+          setFormData((prev) => ({ ...prev, zone: data.zone }));
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -1194,18 +1205,33 @@ function NewBillPageContent() {
                         <Label htmlFor="zone">
                           Railway Zone <span className="text-red-500">*</span>
                         </Label>
-                        <Select value={formData.zone} onValueChange={(value) => setFormData(prev => ({ ...prev, zone: value }))}>
-                          <SelectTrigger className="bg-white">
-                            <SelectValue placeholder="Select railway zone" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {getRailwayZoneOptions().map(zone => (
-                              <SelectItem key={zone.value} value={zone.value}>
-                                {zone.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {roQuota?.applicable && roQuota.zone ? (
+                          // Railway Official — zone is locked to their account zone
+                          <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
+                            <svg className="h-4 w-4 shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-blue-900">
+                                {getRailwayZoneOptions().find((z) => z.value === roQuota.zone)?.label ?? roQuota.zone}
+                              </p>
+                              <p className="text-xs text-blue-600">Zone locked to your Railway Official account</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <Select value={formData.zone} onValueChange={(value) => setFormData(prev => ({ ...prev, zone: value }))}>
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Select railway zone" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getRailwayZoneOptions().map(zone => (
+                                <SelectItem key={zone.value} value={zone.value}>
+                                  {zone.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                         <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
                           Steel prices for PVC will be based on the zone&apos;s nearest city. (Select zone to preview active Steel City: <span className="font-semibold text-slate-700">{formData.zone ? getSteelCityForZone(formData.zone) : 'None'}</span>)
                         </p>

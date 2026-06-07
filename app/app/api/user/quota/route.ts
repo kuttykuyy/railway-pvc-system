@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: { id: true, role: true },
+      select: { id: true, role: true, railwayZone: true },
     });
 
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -39,6 +39,7 @@ export async function GET(_req: NextRequest) {
 
     return NextResponse.json({
       applicable: true,
+      zone: user.railwayZone || null,   // locked zone for railway officials
       bills: billQuota,
       contracts: contractQuota,
     });

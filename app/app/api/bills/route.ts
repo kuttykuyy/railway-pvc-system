@@ -229,6 +229,21 @@ export async function POST(request: NextRequest) {
       classificationEntries = [],
     } = body;
     
+    // ===== STEP 3A: Lock zone for Railway Officials =====
+    // Always use the zone stored on their profile — ignore whatever was submitted
+    let effectiveZone = zone;
+    if (user!.role === 'railway_official') {
+      const roUser = await prisma.user.findUnique({ where: { id: user!.id }, select: { railwayZone: true } });
+      if (roUser?.railwayZone) {
+        effectiveZone = roUser.railwayZone;
+      } else if (!zone) {
+        return NextResponse.json({
+          error: 'Zone not configured',
+          reason: 'Your Railway Official account does not have a zone assigned. Please contact your administrator.',
+        }, { status: 400 });
+      }
+    }
+
     // Validate required fields
     if (!contractId || !billNo || !grossBillAmount || !billAmount || !dateOfMeasurement) {
       return NextResponse.json({ error: 'Missing required fields: contractId, billNo, grossBillAmount, billAmount, dateOfMeasurement' }, { status: 400 });
@@ -400,7 +415,7 @@ export async function POST(request: NextRequest) {
         steelTypes: extractedSteelTypes, // CRITICAL: Store extracted steel types
         dateOfMeasurement: measurementDate,
         quarter,
-        zone: zone || null,
+        zone: effectiveZone || null,
         fuelPriceType: fuelPriceType || 'four_city_avg',
         pvcNumber: autoPvcNumber,
         isFinalPvc: isFinalPvc || false,
@@ -417,16 +432,16 @@ export async function POST(request: NextRequest) {
     
     // ===== STEP 10: Get Quarterly Averages (Needed for Entry PVC Calculations) =====
     // Use zone-based steel city prices instead of default Chennai rates
-    const steelIndexNames = getSteelIndexNamesForZone(zone);
-    const fuelIndexName = getFuelIndexNameForBill(zone, fuelPriceType);
+    const steelIndexNames = getSteelIndexNamesForZone(effectiveZone);
+    const fuelIndexName = getFuelIndexNameForBill(effectiveZone, fuelPriceType);
     const allIndices = [
       'Labour', 'RBI Plant Machinery', fuelIndexName, 'RBI Other Materials',
       'RBI Cement', 'RBI Explosives',
       ...steelIndexNames
     ];
-    logger.log(`📊 Using steel indices for zone "${zone}" (city: ${getSteelCityForZone(zone)}):`, steelIndexNames);
+    logger.log(`📊 Using steel indices for zone "${effectiveZone}" (city: ${getSteelCityForZone(effectiveZone)}):`, steelIndexNames);
     logger.log(`⛽ Using fuel index: ${fuelIndexName} (fuelPriceType: ${fuelPriceType})`);
-    
+
     const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, calculationMethod);
     
     // ===== STEP 11: Create Classification Entries with PVC Calculations =====
