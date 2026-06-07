@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreVertical, CreditCard, UserCog, Activity, History, Trash2, FileText, IndianRupee, ShieldCheck, Calendar, Phone, Shield } from 'lucide-react';
+import { MoreVertical, CreditCard, UserCog, Activity, History, Trash2, FileText, IndianRupee, ShieldCheck, Calendar, Phone, Shield, FolderOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
 import type { User } from '../types';
