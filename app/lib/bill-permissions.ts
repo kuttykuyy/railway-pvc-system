@@ -80,25 +80,21 @@ export async function canUserDeleteBill(
       };
     }
 
-    // For admins, check the setting
+    // Superadmin always allowed
+    if (userRole === 'superadmin') return { allowed: true };
+
+    // Admin: allowed by default; only blocked if setting explicitly set to 'false'
     const setting = await prisma.adminSettings.findUnique({
       where: { key: 'ADMIN_CAN_DELETE_OTHER_USERS_BILLS' }
     });
+    const adminBlocked = setting?.value === 'false';
 
-    const adminCanDeleteOthers = setting?.value === 'true';
     const isOwner = bill.contract.userId === userId;
+    if (isOwner || !adminBlocked) return { allowed: true };
 
-    // Admin can always delete their own bills
-    if (isOwner) {
-      return { allowed: true };
-    }
-
-    // For bills created by other users, check the setting
     return {
-      allowed: adminCanDeleteOthers,
-      reason: adminCanDeleteOthers
-        ? undefined
-        : 'Admin permission to delete other users\' bills is disabled. You can only delete your own bills.'
+      allowed: false,
+      reason: "Admin permission to delete other users' bills is disabled.",
     };
   } catch (error) {
     console.error('Error checking bill deletion permission:', error);
@@ -149,31 +145,23 @@ export async function canUserDeleteBills(
       where: { key: 'ADMIN_CAN_DELETE_OTHER_USERS_BILLS' }
     });
 
-    // Superadmin can always delete any bill
-    if (userRole === 'superadmin') {
-      return { allowed: true };
-    }
+    // Superadmin always allowed
+    if (userRole === 'superadmin') return { allowed: true };
 
-    const adminCanDeleteOthers = setting?.value === 'true';
+    // Admin: allowed by default; only blocked if setting explicitly set to 'false'
+    const adminBlocked = setting?.value === 'false';
+    if (!adminBlocked) return { allowed: true };
 
-    // Find bills not owned by the admin
+    // Admin is blocked from deleting others' bills — filter which ones
     const othersBills = bills.filter((bill: any) => bill.contract.userId !== userId);
+    if (othersBills.length === 0) return { allowed: true };
 
-    // Admin can delete all bills if setting is enabled, or only their own bills if disabled
-    if (othersBills.length === 0) {
-      return { allowed: true };
-    }
-
-    if (!adminCanDeleteOthers) {
-      const disallowedBills = othersBills.map(bill => bill.billNo);
-      return {
-        allowed: false,
-        reason: `Admin permission to delete other users' bills is disabled. Cannot delete: ${disallowedBills.join(', ')}`,
-        disallowedBills
-      };
-    }
-
-    return { allowed: true };
+    const disallowedBills = othersBills.map(bill => bill.billNo);
+    return {
+      allowed: false,
+      reason: `Admin permission to delete other users' bills is disabled. Cannot delete: ${disallowedBills.join(', ')}`,
+      disallowedBills,
+    };
   } catch (error) {
     console.error('Error checking bulk bill deletion permission:', error);
     return { allowed: false, reason: 'Error checking permissions' };
