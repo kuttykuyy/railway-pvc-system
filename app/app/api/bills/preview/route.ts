@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: { id: true, role: true, isFreeAccount: true },
+      select: { id: true, role: true, isFreeAccount: true, freeTrialUsed: true, customProcessingFee: true },
     });
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 401 });
 
@@ -137,12 +137,20 @@ export async function POST(request: NextRequest) {
     // Check provisional
     const { isProvisional } = await isBillUsingProvisionalIndices(quarter, contract.baseMonth);
 
-    // Is this user's first bill?
-    const userBillCount = await prisma.bill.count({ where: { contract: { userId: user.id } } });
+    // Determine bill cost for this user
     const billingSettings = await getBillingSettings();
     const fullCost = billingSettings.billCost || 199;
-    const isFirstBill = userBillCount === 0;
-    const billCost = isFirstBill ? 99 : fullCost;
+    const freeTrialLimit = billingSettings.freeTrialBills || 1;
+
+    // Free roles always ₹0
+    const isFreeRole = user.role === 'admin' || user.role === 'superadmin' ||
+      user.role === 'railway_official' || user.isFreeAccount || user.customProcessingFee === 0;
+
+    // Free trial: new user hasn't used their trial yet
+    const isFreeTrial = !isFreeRole && user.freeTrialUsed < freeTrialLimit;
+
+    const isFirstBill = isFreeTrial;
+    const billCost = isFreeRole ? 0 : isFreeTrial ? 0 : fullCost;
 
     return NextResponse.json({
       quarter,

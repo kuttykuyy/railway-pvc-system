@@ -1653,10 +1653,10 @@ function NewBillPageContent() {
                     {previewResult.isFirstBill ? (
                       <>
                         <p className="font-bold text-amber-800 flex items-center gap-1.5">
-                          🎉 First bill offer — only <span className="text-2xl text-amber-700">₹{previewResult.billCost}</span>
+                          🎉 Free Trial — your first bill is <span className="text-2xl text-green-700">FREE</span>
                         </p>
                         <p className="text-xs text-amber-600 mt-0.5">
-                          Regular price ₹{previewResult.fullCost}. One-time new user discount.
+                          Regular price ₹{previewResult.fullCost}. One-time free trial for new users.
                         </p>
                       </>
                     ) : (
@@ -1683,7 +1683,7 @@ function NewBillPageContent() {
                 onClick={() => { setShowPreviewModal(false); (document.querySelector('form') as HTMLFormElement)?.requestSubmit(); }}
               >
                 <Save className="h-4 w-4 mr-2" />
-                {previewResult.isFirstBill ? `Create for ₹${previewResult.billCost}` : 'Create Bill'}
+                {previewResult.isFirstBill ? 'Create Free Trial Bill' : 'Create Bill'}
               </Button>
             </div>
           </div>
