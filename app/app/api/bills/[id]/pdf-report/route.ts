@@ -295,6 +295,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         },
         workClassification: true, // Include the detailed classification (legacy)
         pvcCalculation: true,
+        billTransaction: { select: { discountType: true } },
         classificationEntries: {
           include: {
             subClassification: true,
@@ -640,8 +641,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         console.error('IR PDF: error embedding index documents:', err);
       }
 
-      // Apply trial watermark for free-trial bills
-      if (bill.isChargeable === false) {
+      // Apply trial watermark for free-trial bills only
+      if (bill.billTransaction?.discountType === 'trial') {
         const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
         irFinalBytes = await applyTrialWatermark(irFinalBytes);
       }

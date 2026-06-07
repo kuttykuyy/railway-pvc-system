@@ -182,9 +182,10 @@ export async function processPaymentForBill(
       isFree = true;
       freeReason = 'custom_zero_fee';
     } else {
-      // Check for free trial (completely disabled)
-      if (false) {
-        // bypassed
+      // Free trial: 1 free bill per new user (freeTrialLimit from admin settings)
+      if (user.freeTrialUsed < freeTrialLimit) {
+        isFree = true;
+        freeReason = 'trial';
       }
     }
 
