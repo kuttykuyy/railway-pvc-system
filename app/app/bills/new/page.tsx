@@ -178,18 +178,6 @@ function NewBillPageContent() {
     shortfall: 0
   });
 
-  // PVC Check state
-  const [isPvcChecking, setIsPvcChecking] = useState(false);
-  const [pvcCheckResult, setPvcCheckResult] = useState<{
-    totalPvc: number;
-    isPositive: boolean;
-    charged: number;
-    breakdown: Record<string, number>;
-    quarter: string;
-    contractAgreementNo: string;
-  } | null>(null);
-  const [showPvcCheckResult, setShowPvcCheckResult] = useState(false);
-
   // Tools subscription states
   const [subscriptionActive, setSubscriptionActive] = useState<boolean>(true); // Default to true to avoid flash
   const [creditBalance, setCreditBalance] = useState<number>(0);
@@ -263,10 +251,6 @@ function NewBillPageContent() {
         toast.success(data.message || 'Subscription activated successfully!', { duration: 4000 });
         setSubscriptionActive(true);
         setShowSubscribeModal(false);
-        // Automatically check PVC after successful activation
-        setTimeout(() => {
-          handlePvcCheck();
-        }, 300);
       } else {
         toast.error(data.error || 'Failed to activate subscription.');
       }
@@ -276,14 +260,6 @@ function NewBillPageContent() {
     } finally {
       setSubscribing(false);
     }
-  };
-
-  const handlePvcCheckClick = async () => {
-    if (!subscriptionActive) {
-      setShowSubscribeModal(true);
-      return;
-    }
-    await handlePvcCheck();
   };
 
   // Scroll to error when it appears
@@ -616,69 +592,6 @@ function NewBillPageContent() {
       ...prev,
       workClassification: subClassId
     }));
-  };
-
-  const handlePvcCheck = async () => {
-    if (!formData.contractId || !formData.dateOfMeasurement || !formData.zone) {
-      toast.error('Please fill Contract, Zone and Date of Measurement first');
-      return;
-    }
-    if (classificationEntries.length === 0) {
-      toast.error('Please add at least one classification entry');
-      return;
-    }
-
-    setIsPvcChecking(true);
-    setError('');
-
-    try {
-      const response = await fetch('/api/bills/pvc-check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contractId: formData.contractId,
-          billNo: formData.billNo || undefined,
-          zone: formData.zone,
-          fuelPriceType: formData.fuelPriceType,
-          dateOfMeasurement: formData.dateOfMeasurement,
-          cementAmount: formData.cementAmount || 0,
-          steelTmtBarsAmount: formData.steelTmtBarsAmount || 0,
-          classificationEntries: classificationEntries.map(entry => ({
-            subClassificationId: entry.subClassificationId,
-            amount: entry.amount === '' ? 0 : typeof entry.amount === 'string' ? parseFloat(entry.amount) || 0 : entry.amount,
-            steelTypes: entry.steelTypes || [],
-          })),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 402) {
-          const requiredMatch = data.error?.match(/Required:\s*₹?([\d,]+\.?\d*)/);
-          const availableMatch = data.error?.match(/Available:\s*₹?([\d,]+\.?\d*)/);
-          if (requiredMatch && availableMatch) {
-            setCreditInfo({
-              currentBalance: parseFloat(availableMatch[1].replace(/,/g, '')),
-              requiredAmount: parseFloat(requiredMatch[1].replace(/,/g, '')),
-              shortfall: parseFloat(requiredMatch[1].replace(/,/g, '')) - parseFloat(availableMatch[1].replace(/,/g, ''))
-            });
-            setShowInsufficientCredit(true);
-            return;
-          }
-        }
-        throw new Error(data.error || 'PVC check failed');
-      }
-
-      setPvcCheckResult(data);
-      setShowPvcCheckResult(true);
-    } catch (err: any) {
-      console.error('PVC check error:', err);
-      toast.error(err.message || 'PVC check failed');
-      setError(err.message || 'PVC check failed');
-    } finally {
-      setIsPvcChecking(false);
-    }
   };
 
   const handlePreview = async () => {
@@ -1566,35 +1479,6 @@ function NewBillPageContent() {
                     <div className="flex flex-col items-center gap-1">
                       <Button
                         type="button"
-                        onClick={handlePvcCheckClick}
-                        disabled={isPvcChecking || isSaving || !formData.contractId || !formData.zone || !formData.dateOfMeasurement || classificationEntries.length === 0}
-                        className="bg-orange-600 hover:bg-orange-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-orange-500/10 font-semibold h-10"
-                      >
-                        {isPvcChecking ? (
-                          <LoadingSpinner size="sm" text="Checking..." />
-                        ) : (
-                          <>
-                            {subscriptionActive ? (
-                              <>
-                                <TrendingUp className="h-4 w-4 mr-2" />
-                                PVC Check
-                              </>
-                            ) : (
-                              <>
-                                <span className="mr-1.5">🔒</span>
-                                PVC Check
-                              </>
-                            )}
-                          </>
-                        )}
-                      </Button>
-                      <p className="text-[10px] text-slate-400 text-center max-w-[200px]">
-                        Quick check if PVC is positive/negative without creating a bill
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <Button
-                        type="button"
                         onClick={handlePreview}
                         disabled={isPreviewLoading || isSaving || !formData.contractId || !formData.zone || !formData.dateOfMeasurement || classificationEntries.length === 0}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-emerald-500/10 font-semibold h-10"
@@ -1653,119 +1537,6 @@ function NewBillPageContent() {
       />
 
       {/* Subscription Dialog */}
-      {showSubscribeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <Card className="w-full max-w-md bg-white border border-slate-100 rounded-3xl p-6 shadow-2xl space-y-6 text-center animate-in fade-in zoom-in duration-250">
-            <div className="relative inline-flex items-center justify-center p-4 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-2xl shadow-lg shadow-indigo-500/10">
-              <span className="text-2xl text-white">🔒</span>
-            </div>
-            
-            <div className="space-y-2">
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Advanced Features Required</h2>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-                The PVC Check is an advanced tool. Subscribe to the monthly bundle for <strong>₹99/month</strong> to get unlimited PVC Checks and classification comparisons.
-              </p>
-            </div>
-
-            <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-left space-y-2">
-              <div className="flex items-center justify-between text-xs font-semibold">
-                <span className="text-slate-500">Monthly Plan Cost:</span>
-                <span className="text-indigo-600 font-black">₹99</span>
-              </div>
-              <div className="flex items-center justify-between text-xs font-semibold">
-                <span className="text-slate-500">Your Wallet Balance:</span>
-                <span className={creditBalance >= 99 ? "text-green-600" : "text-red-500"}>₹{creditBalance.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2 pt-2">
-              <Button
-                onClick={handleSubscribeTools}
-                disabled={subscribing || creditBalance < 99}
-                className="w-full h-11 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold rounded-xl shadow-md shadow-indigo-500/10"
-              >
-                {subscribing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Subscribing...
-                  </>
-                ) : (
-                  'Subscribe Now (₹99)'
-                )}
-              </Button>
-              
-              {creditBalance < 99 && (
-                <div className="space-y-1.5">
-                  <p className="text-[10px] text-red-500 font-bold">
-                    Insufficient credits in your wallet balance.
-                  </p>
-                  <Button
-                    variant="link"
-                    onClick={() => {
-                      setShowSubscribeModal(false);
-                      router.push('/billing');
-                    }}
-                    className="text-xs text-indigo-600 hover:underline p-0 h-auto font-bold"
-                  >
-                    Top Up Credits in Billing Panel →
-                  </Button>
-                </div>
-              )}
-              
-              <Button
-                variant="ghost"
-                onClick={() => setShowSubscribeModal(false)}
-                className="w-full text-slate-500 text-xs font-medium hover:bg-slate-50 rounded-xl"
-              >
-                Close Dialog
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* PVC Check Result Dialog */}
-      {showPvcCheckResult && pvcCheckResult && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-            {/* Header */}
-            <div className={`p-6 text-center ${pvcCheckResult.isPositive ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gradient-to-r from-red-500 to-rose-600'}`}>
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/20 mb-3">
-                {pvcCheckResult.isPositive ? (
-                  <TrendingUp className="h-8 w-8 text-white" />
-                ) : (
-                  <AlertTriangle className="h-8 w-8 text-white" />
-                )}
-              </div>
-              <h3 className="text-xl font-bold text-white">
-                PVC is {pvcCheckResult.isPositive ? 'POSITIVE' : 'NEGATIVE'}
-              </h3>
-              <p className="text-3xl font-bold text-white mt-2">
-                ₹{Math.abs(pvcCheckResult.totalPvc).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-              </p>
-              <p className="text-white/80 text-sm mt-1">
-                Quarter: {pvcCheckResult.quarter} · {pvcCheckResult.contractAgreementNo}
-              </p>
-            </div>
-
-            <div className="p-6 space-y-3">
-              {pvcCheckResult.charged > 0 && (
-                <p className="text-xs text-gray-500 text-center">
-                  ₹{pvcCheckResult.charged} has been deducted from your credit balance for this check
-                </p>
-              )}
-
-              <Button
-                onClick={() => setShowPvcCheckResult(false)}
-                className="w-full bg-gray-900 hover:bg-gray-800"
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Validation and Error Modal Popup */}
       {error && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
