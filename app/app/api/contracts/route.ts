@@ -115,9 +115,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Railway Official contract quota
+    if (user!.role === 'railway_official') {
+      const { checkRailwayOfficialContractQuota } = await import('@/lib/admin-settings');
+      const quota = await checkRailwayOfficialContractQuota(user!.id);
+      if (!quota.allowed) {
+        return NextResponse.json({
+          error: 'Contract limit reached',
+          reason: `Railway Official accounts are limited to ${quota.limit} contracts. You have ${quota.used}/${quota.limit}. Please contact your administrator to increase the limit.`,
+          quotaExceeded: true,
+          quota,
+        }, { status: 429 });
+      }
+    }
+
     const body = await request.json();
-    const { 
-      agreementNo, 
+    const {
+      agreementNo,
       loaNo,
       loaDate,
       contractorName,

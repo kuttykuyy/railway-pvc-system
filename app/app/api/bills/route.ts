@@ -191,7 +191,21 @@ export async function POST(request: NextRequest) {
         isFree: paymentValidation.isFree || false
       }, { status: 402 });
     }
-    
+
+    // ===== STEP 2B: Railway Official Monthly Bill Quota =====
+    if (user!.role === 'railway_official') {
+      const { checkRailwayOfficialBillQuota } = await import('@/lib/admin-settings');
+      const quota = await checkRailwayOfficialBillQuota(user!.id);
+      if (!quota.allowed) {
+        return NextResponse.json({
+          error: 'Monthly bill limit reached',
+          reason: `Railway Official accounts are limited to ${quota.limit} bills per month. You have used ${quota.used}/${quota.limit} this month. Your limit resets on the 1st of next month.`,
+          quotaExceeded: true,
+          quota,
+        }, { status: 429 });
+      }
+    }
+
     // ===== STEP 3: Parse and Validate Request Body =====
     const body = await request.json();
     const {

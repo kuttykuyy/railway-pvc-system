@@ -198,6 +198,14 @@ function NewBillPageContent() {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState<any>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [roQuota, setRoQuota] = useState<{ applicable: boolean; bills?: { used: number; limit: number; remaining: number; allowed: boolean } } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/user/quota')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setRoQuota(data); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     checkMaintenanceMode();
@@ -880,6 +888,45 @@ function NewBillPageContent() {
         </div>
       </div>
 
+      {/* Railway Official Quota Banner */}
+      {roQuota?.applicable && roQuota.bills && (
+        <div className={`rounded-xl border px-4 py-3 ${!roQuota.bills.allowed ? 'border-red-200 bg-red-50' : roQuota.bills.remaining <= 2 ? 'border-amber-200 bg-amber-50' : 'border-blue-200 bg-blue-50'}`}>
+          <div className="flex items-center gap-3">
+            <div className={`rounded-full p-1.5 ${!roQuota.bills.allowed ? 'bg-red-100' : roQuota.bills.remaining <= 2 ? 'bg-amber-100' : 'bg-blue-100'}`}>
+              <svg className={`h-4 w-4 ${!roQuota.bills.allowed ? 'text-red-600' : roQuota.bills.remaining <= 2 ? 'text-amber-600' : 'text-blue-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              {!roQuota.bills.allowed ? (
+                <>
+                  <p className="text-sm font-semibold text-red-800">Monthly bill limit reached</p>
+                  <p className="text-xs text-red-600 mt-0.5">You have used all {roQuota.bills.limit} free bills for this month. Limit resets on the 1st of next month.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-slate-800">
+                    Railway Official · Free account
+                  </p>
+                  <p className={`text-xs mt-0.5 ${roQuota.bills.remaining <= 2 ? 'text-amber-700' : 'text-slate-500'}`}>
+                    {roQuota.bills.remaining} of {roQuota.bills.limit} free bills remaining this month
+                    {roQuota.bills.remaining <= 2 ? ' — almost at your limit' : ''}
+                  </p>
+                </>
+              )}
+            </div>
+            {roQuota.bills.limit > 0 && (
+              <div className="shrink-0 text-right">
+                <p className={`text-lg font-bold ${!roQuota.bills.allowed ? 'text-red-700' : roQuota.bills.remaining <= 2 ? 'text-amber-700' : 'text-blue-700'}`}>
+                  {roQuota.bills.used}/{roQuota.bills.limit}
+                </p>
+                <p className="text-[10px] text-slate-400 uppercase tracking-wide">this month</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Maintenance Mode Alert */}
       {isMaintenanceMode && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
@@ -1513,8 +1560,9 @@ function NewBillPageContent() {
                     </div>
                     <Button
                       type="submit"
-                      disabled={isSaving || !formData.contractId || !formData.billNo || !formData.zone || !formData.dateOfMeasurement}
-                      className="bg-purple-600 hover:bg-purple-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-purple-500/10 font-semibold h-10"
+                      disabled={isSaving || !formData.contractId || !formData.billNo || !formData.zone || !formData.dateOfMeasurement || (roQuota?.applicable === true && roQuota.bills?.allowed === false)}
+                      title={roQuota?.applicable && !roQuota.bills?.allowed ? 'Monthly bill limit reached' : undefined}
+                      className="bg-purple-600 hover:bg-purple-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-purple-500/10 font-semibold h-10 disabled:opacity-50"
                     >
                       {isSaving ? (
                         <LoadingSpinner size="sm" text="Processing..." />
