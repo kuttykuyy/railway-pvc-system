@@ -187,6 +187,7 @@ function NewBillPageContent() {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState<any>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [hasFreeTrial, setHasFreeTrial] = useState<boolean | null>(null);
   const [roQuota, setRoQuota] = useState<{
     applicable: boolean;
     zone?: string | null;
@@ -194,6 +195,13 @@ function NewBillPageContent() {
     missingPostingFields?: string[];
     bills?: { used: number; limit: number; remaining: number; allowed: boolean };
   } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/user/profile')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setHasFreeTrial(!!data.hasFreeTrial); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch('/api/user/quota')
@@ -850,6 +858,17 @@ function NewBillPageContent() {
         </div>
       )}
 
+
+      {/* Free Trial Banner */}
+      {hasFreeTrial && (
+        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 flex items-center gap-3">
+          <span className="text-2xl">🎉</span>
+          <div>
+            <p className="text-sm font-bold text-green-800">Your first bill is FREE — Free Trial Active</p>
+            <p className="text-xs text-green-700 mt-0.5">Create your first bill at no cost. No credits needed. Watermark will be added to the PDF.</p>
+          </div>
+        </div>
+      )}
 
       {/* Maintenance Mode Alert */}
       {isMaintenanceMode && (

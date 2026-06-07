@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { canUserDeleteBills } from '@/lib/bill-permissions';
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user session
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
     if (!session?.user?.email) {
       return NextResponse.json(
@@ -52,16 +53,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Delete PVC calculations first
-    await prisma.pvcCalculation.deleteMany({
-      where: {
-        billId: {
-          in: billIds
-        }
-      }
+    // Delete InvoiceItems linked to BillTransactions for these bills
+    // (InvoiceItem → BillTransaction lacks cascade, must delete manually first)
+    const billTransactions = await prisma.billTransaction.findMany({
+      where: { billId: { in: billIds } },
+      select: { id: true },
     });
+    const txIds = billTransactions.map((t) => t.id);
+    if (txIds.length > 0) {
+      await prisma.invoiceItem.deleteMany({ where: { billTransactionId: { in: txIds } } });
+    }
 
-    // Delete the bills
+    // Delete the bills — cascades handle PvcCalculation, BillTransaction, BillClassificationEntry, etc.
     const deletedBills = await prisma.bill.deleteMany({
       where: {
         id: {

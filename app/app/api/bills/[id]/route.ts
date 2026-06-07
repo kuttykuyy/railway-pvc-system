@@ -66,14 +66,16 @@ export async function DELETE(
       );
     }
 
-    // Delete PVC calculation first (if exists)
-    if (bill.pvcCalculation) {
-      await prisma.pvcCalculation.delete({
-        where: { id: bill.pvcCalculation.id }
-      });
+    // Delete InvoiceItem linked to this bill's BillTransaction (no cascade defined)
+    const billTx = await prisma.billTransaction.findUnique({
+      where: { billId: id },
+      select: { id: true },
+    });
+    if (billTx) {
+      await prisma.invoiceItem.deleteMany({ where: { billTransactionId: billTx.id } });
     }
 
-    // Delete the bill
+    // Delete the bill — cascades handle PvcCalculation, BillTransaction, BillClassificationEntry, etc.
     await prisma.bill.delete({
       where: { id }
     });

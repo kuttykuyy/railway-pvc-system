@@ -645,7 +645,7 @@ model InvoiceItem {
   totalPrice        Float
   discount          Float           @default(0)
   createdAt         DateTime        @default(now())
-  billTransaction   BillTransaction @relation(fields: [billTransactionId], references: [id])
+  billTransaction   BillTransaction @relation(fields: [billTransactionId], references: [id], onDelete: Cascade)
   invoice           Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@map("invoice_items")

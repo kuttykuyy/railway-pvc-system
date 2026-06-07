@@ -41,9 +41,16 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasFreeTrial, setHasFreeTrial] = useState<boolean | null>(null);
   const isAdmin = (session?.user as any)?.role === 'admin';
 
-  useEffect(() => { fetchDashboardData(); }, []);
+  useEffect(() => {
+    fetchDashboardData();
+    fetch('/api/user/profile')
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) setHasFreeTrial(!!d.hasFreeTrial); })
+      .catch(() => {});
+  }, []);
 
   const fetchDashboardData = async (isRefresh = false) => {
     try {
@@ -87,8 +94,22 @@ export default function DashboardPage() {
         </button>
       </div>
 
+      {/* Free Trial Banner */}
+      {hasFreeTrial && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
+          <span className="text-2xl">🎉</span>
+          <div>
+            <p className="text-sm font-bold text-green-800">Free Trial Active — Your first bill is FREE!</p>
+            <p className="text-xs text-green-700 mt-0.5">
+              Create your first PVC bill at no cost. A watermark will appear on the trial PDF.{' '}
+              <Link href="/bills/new" className="underline font-semibold">Create bill now →</Link>
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* New user welcome */}
-      {isNewUser && (
+      {isNewUser && !hasFreeTrial && (
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
           <p className="font-semibold mb-1">Getting started</p>
           <p>Add your first contract, then create a bill under it. The system will automatically calculate PVC using the latest price indices.</p>
