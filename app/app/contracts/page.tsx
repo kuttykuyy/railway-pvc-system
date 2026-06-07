@@ -5,12 +5,13 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 import {
   AlertTriangle,
-  ArrowUpRight,
+  ArrowRight,
   Building2,
   CalendarDays,
-  CheckCircle,
+  CheckCircle2,
+  ChevronRight,
   ClipboardList,
-  Edit,
+  Edit2,
   Eye,
   FileText,
   Filter,
@@ -23,6 +24,7 @@ import {
   Trash2,
   TrendingUp,
   X,
+  Zap,
 } from 'lucide-react';
 
 import { PostingDetailsNotice } from '@/components/posting-details-notice';
@@ -88,66 +90,60 @@ const toNumber = (value: number | null | undefined) => Number(value || 0);
 
 const fmtCurrency = (value: number | null | undefined) => {
   const n = toNumber(value);
+  if (!n) return '—';
+  if (n >= 10000000) return `₹${(n / 10000000).toFixed(2)} Cr`;
+  if (n >= 100000) return `₹${(n / 100000).toFixed(2)} L`;
+  return `₹${n.toLocaleString('en-IN')}`;
+};
+
+const fmtCurrencyFull = (value: number | null | undefined) => {
+  const n = toNumber(value);
   if (!n) return 'Not set';
-  if (n >= 10000000) return `Rs ${(n / 10000000).toFixed(2)} Cr`;
-  if (n >= 100000) return `Rs ${(n / 100000).toFixed(2)} L`;
-  return `Rs ${n.toLocaleString('en-IN')}`;
+  if (n >= 10000000) return `₹${(n / 10000000).toFixed(2)} Cr`;
+  if (n >= 100000) return `₹${(n / 100000).toFixed(2)} L`;
+  return `₹${n.toLocaleString('en-IN')}`;
 };
 
 const dateLabel = (value: string | Date | null | undefined, pattern = 'dd MMM yyyy') => {
-  if (!value) return 'Not set';
+  if (!value) return '—';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Not set';
+  if (Number.isNaN(date.getTime())) return '—';
   return format(date, pattern);
 };
 
 function contractAttentionReasons(contract: Contract) {
   const reasons: string[] = [];
-
-  if (contract._count.bills === 0) reasons.push('No bills created');
-  if (contract.pvcApplicable && contract._count.bills > 0 && contract._count.pvcCalculations === 0) {
+  if (contract._count.bills === 0) reasons.push('No bills');
+  if (contract.pvcApplicable && contract._count.bills > 0 && contract._count.pvcCalculations === 0)
     reasons.push('PVC pending');
-  }
   if (!contract.contractValue && !contract.tenderAdvertisedValue) reasons.push('Value missing');
   if (!contract.loaNo) reasons.push('LOA missing');
-
   return reasons;
 }
 
-function StatusPill({ contract }: { contract: Contract }) {
-  const reasons = contractAttentionReasons(contract);
+type StatusType = 'pvc-ready' | 'pvc-pending' | 'active' | 'setup';
 
-  if (contract._count.pvcCalculations > 0) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-        <CheckCircle className="h-3.5 w-3.5" />
-        PVC ready
-      </span>
-    );
-  }
+function getContractStatus(contract: Contract): StatusType {
+  if (contract._count.pvcCalculations > 0) return 'pvc-ready';
+  if (contract.pvcApplicable && contract._count.bills > 0 && contract._count.pvcCalculations === 0) return 'pvc-pending';
+  if (contract._count.bills > 0) return 'active';
+  return 'setup';
+}
 
-  if (reasons.includes('PVC pending')) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
-        <AlertTriangle className="h-3.5 w-3.5" />
-        PVC pending
-      </span>
-    );
-  }
+const STATUS_CONFIG: Record<StatusType, { label: string; dot: string; badge: string; border: string }> = {
+  'pvc-ready':  { label: 'PVC Ready',    dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', border: 'border-l-emerald-400' },
+  'pvc-pending':{ label: 'PVC Pending',  dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',       border: 'border-l-amber-400'   },
+  'active':     { label: 'Billing',      dot: 'bg-sky-400',     badge: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200',             border: 'border-l-sky-400'     },
+  'setup':      { label: 'Setup',        dot: 'bg-slate-300',   badge: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',      border: 'border-l-slate-200'   },
+};
 
-  if (contract._count.bills > 0) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700">
-        <Receipt className="h-3.5 w-3.5" />
-        Billing active
-      </span>
-    );
-  }
-
+function StatusBadge({ contract }: { contract: Contract }) {
+  const status = getContractStatus(contract);
+  const cfg = STATUS_CONFIG[status];
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
-      <FileText className="h-3.5 w-3.5" />
-      Setup
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.badge}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+      {cfg.label}
     </span>
   );
 }
@@ -160,11 +156,10 @@ function BillsDialog({ contract }: { contract: Contract }) {
 
   useEffect(() => {
     if (!open) return;
-
     setError('');
     setLoading(true);
     fetch(`/api/bills?contractId=${contract.id}`)
-      .then((response) => response.json())
+      .then((r) => r.json())
       .then((data) => setBills((Array.isArray(data) ? data : data.data || []).slice(0, 10)))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -173,70 +168,61 @@ function BillsDialog({ contract }: { contract: Contract }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-50">
+        <button className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200">
           <Receipt className="h-3.5 w-3.5" />
           {contract._count.bills} bill{contract._count.bills !== 1 ? 's' : ''}
         </button>
       </DialogTrigger>
       <DialogContent className="max-h-[82vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg font-semibold">Bills for {contract.agreementNo}</DialogTitle>
+          <DialogTitle className="text-lg font-semibold">{contract.agreementNo}</DialogTitle>
           <p className="text-sm text-slate-500">{contract.contractorName}</p>
         </DialogHeader>
-
         {loading ? (
-          <div className="flex justify-center py-10">
-            <LoadingSpinner text="Loading bills..." />
-          </div>
+          <div className="flex justify-center py-10"><LoadingSpinner text="Loading bills…" /></div>
         ) : error ? (
           <StatusMessage type="error" title="Error" message={error} />
         ) : bills.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <FileText className="mb-3 h-10 w-10 text-slate-300" />
-            <p className="font-medium text-slate-700">No bills have been created for this contract.</p>
+            <div className="mb-4 rounded-full bg-slate-100 p-4"><FileText className="h-8 w-8 text-slate-400" /></div>
+            <p className="font-semibold text-slate-800">No bills yet</p>
+            <p className="mt-1 text-sm text-slate-500">Create the first bill for this contract.</p>
             <Button asChild size="sm" className="mt-4">
               <Link href={`/bills/new?contractId=${contract.id}`}>
-                <Plus className="mr-1.5 h-4 w-4" />
-                Create first bill
+                <Plus className="mr-1.5 h-4 w-4" /> Create first bill
               </Link>
             </Button>
           </div>
         ) : (
           <>
-            <div className="overflow-hidden rounded-lg border border-slate-200">
+            <div className="overflow-hidden rounded-xl border border-slate-200">
               <table className="w-full text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500">Bill no</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500">Quarter</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">Bill amount</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">PVC</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">Cumulative</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500">Measured</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">Open</th>
+                    {['Bill no', 'Quarter', 'Bill amount', 'PVC', 'Cumulative', 'Measured', ''].map((h) => (
+                      <th key={h} className={`px-3 py-2.5 text-xs font-semibold text-slate-500 ${h && h !== 'Bill no' && h !== 'Quarter' && h !== 'Measured' ? 'text-right' : 'text-left'}`}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {bills.map((bill) => (
                     <tr key={bill.id} className="hover:bg-slate-50">
-                      <td className="px-3 py-2 font-semibold text-slate-900">{bill.billNo}</td>
-                      <td className="px-3 py-2 text-slate-600">{bill.quarter}</td>
-                      <td className="px-3 py-2 text-right font-medium">{fmtCurrency(bill.billAmount)}</td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-3 py-2.5 font-semibold text-slate-900">{bill.billNo}</td>
+                      <td className="px-3 py-2.5 text-slate-600">{bill.quarter}</td>
+                      <td className="px-3 py-2.5 text-right font-medium">{fmtCurrencyFull(bill.billAmount)}</td>
+                      <td className="px-3 py-2.5 text-right">
                         {bill.pvcCalculation ? (
                           <span className={bill.pvcCalculation.totalPvc >= 0 ? 'font-semibold text-emerald-700' : 'font-semibold text-red-600'}>
-                            {fmtCurrency(bill.pvcCalculation.totalPvc)}
+                            {fmtCurrencyFull(bill.pvcCalculation.totalPvc)}
                           </span>
-                        ) : (
-                          <span className="text-slate-400">Pending</span>
-                        )}
+                        ) : <span className="text-slate-400">Pending</span>}
                       </td>
-                      <td className="px-3 py-2 text-right text-slate-700">
-                        {bill.pvcCalculation ? fmtCurrency(bill.pvcCalculation.cumulativePvc) : '-'}
+                      <td className="px-3 py-2.5 text-right text-slate-700">
+                        {bill.pvcCalculation ? fmtCurrencyFull(bill.pvcCalculation.cumulativePvc) : '—'}
                       </td>
-                      <td className="px-3 py-2 text-xs text-slate-500">{dateLabel(bill.dateOfMeasurement)}</td>
-                      <td className="px-3 py-2 text-right">
-                        <Link href={`/bills/${bill.id}`} className="inline-flex rounded-md p-1.5 text-slate-500 hover:bg-sky-50 hover:text-sky-700">
+                      <td className="px-3 py-2.5 text-xs text-slate-500">{dateLabel(bill.dateOfMeasurement)}</td>
+                      <td className="px-3 py-2.5 text-right">
+                        <Link href={`/bills/${bill.id}`} className="inline-flex rounded-lg p-1.5 text-slate-400 hover:bg-sky-50 hover:text-sky-700">
                           <Eye className="h-4 w-4" />
                         </Link>
                       </td>
@@ -248,7 +234,7 @@ function BillsDialog({ contract }: { contract: Contract }) {
             {contract._count.bills > 10 && (
               <div className="pt-2 text-center">
                 <Link href={`/contracts/${contract.id}`} className="text-sm font-medium text-sky-700 hover:underline">
-                  View all {contract._count.bills} bills
+                  View all {contract._count.bills} bills →
                 </Link>
               </div>
             )}
@@ -261,13 +247,12 @@ function BillsDialog({ contract }: { contract: Contract }) {
 
 function DeleteButton({ contract, onDelete }: { contract: Contract; onDelete: (id: string) => void }) {
   const [loading, setLoading] = useState(false);
-
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
         <button
           aria-label={`Delete ${contract.agreementNo}`}
-          className="rounded-md p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+          className="rounded-lg p-2 text-slate-300 transition-colors hover:bg-red-50 hover:text-red-500"
           disabled={loading}
         >
           {loading ? <LoadingSpinner size="sm" /> : <Trash2 className="h-4 w-4" />}
@@ -277,53 +262,20 @@ function DeleteButton({ contract, onDelete }: { contract: Contract; onDelete: (i
         <AlertDialogHeader>
           <AlertDialogTitle>Delete contract?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete {contract.agreementNo}, including all bills and PVC calculations linked to it.
+            This will permanently delete <strong>{contract.agreementNo}</strong>, including all bills and PVC calculations linked to it. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
             className="bg-red-600 text-white hover:bg-red-700"
-            onClick={async () => {
-              setLoading(true);
-              await onDelete(contract.id);
-              setLoading(false);
-            }}
+            onClick={async () => { setLoading(true); await onDelete(contract.id); setLoading(false); }}
           >
             Delete
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  helper,
-  icon: Icon,
-  tone,
-}: {
-  label: string;
-  value: string | number;
-  helper: string;
-  icon: typeof Building2;
-  tone: string;
-}) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
-          <p className="mt-1 truncate text-2xl font-bold text-slate-950">{value}</p>
-          <p className="mt-1 text-xs text-slate-500">{helper}</p>
-        </div>
-        <div className={`rounded-md p-2 ${tone}`}>
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -339,12 +291,8 @@ export default function ContractsPage() {
   useEffect(() => {
     const saved = localStorage.getItem('contractsViewMode');
     if (saved === 'grid' || saved === 'table') setViewMode(saved);
-
     fetch('/api/contracts')
-      .then((response) => {
-        if (!response.ok) throw new Error('Failed to fetch contracts');
-        return response.json();
-      })
+      .then((r) => { if (!r.ok) throw new Error('Failed to fetch'); return r.json(); })
       .then(setContracts)
       .catch((err) => setError(err.message))
       .finally(() => setIsLoading(false));
@@ -352,33 +300,23 @@ export default function ContractsPage() {
 
   const filtered = useMemo(() => {
     let list = [...contracts];
-
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      list = list.filter((contract) =>
-        [
-          contract.agreementNo,
-          contract.contractorName,
-          contract.workDescription,
-          contract.loaNo || '',
-          contract.user?.name || '',
-          contract.user?.email || '',
-        ].some((value) => value.toLowerCase().includes(q))
+      list = list.filter((c) =>
+        [c.agreementNo, c.contractorName, c.workDescription, c.loaNo || '', c.user?.name || '', c.user?.email || '']
+          .some((v) => v.toLowerCase().includes(q))
       );
     }
-
     if (statusFilter !== 'all') {
-      list = list.filter((contract) => {
-        const attention = contractAttentionReasons(contract).length > 0;
-        if (statusFilter === 'needs-action') return attention;
-        if (statusFilter === 'active') return contract._count.bills > 0;
-        if (statusFilter === 'no-bills') return contract._count.bills === 0;
-        if (statusFilter === 'with-pvc') return contract._count.pvcCalculations > 0;
-        if (statusFilter === 'not-eligible') return !contract.pvcApplicable;
+      list = list.filter((c) => {
+        if (statusFilter === 'needs-action') return contractAttentionReasons(c).length > 0;
+        if (statusFilter === 'active') return c._count.bills > 0;
+        if (statusFilter === 'no-bills') return c._count.bills === 0;
+        if (statusFilter === 'with-pvc') return c._count.pvcCalculations > 0;
+        if (statusFilter === 'not-eligible') return !c.pvcApplicable;
         return true;
       });
     }
-
     list.sort((a, b) => {
       if (sortBy === 'oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       if (sortBy === 'agreement') return a.agreementNo.localeCompare(b.agreementNo);
@@ -387,311 +325,315 @@ export default function ContractsPage() {
       if (sortBy === 'value') return toNumber(b.contractValue || b.tenderAdvertisedValue) - toNumber(a.contractValue || a.tenderAdvertisedValue);
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-
     return list;
   }, [contracts, search, sortBy, statusFilter]);
 
   const stats = useMemo(() => {
-    const active = contracts.filter((contract) => contract._count.bills > 0).length;
-    const pvcDone = contracts.filter((contract) => contract._count.pvcCalculations > 0).length;
-    const needsAction = contracts.filter((contract) => contractAttentionReasons(contract).length > 0).length;
-    const totalBills = contracts.reduce((sum, contract) => sum + contract._count.bills, 0);
-    const totalValue = contracts.reduce((sum, contract) => sum + toNumber(contract.contractValue || contract.tenderAdvertisedValue), 0);
-
-    return {
-      active,
-      needsAction,
-      pvcDone,
-      totalBills,
-      totalValue,
-      total: contracts.length,
-    };
+    const active = contracts.filter((c) => c._count.bills > 0).length;
+    const pvcDone = contracts.filter((c) => c._count.pvcCalculations > 0).length;
+    const needsAction = contracts.filter((c) => contractAttentionReasons(c).length > 0).length;
+    const totalBills = contracts.reduce((s, c) => s + c._count.bills, 0);
+    const totalValue = contracts.reduce((s, c) => s + toNumber(c.contractValue || c.tenderAdvertisedValue), 0);
+    return { active, needsAction, pvcDone, totalBills, totalValue, total: contracts.length };
   }, [contracts]);
 
   const attentionContracts = useMemo(
-    () => contracts.filter((contract) => contractAttentionReasons(contract).length > 0).slice(0, 4),
+    () => contracts.filter((c) => contractAttentionReasons(c).length > 0).slice(0, 4),
     [contracts]
   );
 
   const handleDelete = async (id: string) => {
-    const response = await fetch(`/api/contracts/${id}`, { method: 'DELETE' });
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
+    const r = await fetch(`/api/contracts/${id}`, { method: 'DELETE' });
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
       setError(data.error || 'Failed to delete contract');
       return;
     }
-    setContracts((current) => current.filter((contract) => contract.id !== id));
+    setContracts((cur) => cur.filter((c) => c.id !== id));
   };
 
-  const resetFilters = () => {
-    setSearch('');
-    setStatusFilter('all');
-    setSortBy('newest');
-  };
+  const resetFilters = () => { setSearch(''); setStatusFilter('all'); setSortBy('newest'); };
+  const hasFilters = search || statusFilter !== 'all' || sortBy !== 'newest';
 
   if (isLoading) {
     return (
       <div className="flex min-h-[420px] items-center justify-center">
-        <LoadingSpinner size="lg" text="Loading contracts..." />
+        <LoadingSpinner size="lg" text="Loading contracts…" />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
+    <div className="mx-auto max-w-7xl px-4 py-8">
       <PostingDetailsNotice />
 
-      <div className="mt-4 flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-end md:justify-between">
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-sky-700">
-            <ClipboardList className="h-4 w-4" />
-            Contract workspace
-          </div>
-          <h1 className="mt-1 text-2xl font-bold text-slate-950">Contracts</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            Track agreements, bills, base months, and PVC readiness from one operational view.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Contracts</h1>
+          <p className="mt-0.5 text-sm text-slate-500">Manage agreements, bills, and PVC calculations.</p>
         </div>
-
-        <div className="flex flex-wrap gap-2">
-<Button asChild>
-            <Link href="/contracts/new">
-              <Plus className="mr-2 h-4 w-4" />
-              New contract
-            </Link>
-          </Button>
-        </div>
+        <Button asChild className="shrink-0">
+          <Link href="/contracts/new">
+            <Plus className="mr-2 h-4 w-4" /> New contract
+          </Link>
+        </Button>
       </div>
 
       {error && <div className="mt-4"><StatusMessage type="error" title="Error" message={error} /></div>}
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Contracts" value={stats.total} helper={`${stats.active} with billing activity`} icon={Building2} tone="bg-slate-100 text-slate-700" />
-        <MetricCard label="Portfolio value" value={fmtCurrency(stats.totalValue)} helper="Agreement or tender value" icon={IndianRupee} tone="bg-emerald-50 text-emerald-700" />
-        <MetricCard label="Bills" value={stats.totalBills} helper="Across visible contracts" icon={Receipt} tone="bg-sky-50 text-sky-700" />
-        <MetricCard label="PVC ready" value={stats.pvcDone} helper="Contracts with PVC calculations" icon={TrendingUp} tone="bg-violet-50 text-violet-700" />
-        <MetricCard label="Needs action" value={stats.needsAction} helper="Missing bills, LOA, value, or PVC" icon={AlertTriangle} tone="bg-amber-50 text-amber-700" />
-      </div>
+      {/* ── Stats strip ─────────────────────────────────────────────────── */}
+      {contracts.length > 0 && (
+        <div className="mt-6 flex flex-wrap gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 shadow-sm">
+          {[
+            { label: 'Total', value: stats.total, sub: `${stats.active} active`, color: 'text-slate-900' },
+            { label: 'Portfolio', value: fmtCurrency(stats.totalValue) === '—' ? 'Not set' : fmtCurrency(stats.totalValue), sub: 'Contract value', color: 'text-emerald-700' },
+            { label: 'Bills', value: stats.totalBills, sub: 'Across all contracts', color: 'text-sky-700' },
+            { label: 'PVC Ready', value: stats.pvcDone, sub: 'With calculations', color: 'text-violet-700' },
+            { label: 'Action needed', value: stats.needsAction, sub: 'Missing data', color: stats.needsAction > 0 ? 'text-amber-600' : 'text-slate-400' },
+          ].map(({ label, value, sub, color }) => (
+            <div key={label} className="flex flex-1 flex-col items-center gap-0.5 bg-white px-5 py-4 text-center min-w-[100px]">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+              <p className={`text-xl font-bold ${color}`}>{value}</p>
+              <p className="text-xs text-slate-400">{sub}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
+      {/* ── Attention banner ────────────────────────────────────────────── */}
       {attentionContracts.length > 0 && (
-        <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
-                <AlertTriangle className="h-4 w-4" />
-                Priority follow-up
-              </div>
-              <p className="mt-1 text-sm text-amber-700">
-                These contracts are missing data or the next billing/PVC step.
-              </p>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[620px]">
-              {attentionContracts.map((contract) => (
-                <Link
-                  key={contract.id}
-                  href={`/contracts/${contract.id}`}
-                  className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-white px-3 py-2 text-sm hover:border-amber-300 hover:bg-amber-50"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-slate-900">{contract.agreementNo}</p>
-                    <p className="truncate text-xs text-slate-500">{contractAttentionReasons(contract).join(', ')}</p>
-                  </div>
-                  <ArrowUpRight className="h-4 w-4 shrink-0 text-amber-700" />
-                </Link>
-              ))}
-            </div>
+        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <p className="text-sm font-semibold text-amber-800">Needs attention</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {attentionContracts.map((c) => (
+              <Link
+                key={c.id}
+                href={`/contracts/${c.id}`}
+                className="group flex items-center justify-between gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2.5 text-sm transition-all hover:border-amber-300 hover:shadow-sm"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-slate-900">{c.agreementNo}</p>
+                  <p className="truncate text-xs text-amber-600">{contractAttentionReasons(c).join(' · ')}</p>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-amber-400 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            ))}
           </div>
         </div>
       )}
 
-      <div className="mt-5 rounded-lg border border-slate-200 bg-white p-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              placeholder="Search agreement, contractor, work, LOA, or owner"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="h-10 pl-9"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 sm:flex">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-10 w-full sm:w-44">
-                <Filter className="mr-2 h-4 w-4 text-slate-400" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All contracts</SelectItem>
-                <SelectItem value="needs-action">Needs action</SelectItem>
-                <SelectItem value="active">With bills</SelectItem>
-                <SelectItem value="no-bills">No bills</SelectItem>
-                <SelectItem value="with-pvc">PVC ready</SelectItem>
-                <SelectItem value="not-eligible">PVC not eligible</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="h-10 w-full sm:w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="newest">Newest first</SelectItem>
-                <SelectItem value="oldest">Oldest first</SelectItem>
-                <SelectItem value="agreement">Agreement no</SelectItem>
-                <SelectItem value="contractor">Contractor</SelectItem>
-                <SelectItem value="bills">Most bills</SelectItem>
-                <SelectItem value="value">Highest value</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <div className="flex overflow-hidden rounded-md border border-slate-200">
-              <button
-                aria-label="Grid view"
-                onClick={() => {
-                  setViewMode('grid');
-                  localStorage.setItem('contractsViewMode', 'grid');
-                }}
-                className={`grid h-10 w-10 place-items-center ${viewMode === 'grid' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-              <button
-                aria-label="Table view"
-                onClick={() => {
-                  setViewMode('table');
-                  localStorage.setItem('contractsViewMode', 'table');
-                }}
-                className={`grid h-10 w-10 place-items-center border-l border-slate-200 ${viewMode === 'table' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-              >
-                <LayoutList className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
-          <span>
-            Showing <strong className="text-slate-900">{filtered.length}</strong> of {contracts.length} contracts
-          </span>
-          {(search || statusFilter !== 'all' || sortBy !== 'newest') && (
-            <button onClick={resetFilters} className="inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium text-sky-700 hover:bg-sky-50">
+      {/* ── Search + filters ────────────────────────────────────────────── */}
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            placeholder="Search by agreement, contractor, work, or LOA…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-10 rounded-lg pl-9"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
               <X className="h-4 w-4" />
-              Clear filters
             </button>
           )}
         </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-10 w-40 rounded-lg">
+              <Filter className="mr-2 h-3.5 w-3.5 text-slate-400" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All contracts</SelectItem>
+              <SelectItem value="needs-action">Needs action</SelectItem>
+              <SelectItem value="active">With bills</SelectItem>
+              <SelectItem value="no-bills">No bills</SelectItem>
+              <SelectItem value="with-pvc">PVC ready</SelectItem>
+              <SelectItem value="not-eligible">Not eligible</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="h-10 w-40 rounded-lg">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest first</SelectItem>
+              <SelectItem value="oldest">Oldest first</SelectItem>
+              <SelectItem value="agreement">Agreement no.</SelectItem>
+              <SelectItem value="contractor">Contractor</SelectItem>
+              <SelectItem value="bills">Most bills</SelectItem>
+              <SelectItem value="value">Highest value</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* View toggle */}
+          <div className="flex overflow-hidden rounded-lg border border-slate-200">
+            {(['grid', 'table'] as const).map((mode, i) => (
+              <button
+                key={mode}
+                aria-label={`${mode} view`}
+                onClick={() => { setViewMode(mode); localStorage.setItem('contractsViewMode', mode); }}
+                className={`grid h-10 w-10 place-items-center ${i > 0 ? 'border-l border-slate-200' : ''} transition-colors ${viewMode === mode ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+              >
+                {mode === 'grid' ? <LayoutGrid className="h-4 w-4" /> : <LayoutList className="h-4 w-4" />}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="mt-5 flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white py-16 text-center">
-          <Building2 className="mb-3 h-10 w-10 text-slate-300" />
-          <p className="font-semibold text-slate-800">{contracts.length === 0 ? 'No contracts yet' : 'No matching contracts'}</p>
-          <p className="mt-1 max-w-md text-sm text-slate-500">
+      {/* Result count + clear */}
+      <div className="mt-3 flex items-center justify-between text-sm text-slate-500">
+        <span>
+          {filtered.length === contracts.length
+            ? <>{contracts.length} contract{contracts.length !== 1 ? 's' : ''}</>
+            : <><strong className="text-slate-800">{filtered.length}</strong> of {contracts.length} contracts</>}
+        </span>
+        {hasFilters && (
+          <button onClick={resetFilters} className="flex items-center gap-1 rounded-md px-2 py-1 font-medium text-sky-700 hover:bg-sky-50">
+            <X className="h-3.5 w-3.5" /> Clear filters
+          </button>
+        )}
+      </div>
+
+      {/* ── Empty state ─────────────────────────────────────────────────── */}
+      {filtered.length === 0 && (
+        <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-20 text-center">
+          <div className="mb-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+            <ClipboardList className="h-10 w-10 text-slate-400" />
+          </div>
+          <p className="text-lg font-semibold text-slate-800">
+            {contracts.length === 0 ? 'No contracts yet' : 'No matching contracts'}
+          </p>
+          <p className="mt-1.5 max-w-sm text-sm text-slate-500">
             {contracts.length === 0
-              ? 'Create the first contract to start tracking bills, base months, and PVC calculations.'
-              : 'Try changing the search text or status filter.'}
+              ? 'Add your first contract to start tracking bills and PVC calculations.'
+              : 'Try adjusting the search or filters.'}
           </p>
           {contracts.length === 0 ? (
-            <Button asChild size="sm" className="mt-4">
+            <Button asChild className="mt-6">
               <Link href="/contracts/new">
-                <Plus className="mr-1.5 h-4 w-4" />
-                Create contract
+                <Plus className="mr-2 h-4 w-4" /> Create first contract
               </Link>
             </Button>
           ) : (
-            <Button variant="outline" size="sm" onClick={resetFilters} className="mt-4">
+            <Button variant="outline" onClick={resetFilters} className="mt-6">
               Clear filters
             </Button>
           )}
         </div>
-      ) : viewMode === 'grid' ? (
-        <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
+      )}
+
+      {/* ── Grid view ───────────────────────────────────────────────────── */}
+      {filtered.length > 0 && viewMode === 'grid' && (
+        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
           {filtered.map((contract) => {
             const reasons = contractAttentionReasons(contract);
             const mainValue = contract.contractValue || contract.tenderAdvertisedValue;
+            const status = getContractStatus(contract);
+            const cfg = STATUS_CONFIG[status];
 
             return (
-              <div key={contract.id} className="rounded-lg border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
-                <div className="border-b border-slate-100 px-4 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link href={`/contracts/${contract.id}`} className="truncate text-base font-bold text-slate-950 hover:text-sky-700">
-                          {contract.agreementNo}
-                        </Link>
-                        <StatusPill contract={contract} />
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-sm text-slate-500">{contract.workDescription}</p>
+              <div
+                key={contract.id}
+                className={`group relative overflow-hidden rounded-2xl border border-slate-200 border-l-4 bg-white shadow-sm transition-all hover:shadow-md ${cfg.border}`}
+              >
+                {/* Card header */}
+                <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={`/contracts/${contract.id}`}
+                        className="text-base font-bold text-slate-900 hover:text-sky-700 transition-colors"
+                      >
+                        {contract.agreementNo}
+                      </Link>
+                      <StatusBadge contract={contract} />
                     </div>
-                    <DeleteButton contract={contract} onDelete={handleDelete} />
+                    <p className="mt-1 line-clamp-1 text-sm text-slate-500">{contract.workDescription}</p>
                   </div>
+                  <DeleteButton contract={contract} onDelete={handleDelete} />
                 </div>
 
-                <div className="px-4 py-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
+                {/* Card body */}
+                <div className="border-t border-slate-100 px-5 py-4">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase text-slate-400">Contractor</p>
-                      <p className="mt-1 truncate font-semibold text-slate-900">{contract.contractorName}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Contractor</p>
+                      <p className="mt-0.5 truncate text-sm font-semibold text-slate-800">{contract.contractorName}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase text-slate-400">Value</p>
-                      <p className="mt-1 font-semibold text-emerald-700">{fmtCurrency(mainValue)}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Value</p>
+                      <p className="mt-0.5 text-sm font-bold text-emerald-600">{fmtCurrencyFull(mainValue)}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase text-slate-400">Opening</p>
-                      <p className="mt-1 flex items-center gap-1.5 text-slate-700">
-                        <CalendarDays className="h-4 w-4 text-slate-400" />
-                        {dateLabel(contract.dateOfOpening)}
-                      </p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Opening date</p>
+                      <p className="mt-0.5 text-sm text-slate-700">{dateLabel(contract.dateOfOpening)}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase text-slate-400">Base month</p>
-                      <p className="mt-1 text-slate-700">{dateLabel(contract.baseMonth, 'MMM yyyy')}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Base month</p>
+                      <p className="mt-0.5 text-sm text-slate-700">{dateLabel(contract.baseMonth, 'MMM yyyy')}</p>
                     </div>
                   </div>
 
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  {/* Pills row */}
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
                     <BillsDialog contract={contract} />
-                    <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-700">
                       <TrendingUp className="h-3.5 w-3.5" />
                       {contract._count.pvcCalculations} PVC
                     </span>
-                    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${contract.pvcApplicable ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                      {contract.pvcApplicable ? 'Eligible' : 'Not eligible'}
-                    </span>
+                    {contract.loaNo && (
+                      <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-600">
+                        LOA {contract.loaNo}
+                      </span>
+                    )}
+                    {!contract.pvcApplicable && (
+                      <span className="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs text-slate-500">Not eligible</span>
+                    )}
                   </div>
 
+                  {/* Attention notice */}
                   {reasons.length > 0 && (
-                    <div className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                      <span className="font-semibold">Needs:</span> {reasons.join(', ')}
+                    <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                      <span><strong>Needs:</strong> {reasons.join(' · ')}</span>
                     </div>
                   )}
 
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                    <p className="truncate text-xs text-slate-500">
-                      {contract.user ? `Owner: ${contract.user.name || contract.user.email}` : 'Owner not assigned'}
+                  {/* Footer actions */}
+                  <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-4">
+                    <p className="truncate text-xs text-slate-400">
+                      {contract.user ? (contract.user.name || contract.user.email) : 'No owner'}
                     </p>
                     <div className="flex items-center gap-1">
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/contracts/${contract.id}`}>
-                          <Eye className="mr-1.5 h-4 w-4" />
-                          View
-                        </Link>
-                      </Button>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/contracts/${contract.id}/edit`}>
-                          <Edit className="mr-1.5 h-4 w-4" />
-                          Edit
-                        </Link>
-                      </Button>
-                      <Button asChild size="sm">
-                        <Link href={`/bills/new?contractId=${contract.id}`}>
-                          <Plus className="mr-1.5 h-4 w-4" />
-                          Bill
-                        </Link>
-                      </Button>
+                      <Link
+                        href={`/contracts/${contract.id}/edit`}
+                        className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                        aria-label="Edit"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Link>
+                      <Link
+                        href={`/contracts/${contract.id}`}
+                        className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-sky-50 hover:text-sky-700"
+                        aria-label="View"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                      <Link
+                        href={`/bills/new?contractId=${contract.id}`}
+                        className="ml-1 inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-700"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Bill
+                      </Link>
                     </div>
                   </div>
                 </div>
@@ -699,63 +641,64 @@ export default function ContractsPage() {
             );
           })}
         </div>
-      ) : (
-        <div className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      )}
+
+      {/* ── Table view ──────────────────────────────────────────────────── */}
+      {filtered.length > 0 && viewMode === 'table' && (
+        <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1020px] text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Agreement</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Contractor</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-500">Value</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Dates</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-slate-500">Bills</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-slate-500">PVC</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Status</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-500">Actions</th>
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  {['Agreement', 'Contractor', 'Value', 'Dates', 'Bills', 'PVC', 'Status', ''].map((h) => (
+                    <th key={h} className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400 ${h === 'Value' || h === '' ? 'text-right' : 'text-left'}`}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((contract) => {
                   const reasons = contractAttentionReasons(contract);
+                  const status = getContractStatus(contract);
+                  const cfg = STATUS_CONFIG[status];
                   return (
-                    <tr key={contract.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3">
-                        <Link href={`/contracts/${contract.id}`} className="font-bold text-slate-950 hover:text-sky-700">
+                    <tr key={contract.id} className="group hover:bg-slate-50/70">
+                      <td className="px-4 py-3.5">
+                        <div className={`mb-1 inline-block h-1 w-8 rounded-full ${cfg.dot}`} />
+                        <Link href={`/contracts/${contract.id}`} className="block font-bold text-slate-900 hover:text-sky-700">
                           {contract.agreementNo}
                         </Link>
-                        <p className="mt-1 max-w-xs truncate text-xs text-slate-500">{contract.workDescription}</p>
+                        <p className="mt-0.5 max-w-[220px] truncate text-xs text-slate-500">{contract.workDescription}</p>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3.5">
                         <p className="max-w-[180px] truncate font-medium text-slate-800">{contract.contractorName}</p>
-                        <p className="text-xs text-slate-500">{contract.loaNo || 'LOA not set'}</p>
+                        <p className="text-xs text-slate-400">{contract.loaNo || 'No LOA'}</p>
                       </td>
-                      <td className="px-4 py-3 text-right font-semibold text-emerald-700">
-                        {fmtCurrency(contract.contractValue || contract.tenderAdvertisedValue)}
+                      <td className="px-4 py-3.5 text-right font-bold text-emerald-600">
+                        {fmtCurrencyFull(contract.contractValue || contract.tenderAdvertisedValue)}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        <p>{dateLabel(contract.dateOfOpening)}</p>
-                        <p className="text-xs text-slate-500">Base {dateLabel(contract.baseMonth, 'MMM yyyy')}</p>
+                      <td className="px-4 py-3.5">
+                        <p className="text-slate-700">{dateLabel(contract.dateOfOpening)}</p>
+                        <p className="text-xs text-slate-400">Base {dateLabel(contract.baseMonth, 'MMM yyyy')}</p>
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-3.5">
                         <BillsDialog contract={contract} />
                       </td>
-                      <td className="px-4 py-3 text-center font-semibold text-slate-700">{contract._count.pvcCalculations}</td>
-                      <td className="px-4 py-3">
-                        <div className="space-y-1">
-                          <StatusPill contract={contract} />
-                          {reasons.length > 0 && <p className="text-xs text-amber-700">{reasons[0]}</p>}
-                        </div>
+                      <td className="px-4 py-3.5 font-semibold text-slate-700">{contract._count.pvcCalculations}</td>
+                      <td className="px-4 py-3.5">
+                        <StatusBadge contract={contract} />
+                        {reasons.length > 0 && <p className="mt-1 text-xs text-amber-600">{reasons[0]}</p>}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3.5">
                         <div className="flex items-center justify-end gap-1">
-                          <Link href={`/contracts/${contract.id}`} className="rounded-md p-2 text-slate-500 hover:bg-sky-50 hover:text-sky-700" aria-label="View contract">
+                          <Link href={`/contracts/${contract.id}`} className="rounded-lg p-2 text-slate-400 hover:bg-sky-50 hover:text-sky-700" aria-label="View">
                             <Eye className="h-4 w-4" />
                           </Link>
-                          <Link href={`/contracts/${contract.id}/edit`} className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="Edit contract">
-                            <Edit className="h-4 w-4" />
+                          <Link href={`/contracts/${contract.id}/edit`} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Edit">
+                            <Edit2 className="h-4 w-4" />
                           </Link>
-                          <Link href={`/bills/new?contractId=${contract.id}`} className="rounded-md p-2 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700" aria-label="Create bill">
+                          <Link href={`/bills/new?contractId=${contract.id}`} className="rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-700" aria-label="New bill">
                             <Plus className="h-4 w-4" />
                           </Link>
                           <DeleteButton contract={contract} onDelete={handleDelete} />
