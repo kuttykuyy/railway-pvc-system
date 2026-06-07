@@ -640,6 +640,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         console.error('IR PDF: error embedding index documents:', err);
       }
 
+      // Apply trial watermark for free-trial bills
+      if (bill.isChargeable === false) {
+        const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
+        irFinalBytes = await applyTrialWatermark(irFinalBytes);
+      }
+
       return new Response(Buffer.from(irFinalBytes), {
         headers: {
           'Content-Type': 'application/pdf',
@@ -4207,6 +4213,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       }
     } else {
       console.log('Component index documents disabled in template settings');
+    }
+
+    // Apply trial watermark for free-trial bills
+    if (bill.isChargeable === false) {
+      const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
+      finalPdfBytes = await applyTrialWatermark(finalPdfBytes);
     }
 
     const pdfBuffer = Buffer.from(finalPdfBytes);
