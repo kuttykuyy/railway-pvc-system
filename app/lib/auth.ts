@@ -57,17 +57,8 @@ export const authOptions: NextAuthOptions = {
           }
 
           // Use the actual role from the database
-          // Special override: always set admin role for specific email
-          let role = user.role || 'contractor';
-          
-          if (user.email === '30prasath93@gmail.com' && role !== 'admin') {
-            role = 'admin';
-            await prisma.user.update({
-              where: { id: user.id },
-              data: { role: 'admin' }
-            });
-          }
-          
+          const role = user.role || 'contractor';
+
           return {
             id: user.id,
             email: user.email,
