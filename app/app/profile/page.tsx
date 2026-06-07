@@ -122,7 +122,7 @@ export default function ProfilePage() {
 
     fetch('/api/razorpay/config')
       .then(r => r.ok ? r.json() : {})
-      .then(d => setRazorpayEnabled(!!d.enabled))
+      .then((d: any) => setRazorpayEnabled(!!d.enabled))
       .catch(console.error);
 
     fetch('/api/gst-invoices')
