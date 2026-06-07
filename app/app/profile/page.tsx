@@ -503,8 +503,8 @@ export default function ProfilePage() {
                   </CardContent>
                 </Card>
 
-                {/* Advanced Tools Add-on */}
-                <Card className="border border-slate-100 shadow-sm bg-gradient-to-br from-white to-indigo-50/20 rounded-2xl overflow-hidden">
+                {/* Advanced Tools Add-on — hidden for railway officials */}
+                {userData?.role !== 'railway_official' && <Card className="border border-slate-100 shadow-sm bg-gradient-to-br from-white to-indigo-50/20 rounded-2xl overflow-hidden">
                   <CardHeader className="bg-gradient-to-r from-indigo-50/30 to-purple-50/30 border-b border-slate-100 px-4 py-3">
                     <CardTitle className="text-xs font-bold text-slate-900 flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
@@ -556,7 +556,7 @@ export default function ProfilePage() {
                       </p>
                     )}
                   </CardContent>
-                </Card>
+                </Card>}
               </div>
 
               {/* Transactions / GST Invoices */}
