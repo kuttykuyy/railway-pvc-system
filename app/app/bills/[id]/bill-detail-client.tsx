@@ -751,32 +751,6 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
 
         {/* Action Controls */}
         <div className="flex flex-wrap md:flex-nowrap items-center gap-2.5 pt-3 md:pt-0 border-t border-slate-100 dark:border-slate-800 md:border-none flex-shrink-0 w-full md:w-auto justify-start md:justify-end">
-          {(user.role === 'user' || user.role === 'contractor' || user.role === 'admin') && 
-           (bill.status === 'draft' || bill.status === 'revision_requested') && (
-            <>
-              {(user.role === 'user' || user.role === 'contractor') && bill.hasBeenEditedOnce ? (
-                <div className="relative group">
-                  <Button variant="outline" className="gap-2 opacity-50 cursor-not-allowed rounded-xl h-11" disabled>
-                    <Edit size={16} />
-                    Edit Bill
-                  </Button>
-                  <div className="absolute hidden group-hover:block bottom-full mb-2 right-0 w-72 p-3 bg-slate-950 text-white text-xs rounded-xl shadow-xl z-50 border border-slate-800/80">
-                    <p className="font-bold text-amber-400 flex items-center gap-1.5 mb-1">
-                      <AlertTriangle size={14} /> Limit Reached
-                    </p>
-                    <p className="text-slate-300">Contractors are limited to a single edit session per bill. Please contact Support to authorize additional edits.</p>
-                  </div>
-                </div>
-              ) : (
-                <Link href={`/bills/edit/${bill.id}`}>
-                  <Button variant="outline" className="gap-2 rounded-xl h-11 border-slate-200 hover:bg-slate-50 dark:hover:bg-slate-850 dark:border-slate-800 shadow-sm">
-                    <Edit size={16} className="text-slate-500" />
-                    Edit Bill
-                  </Button>
-                </Link>
-              )}
-            </>
-          )}
 
           {/* PDF Format selector */}
           <Select value={pdfFormat} onValueChange={(v) => setPdfFormat(v as 'detailed' | 'ir_standard')}>
@@ -949,28 +923,6 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
           </div>
         )}
 
-        {(user.role === 'user' || user.role === 'contractor') && bill.hasBeenEditedOnce && (
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 shadow-sm">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex-shrink-0">
-                <Edit className="h-5 w-5" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-bold text-amber-900 dark:text-amber-300">
-                  Bill Edit Limit Active
-                </h3>
-                <p className="text-xs text-amber-700 dark:text-amber-400/80 mt-0.5">
-                  You have already edited this bill once. Direct contractor edits are now capped. 
-                  {bill.lastEditedAt && (
-                    <span className="block mt-1 font-mono font-semibold">
-                      Last Edit Session: {format(new Date(bill.lastEditedAt), 'dd MMM yyyy, HH:mm')}
-                    </span>
-                  )}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 3. Approval Actions card */}
