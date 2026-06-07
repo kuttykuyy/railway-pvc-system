@@ -168,7 +168,17 @@ export const authOptions: NextAuthOptions = {
         if (token && session.user) {
           // Add id and role to the session user object
           (session.user as any).id = token.id as string;
-          (session.user as any).role = token.role as string;
+
+          // Always pull latest role from DB so admin changes take effect immediately
+          if (token.email) {
+            const dbUser = await prisma.user.findUnique({
+              where: { email: token.email as string },
+              select: { role: true },
+            });
+            (session.user as any).role = dbUser?.role || token.role as string;
+          } else {
+            (session.user as any).role = token.role as string;
+          }
         }
         return session;
       } catch (error) {
