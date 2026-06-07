@@ -71,8 +71,8 @@ export async function canUserDeleteBill(
       return { allowed: false, reason: 'Bill not found' };
     }
 
-    // If the user is not an admin, they can only delete their own bills
-    if (userRole !== 'admin') {
+    // If the user is not an admin/superadmin, they can only delete their own bills
+    if (userRole !== 'admin' && userRole !== 'superadmin') {
       const isOwner = bill.contract.userId === userId;
       return {
         allowed: isOwner,
@@ -128,8 +128,8 @@ export async function canUserDeleteBills(
       return { allowed: false, reason: 'No bills found' };
     }
 
-    // If the user is not an admin, they can only delete their own bills
-    if (userRole !== 'admin') {
+    // If the user is not an admin/superadmin, they can only delete their own bills
+    if (userRole !== 'admin' && userRole !== 'superadmin') {
       const disallowedBills = bills
         .filter(bill => bill.contract.userId !== userId)
         .map(bill => bill.billNo);
@@ -144,10 +144,15 @@ export async function canUserDeleteBills(
       };
     }
 
-    // For admins, check the setting
+    // For admins/superadmins, check the setting
     const setting = await prisma.adminSettings.findUnique({
       where: { key: 'ADMIN_CAN_DELETE_OTHER_USERS_BILLS' }
     });
+
+    // Superadmin can always delete any bill
+    if (userRole === 'superadmin') {
+      return { allowed: true };
+    }
 
     const adminCanDeleteOthers = setting?.value === 'true';
 

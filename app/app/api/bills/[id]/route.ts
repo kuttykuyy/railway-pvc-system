@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { getQuarterFromDate, calculateDedicatedCementPvc, calculateDedicatedSteelPvc, calculateClassificationEntryPvc } from '@/lib/pvc-calculations';
 import { getQuarterlyAverages } from '@/lib/db-utils';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { canUserDeleteBill, canUserEditBill } from '@/lib/bill-permissions';
 import { extractSteelTypesFromEntries } from '@/lib/steel-type-handler';
 import { areFinalIndicesAvailableForBill } from '@/lib/index-status';
@@ -21,8 +22,8 @@ export async function DELETE(
     const { id } = params;
 
     // Get user session
-    const session = await getServerSession();
-    
+    const session = await getServerSession(authOptions);
+
     if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
