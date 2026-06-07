@@ -76,9 +76,16 @@ export async function validateBillProcessing(
       }
     }
 
-    // Check if user has free trial remaining (completely disabled)
-    if (false) {
-      // bypassed
+    // Check if user has free trial remaining
+    const { getBillingSettings: getSettings } = await import('./admin-settings');
+    const trialSettings = await getSettings();
+    const freeTrialLimit = trialSettings.freeTrialBills || 1;
+    if (user.freeTrialUsed < freeTrialLimit) {
+      return {
+        canProcess: true,
+        isFree: true,
+        reason: `Free trial bill (${user.freeTrialUsed + 1}/${freeTrialLimit} used)`,
+      };
     }
 
     // For paid contractor bills, use a fixed per-bill charge with no discounts.
