@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: { id: true, role: true, railwayZone: true },
+      select: { id: true, role: true, railwayZone: true, designation: true, department: true, division: true },
     });
 
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -32,6 +32,12 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ applicable: false });
     }
 
+    const missingPostingFields: string[] = [];
+    if (!user.designation) missingPostingFields.push('Designation');
+    if (!user.department)  missingPostingFields.push('Department');
+    if (!user.railwayZone) missingPostingFields.push('Railway Zone');
+    if (!user.division)    missingPostingFields.push('Division');
+
     const [billQuota, contractQuota] = await Promise.all([
       checkRailwayOfficialBillQuota(user.id),
       checkRailwayOfficialContractQuota(user.id),
@@ -39,7 +45,9 @@ export async function GET(_req: NextRequest) {
 
     return NextResponse.json({
       applicable: true,
-      zone: user.railwayZone || null,   // locked zone for railway officials
+      zone: user.railwayZone || null,
+      postingComplete: missingPostingFields.length === 0,
+      missingPostingFields,
       bills: billQuota,
       contracts: contractQuota,
     });

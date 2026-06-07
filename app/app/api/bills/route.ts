@@ -192,8 +192,28 @@ export async function POST(request: NextRequest) {
       }, { status: 402 });
     }
 
-    // ===== STEP 2B: Railway Official Monthly Bill Quota =====
+    // ===== STEP 2B: Railway Official checks =====
     if (user!.role === 'railway_official') {
+      // 1. Posting details must be complete
+      const roProfile = await prisma.user.findUnique({
+        where: { id: user!.id },
+        select: { designation: true, department: true, railwayZone: true, division: true },
+      });
+      const missingFields: string[] = [];
+      if (!roProfile?.designation) missingFields.push('Designation');
+      if (!roProfile?.department)  missingFields.push('Department');
+      if (!roProfile?.railwayZone) missingFields.push('Railway Zone');
+      if (!roProfile?.division)    missingFields.push('Division');
+      if (missingFields.length > 0) {
+        return NextResponse.json({
+          error: 'Incomplete posting details',
+          reason: `Please complete your Railway Posting Details before creating a bill. Missing: ${missingFields.join(', ')}.`,
+          missingPostingFields: missingFields,
+          postingIncomplete: true,
+        }, { status: 403 });
+      }
+
+      // 2. Monthly bill quota
       const { checkRailwayOfficialBillQuota } = await import('@/lib/admin-settings');
       const quota = await checkRailwayOfficialBillQuota(user!.id);
       if (!quota.allowed) {

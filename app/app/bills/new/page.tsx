@@ -201,6 +201,8 @@ function NewBillPageContent() {
   const [roQuota, setRoQuota] = useState<{
     applicable: boolean;
     zone?: string | null;
+    postingComplete?: boolean;
+    missingPostingFields?: string[];
     bills?: { used: number; limit: number; remaining: number; allowed: boolean };
   } | null>(null);
 
@@ -899,6 +901,32 @@ function NewBillPageContent() {
         </div>
       </div>
 
+      {/* Railway Official — Incomplete Posting Details Block */}
+      {roQuota?.applicable && roQuota.postingComplete === false && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-full bg-red-100 p-1.5 mt-0.5">
+              <svg className="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-red-800">Railway Posting Details incomplete</p>
+              <p className="mt-0.5 text-xs text-red-600">
+                You must complete your posting details before creating a bill. Missing:{' '}
+                <strong>{roQuota.missingPostingFields?.join(', ')}</strong>.
+              </p>
+              <a
+                href="/profile#posting"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+              >
+                Complete Posting Details →
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Railway Official Quota Banner */}
       {roQuota?.applicable && roQuota.bills && (
         <div className={`rounded-xl border px-4 py-3 ${!roQuota.bills.allowed ? 'border-red-200 bg-red-50' : roQuota.bills.remaining <= 2 ? 'border-amber-200 bg-amber-50' : 'border-blue-200 bg-blue-50'}`}>
@@ -1586,8 +1614,8 @@ function NewBillPageContent() {
                     </div>
                     <Button
                       type="submit"
-                      disabled={isSaving || !formData.contractId || !formData.billNo || !formData.zone || !formData.dateOfMeasurement || (roQuota?.applicable === true && roQuota.bills?.allowed === false)}
-                      title={roQuota?.applicable && !roQuota.bills?.allowed ? 'Monthly bill limit reached' : undefined}
+                      disabled={isSaving || !formData.contractId || !formData.billNo || !formData.zone || !formData.dateOfMeasurement || (roQuota?.applicable === true && roQuota.bills?.allowed === false) || (roQuota?.applicable === true && roQuota.postingComplete === false)}
+                      title={roQuota?.applicable && roQuota.postingComplete === false ? 'Complete your Railway Posting Details first' : roQuota?.applicable && !roQuota.bills?.allowed ? 'Monthly bill limit reached' : undefined}
                       className="bg-purple-600 hover:bg-purple-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-purple-500/10 font-semibold h-10 disabled:opacity-50"
                     >
                       {isSaving ? (
