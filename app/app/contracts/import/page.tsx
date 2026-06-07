@@ -275,8 +275,8 @@ export default function ContractImportPage() {
             className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-colors ${dragging ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'}`}
           >
             <FileUp className="h-10 w-10 mx-auto text-slate-300 mb-3" />
-            <p className="text-sm font-semibold text-slate-700">Drop your Excel or CSV file here</p>
-            <p className="text-xs text-slate-400 mt-1">or click to browse · Max 200 rows</p>
+            <p className="text-sm font-semibold text-slate-700 text-center">Drop your Excel or CSV file here</p>
+            <p className="text-xs text-slate-400 mt-1 text-center">or click to browse · Max 200 rows</p>
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} />
           </div>
         </div>
