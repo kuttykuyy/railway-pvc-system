@@ -56,8 +56,8 @@ export default function HomePage() {
             {/* Left Content */}
             <div className="flex-1 space-y-8 text-center lg:text-left z-10">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-sm font-medium text-slate-600 shadow-sm hover:shadow transition-shadow">
-                <span className="flex h-2 w-2 rounded-full bg-blue-600 animate-pulse" />
-                GCC Clause 17 · IR Standard PDF · Free Preview
+                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                Free Trial · IR Standard PDF · Free Preview
               </div>
 
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight text-slate-900 leading-[1.1]">
@@ -317,10 +317,11 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <MiniFeature icon={<Gift />} title="Free Trial" desc="First PVC bill is completely free for every new user — no credits needed, watermarked PDF" badge="New" />
             <MiniFeature icon={<ReceiptText />} title="IR Standard PDF" desc="Official GCC Cl.17 statement with monthly indices, formula, and provisional watermark" badge="New" />
             <MiniFeature icon={<Layers />} title="Bulk Bill Creation" desc="Create and submit multiple bills simultaneously with one-time zone & fuel setup" badge="New" />
             <MiniFeature icon={<Download />} title="Bulk PDF Download" desc="Download Detailed or IR Standard PDFs for multiple bills merged into one file" badge="New" />
-            <MiniFeature icon={<FileSpreadsheet />} title="Monthly Index History" desc="Complete month-by-month breakdown of all indices from base month to current quarter" badge="New" />
+            <MiniFeature icon={<FileSpreadsheet />} title="Excel Contract Import" desc="Import multiple contracts at once via Excel/CSV template — saves hours of manual entry" badge="New" />
             <MiniFeature icon={<ScanSearch />} title="Free PVC Preview" desc="See the full PVC breakdown before paying — no credits deducted for preview calculations" badge="New" />
             <MiniFeature icon={<MessageSquare />} title="WhatsApp Integration" desc="Receive bills and critical alerts directly on WhatsApp" />
             <MiniFeature icon={<BarChart3 />} title="Deep Analytics" desc="Custom abstract reports and visual summaries across contracts" />
@@ -340,17 +341,17 @@ export default function HomePage() {
             <p className="text-xl text-slate-500 font-light">Credit-based pay-as-you-go. Top up your wallet, use credits per bill. No subscriptions, no lock-in.</p>
           </div>
 
-          {/* First bill offer banner */}
+          {/* Free trial banner */}
           <div className="max-w-4xl mx-auto mb-6">
-            <div className="flex items-center gap-4 bg-amber-50 border border-amber-200 rounded-2xl px-6 py-4">
+            <div className="flex items-center gap-4 bg-emerald-50 border border-emerald-200 rounded-2xl px-6 py-4">
               <span className="text-3xl">🎉</span>
               <div className="flex-1">
-                <p className="font-black text-amber-900 text-lg">Your first bill is only ₹99</p>
-                <p className="text-amber-700 text-sm font-light">New users get a one-time discount on their first PVC bill. No coupon needed — applied automatically.</p>
+                <p className="font-black text-emerald-900 text-lg">Your first bill is completely FREE</p>
+                <p className="text-emerald-700 text-sm font-light">New users get one free PVC bill as a trial. No payment or credits needed — applied automatically.</p>
               </div>
               <div className="shrink-0 text-right hidden sm:block">
-                <p className="text-3xl font-black text-amber-600">₹99</p>
-                <p className="text-xs text-amber-500 line-through">₹199</p>
+                <p className="text-3xl font-black text-emerald-600">FREE</p>
+                <p className="text-xs text-emerald-500">First bill trial</p>
               </div>
             </div>
           </div>
@@ -366,7 +367,7 @@ export default function HomePage() {
                     <span className="text-7xl font-black text-slate-900">₹199</span>
                     <span className="text-slate-500 font-medium pb-2 text-lg">/ bill</span>
                   </div>
-                  <p className="text-xs text-amber-600 font-semibold mb-3">First bill ₹99 — automatically applied for new users</p>
+                  <p className="text-xs text-emerald-600 font-semibold mb-3">First bill FREE — one-time trial automatically applied for new users</p>
                   <p className="text-slate-500 font-light text-sm leading-relaxed">
                     Each PVC bill deducts credits from your wallet. Top up any amount — credits never expire.
                   </p>
@@ -400,7 +401,7 @@ export default function HomePage() {
                   </div>
                   <Link href="/auth/signin?mode=signup" className="mt-6 block">
                     <Button className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-600/20">
-                      Get Started — First Bill ₹99 <ArrowRight className="ml-2 w-4 h-4" />
+                      Get Started — First Bill Free <ArrowRight className="ml-2 w-4 h-4" />
                     </Button>
                   </Link>
                 </div>
@@ -460,7 +461,7 @@ export default function HomePage() {
               </Button>
             </Link>
             <p className="mt-4 text-sm text-slate-400 font-medium text-center">
-              First bill ₹99 · Free PVC preview · Pay-as-you-go credits · GST invoices included
+              First bill FREE · Free PVC preview · Pay-as-you-go credits · GST invoices included
             </p>
           </div>
         </div>
