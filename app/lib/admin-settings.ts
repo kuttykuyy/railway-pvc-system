@@ -153,7 +153,7 @@ export async function isMultipleBillEditsAllowed(): Promise<boolean> {
  * Check if email verification is required for user signup
  */
 export async function isEmailVerificationRequired(): Promise<boolean> {
-  return await getAdminSetting('EMAIL_VERIFICATION_REQUIRED', true);
+  return await getAdminSetting('EMAIL_VERIFICATION_REQUIRED', false);
 }
 
 /**

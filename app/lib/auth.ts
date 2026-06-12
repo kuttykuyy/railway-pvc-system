@@ -6,6 +6,7 @@ import GoogleProvider from 'next-auth/providers/google';
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
+import { isEmailVerificationRequired } from '@/lib/admin-settings';
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -83,7 +84,7 @@ export const authOptions: NextAuthOptions = {
       if (account?.provider === 'credentials') {
         // Check if emailVerified exists on the user object
         const userWithVerification = user as any;
-        if (!userWithVerification.emailVerified) {
+        if (!userWithVerification.emailVerified && await isEmailVerificationRequired()) {
           console.error('🚨 Sign-in blocked: Email not verified for', user.email);
           // This will redirect to the error page with EmailNotVerified error
           throw new Error('EmailNotVerified');
