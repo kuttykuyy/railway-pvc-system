@@ -23,12 +23,12 @@ const NON_STEEL_COMPONENT_TYPES = Object.values(ComponentType).filter(t => !STEE
 
 function billHasSteel(pvc: any): boolean {
   if (!pvc) return false;
-  return (pvc.steelPvc ?? 0) > 0
-    || (pvc.dedicatedSteelPvc ?? 0) > 0
-    || (pvc.dedicatedSteelTmtBarsPvc ?? 0) > 0
-    || (pvc.dedicatedSteelAngleChannelPvc ?? 0) > 0
-    || (pvc.dedicatedSteelPlatesPvc ?? 0) > 0
-    || (pvc.dedicatedSteelOtherSectionsPvc ?? 0) > 0;
+  return (pvc.steelPvc ?? 0) !== 0
+    || (pvc.dedicatedSteelPvc ?? 0) !== 0
+    || (pvc.dedicatedSteelTmtBarsPvc ?? 0) !== 0
+    || (pvc.dedicatedSteelAngleChannelPvc ?? 0) !== 0
+    || (pvc.dedicatedSteelPlatesPvc ?? 0) !== 0
+    || (pvc.dedicatedSteelOtherSectionsPvc ?? 0) !== 0;
 }
 import jwt from 'jsonwebtoken';
 
