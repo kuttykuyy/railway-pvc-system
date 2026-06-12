@@ -70,7 +70,7 @@ const DEFAULT_SETTINGS = [
   },
   {
     key: 'EMAIL_VERIFICATION_REQUIRED',
-    value: 'false',
+    value: 'true',
     description: 'Require users to verify their email before accessing the system. When disabled, users can sign up and access the system immediately without email verification.',
     dataType: 'boolean'
   },
