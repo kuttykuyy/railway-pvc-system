@@ -13,6 +13,11 @@ const nextConfig = {
     ignoreBuildErrors: false,
   },
   images: { unoptimized: true },
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
   webpack: (config, { isServer }) => {
     config.resolve.alias.canvas = false;
     if (!isServer) {
