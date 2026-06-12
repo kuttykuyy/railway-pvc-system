@@ -31,15 +31,16 @@ interface CombinedPDFRequest {
 // POST /api/bills/[id]/combined-pdf - Generate combined PDF with covering letter, bill, abstract, and previous bills
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const billId = params.id;
+    const billId = id;
     const body: CombinedPDFRequest = await request.json();
 
     // Get the bill with contract details

@@ -6,6 +6,7 @@ import { getQuarterlyAverages } from '@/lib/db-utils';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { canUserDeleteBill, canUserEditBill } from '@/lib/bill-permissions';
+import { checkUserBillAccess } from '@/lib/permissions';
 import { extractSteelTypesFromEntries } from '@/lib/steel-type-handler';
 import { areFinalIndicesAvailableForBill } from '@/lib/index-status';
 import { recalculateCumulativePvcForContract } from '@/lib/recalculateCumulativePvc';
@@ -16,10 +17,11 @@ export const dynamic = "force-dynamic";
 // DELETE /api/bills/[id] - Delete a single bill
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    const { id } = params;
+    
 
     // Get user session
     const session = await getServerSession(authOptions);
@@ -94,10 +96,39 @@ export async function DELETE(
 // GET /api/bills/[id] - Get a single bill
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    const { id } = params;
+    
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true, role: true }
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    const access = await checkUserBillAccess(user.id, id);
+    if (!access?.canView) {
+      return NextResponse.json(
+        { error: 'Access denied' },
+        { status: 403 }
+      );
+    }
 
     const bill = await prisma.bill.findUnique({
       where: { id },
@@ -138,13 +169,14 @@ export async function GET(
 // ============================================================================
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   console.log('\n🔄 ===== NEW BILL API: PUT REQUEST STARTED =====');
-  console.log(`   Bill ID: ${params.id}\n`);
+  console.log(`   Bill ID: ${id}\n`);
   
   try {
-    const { id } = params;
+    
     const body = await request.json();
     
     const {

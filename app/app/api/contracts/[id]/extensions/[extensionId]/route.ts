@@ -7,8 +7,9 @@ import { authOptions } from '@/lib/auth';
 // GET - Fetch a specific extension
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string; extensionId: string } }
+  { params }: { params: Promise<{ id: string; extensionId: string }> }
 ) {
+  const { id, extensionId } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -17,7 +18,7 @@ export async function GET(
 
     const extension = await prisma.contractExtension.findUnique({
       where: {
-        id: params.extensionId
+        id: extensionId
       },
       include: {
         contract: true
@@ -41,8 +42,9 @@ export async function GET(
 // PATCH - Update an extension
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string; extensionId: string } }
+  { params }: { params: Promise<{ id: string; extensionId: string }> }
 ) {
+  const { id, extensionId } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -81,7 +83,7 @@ export async function PATCH(
 
     const extension = await prisma.contractExtension.update({
       where: {
-        id: params.extensionId
+        id: extensionId
       },
       data: updateData
     });
@@ -89,7 +91,7 @@ export async function PATCH(
     // Update contract if this is the latest extension
     if (data.extendedCompletionDate) {
       await prisma.contract.update({
-        where: { id: params.id },
+        where: { id: id },
         data: {
           currentCompletionDate: new Date(data.extendedCompletionDate),
           extensionType: data.extensionType || extension.extensionType,
@@ -112,8 +114,9 @@ export async function PATCH(
 // DELETE - Delete an extension
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string; extensionId: string } }
+  { params }: { params: Promise<{ id: string; extensionId: string }> }
 ) {
+  const { id, extensionId } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -122,13 +125,13 @@ export async function DELETE(
 
     await prisma.contractExtension.delete({
       where: {
-        id: params.extensionId
+        id: extensionId
       }
     });
 
     // Check if there are remaining extensions and update contract accordingly
     const remainingExtensions = await prisma.contractExtension.findMany({
-      where: { contractId: params.id },
+      where: { contractId: id },
       orderBy: { approvalDate: 'desc' },
       take: 1
     });
@@ -136,7 +139,7 @@ export async function DELETE(
     if (remainingExtensions.length > 0) {
       const latestExtension = remainingExtensions[0];
       await prisma.contract.update({
-        where: { id: params.id },
+        where: { id: id },
         data: {
           currentCompletionDate: latestExtension.extendedCompletionDate,
           extensionType: latestExtension.extensionType,
@@ -147,11 +150,11 @@ export async function DELETE(
     } else {
       // No more extensions, reset contract to original state
       const contract = await prisma.contract.findUnique({
-        where: { id: params.id }
+        where: { id: id }
       });
       
       await prisma.contract.update({
-        where: { id: params.id },
+        where: { id: id },
         data: {
           currentCompletionDate: contract?.originalCompletionDate,
           extensionType: null,

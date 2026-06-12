@@ -8,9 +8,10 @@ import { format } from 'date-fns';
 export const dynamic = "force-dynamic";
 
 // GET /api/contracts/[id]/quarterly-averages - Get quarterly averages for all quarters
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
-    const contractId = params.id;
+    const contractId = id;
     
     const contract = await prisma.contract.findUnique({
       where: { id: contractId }

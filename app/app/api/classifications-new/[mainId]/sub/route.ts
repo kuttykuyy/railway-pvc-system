@@ -8,8 +8,9 @@ import { validateAdminAccess } from '@/lib/role-auth';
 // POST - Create new sub-classification under a main classification
 export async function POST(
   request: NextRequest,
-  { params }: { params: { mainId: string } }
+  { params }: { params: Promise<{ mainId: string }> }
 ) {
+  const { mainId } = await params;
   try {
     // Check admin access
     const { authorized, message } = await validateAdminAccess(request);

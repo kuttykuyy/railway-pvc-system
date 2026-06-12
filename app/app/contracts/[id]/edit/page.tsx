@@ -11,12 +11,13 @@ export const dynamic = "force-dynamic";
 
 
 interface EditContractPageProps {
-  params: { id: string };
+  params: Promise<{id: string}>;
 }
 
 export default async function EditContractPage({ params }: EditContractPageProps) {
+  const { id } = await params;
   const contract = await prisma.contract.findUnique({
-    where: { id: params.id }
+    where: { id: id }
   });
 
   if (!contract) {

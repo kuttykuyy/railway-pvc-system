@@ -7,11 +7,12 @@ import { generateCoveringLetter } from '@/lib/pdf/generators/covering-letter-gen
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     console.log('=== Covering Letter Generation Started ===');
-    console.log('Bill ID:', params.id);
+    console.log('Bill ID:', id);
     
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -23,7 +24,7 @@ export async function GET(
     const userRole = (session.user as any).role as string;
     console.log('User:', userId, 'Role:', userRole);
 
-    const billId = params.id;
+    const billId = id;
 
     // Fetch bill with contract details
     console.log('Fetching bill data...');

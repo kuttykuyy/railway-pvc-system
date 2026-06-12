@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 /**
  * Public API endpoint for accessing bill PDFs via WhatsApp
@@ -11,13 +11,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import jwt from 'jsonwebtoken';
+import { getNextAuthSecret } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 // Increase timeout for PDF generation - WhatsApp servers may have stricter timeouts
 export const maxDuration = 60; // 60 seconds max
-
-const JWT_SECRET = process.env.NEXTAUTH_SECRET || 'fallback-secret-key';
 
 export async function GET(req: NextRequest) {
   const startTime = Date.now();
@@ -41,7 +40,7 @@ export async function GET(req: NextRequest) {
 
     // Verify the token
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { billId: string; exp: number };
+      const decoded = jwt.verify(token, getNextAuthSecret()) as { billId: string; exp: number };
       
       // Check if the token is for this bill
       if (decoded.billId !== billId) {

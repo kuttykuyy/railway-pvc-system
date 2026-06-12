@@ -8,8 +8,9 @@ export const dynamic = "force-dynamic";
 // PATCH /api/admin/users/[userId] - Update user role
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
+  const { userId } = await params;
   try {
     // Check admin access
     const { authorized, user: adminUser, message } = await validateAdminAccess(request);
@@ -21,7 +22,7 @@ export async function PATCH(
       );
     }
 
-    const { userId } = params;
+    
     const body = await request.json();
     const { role: roleUpperCase } = body;
 
@@ -86,8 +87,9 @@ export async function PATCH(
 // DELETE /api/admin/users/[userId] - Delete user and all related data
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
+  const { userId } = await params;
   try {
     // Check admin access
     const { authorized, user: adminUser, message } = await validateAdminAccess(request);
@@ -99,7 +101,7 @@ export async function DELETE(
       );
     }
 
-    const { userId } = params;
+    
 
     // Check if user exists
     const targetUser = await prisma.user.findUnique({

@@ -10,8 +10,9 @@ export const dynamic = 'force-dynamic';
 // Sets or clears a per-user contract limit override for a Railway Official
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
+  const { userId } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -28,7 +29,7 @@ export async function PATCH(
     }
 
     const target = await prisma.user.findUnique({
-      where: { id: params.userId },
+      where: { id: userId },
       select: { role: true },
     });
 
@@ -38,7 +39,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.user.update({
-      where: { id: params.userId },
+      where: { id: userId },
       data: { contractLimitOverride: contractLimitOverride ?? null },
       select: { id: true, contractLimitOverride: true },
     });

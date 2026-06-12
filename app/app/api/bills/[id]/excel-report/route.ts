@@ -183,9 +183,10 @@ function numberToWordsIndian(num: number): string {
 }
 
 // GET /api/bills/[id]/excel-report - Generate comprehensive PVC Excel report with professional formatting
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
-    const billId = params.id;
+    const billId = id;
     
     // Get the main bill with all related data
     const bill = await prisma.bill.findUnique({

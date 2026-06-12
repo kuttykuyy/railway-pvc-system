@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 /**
  * POST /api/telegram/webhook
  * Receives updates from Telegram Bot API
@@ -6,11 +6,19 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { handleTelegramMessage } from '@/lib/telegram-message-handler';
+import { getTelegramWebhookSecret } from '@/lib/telegram-api';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    // Validate Telegram's webhook secret token to prevent spoofed requests
+    const secretToken = request.headers.get('x-telegram-bot-api-secret-token');
+    if (secretToken !== getTelegramWebhookSecret()) {
+      console.warn('[Telegram] Invalid or missing webhook secret token');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
 
     // Handle text messages

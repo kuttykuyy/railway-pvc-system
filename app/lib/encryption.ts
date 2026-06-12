@@ -8,12 +8,13 @@ const TAG_LENGTH = 16;
 const KEY_LENGTH = 32;
 const ITERATIONS = 10000;
 
-// Get encryption key from environment or generate one
+// Get encryption key from environment
 const getEncryptionKey = (): string => {
-  if (!process.env.ENCRYPTION_KEY) {
-    return 'default-encryption-key-change-this-in-production';
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key) {
+    throw new Error('ENCRYPTION_KEY environment variable is not set');
   }
-  return process.env.ENCRYPTION_KEY;
+  return key;
 };
 
 /**

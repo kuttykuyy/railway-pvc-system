@@ -7,8 +7,9 @@ import { authOptions } from '@/lib/auth';
 // GET - Fetch all extensions for a contract
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -17,7 +18,7 @@ export async function GET(
 
     const extensions = await prisma.contractExtension.findMany({
       where: {
-        contractId: params.id
+        contractId: id
       },
       orderBy: {
         approvalDate: 'desc'
@@ -37,8 +38,9 @@ export async function GET(
 // POST - Create a new extension
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -82,7 +84,7 @@ export async function POST(
     // Create the extension
     const extension = await prisma.contractExtension.create({
       data: {
-        contractId: params.id,
+        contractId: id,
         extensionType: data.extensionType,
         extensionSubcategory: data.extensionSubcategory || null,
         extensionReason: data.extensionReason || null,
@@ -101,7 +103,7 @@ export async function POST(
 
     // Update the contract with latest extension details
     await prisma.contract.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         currentCompletionDate: extendedDate,
         extensionType: data.extensionType,

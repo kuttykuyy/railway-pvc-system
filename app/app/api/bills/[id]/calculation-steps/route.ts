@@ -12,9 +12,10 @@ import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-s
 export const dynamic = "force-dynamic";
 
 // GET /api/bills/[id]/calculation-steps - Get detailed calculation steps for a bill
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
-    const billId = params.id;
+    const billId = id;
     
     // Get the bill with related data
     const bill = await prisma.bill.findUnique({

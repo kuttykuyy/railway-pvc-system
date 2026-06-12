@@ -6,6 +6,8 @@ import { prisma } from "@/lib/db";
 import { uploadFile } from "@/lib/s3";
 import { ComponentType } from "@prisma/client";
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -116,6 +118,14 @@ export async function POST(request: NextRequest) {
       if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
         return NextResponse.json(
           { error: "Only PDF files are allowed" },
+          { status: 400 }
+        );
+      }
+
+      // Enforce maximum file size
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json(
+          { error: `File size exceeds the ${MAX_FILE_SIZE / 1024 / 1024} MB limit` },
           { status: 400 }
         );
       }

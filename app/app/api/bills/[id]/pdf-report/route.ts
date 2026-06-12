@@ -17,6 +17,8 @@ import rateLimiter, { RATE_LIMITS, getIdentifier } from '@/lib/rate-limiter';
 import { embedLabourIndex, embedComponentIndicesRange } from '@/lib/pdf/utils/labour-index-embedder';
 import { PDFDocument } from 'pdf-lib';
 import { ComponentType } from '@prisma/client';
+import jwt from 'jsonwebtoken';
+import { getNextAuthSecret } from '@/lib/auth';
 
 const STEEL_COMPONENT_TYPES = [ComponentType.TMT_BARS, ComponentType.ANGLE_CHANNEL, ComponentType.PLATES, ComponentType.OTHER_SECTIONS];
 const NON_STEEL_COMPONENT_TYPES = Object.values(ComponentType).filter(t => !STEEL_COMPONENT_TYPES.includes(t as any)) as ComponentType[];
@@ -30,7 +32,6 @@ function billHasSteel(pvc: any): boolean {
     || (pvc.dedicatedSteelPlatesPvc ?? 0) !== 0
     || (pvc.dedicatedSteelOtherSectionsPvc ?? 0) !== 0;
 }
-import jwt from 'jsonwebtoken';
 
 export const dynamic = "force-dynamic";
 
@@ -112,7 +113,8 @@ function numberToWordsIndian(num: number): string {
 }
 
 // GET /api/bills/[id]/pdf-report - Generate comprehensive PVC report
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     // Rate limiting for expensive PDF generation
     const identifier = getIdentifier(request);
@@ -140,7 +142,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           throw new Error('jsPDF is not available');
         }
         
-        const billId = params.id;
+        const billId = id;
     const { searchParams } = new URL(request.url);
     const templateId = searchParams.get('templateId');
     const publicAccess = searchParams.get('public_access');
@@ -150,7 +152,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     let isPublicAccessValid = false;
     if (publicAccess === 'true' && publicToken) {
       try {
-        const decoded = jwt.verify(publicToken, process.env.NEXTAUTH_SECRET || 'fallback-secret-key') as { billId: string };
+        const decoded = jwt.verify(publicToken, getNextAuthSecret()) as { billId: string };
         if (decoded.billId === billId) {
           isPublicAccessValid = true;
           console.log('Public access token validated for bill:', billId);

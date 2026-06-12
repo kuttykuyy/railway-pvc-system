@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 /**
  * API endpoint to send bill PDF via WhatsApp using MyDreams API
@@ -11,16 +11,15 @@ import { prisma } from '@/lib/db';
 import { sendBillPDFNotification, isMyDreamsWhatsAppConfigured } from '@/lib/whatsapp-mydreams';
 import jwt from 'jsonwebtoken';
 import { format } from 'date-fns';
+import { getNextAuthSecret } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
-
-const JWT_SECRET = process.env.NEXTAUTH_SECRET || 'fallback-secret-key';
 
 // Generate a temporary signed token for public PDF access
 function generatePDFToken(billId: string, expiresInHours: number = 24): string {
   return jwt.sign(
     { billId },
-    JWT_SECRET,
+    getNextAuthSecret(),
     { expiresIn: `${expiresInHours}h` }
   );
 }

@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
@@ -37,20 +37,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    logger.log(`[${requestId}] Webhook secret loaded (length: ${webhookSecret.length})`);
     logger.log(`[${requestId}] Body length: ${body.length}`);
-    logger.log(`[${requestId}] Received signature: ${signature}`);
 
     const expectedSignature = crypto
       .createHmac('sha256', webhookSecret)
       .update(body)
       .digest('hex');
 
-    logger.log(`[${requestId}] Expected signature: ${expectedSignature}`);
-
     if (signature !== expectedSignature) {
       console.error(`[${requestId}] Invalid webhook signature`);
-      console.error(`[${requestId}] Signature mismatch - Expected: ${expectedSignature}, Got: ${signature}`);
       return NextResponse.json(
         { error: 'Invalid signature' },
         { status: 401 }

@@ -10,16 +10,22 @@ async function main() {
 
   // Create admin user
   console.log('Creating admin user...');
-  
-  // Admin user - Email: admin@railway.gov.in, Password: admin123
-  const adminPassword = await bcrypt.hash('admin123', 12);
+
+  const adminEmail = process.env.ADMIN_SEED_EMAIL || 'admin@railway.gov.in';
+  const adminPasswordPlain = process.env.ADMIN_SEED_PASSWORD;
+  if (!adminPasswordPlain) {
+    console.error('ADMIN_SEED_PASSWORD environment variable is required to seed the admin user.');
+    process.exit(1);
+  }
+
+  const adminPassword = await bcrypt.hash(adminPasswordPlain, 12);
   await prisma.user.upsert({
-    where: { email: 'admin@railway.gov.in' },
+    where: { email: adminEmail },
     update: {
       emailVerified: new Date(),
     },
     create: {
-      email: 'admin@railway.gov.in',
+      email: adminEmail,
       password: adminPassword,
       name: 'Railway Admin',
       role: 'admin', // Set as admin

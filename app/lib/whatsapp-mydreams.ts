@@ -1,4 +1,5 @@
-﻿import { logger } from './logger';
+import { logger } from './logger';
+import { getNextAuthSecret } from './auth';
 
 /**
  * MyDreams Technology WhatsApp API Integration
@@ -320,8 +321,7 @@ export async function sendBillPDFWithTemplate(
 
     // Generate PDF URL via proxy endpoint with JWT token for public access
     const pdfFileName = `PVC_Report_${billData.billNumber.replace(/\//g, '_')}.pdf`;
-    const JWT_SECRET = process.env.NEXTAUTH_SECRET || 'fallback-secret-key';
-    const pdfToken = jwt.sign({ billId }, JWT_SECRET, { expiresIn: '24h' });
+    const pdfToken = jwt.sign({ billId }, getNextAuthSecret(), { expiresIn: '24h' });
     const encodedToken = encodeURIComponent(pdfToken);
     const pdfUrl = `${process.env.NEXTAUTH_URL}/api/public/bill-pdf?billId=${billId}&token=${encodedToken}`;
 

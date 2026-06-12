@@ -1,4 +1,4 @@
-﻿import { logger } from './logger';
+import { logger } from './logger';
 /**
  * Text-based PDF parser for Indian Railway running account bills.
  * Extracts bill data using regex pattern matching on text extracted via pdfjs-dist.
@@ -8,7 +8,7 @@
  */
 
 // @ts-ignore - pdfjs-dist legacy build doesn't have perfect types
-const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.mjs');
 
 // Disable worker to avoid "Cannot find module './pdf.worker.js'" in standalone builds.
 // The actual disabling happens via disableWorker:true in getDocument() calls.

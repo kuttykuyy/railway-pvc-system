@@ -7,8 +7,9 @@ import { authOptions } from '@/lib/auth';
 // PUT - Update a subcategory
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -31,7 +32,7 @@ export async function PUT(
 
     // Check if subcategory exists
     const existing = await prisma.extensionSubcategory.findUnique({
-      where: { id: params.id }
+      where: { id: id }
     });
 
     if (!existing) {
@@ -56,7 +57,7 @@ export async function PUT(
     }
 
     const subcategory = await prisma.extensionSubcategory.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         code: data.code,
         name: data.name,
@@ -79,8 +80,9 @@ export async function PUT(
 // DELETE - Delete a subcategory
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -101,7 +103,7 @@ export async function DELETE(
 
     // Check if subcategory is in use
     const inUse = await prisma.contractExtension.findFirst({
-      where: { extensionSubcategory: params.id }
+      where: { extensionSubcategory: id }
     });
 
     if (inUse) {
@@ -112,7 +114,7 @@ export async function DELETE(
     }
 
     await prisma.extensionSubcategory.delete({
-      where: { id: params.id }
+      where: { id: id }
     });
 
     return NextResponse.json({ success: true });

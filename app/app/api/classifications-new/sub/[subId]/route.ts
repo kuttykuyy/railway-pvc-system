@@ -8,8 +8,9 @@ import { validateAdminAccess } from '@/lib/role-auth';
 // PUT - Update sub-classification
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { subId: string } }
+  { params }: { params: Promise<{ subId: string }> }
 ) {
+  const { subId } = await params;
   try {
     // Check admin access
     const { authorized, message } = await validateAdminAccess(request);
@@ -59,7 +60,7 @@ export async function PUT(
     if (isDefault) {
       await prisma.classification.updateMany({
         where: {
-          id: { not: params.subId }
+          id: { not: subId }
         },
         data: { isDefault: false }
       });
@@ -67,7 +68,7 @@ export async function PUT(
 
     // Update the sub-classification
     const subClassification = await prisma.classification.update({
-      where: { id: params.subId },
+      where: { id: subId },
       data: {
         code,
         name,
@@ -104,8 +105,9 @@ export async function PUT(
 // DELETE - Delete sub-classification
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { subId: string } }
+  { params }: { params: Promise<{ subId: string }> }
 ) {
+  const { subId } = await params;
   try {
     // Check admin access
     const { authorized, message } = await validateAdminAccess(request);
@@ -119,7 +121,7 @@ export async function DELETE(
 
     // Check if this sub-classification is being used by any bills
     const billsUsingThis = await prisma.bill.count({
-      where: { workClassificationId: params.subId }
+      where: { workClassificationId: subId }
     });
 
     if (billsUsingThis > 0) {
@@ -131,7 +133,7 @@ export async function DELETE(
 
     // Delete the sub-classification
     await prisma.classification.delete({
-      where: { id: params.subId }
+      where: { id: subId }
     });
 
     return NextResponse.json({ message: 'Sub-classification deleted successfully' });

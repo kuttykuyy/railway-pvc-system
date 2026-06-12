@@ -7,8 +7,9 @@ import { prisma } from '@/lib/db';
 // GET single classification group
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
@@ -16,7 +17,7 @@ export async function GET(
     }
 
     const group = await prisma.classificationGroup.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         subClassifications: {
           orderBy: { code: 'asc' }
@@ -44,8 +45,9 @@ export async function GET(
 // PUT update classification group
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
@@ -68,7 +70,7 @@ export async function PUT(
     const { code, name, description, isActive } = body;
 
     const group = await prisma.classificationGroup.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         code,
         name,
@@ -95,8 +97,9 @@ export async function PUT(
 // DELETE classification group
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
@@ -116,7 +119,7 @@ export async function DELETE(
     }
 
     await prisma.classificationGroup.delete({
-      where: { id: params.id }
+      where: { id: id }
     });
 
     return NextResponse.json({ success: true });

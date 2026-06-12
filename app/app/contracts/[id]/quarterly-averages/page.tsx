@@ -10,15 +10,14 @@ export const dynamic = "force-dynamic";
 
 
 interface PageProps {
-  params: {
-    id: string;
-  };
+  params: Promise<{id: string;}>;
 }
 
 export default async function QuarterlyAveragesPage({ params }: PageProps) {
+  const { id } = await params;
   // Verify the contract exists and user has access
   const contract = await prisma.contract.findUnique({
-    where: { id: params.id }
+    where: { id: id }
   });
 
   if (!contract) {
@@ -28,21 +27,22 @@ export default async function QuarterlyAveragesPage({ params }: PageProps) {
   return (
     <div className="container mx-auto p-6">
       <div className="mb-6">
-        <BackButton href={`/contracts/${params.id}`} className="mb-4" />
+        <BackButton href={`/contracts/${id}`} className="mb-4" />
         <h1 className="text-3xl font-bold tracking-tight">Quarterly Price Indices</h1>
         <p className="text-muted-foreground mt-2">
           View average price indices for each quarter based on PVC components
         </p>
       </div>
 
-      <QuarterlyAveragesDisplay contractId={params.id} />
+      <QuarterlyAveragesDisplay contractId={id} />
     </div>
   );
 }
 
 export async function generateMetadata({ params }: PageProps) {
+  const { id } = await params;
   const contract = await prisma.contract.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: { agreementNo: true }
   });
 

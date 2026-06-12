@@ -7,7 +7,8 @@ import { prisma } from '@/lib/db';
 export const dynamic = "force-dynamic";
 
 // GET /api/report-templates/[id] - Get a specific template
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
     
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     
     const template = await prisma.reportTemplate.findFirst({
       where: {
-        id: params.id,
+        id: id,
         OR: [
           { userId: user.id },      // User's own template
           { isGlobal: true }         // Global template
@@ -45,7 +46,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PUT /api/report-templates/[id] - Update a template
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
     
@@ -64,7 +66,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     // Verify ownership
     const existingTemplate = await prisma.reportTemplate.findFirst({
       where: {
-        id: params.id,
+        id: id,
         userId: user.id
       }
     });
@@ -88,7 +90,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         where: {
           userId: user.id,
           isDefault: true,
-          id: { not: params.id }
+          id: { not: id }
         },
         data: { isDefault: false }
       });
@@ -96,7 +98,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     
     // Update the template
     const template = await prisma.reportTemplate.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         name: name || existingTemplate.name,
         description: description !== undefined ? description : existingTemplate.description,
@@ -115,7 +117,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 // DELETE /api/report-templates/[id] - Delete a template
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
     
@@ -134,7 +137,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     // Verify ownership
     const template = await prisma.reportTemplate.findFirst({
       where: {
-        id: params.id,
+        id: id,
         userId: user.id
       }
     });
@@ -144,7 +147,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     }
     
     await prisma.reportTemplate.delete({
-      where: { id: params.id }
+      where: { id: id }
     });
     
     return NextResponse.json({ success: true });

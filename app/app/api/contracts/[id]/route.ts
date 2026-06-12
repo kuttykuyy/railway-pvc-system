@@ -8,8 +8,9 @@ export const dynamic = "force-dynamic";
 // GET /api/contracts/[id] - Get single contract
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     // Validate API access
     const { authorized, user, message } = await validateApiAccess(request);
@@ -26,7 +27,7 @@ export async function GET(
     
     // Fetch the contract first
     const contract = await prisma.contract.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         user: {
           select: {
@@ -103,8 +104,9 @@ export async function GET(
 // PUT /api/contracts/[id] - Update contract
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   let agreementNoForError = 'unknown';
   try {
     // Validate API access
@@ -121,7 +123,7 @@ export async function PUT(
     const isAdmin = user.role === 'admin' || user.email === '30prasath93@gmail.com';
     
     // Build where clause based on user role
-    let whereClause: any = { id: params.id };
+    let whereClause: any = { id: id };
     
     // For non-admin users, only allow updating their own contracts
     if (!isAdmin) {
@@ -170,7 +172,7 @@ export async function PUT(
     }
 
     const contract = await prisma.contract.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         agreementNo,
         loaNo,
@@ -235,8 +237,9 @@ export async function PUT(
 // DELETE /api/contracts/[id] - Delete contract
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     // Validate API access
     const { authorized, user, message } = await validateApiAccess(request);
@@ -252,7 +255,7 @@ export async function DELETE(
     const isAdmin = user.role === 'admin' || user.email === '30prasath93@gmail.com';
     
     // Build where clause based on user role
-    let whereClause: any = { id: params.id };
+    let whereClause: any = { id: id };
     
     // For non-admin users, only allow deleting their own contracts
     if (!isAdmin) {
@@ -272,7 +275,7 @@ export async function DELETE(
     }
 
     await prisma.contract.delete({
-      where: { id: params.id }
+      where: { id: id }
     });
     
     return NextResponse.json({ message: 'Contract deleted successfully' });
@@ -288,7 +291,8 @@ export async function DELETE(
 // PATCH /api/contracts/[id] - Partially update contract (alias for PUT)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   return PUT(request, { params });
 }

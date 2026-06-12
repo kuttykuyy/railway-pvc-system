@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 /**
  * External API: Bill Creation
  * Allows external apps (like primerp.in) to create PVC bills
@@ -18,19 +18,13 @@ import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-s
 import { checkUserContractAccess } from '@/lib/permissions';
 import { areFinalIndicesAvailableForBill } from '@/lib/index-status';
 import { extractSteelTypesFromEntries } from '@/lib/steel-type-handler';
+import { getExternalCorsHeaders } from '@/lib/external-cors';
 
 export const dynamic = 'force-dynamic';
 
-// CORS headers for external access
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
-};
-
 // Handle CORS preflight
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 200, headers: corsHeaders });
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, { status: 200, headers: getExternalCorsHeaders(request) });
 }
 
 /**
@@ -44,7 +38,7 @@ export async function GET(request: NextRequest) {
     if (!auth.valid) {
       return NextResponse.json(
         { success: false, error: auth.error },
-        { status: 401, headers: corsHeaders }
+        { status: 401, headers: getExternalCorsHeaders(request) }
       );
     }
     
@@ -63,7 +57,7 @@ export async function GET(request: NextRequest) {
       if (!access?.canView) {
         return NextResponse.json(
           { success: false, error: 'Access denied to this contract' },
-          { status: 403, headers: corsHeaders }
+          { status: 403, headers: getExternalCorsHeaders(request) }
         );
       }
       where.contractId = contractId;
@@ -115,13 +109,13 @@ export async function GET(request: NextRequest) {
         limit,
         totalPages: Math.ceil(total / limit)
       }
-    }, { headers: corsHeaders });
+    }, { headers: getExternalCorsHeaders(request) });
     
   } catch (error) {
     console.error('[ExternalAPI] GET bills error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch bills' },
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: getExternalCorsHeaders(request) }
     );
   }
 }
@@ -157,7 +151,7 @@ export async function POST(request: NextRequest) {
     if (!auth.valid) {
       return NextResponse.json(
         { success: false, error: auth.error },
-        { status: 401, headers: corsHeaders }
+        { status: 401, headers: getExternalCorsHeaders(request) }
       );
     }
     
@@ -190,7 +184,7 @@ export async function POST(request: NextRequest) {
         success: false,
         error: 'Missing required fields',
         required: ['contractId', 'billNo', 'grossBillAmount', 'billAmount', 'dateOfMeasurement']
-      }, { status: 400, headers: corsHeaders });
+      }, { status: 400, headers: getExternalCorsHeaders(request) });
     }
     
     // ===== Step 4: Check Contract Access =====
@@ -198,7 +192,7 @@ export async function POST(request: NextRequest) {
     if (!contractAccess?.canCreateBills) {
       return NextResponse.json(
         { success: false, error: 'Access denied - Cannot create bills for this contract' },
-        { status: 403, headers: corsHeaders }
+        { status: 403, headers: getExternalCorsHeaders(request) }
       );
     }
     
@@ -219,7 +213,7 @@ export async function POST(request: NextRequest) {
     if (!contract) {
       return NextResponse.json(
         { success: false, error: 'Contract not found' },
-        { status: 404, headers: corsHeaders }
+        { status: 404, headers: getExternalCorsHeaders(request) }
       );
     }
     
@@ -228,7 +222,7 @@ export async function POST(request: NextRequest) {
     if (isNaN(measurementDate.getTime())) {
       return NextResponse.json(
         { success: false, error: 'Invalid measurement date format. Use ISO format (YYYY-MM-DD)' },
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: getExternalCorsHeaders(request) }
       );
     }
     
@@ -237,7 +231,7 @@ export async function POST(request: NextRequest) {
     if (measurementDate > today) {
       return NextResponse.json(
         { success: false, error: 'Measurement date cannot be in the future' },
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: getExternalCorsHeaders(request) }
       );
     }
     
@@ -245,7 +239,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ 
         success: false,
         error: `Measurement date must be after contract base month (${contract.baseMonth.toISOString().split('T')[0]})`
-      }, { status: 400, headers: corsHeaders });
+      }, { status: 400, headers: getExternalCorsHeaders(request) });
     }
     
     // Check if final indices are available
@@ -255,7 +249,7 @@ export async function POST(request: NextRequest) {
         success: false,
         error: indicesCheck.message,
         missingMonths: indicesCheck.missingMonths
-      }, { status: 400, headers: corsHeaders });
+      }, { status: 400, headers: getExternalCorsHeaders(request) });
     }
     
     // ===== Step 6: Payment Validation (inline for external API) =====
@@ -271,7 +265,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'User not found' },
-        { status: 404, headers: corsHeaders }
+        { status: 404, headers: getExternalCorsHeaders(request) }
       );
     }
     
@@ -287,7 +281,7 @@ export async function POST(request: NextRequest) {
           error: 'Insufficient credits',
           reason: `Required: ₹${billCost}, Available: ₹${currentBalance}`,
           requiredPayment: billCost
-        }, { status: 402, headers: corsHeaders });
+        }, { status: 402, headers: getExternalCorsHeaders(request) });
       }
     }
     
@@ -445,13 +439,13 @@ export async function POST(request: NextRequest) {
           pdf: `https://irpvc.in/api/bills/${bill.id}/pdf-report`
         }
       }
-    }, { status: 201, headers: corsHeaders });
+    }, { status: 201, headers: getExternalCorsHeaders(request) });
     
   } catch (error) {
     console.error('[ExternalAPI] POST bills error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to create bill', details: String(error) },
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: getExternalCorsHeaders(request) }
     );
   }
 }

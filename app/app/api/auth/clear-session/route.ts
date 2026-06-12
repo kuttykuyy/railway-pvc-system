@@ -8,11 +8,11 @@ import { cookies } from 'next/headers';
  */
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies();
-    
+    const cookieStore = await cookies();
+
     // Get all cookies
     const allCookies = cookieStore.getAll();
-    
+
     // Clear all NextAuth session cookies
     for (const cookie of allCookies) {
       if (cookie.name.includes('next-auth') || cookie.name.includes('__Secure-next-auth')) {
@@ -41,11 +41,11 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies();
-    
+    const cookieStore = await cookies();
+
     // Get all cookies
     const allCookies = cookieStore.getAll();
-    
+
     // Clear all NextAuth session cookies
     for (const cookie of allCookies) {
       if (cookie.name.includes('next-auth') || cookie.name.includes('__Secure-next-auth')) {

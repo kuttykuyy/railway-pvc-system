@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 /**
  * GET /api/telegram/setup-webhook
  * Registers the webhook URL with Telegram
@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { setTelegramWebhook, getTelegramWebhookInfo } from '@/lib/telegram-api';
+import { setTelegramWebhook, getTelegramWebhookInfo, getTelegramWebhookSecret } from '@/lib/telegram-api';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,8 +19,9 @@ export async function GET(request: NextRequest) {
     const currentInfo = await getTelegramWebhookInfo();
     logger.log('Current webhook info:', currentInfo);
 
-    // Set new webhook
-    const result = await setTelegramWebhook(webhookUrl);
+    // Set new webhook with secret token so Telegram signs future requests
+    const secretToken = getTelegramWebhookSecret();
+    const result = await setTelegramWebhook(webhookUrl, secretToken);
 
     return NextResponse.json({
       success: result.ok,

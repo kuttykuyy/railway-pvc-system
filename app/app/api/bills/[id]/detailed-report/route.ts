@@ -8,9 +8,10 @@ import { format } from 'date-fns';
 export const dynamic = "force-dynamic";
 
 // GET /api/bills/[id]/detailed-report - Get detailed monthly report for a bill
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
-    const billId = params.id;
+    const billId = id;
     
     // Get the bill with all related data
     const bill = await prisma.bill.findUnique({

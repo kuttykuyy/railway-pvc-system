@@ -19,6 +19,7 @@ import { extractSteelTypesFromEntries } from '@/lib/steel-type-handler';
 import { sendBillPDFNotification, isMyDreamsWhatsAppConfigured, validatePhoneNumber, getAdminWhatsAppNumber, sendBillPDFWithTemplate } from '@/lib/whatsapp-mydreams';
 import { notifyNewBillCreated } from '@/lib/slack-webhook';
 import jwt from 'jsonwebtoken';
+import { getNextAuthSecret } from '@/lib/auth';
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0; // Disable all caching
@@ -719,10 +720,9 @@ export async function POST(request: NextRequest) {
         logger.log(`📱 Sending WhatsApp notification with PDF to contractor: ${contractorPhone}`);
         
         // Generate JWT token for public PDF access (valid for 24 hours)
-        const JWT_SECRET = process.env.NEXTAUTH_SECRET || 'fallback-secret-key';
         const pdfToken = jwt.sign(
           { billId: createdBill.id },
-          JWT_SECRET,
+          getNextAuthSecret(),
           { expiresIn: '24h' }
         );
         

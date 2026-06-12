@@ -16,12 +16,11 @@ export const metadata: Metadata = {
 };
 
 interface BillDetailPageProps {
-  params: {
-    id: string;
-  };
+  params: Promise<{id: string;}>;
 }
 
 export default async function BillDetailPage({ params }: BillDetailPageProps) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
@@ -38,7 +37,7 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
 
   // Get the bill
   const bill = await prisma.bill.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       contract: {
         include: {

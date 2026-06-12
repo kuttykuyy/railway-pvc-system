@@ -8,8 +8,9 @@ export const dynamic = "force-dynamic";
 // POST /api/admin/users/[userId]/credits - Add or deduct credits
 export async function POST(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
+  const { userId } = await params;
   try {
     // Check admin access
     const { authorized, user: adminUser, message } = await validateAdminAccess(request);
@@ -42,7 +43,7 @@ export async function POST(
 
     // Check if user exists
     const targetUser = await prisma.user.findUnique({
-      where: { id: params.userId },
+      where: { id: userId },
       include: {
         customerAccount: true
       }
@@ -77,7 +78,7 @@ export async function POST(
     const result = await prisma.$transaction(async (prisma: any) => {
       // Update customer account balance
       const updatedAccount = await prisma.customerAccount.update({
-        where: { userId: params.userId },
+        where: { userId: userId },
         data: {
           creditBalance: newBalance
         }
@@ -86,7 +87,7 @@ export async function POST(
       // Create credit transaction record
       const transaction = await prisma.creditTransaction.create({
         data: {
-          userId: params.userId,
+          userId: userId,
           amount: creditAmount,
           type: type,
           reason: reason,
@@ -120,8 +121,9 @@ export async function POST(
 // GET /api/admin/users/[userId]/credits - Get credit transaction history
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
+  const { userId } = await params;
   try {
     // Check admin access
     const { authorized, message } = await validateAdminAccess(request);
@@ -139,7 +141,7 @@ export async function GET(
 
     // Get credit transactions for user
     const transactions = await prisma.creditTransaction.findMany({
-      where: { userId: params.userId },
+      where: { userId: userId },
       orderBy: { createdAt: 'desc' },
       take: limit,
       skip: offset
@@ -147,12 +149,12 @@ export async function GET(
 
     // Get total count
     const totalCount = await prisma.creditTransaction.count({
-      where: { userId: params.userId }
+      where: { userId: userId }
     });
 
     // Get current balance
     const user = await prisma.user.findUnique({
-      where: { id: params.userId },
+      where: { id: userId },
       include: {
         customerAccount: {
           select: {

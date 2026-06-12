@@ -6,8 +6,9 @@ import { getGstInvoice } from '@/lib/gst-invoice';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -30,7 +31,7 @@ export async function GET(
       );
     }
 
-    const invoice = await getGstInvoice(params.id);
+    const invoice = await getGstInvoice(id);
 
     if (!invoice) {
       return NextResponse.json(

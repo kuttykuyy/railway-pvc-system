@@ -1,4 +1,4 @@
-﻿import { logger } from './logger';
+import { logger } from './logger';
 /**
  * Telegram Bot API utilities
  */
@@ -9,6 +9,12 @@ function getBotToken(): string {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) throw new Error('TELEGRAM_BOT_TOKEN not configured');
   return token;
+}
+
+export function getTelegramWebhookSecret(): string {
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!secret) throw new Error('TELEGRAM_WEBHOOK_SECRET not configured');
+  return secret;
 }
 
 function apiUrl(method: string): string {
@@ -89,12 +95,17 @@ export async function sendTelegramDocument(
 /**
  * Register webhook URL with Telegram
  */
-export async function setTelegramWebhook(webhookUrl: string): Promise<any> {
+export async function setTelegramWebhook(webhookUrl: string, secretToken?: string): Promise<any> {
   try {
+    const body: Record<string, string> = { url: webhookUrl };
+    if (secretToken) {
+      body.secret_token = secretToken;
+    }
+
     const res = await fetch(apiUrl('setWebhook'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: webhookUrl }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     logger.log('Telegram setWebhook result:', data);

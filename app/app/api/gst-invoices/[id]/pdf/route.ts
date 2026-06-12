@@ -6,8 +6,9 @@ import { prisma } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -31,7 +32,7 @@ export async function GET(
 
     // Get invoice
     const invoice = await prisma.gstInvoice.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!invoice) {

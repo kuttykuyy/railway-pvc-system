@@ -1,6 +1,14 @@
 import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
 
+function getAuthSecret(): string {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    throw new Error("NEXTAUTH_SECRET environment variable is not set");
+  }
+  return secret;
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
 
@@ -60,13 +68,13 @@ export async function middleware(req: NextRequest) {
   if (pathname === '/') {
     let rootToken = await getToken({
       req,
-      secret: process.env.NEXTAUTH_SECRET || 'Fi0MOZYHoOhJbC1I7POU3RgAgLAseMsL',
+      secret: getAuthSecret(),
       secureCookie: true
     });
     if (!rootToken) {
       rootToken = await getToken({
         req,
-        secret: process.env.NEXTAUTH_SECRET || 'Fi0MOZYHoOhJbC1I7POU3RgAgLAseMsL',
+        secret: getAuthSecret(),
         secureCookie: false
       });
     }
@@ -91,14 +99,14 @@ export async function middleware(req: NextRequest) {
   // Check token for protected routes (trying secure cookie first, then insecure fallback)
   let token = await getToken({ 
     req, 
-    secret: process.env.NEXTAUTH_SECRET || 'Fi0MOZYHoOhJbC1I7POU3RgAgLAseMsL',
+    secret: getAuthSecret(),
     secureCookie: true
   });
 
   if (!token) {
     token = await getToken({ 
       req, 
-      secret: process.env.NEXTAUTH_SECRET || 'Fi0MOZYHoOhJbC1I7POU3RgAgLAseMsL',
+      secret: getAuthSecret(),
       secureCookie: false
     });
   }

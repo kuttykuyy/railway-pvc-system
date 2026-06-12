@@ -7,11 +7,12 @@ import { NextRequest, NextResponse } from 'next/server';
 // GET - Get single classification
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const classification = await prisma.classification.findUnique({
-      where: { id: params.id }
+      where: { id: id }
     });
 
     if (!classification) {
@@ -34,8 +35,9 @@ export async function GET(
 // PUT - Update classification
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const body = await request.json();
     const {
@@ -75,13 +77,13 @@ export async function PUT(
     // If this is being set as default, remove default from others
     if (isDefault) {
       await prisma.classification.updateMany({
-        where: { id: { not: params.id } },
+        where: { id: { not: id } },
         data: { isDefault: false }
       });
     }
 
     const classification = await prisma.classification.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         code,
         name,
@@ -125,12 +127,13 @@ export async function PUT(
 // DELETE - Delete classification
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     // Check if classification exists and is not default
     const classification = await prisma.classification.findUnique({
-      where: { id: params.id }
+      where: { id: id }
     });
 
     if (!classification) {
@@ -148,7 +151,7 @@ export async function DELETE(
     }
 
     await prisma.classification.delete({
-      where: { id: params.id }
+      where: { id: id }
     });
 
     return NextResponse.json({ message: 'Classification deleted successfully' });

@@ -11,12 +11,13 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     // Get invoice
     const invoice = await prisma.gstInvoice.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!invoice) {

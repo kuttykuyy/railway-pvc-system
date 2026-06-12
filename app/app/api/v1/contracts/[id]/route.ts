@@ -9,8 +9,9 @@ import { prisma } from '@/lib/db';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     // Verify API key
     const auth = await verifyApiKey(request);
@@ -33,7 +34,7 @@ export async function GET(
     // Fetch contract
     const contract = await prisma.contract.findFirst({
       where: {
-        id: params.id,
+        id: id,
         userId: auth.userId // Ensure user owns this contract
       },
       include: {

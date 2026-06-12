@@ -1,0 +1,16 @@
+# Root-level ignores
+.env
+.env*.local
+*.log
+.tmp_*
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Dependency / build caches (subdirectories have their own .gitignore too)
+node_modules/
+.next/
+.vercel/

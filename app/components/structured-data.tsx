@@ -156,32 +156,37 @@ export default function StructuredData() {
         id="organization-schema"
         type="application/ld+json"
         strategy="afterInteractive"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
-      />
+      >
+        {JSON.stringify(organizationSchema)}
+      </Script>
       <Script
         id="website-schema"
         type="application/ld+json"
         strategy="afterInteractive"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
-      />
+      >
+        {JSON.stringify(websiteSchema)}
+      </Script>
       <Script
         id="software-schema"
         type="application/ld+json"
         strategy="afterInteractive"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }}
-      />
+      >
+        {JSON.stringify(softwareSchema)}
+      </Script>
       <Script
         id="breadcrumb-schema"
         type="application/ld+json"
         strategy="afterInteractive"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
-      />
+      >
+        {JSON.stringify(breadcrumbSchema)}
+      </Script>
       <Script
         id="faq-schema"
         type="application/ld+json"
         strategy="afterInteractive"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
-      />
+      >
+        {JSON.stringify(faqSchema)}
+      </Script>
     </>
   );
 }

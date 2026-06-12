@@ -7,13 +7,12 @@ export const dynamic = "force-dynamic";
 // PUT /api/indices/monthly/[id] - Update a specific monthly index value
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const body = await request.json();
     const { value, isProvisional } = body;
-    const id = params.id;
-    
     if (value === undefined || isNaN(parseFloat(value))) {
       return NextResponse.json(
         { error: 'Valid value is required' },
@@ -57,11 +56,10 @@ export async function PUT(
 // DELETE /api/indices/monthly/[id] - Delete a specific monthly index value
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    const id = params.id;
-    
     await prisma.monthlyIndexValue.delete({
       where: { id }
     });

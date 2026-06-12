@@ -139,7 +139,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <script dangerouslySetInnerHTML={{ __html: `(function(){var o=console.error;console.error=function(){var a=[].slice.call(arguments).join(' ');if(a.indexOf('CLIENT_FETCH_ERROR')!==-1||a.indexOf('next-auth')!==-1&&a.indexOf('error')!==-1)return;o.apply(console,arguments)};})();` }} />
+        <Script id="console-error-filter" strategy="beforeInteractive">
+          {`(function(){var o=console.error;console.error=function(){var a=[].slice.call(arguments).join(' ');if(a.indexOf('CLIENT_FETCH_ERROR')!==-1||a.indexOf('next-auth')!==-1&&a.indexOf('error')!==-1)return;o.apply(console,arguments)};})();`}
+        </Script>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#7c3aed" />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
@@ -172,38 +174,36 @@ export default function RootLayout({
         </ErrorBoundary>
         
         {/* Service Worker Registration */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if (typeof window !== 'undefined' && 'serviceWorker' in navigator && typeof navigator.serviceWorker.register === 'function') {
-                window.addEventListener('load', function() {
-                  try {
-                    // Only register if we're not in test mode and on specific domains
-                    var allowedDomains = ['irpvc.in'];
-                    var isAllowedDomain = allowedDomains.some(function(domain) {
-                      return window.location.hostname === domain;
+        <Script id="service-worker-registration" strategy="afterInteractive">
+          {`
+            if (typeof window !== 'undefined' && 'serviceWorker' in navigator && typeof navigator.serviceWorker.register === 'function') {
+              window.addEventListener('load', function() {
+                try {
+                  // Only register if we're not in test mode and on specific domains
+                  var allowedDomains = ['irpvc.in'];
+                  var isAllowedDomain = allowedDomains.some(function(domain) {
+                    return window.location.hostname === domain;
+                  });
+                  var isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
+
+                  if (!window.__NEXT_TEST_MODE && isAllowedDomain && isSecure) {
+                    navigator.serviceWorker.register('/sw.js', {
+                      scope: '/'
+                    })
+                    .then(function(registration) {
+                      // Service worker registered successfully
+                    })
+                    .catch(function(registrationError) {
+                      // Service worker registration failed
                     });
-                    var isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
-                    
-                    if (!window.__NEXT_TEST_MODE && isAllowedDomain && isSecure) {
-                      navigator.serviceWorker.register('/sw.js', {
-                        scope: '/'
-                      })
-                      .then(function(registration) {
-                        // Service worker registered successfully
-                      })
-                      .catch(function(registrationError) {
-                        // Service worker registration failed
-                      });
-                    }
-                  } catch (error) {
-                    // Silently handle errors
                   }
-                });
-              }
-            `,
-          }}
-        />
+                } catch (error) {
+                  // Silently handle errors
+                }
+              });
+            }
+          `}
+        </Script>
       </body>
     </html>
   );

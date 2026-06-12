@@ -14,7 +14,7 @@ import { BillCard } from '@/components/bill-card';
 
 export const dynamic = 'force-dynamic';
 
-interface Props { params: { id: string } }
+interface Props { params: Promise<{id: string}> }
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -26,8 +26,9 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export default async function ContractDetailPage({ params }: Props) {
+  const { id } = await params;
   const contract = await prisma.contract.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       bills: {
         orderBy: { dateOfMeasurement: 'desc' },

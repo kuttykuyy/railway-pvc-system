@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       );
     }
 
-    logger.log('[PVC Payment] Checking session:', sessionToken);
+    logger.log('[PVC Payment] Session token present:', !!sessionToken);
 
     // Check if session exists and is unpaid
     const pvcSession = await prisma.pvcComparisonSession.findUnique({

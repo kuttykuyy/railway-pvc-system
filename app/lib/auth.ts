@@ -1,4 +1,4 @@
-﻿import { logger } from './logger';
+import { logger } from './logger';
 
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
@@ -7,6 +7,19 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { isEmailVerificationRequired } from '@/lib/admin-settings';
+
+/**
+ * Return the configured NextAuth secret.
+ * Fails closed if NEXTAUTH_SECRET is not set so tokens cannot be forged
+ * using a hardcoded fallback.
+ */
+export function getNextAuthSecret(): string {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    throw new Error('NEXTAUTH_SECRET environment variable is not set');
+  }
+  return secret;
+}
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),

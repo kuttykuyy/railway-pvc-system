@@ -8,18 +8,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateExternalApiKey } from '@/lib/external-api-auth';
+import { getExternalCorsHeaders } from '@/lib/external-cors';
 
 export const dynamic = 'force-dynamic';
 
-// CORS headers
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
-};
-
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 200, headers: corsHeaders });
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, { status: 200, headers: getExternalCorsHeaders(request) });
 }
 
 /**
@@ -33,7 +27,7 @@ export async function GET(request: NextRequest) {
     if (!auth.valid) {
       return NextResponse.json(
         { success: false, error: auth.error },
-        { status: 401, headers: corsHeaders }
+        { status: 401, headers: getExternalCorsHeaders(request) }
       );
     }
     
@@ -113,13 +107,13 @@ export async function GET(request: NextRequest) {
         limit,
         totalPages: Math.ceil(total / limit)
       }
-    }, { headers: corsHeaders });
+    }, { headers: getExternalCorsHeaders(request) });
     
   } catch (error) {
     console.error('[ExternalAPI] GET contracts error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch contracts' },
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: getExternalCorsHeaders(request) }
     );
   }
 }

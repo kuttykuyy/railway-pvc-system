@@ -13,12 +13,13 @@ import { BackButton } from '@/components/ui/back-button';
 export const dynamic = 'force-dynamic';
 
 interface ExtensionsPageProps {
-  params: { id: string };
+  params: Promise<{id: string}>;
 }
 
 export default async function ExtensionsPage({ params }: ExtensionsPageProps) {
+  const { id } = await params;
   const contract = await prisma.contract.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       extensions: {
         orderBy: { approvalDate: 'desc' }
