@@ -58,27 +58,13 @@
       "name": "New Bill",
       "short_name": "New Bill",
       "description": "Create a new PVC bill",
-      "url": "/bills/new",
-      "icons": [
-        {
-          "src": "/icons/new-bill-96x96.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        }
-      ]
+      "url": "/bills/new"
     },
     {
       "name": "New Contract",
       "short_name": "Contract",
       "description": "Create a new contract",
-      "url": "/contracts/new",
-      "icons": [
-        {
-          "src": "/icons/contract-96x96.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        }
-      ]
+      "url": "/contracts/new"
     }
   ]
 }
