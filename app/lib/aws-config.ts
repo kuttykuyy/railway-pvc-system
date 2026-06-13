@@ -7,13 +7,13 @@ export interface BucketConfig {
 }
 
 export function getBucketConfig(): BucketConfig {
-  const bucketName = process.env.AWS_BUCKET_NAME;
-  const folderPrefix = process.env.AWS_FOLDER_PREFIX || '';
-  
+  const bucketName = process.env.AWS_BUCKET_NAME || process.env.S3_BUCKET_NAME || process.env.SUPABASE_STORAGE_BUCKET;
+  const folderPrefix = process.env.AWS_FOLDER_PREFIX || process.env.S3_FOLDER_PREFIX || '';
+
   if (!bucketName) {
-    throw new Error('AWS_BUCKET_NAME environment variable is not set');
+    throw new Error('Bucket name is not set. Set AWS_BUCKET_NAME, S3_BUCKET_NAME, or SUPABASE_STORAGE_BUCKET.');
   }
-  
+
   return {
     bucketName,
     folderPrefix
@@ -21,5 +21,18 @@ export function getBucketConfig(): BucketConfig {
 }
 
 export function createS3Client(): S3Client {
-  return new S3Client({});
+  const endpoint = process.env.S3_ENDPOINT_URL || process.env.SUPABASE_S3_ENDPOINT;
+  const region = process.env.AWS_REGION || process.env.S3_REGION || process.env.SUPABASE_REGION || 'auto';
+
+  const clientConfig: ConstructorParameters<typeof S3Client>[0] = {
+    region,
+  };
+
+  if (endpoint) {
+    clientConfig.endpoint = endpoint;
+    // Supabase Storage and other S3-compatible services typically expect path-style URLs
+    clientConfig.forcePathStyle = process.env.S3_FORCE_PATH_STYLE !== 'false';
+  }
+
+  return new S3Client(clientConfig);
 }
