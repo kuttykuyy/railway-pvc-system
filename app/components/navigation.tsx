@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { RazorpayTopupDialog } from '@/components/ui/razorpay-topup-dialog';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { getClientRoleInfo } from '@/lib/role-auth';
 import { 
   Building2,
@@ -362,6 +363,9 @@ export default function Navigation() {
                   </div>
                 )}
                 
+                {/* Theme Toggle */}
+                <ThemeToggle />
+
                 {/* User Menu */}
                 <div className="flex items-center ml-2 pl-2 border-l border-gray-200">
                   <DropdownMenu>
