@@ -7,11 +7,21 @@ import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { setTelegramWebhook, getTelegramWebhookInfo, getTelegramWebhookSecret } from '@/lib/telegram-api';
+import { validateAdminAccess } from '@/lib/role-auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    // Only admins can register or inspect the Telegram webhook
+    const { authorized, message } = await validateAdminAccess(request);
+    if (!authorized) {
+      return NextResponse.json(
+        { error: message || 'Admin access required' },
+        { status: 403 }
+      );
+    }
+
     const baseUrl = process.env.NEXTAUTH_URL || 'https://irpvc.in';
     const webhookUrl = `${baseUrl}/api/telegram/webhook`;
 

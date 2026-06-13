@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 /**
  * Incoming WhatsApp Webhook Endpoint
@@ -32,6 +32,21 @@ export async function POST(req: NextRequest) {
     if (!webhookEnabled || webhookEnabled.value !== 'true') {
       logger.log('WhatsApp webhook is not enabled');
       return NextResponse.json({ error: 'Webhook not enabled' }, { status: 403 });
+    }
+
+    // Verify shared secret token to prevent spoofed webhook requests
+    const { searchParams } = new URL(req.url);
+    const tokenFromQuery = searchParams.get('token');
+    const tokenFromHeader = req.headers.get('x-webhook-token');
+    const providedToken = tokenFromHeader || tokenFromQuery;
+
+    const expectedToken = await prisma.adminSettings.findUnique({
+      where: { key: 'whatsapp_webhook_verify_token' },
+    });
+
+    if (!providedToken || providedToken !== expectedToken?.value) {
+      console.warn('WhatsApp webhook rejected: invalid or missing verify token');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Parse incoming webhook payload

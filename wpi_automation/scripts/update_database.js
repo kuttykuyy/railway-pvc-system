@@ -8,6 +8,7 @@
 const { PrismaClient } = require('@prisma/client');
 const fs = require('fs');
 const path = require('path');
+const { sendSlackAlert } = require('./slack-alert');
 
 const prisma = new PrismaClient({
   datasources: {
@@ -95,14 +96,34 @@ async function updateDatabase(updatesFile) {
     };
     
     console.log(JSON.stringify(result));
-    
+
+    if (errorCount > 0) {
+      await sendSlackAlert('warning', 'WPI database update completed with errors', {
+        'Updated': String(successCount),
+        'Failed': String(errorCount),
+        'First Error': errors[0]?.error || 'N/A',
+        'Updates File': updatesFile
+      });
+    } else {
+      await sendSlackAlert('info', 'WPI database update completed', {
+        'Updated': String(successCount),
+        'Failed': '0',
+        'Updates File': updatesFile
+      });
+    }
+
     await prisma.$disconnect();
     process.exit(errorCount === 0 ? 0 : 1);
-    
+
   } catch (error) {
     console.error('❌ Fatal error during database update:', error);
     console.error(error.stack);
-    
+
+    await sendSlackAlert('critical', 'WPI database update fatal error', {
+      'Error': error.message || String(error),
+      'Updates File': updatesFile
+    });
+
     await prisma.$disconnect();
     process.exit(1);
   }

@@ -8,6 +8,7 @@
 const { PrismaClient } = require('@prisma/client');
 const fs = require('fs');
 const https = require('https');
+const { sendSlackAlert } = require('./slack-alert');
 
 const prisma = new PrismaClient({
   datasources: {
@@ -180,9 +181,16 @@ async function sendNotification(notificationFile) {
     
     // Send WhatsApp message
     const result = await sendWhatsAppMessage(credentials, ADMIN_PHONE, message);
-    
+
     console.log('\n✅ WhatsApp notification sent successfully');
     console.log(`   Message ID: ${result.messageId}`);
+
+    await sendSlackAlert('info', 'WPI WhatsApp notification sent', {
+      'Month': notificationData.month || 'N/A',
+      'Status': notificationData.status || 'N/A',
+      'Updated': String(notificationData.updated_count || 0),
+      'Total': String(notificationData.total_count || 0)
+    });
     
     // Log to database
     try {
@@ -213,7 +221,12 @@ async function sendNotification(notificationFile) {
   } catch (error) {
     console.error('\n❌ Failed to send WhatsApp notification:', error);
     console.error(error.stack);
-    
+
+    await sendSlackAlert('critical', 'WPI WhatsApp notification failed', {
+      'Error': error.message || String(error),
+      'Admin Phone': ADMIN_PHONE
+    });
+
     await prisma.$disconnect();
     process.exit(1);
   }

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { prisma } from '@/lib/db';
 import { sendPaymentConfirmation } from '@/lib/whatsapp-mydreams';
+import { sendSlackAlert } from '@/lib/slack-webhook';
 
 /**
  * POST /api/razorpay/webhook
@@ -21,6 +22,11 @@ export async function POST(request: NextRequest) {
 
     if (!signature) {
       console.error(`[${requestId}] Missing webhook signature`);
+      await sendSlackAlert('critical', 'Razorpay webhook missing signature', {
+        'Request ID': requestId,
+        'Source IP': request.headers.get('x-forwarded-for') || 'unknown',
+        'User Agent': request.headers.get('user-agent') || 'unknown'
+      });
       return NextResponse.json(
         { error: 'Missing signature' },
         { status: 400 }
@@ -31,6 +37,10 @@ export async function POST(request: NextRequest) {
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
     if (!webhookSecret) {
       console.error(`[${requestId}] Webhook secret not configured`);
+      await sendSlackAlert('critical', 'Razorpay webhook secret not configured', {
+        'Request ID': requestId,
+        'Time': new Date().toISOString()
+      });
       return NextResponse.json(
         { error: 'Webhook not configured' },
         { status: 500 }
@@ -46,6 +56,12 @@ export async function POST(request: NextRequest) {
 
     if (signature !== expectedSignature) {
       console.error(`[${requestId}] Invalid webhook signature`);
+      await sendSlackAlert('critical', 'Razorpay webhook invalid signature', {
+        'Request ID': requestId,
+        'Source IP': request.headers.get('x-forwarded-for') || 'unknown',
+        'User Agent': request.headers.get('user-agent') || 'unknown',
+        'Body Length': String(body.length)
+      });
       return NextResponse.json(
         { error: 'Invalid signature' },
         { status: 401 }
@@ -76,6 +92,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error(`[${requestId}] Webhook processing error:`, error);
+    await sendSlackAlert('critical', 'Razorpay webhook processing error', {
+      'Request ID': requestId,
+      'Error': error.message || String(error),
+      'Time': new Date().toISOString()
+    });
     return NextResponse.json(
       { error: 'Webhook processing failed' },
       { status: 500 }
@@ -96,6 +117,11 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
 
   if (!transaction) {
     console.error(`[${requestId}] Transaction not found: ${orderId}`);
+    await sendSlackAlert('warning', 'Razorpay webhook: transaction not found', {
+      'Request ID': requestId,
+      'Order ID': orderId,
+      'Payment ID': payment?.id || 'N/A'
+    });
     return;
   }
 
@@ -126,6 +152,11 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
 
   if (!user) {
     console.error(`[${requestId}] User not found: ${transaction.userId}`);
+    await sendSlackAlert('warning', 'Razorpay webhook: user not found for payment', {
+      'Request ID': requestId,
+      'Order ID': orderId,
+      'User ID': transaction.userId
+    });
     return;
   }
 
@@ -252,6 +283,11 @@ async function handlePaymentFailure(requestId: string, payment: any) {
 
   if (!transaction) {
     console.error(`[${requestId}] Transaction not found: ${orderId}`);
+    await sendSlackAlert('warning', 'Razorpay webhook: transaction not found', {
+      'Request ID': requestId,
+      'Order ID': orderId,
+      'Payment ID': payment?.id || 'N/A'
+    });
     return;
   }
 

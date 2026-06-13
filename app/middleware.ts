@@ -25,12 +25,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(newUrl);
   }
 
-  // Allow public access to PDF reports with valid token
-  if (pathname.match(/^\/api\/bills\/[^\/]+\/pdf-report$/) && 
-      searchParams.get('public_access') === 'true' && 
-      searchParams.get('token')) {
-    return NextResponse.next();
-  }
+  // Public PDF access is validated inside the route handler, not here.
+  // The middleware only ensures the request reaches the handler; auth bypass
+  // is never granted based solely on the presence of query parameters.
 
   // Allow access to auth pages and API routes without token
   if (pathname.startsWith('/auth/') || 
@@ -66,18 +63,11 @@ export async function middleware(req: NextRequest) {
 
   // For root path, redirect authenticated users to /contracts
   if (pathname === '/') {
-    let rootToken = await getToken({
+    const rootToken = await getToken({
       req,
       secret: getAuthSecret(),
       secureCookie: true
     });
-    if (!rootToken) {
-      rootToken = await getToken({
-        req,
-        secret: getAuthSecret(),
-        secureCookie: false
-      });
-    }
     if (rootToken) {
       return NextResponse.redirect(new URL('/contracts', req.url));
     }
@@ -96,20 +86,12 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check token for protected routes (trying secure cookie first, then insecure fallback)
-  let token = await getToken({ 
+  // Check token for protected routes using secure cookies only
+  const token = await getToken({ 
     req, 
     secret: getAuthSecret(),
     secureCookie: true
   });
-
-  if (!token) {
-    token = await getToken({ 
-      req, 
-      secret: getAuthSecret(),
-      secureCookie: false
-    });
-  }
 
   if (!token) {
     const signInUrl = new URL('/auth/signin', req.url);

@@ -1,14 +1,13 @@
-﻿import { logger } from './logger';
+import { logger } from './logger';
 
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
 
-// Load Razorpay credentials from auth secrets file
+// Load Razorpay credentials from environment variables only.
+// A hardcoded secrets-file fallback was removed to prevent accidental
+// credential exposure if the server home directory is compromised.
 const loadRazorpayCredentials = () => {
   try {
-    // First, try environment variables
     if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
       logger.log('[Razorpay] Loading credentials from environment variables');
       return {
@@ -16,31 +15,12 @@ const loadRazorpayCredentials = () => {
         keySecret: process.env.RAZORPAY_KEY_SECRET,
       };
     }
-    
-    // If not in env, try auth secrets file
-    const homeDir = process.env.HOME;
-    if (!homeDir) {
-      throw new Error('HOME environment variable is not set');
-    }
-    const authSecretsPath = path.join(homeDir, '.config', 'abacusai_auth_secrets.json');
-    
-    if (fs.existsSync(authSecretsPath)) {
-      const authSecrets = JSON.parse(fs.readFileSync(authSecretsPath, 'utf8'));
-      
-      if (authSecrets.razorpay?.secrets?.key_id?.value && authSecrets.razorpay?.secrets?.key_secret?.value) {
-        logger.log('[Razorpay] Loading credentials from auth secrets file');
-        return {
-          keyId: authSecrets.razorpay.secrets.key_id.value,
-          keySecret: authSecrets.razorpay.secrets.key_secret.value,
-        };
-      }
-    }
-    
-    logger.warn('[Razorpay] Credentials not found in environment variables or auth secrets file');
+
+    logger.warn('[Razorpay] Credentials not found in environment variables');
   } catch (error) {
     console.error('[Razorpay] Error loading credentials:', error);
   }
-  
+
   return null;
 };
 

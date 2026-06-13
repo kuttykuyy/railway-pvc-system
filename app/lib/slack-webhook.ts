@@ -1,4 +1,4 @@
-﻿import { logger } from './logger';
+import { logger } from './logger';
 
 /**
  * Slack Webhook Notification Utility
@@ -166,6 +166,60 @@ export async function sendGenericSlackNotification(message: string): Promise<boo
   };
 
   return await sendSlackNotification(payload);
+}
+
+export type AlertLevel = 'info' | 'warning' | 'critical';
+
+/**
+ * Send a structured monitoring/operations alert to Slack.
+ * Use this for errors, warnings, and important system events.
+ */
+export async function sendSlackAlert(
+  level: AlertLevel,
+  title: string,
+  fields: Record<string, string>
+): Promise<boolean> {
+  if (!process.env.ENABLE_SLACK_NOTIFICATIONS || process.env.ENABLE_SLACK_NOTIFICATIONS !== 'true') {
+    logger.log(`[Slack Alert] ${level}: ${title} (slack notifications disabled)`);
+    return false;
+  }
+
+  const emoji = { info: 'ℹ️', warning: '⚠️', critical: '🚨' }[level];
+  const formattedDate = new Date().toLocaleString('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Kolkata'
+  });
+
+  const payload: SlackNotificationPayload = {
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `${emoji} ${title}`
+        }
+      },
+      {
+        type: 'section',
+        fields: Object.entries(fields).map(([key, value]) => ({
+          type: 'mrkdwn',
+          text: `*${key}:*\n${value || 'N/A'}`
+        }))
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `Alert sent from Railway PVC System at ${formattedDate}`
+          }
+        ]
+      }
+    ]
+  };
+
+  return sendSlackNotification(payload);
 }
 
 /**
