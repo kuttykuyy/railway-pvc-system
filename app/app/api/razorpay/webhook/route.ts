@@ -199,6 +199,15 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
   logger.log(`[${requestId}] ✅ Payment processed successfully via webhook`);
   logger.log(`[${requestId}] Credits: ₹${transaction.creditAmount} added. GST invoice will be generated when user provides billing details.`);
 
+  await sendSlackAlert('info', 'Razorpay payment credited', {
+    'Request ID': requestId,
+    'User': user.email || user.name || user.id,
+    'Order ID': orderId,
+    'Payment ID': paymentId,
+    'Credits Added': `₹${transaction.creditAmount.toLocaleString('en-IN')}`,
+    'New Balance': `₹${newBalance.toLocaleString('en-IN')}`
+  });
+
   // Send WhatsApp payment confirmation if user has phone number
   if (user.phone) {
     logger.log(`[${requestId}] Sending WhatsApp payment confirmation to ${user.phone}...`);
