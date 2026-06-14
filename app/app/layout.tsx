@@ -13,7 +13,7 @@ import StructuredData from '@/components/structured-data';
 import LayoutWrapper from '@/components/layout-wrapper';
 import Script from 'next/script';
 
-const inter = Inter({ 
+const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
   preload: true,
@@ -148,13 +148,6 @@ export default function RootLayout({
         <StructuredData />
       </head>
       <body className={inter.className}>
-        {/* Google AdSense Integration */}
-        <Script 
-          async 
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6836761436784639" 
-          crossOrigin="anonymous"
-          strategy="afterInteractive"
-        />
         <ErrorBoundary>
           <Providers>
             <ThemeProvider
