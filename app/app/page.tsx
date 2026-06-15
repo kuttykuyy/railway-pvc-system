@@ -66,7 +66,7 @@ export default function HomePage() {
               </h1>
 
               <p className="text-lg sm:text-xl text-slate-600 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-light">
-                The modern platform for Indian Railway contractors to automate Price Variation Clause calculations, generate IR Standard PVC statements, manage bulk billing, and track indices instantly.
+                The modern platform for Indian Railway contractors to automate Price Variation Clause calculations, generate IR Standard PVC statements, manage bulk billing, and track indices instantly—now with full Hindi (हिन्दी) language support.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
@@ -89,6 +89,7 @@ export default function HomePage() {
                 <span className="flex items-center gap-2"><FileText className="w-5 h-5 text-blue-500" /> IR Standard PDF</span>
                 <span className="flex items-center gap-2"><Layers className="w-5 h-5 text-purple-500" /> Bulk Bills</span>
                 <span className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-emerald-500" /> Free Preview</span>
+                <span className="flex items-center gap-2"><Users className="w-5 h-5 text-indigo-500" /> Bilingual (English / हिन्दी)</span>
               </div>
             </div>
 
@@ -325,7 +326,7 @@ export default function HomePage() {
             <MiniFeature icon={<ScanSearch />} title="Free PVC Preview" desc="See the full PVC breakdown before paying — no credits deducted for preview calculations" badge="New" />
             <MiniFeature icon={<MessageSquare />} title="WhatsApp Integration" desc="Receive bills and critical alerts directly on WhatsApp" />
             <MiniFeature icon={<BarChart3 />} title="Deep Analytics" desc="Custom abstract reports and visual summaries across contracts" />
-            <MiniFeature icon={<Users />} title="Team Access" desc="Role-based permissions for staff, admins, and railway officials" />
+            <MiniFeature icon={<Users />} title="Bilingual Support" desc="Switch seamlessly between English and Hindi (हिन्दी) across all dashboards, contracts, and bills" badge="New" />
             <MiniFeature icon={<IndianRupee />} title="GST Billing" desc="18% GST applied transparently on credit top-ups with full invoice generation" />
             <MiniFeature icon={<Lock />} title="Extension Compliance" desc="17A / 17B rule engines with dedicated steel and cement PVC" />
             <MiniFeature icon={<Smartphone />} title="Mobile First" desc="Fully responsive design for on-site field access" />
