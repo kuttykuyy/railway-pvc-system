@@ -14,6 +14,7 @@ interface CoefficientSet {
   fuel: number;
   materials: number;
   machinery: number;
+  explosives: number;
   fixed: number;
 }
 
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
       startMonth,
       baseMonth,
       zone = 'SR',
-      steelType = 'Steel TMT Bars',
+      steelTypes = ['TMT'],
       coefficients
     }: {
       totalValue: number;
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
       startMonth: string;
       baseMonth: string;
       zone?: string;
-      steelType?: string;
+      steelTypes?: string[];
       coefficients: CoefficientSet;
     } = body;
 
@@ -52,28 +53,58 @@ export async function POST(request: NextRequest) {
 
     // Index names mapping based on zone
     const steelCity = getSteelCityForZone(zone);
-    let steelIndexName = steelType;
-    if (steelCity !== 'Chennai' && !steelType.includes(' - ')) {
-      steelIndexName = `${steelType} - ${steelCity}`;
+    
+    // Resolve single steelType fallback for backward compatibility
+    let selectedSteelTypes = steelTypes;
+    if (!selectedSteelTypes && body.steelType) {
+      const mapType = (type: string) => {
+        if (type.includes('TMT')) return 'TMT';
+        if (type.includes('Angle')) return 'ANGLE_CHANNEL';
+        if (type.includes('Plate')) return 'PLATES';
+        if (type.includes('Other')) return 'OTHER_SECTIONS';
+        return 'TMT';
+      };
+      selectedSteelTypes = [mapType(body.steelType)];
+    }
+    if (!selectedSteelTypes || selectedSteelTypes.length === 0) {
+      selectedSteelTypes = ['TMT'];
     }
 
-    const fuelIndexName = getFuelIndexNameForBill(zone, 'zone_city');
-
-    const indexMapping: Record<keyof Omit<CoefficientSet, 'fixed'>, string> = {
-      labor: 'Labour',
-      cement: 'RBI Cement',
-      steel: steelIndexName,
-      fuel: fuelIndexName,
-      materials: 'RBI Other Materials',
-      machinery: 'RBI Plant Machinery'
+    const getSteelIndexName = (type: string) => {
+      const mapping: Record<string, string> = {
+        'TMT': 'Steel TMT Bars',
+        'ANGLE_CHANNEL': 'Steel Angle/Channel',
+        'PLATES': 'Steel Plates',
+        'OTHER_SECTIONS': 'Steel Other Sections',
+        'TMT_BARS': 'Steel TMT Bars'
+      };
+      const baseName = mapping[type] || 'Steel TMT Bars';
+      if (steelCity !== 'Chennai' && !baseName.includes(' - ')) {
+        return `${baseName} - ${steelCity}`;
+      }
+      return baseName;
     };
 
-    const keys = Object.keys(indexMapping) as Array<keyof Omit<CoefficientSet, 'fixed'>>;
+    const steelDbNames = Array.from(new Set(selectedSteelTypes.map(t => getSteelIndexName(t))));
+    const fuelIndexName = getFuelIndexNameForBill(zone, 'zone_city');
+
+    const nonSteelMapping = {
+      labor: 'Labour',
+      cement: 'RBI Cement',
+      fuel: fuelIndexName,
+      materials: 'RBI Other Materials',
+      machinery: 'RBI Plant Machinery',
+      explosives: 'RBI Explosives'
+    };
+
+    const allDbNamesToFetch = [
+      ...Object.values(nonSteelMapping),
+      ...steelDbNames
+    ];
 
     // Fetch index metadata and historical values in parallel
-    const indicesData = await Promise.all(
-      keys.map(async (key) => {
-        const name = indexMapping[key];
+    const fetchedIndices = await Promise.all(
+      allDbNamesToFetch.map(async (name) => {
         const priceIndex = await prisma.priceIndex.findUnique({
           where: { name },
           include: {
@@ -82,17 +113,25 @@ export async function POST(request: NextRequest) {
             }
           }
         });
-        return { key, name, priceIndex };
+        return { name, priceIndex };
       })
     );
+
+    const priceIndexMap = new Map<string, any>();
+    for (const item of fetchedIndices) {
+      priceIndexMap.set(item.name, item.priceIndex);
+    }
 
     const baseIndices: Record<string, number> = {};
     const historicalTrends: Record<string, { month: Date; value: number }[]> = {};
 
-    // Determine Base Indices and load histories
-    for (const { key, name, priceIndex } of indicesData) {
+    // Determine Base Indices and load histories for non-steel components
+    const nonSteelKeys = Object.keys(nonSteelMapping) as Array<keyof typeof nonSteelMapping>;
+    for (const key of nonSteelKeys) {
+      const name = nonSteelMapping[key];
+      const priceIndex = priceIndexMap.get(name);
+
       if (!priceIndex) {
-        // Fallback for missing indices in DB (e.g. mock standard values)
         baseIndices[key] = 100;
         historicalTrends[key] = [];
         continue;
@@ -100,16 +139,61 @@ export async function POST(request: NextRequest) {
 
       // Base month index value
       const baseValRecord = priceIndex.monthlyValues.find(
-        (v) =>
+        (v: any) =>
           v.month.getFullYear() === baseMonthDate.getFullYear() &&
           v.month.getMonth() === baseMonthDate.getMonth()
       );
       baseIndices[key] = baseValRecord?.value || priceIndex.baseValue || 100;
-      historicalTrends[key] = priceIndex.monthlyValues.map((v) => ({
+      historicalTrends[key] = priceIndex.monthlyValues.map((v: any) => ({
         month: v.month,
         value: v.value
       }));
     }
+
+    // Combine multiple steel indices into a single virtual steel index
+    const steelBaseValues: number[] = [];
+    const steelHistoriesByMonth = new Map<string, number[]>();
+
+    for (const name of steelDbNames) {
+      const priceIndex = priceIndexMap.get(name);
+      if (!priceIndex) continue;
+
+      const baseValRecord = priceIndex.monthlyValues.find(
+        (v: any) =>
+          v.month.getFullYear() === baseMonthDate.getFullYear() &&
+          v.month.getMonth() === baseMonthDate.getMonth()
+      );
+      const baseVal = baseValRecord?.value || priceIndex.baseValue || 100;
+      steelBaseValues.push(baseVal);
+
+      for (const v of priceIndex.monthlyValues) {
+        const monthKey = `${v.month.getFullYear()}-${v.month.getMonth()}`;
+        if (!steelHistoriesByMonth.has(monthKey)) {
+          steelHistoriesByMonth.set(monthKey, []);
+        }
+        steelHistoriesByMonth.get(monthKey)!.push(v.value);
+      }
+    }
+
+    baseIndices['steel'] = steelBaseValues.length > 0
+      ? steelBaseValues.reduce((a, b) => a + b, 0) / steelBaseValues.length
+      : 100;
+
+    const steelHistoryMerged: { month: Date; value: number }[] = [];
+    for (const [monthKey, vals] of steelHistoriesByMonth.entries()) {
+      const [year, month] = monthKey.split('-').map(Number);
+      const avgVal = vals.reduce((a, b) => a + b, 0) / vals.length;
+      steelHistoryMerged.push({
+        month: new Date(year, month, 1),
+        value: avgVal
+      });
+    }
+    steelHistoryMerged.sort((a, b) => a.month.getTime() - b.month.getTime());
+    historicalTrends['steel'] = steelHistoryMerged;
+
+    const keys: Array<keyof Omit<CoefficientSet, 'fixed'>> = [
+      'labor', 'cement', 'steel', 'fuel', 'materials', 'machinery', 'explosives'
+    ];
 
     // Projections logic using weighted linear regression
     const projectIndex = (
@@ -322,6 +406,7 @@ export async function POST(request: NextRequest) {
         baseMonth: baseMonthDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
         zone,
         steelCity,
+        selectedSteelTypes,
         coefficients
       },
       baseIndices,

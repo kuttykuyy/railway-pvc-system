@@ -11,6 +11,7 @@ import { BackButton } from '@/components/ui/back-button';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 import { useLanguage } from '@/components/i18n-provider';
 import { Loader2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   TrendingUp, TrendingDown, Minus, Info, BarChart3, Calculator, Percent,
   Sparkles, CheckCircle2, AlertTriangle, ArrowRight, Download, Calendar, HelpCircle
@@ -27,33 +28,34 @@ interface CoefficientSet {
   fuel: number;
   materials: number;
   machinery: number;
+  explosives: number;
   fixed: number;
 }
 
 const PRESETS: Record<string, { label: string; coefficients: CoefficientSet }> = {
   bridge: {
     label: 'Bridge Works (High Steel/Cement)',
-    coefficients: { labor: 25, cement: 15, steel: 30, fuel: 10, materials: 10, machinery: 5, fixed: 5 }
+    coefficients: { labor: 25, cement: 15, steel: 30, fuel: 10, materials: 10, machinery: 5, explosives: 0, fixed: 5 }
   },
   earthwork: {
     label: 'Earthwork & Excavation (High Fuel/Labor)',
-    coefficients: { labor: 30, cement: 0, steel: 0, fuel: 35, materials: 15, machinery: 10, fixed: 10 }
+    coefficients: { labor: 30, cement: 0, steel: 0, fuel: 35, materials: 15, machinery: 10, explosives: 0, fixed: 10 }
   },
   track: {
     label: 'Track Laying & Ballast (High Labor/Materials)',
-    coefficients: { labor: 35, cement: 5, steel: 20, fuel: 15, materials: 15, machinery: 0, fixed: 10 }
+    coefficients: { labor: 35, cement: 5, steel: 20, fuel: 15, materials: 15, machinery: 0, explosives: 0, fixed: 10 }
   },
   station: {
     label: 'Station Buildings (General Civil)',
-    coefficients: { labor: 25, cement: 20, steel: 15, fuel: 10, materials: 15, machinery: 5, fixed: 10 }
+    coefficients: { labor: 25, cement: 20, steel: 15, fuel: 10, materials: 15, machinery: 5, explosives: 0, fixed: 10 }
   },
   signaling: {
     label: 'Signaling & Telecom (High Materials/Labor)',
-    coefficients: { labor: 30, cement: 0, steel: 5, fuel: 10, materials: 40, machinery: 5, fixed: 10 }
+    coefficients: { labor: 30, cement: 0, steel: 5, fuel: 10, materials: 40, machinery: 5, explosives: 0, fixed: 10 }
   },
   custom: {
     label: 'Custom (Manual Entry)',
-    coefficients: { labor: 0, cement: 0, steel: 0, fuel: 0, materials: 0, machinery: 0, fixed: 100 }
+    coefficients: { labor: 0, cement: 0, steel: 0, fuel: 0, materials: 0, machinery: 0, explosives: 0, fixed: 100 }
   }
 };
 
@@ -70,8 +72,15 @@ export default function TenderingEstimatorPage() {
   const [startMonth, setStartMonth] = useState('2026-07');
   const [baseMonth, setBaseMonth] = useState('2026-06');
   const [zone, setZone] = useState('SR');
-  const [steelType, setSteelType] = useState('Steel TMT Bars');
+  const [selectedSteelTypes, setSelectedSteelTypes] = useState<string[]>(['TMT']);
   const [selectedPreset, setSelectedPreset] = useState<string>('bridge');
+
+  // Database classifications state
+  const [classificationGroups, setClassificationGroups] = useState<any[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+  const [selectedSubId, setSelectedSubId] = useState<string>('');
+  const [loadingClassifications, setLoadingClassifications] = useState(true);
+
   const [coefficients, setCoefficients] = useState<CoefficientSet>({ ...PRESETS.bridge.coefficients });
 
   const [forecastResult, setForecastResult] = useState<any>(null);
@@ -80,15 +89,82 @@ export default function TenderingEstimatorPage() {
 
   const zoneOptions = useMemo(() => getRailwayZoneOptions(), []);
 
+  // Fetch classifications on mount
+  useEffect(() => {
+    const fetchClassifications = async () => {
+      try {
+        const res = await fetch('/api/classification-groups');
+        if (res.ok) {
+          const data = await res.json();
+          const groups = data.groups || [];
+          setClassificationGroups(groups);
+          
+          if (groups.length > 0) {
+            setSelectedGroupId(groups[0].id);
+            if (groups[0].subClassifications && groups[0].subClassifications.length > 0) {
+              const firstSub = groups[0].subClassifications[0];
+              setSelectedSubId(firstSub.id);
+              setCoefficients({
+                labor: firstSub.labour || 0,
+                cement: firstSub.cement || 0,
+                steel: firstSub.steel || 0,
+                fuel: firstSub.fuel || 0,
+                materials: firstSub.otherMaterials || 0,
+                machinery: firstSub.plantMachinery || 0,
+                explosives: firstSub.explosives || 0,
+                fixed: firstSub.fixed || 0
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load classifications:', err);
+      } finally {
+        setLoadingClassifications(false);
+      }
+    };
+    fetchClassifications();
+  }, []);
+
   // Update coefficients when preset changes
   const handlePresetChange = (val: string) => {
     setSelectedPreset(val);
     setCoefficients({ ...PRESETS[val].coefficients });
   };
 
+  // Update coefficients when sub-classification changes
+  const handleSubClassificationChange = (subId: string) => {
+    setSelectedSubId(subId);
+    if (!subId) return;
+
+    const group = classificationGroups.find(g => g.subClassifications.some((s: any) => s.id === subId));
+    if (!group) return;
+    const sub = group.subClassifications.find((s: any) => s.id === subId);
+    if (!sub) return;
+
+    setCoefficients({
+      labor: sub.labour || 0,
+      cement: sub.cement || 0,
+      steel: sub.steel || 0,
+      fuel: sub.fuel || 0,
+      materials: sub.otherMaterials || 0,
+      machinery: sub.plantMachinery || 0,
+      explosives: sub.explosives || 0,
+      fixed: sub.fixed || 0
+    });
+  };
+
   const handleCoefficientChange = (field: keyof CoefficientSet, value: number) => {
     setCoefficients(prev => {
       const next = { ...prev, [field]: value };
+      
+      // If manually modifying any coefficient, switch dropdowns to Custom mode
+      const isCustomMode = selectedGroupId === 'presets' && selectedPreset === 'custom';
+      if (!isCustomMode) {
+        setSelectedGroupId('presets');
+        setSelectedPreset('custom');
+      }
+
       // Recalculate fixed component if not custom, or let user adjust all manually
       if (selectedPreset !== 'custom') {
         const sumOfOthers = Object.keys(next)
@@ -124,7 +200,7 @@ export default function TenderingEstimatorPage() {
           startMonth,
           baseMonth,
           zone,
-          steelType,
+          steelTypes: selectedSteelTypes,
           coefficients
         })
       });
@@ -263,32 +339,56 @@ export default function TenderingEstimatorPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Railway Zone</label>
-                <Select value={zone} onValueChange={setZone}>
-                  <SelectTrigger className="rounded-xl border-slate-200">
-                    <SelectValue placeholder="Zone" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {zoneOptions.map(z => (
-                      <SelectItem key={z.value} value={z.value}>{z.value}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Steel Price Type</label>
-                <Select value={steelType} onValueChange={setSteelType}>
-                  <SelectTrigger className="rounded-xl border-slate-200">
-                    <SelectValue placeholder="Steel" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Steel TMT Bars">TMT Bars</SelectItem>
-                    <SelectItem value="Steel Angle/Channel">Angles/Channels</SelectItem>
-                    <SelectItem value="Steel Plates">Plates</SelectItem>
-                  </SelectContent>
-                </Select>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Railway Zone</label>
+              <Select value={zone} onValueChange={setZone}>
+                <SelectTrigger className="rounded-xl border-slate-200">
+                  <SelectValue placeholder="Zone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {zoneOptions.map(z => (
+                    <SelectItem key={z.value} value={z.value}>{z.value}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                Steel Price Types (Select one or more)
+              </label>
+              <div className="grid grid-cols-2 gap-2.5 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                {[
+                  { value: 'TMT', label: 'TMT Bars', desc: 'Thermo-Mechanically Treated' },
+                  { value: 'ANGLE_CHANNEL', label: 'Angles/Channels', desc: 'Structural Sections' },
+                  { value: 'PLATES', label: 'Plates', desc: 'Steel Plates' },
+                  { value: 'OTHER_SECTIONS', label: 'Other Sections', desc: 'Other Steel Sections' }
+                ].map((item) => (
+                  <div key={item.value} className="flex items-center space-x-2.5 bg-white px-3 py-2 rounded-lg border border-slate-100 shadow-sm hover:border-indigo-100 hover:bg-indigo-50/20 transition-all">
+                    <Checkbox
+                      id={`steel-type-${item.value}`}
+                      checked={selectedSteelTypes.includes(item.value)}
+                      onCheckedChange={(checked) => {
+                        setSelectedSteelTypes(prev => {
+                          if (checked) {
+                            return [...prev, item.value];
+                          } else {
+                            return prev.length > 1 ? prev.filter(t => t !== item.value) : prev;
+                          }
+                        });
+                      }}
+                      className="border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <label
+                        htmlFor={`steel-type-${item.value}`}
+                        className="text-xs font-semibold text-slate-700 cursor-pointer block select-none"
+                      >
+                        {item.label}
+                      </label>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -297,18 +397,68 @@ export default function TenderingEstimatorPage() {
               PVC Coefficients (%)
             </h3>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Work Preset Category</label>
-              <Select value={selectedPreset} onValueChange={handlePresetChange}>
-                <SelectTrigger className="rounded-xl border-slate-200">
-                  <SelectValue placeholder="Select preset" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.keys(PRESETS).map(key => (
-                    <SelectItem key={key} value={key}>{PRESETS[key].label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Classification Group</label>
+                <Select
+                  value={selectedGroupId}
+                  onValueChange={(val) => {
+                    setSelectedGroupId(val);
+                    if (val === 'presets') {
+                      handlePresetChange('bridge');
+                    } else {
+                      const group = classificationGroups.find(g => g.id === val);
+                      if (group && group.subClassifications && group.subClassifications.length > 0) {
+                        handleSubClassificationChange(group.subClassifications[0].id);
+                      }
+                    }
+                  }}
+                  disabled={loadingClassifications}
+                >
+                  <SelectTrigger className="rounded-xl border-slate-200">
+                    <SelectValue placeholder={loadingClassifications ? "Loading groups..." : "Select Group"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {classificationGroups.map(g => (
+                      <SelectItem key={g.id} value={g.id}>{g.code} - {g.name}</SelectItem>
+                    ))}
+                    <SelectItem value="presets">--- Quick Presets ---</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Sub-Classification</label>
+                {selectedGroupId === 'presets' ? (
+                  <Select value={selectedPreset} onValueChange={handlePresetChange}>
+                    <SelectTrigger className="rounded-xl border-slate-200">
+                      <SelectValue placeholder="Select preset" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.keys(PRESETS).map(key => (
+                        <SelectItem key={key} value={key}>{PRESETS[key].label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select
+                    value={selectedSubId}
+                    onValueChange={handleSubClassificationChange}
+                    disabled={!selectedGroupId || loadingClassifications}
+                  >
+                    <SelectTrigger className="rounded-xl border-slate-200">
+                      <SelectValue placeholder="Select Sub-Classification" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {classificationGroups
+                        .find(g => g.id === selectedGroupId)
+                        ?.subClassifications.map((s: any) => (
+                          <SelectItem key={s.id} value={s.id}>{s.code} - {s.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-1">
@@ -319,7 +469,8 @@ export default function TenderingEstimatorPage() {
                 { name: 'fuel', label: 'Fuel (F)' },
                 { name: 'materials', label: 'Materials (M)' },
                 { name: 'machinery', label: 'Machinery (K)' },
-                { name: 'fixed', label: 'Fixed (W)', disabled: selectedPreset !== 'custom' }
+                { name: 'explosives', label: 'Explosives (E)' },
+                { name: 'fixed', label: 'Fixed (W)', disabled: selectedGroupId !== 'presets' || selectedPreset !== 'custom' }
               ].map(item => (
                 <div key={item.name} className="space-y-0.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.label}</label>
@@ -571,7 +722,7 @@ export default function TenderingEstimatorPage() {
                     <thead className="bg-slate-50/70 font-bold text-slate-500">
                       <tr>
                         <th className="px-4 py-2.5">Month</th>
-                        {(['labor', 'cement', 'steel', 'fuel', 'materials', 'machinery'] as Array<keyof Omit<CoefficientSet, 'fixed'>>).map((key) => {
+                        {(['labor', 'cement', 'steel', 'fuel', 'materials', 'machinery', 'explosives'] as Array<keyof Omit<CoefficientSet, 'fixed'>>).map((key) => {
                           const coeff = coefficients[key] || 0;
                           if (coeff === 0) return null;
                           return <th key={key} className="px-4 py-2.5 uppercase">{key}</th>;
@@ -582,7 +733,7 @@ export default function TenderingEstimatorPage() {
                       {forecastResult.monthlyIndexTrends.map((t: any) => (
                         <tr key={t.month} className="hover:bg-slate-50/40">
                           <td className="px-4 py-2.5 font-medium text-slate-800">{t.month}</td>
-                          {(['labor', 'cement', 'steel', 'fuel', 'materials', 'machinery'] as Array<keyof Omit<CoefficientSet, 'fixed'>>).map((key) => {
+                          {(['labor', 'cement', 'steel', 'fuel', 'materials', 'machinery', 'explosives'] as Array<keyof Omit<CoefficientSet, 'fixed'>>).map((key) => {
                             const coeff = coefficients[key] || 0;
                             if (coeff === 0) return null;
                             const val = t[`${key}_baseline`]?.toFixed(1);
