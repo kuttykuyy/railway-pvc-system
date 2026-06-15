@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { FileText, Save, ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useLanguage } from '@/components/i18n-provider';
 
 interface Contract {
   id: string;
@@ -29,6 +30,7 @@ interface MobileBillFormProps {
 
 export default function MobileBillForm({ mode = 'create', billId }: MobileBillFormProps) {
   const router = useRouter();
+  const { t, language } = useLanguage();
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [classifications, setClassifications] = useState<Classification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -96,7 +98,7 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
       }
     } catch (err) {
       console.error('Error loading data:', err);
-      setError('Failed to load form data');
+      setError(language === 'hi' ? 'फ़ॉर्म डेटा लोड करने में विफल' : 'Failed to load form data');
     } finally {
       setIsLoading(false);
     }
@@ -148,11 +150,11 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
         }, 1500);
       } else {
         const errorData = await response.json();
-        setError(errorData.error || `Failed to ${mode} bill`);
+        setError(errorData.error || (language === 'hi' ? `बिल ${mode === 'edit' ? 'अपडेट' : 'बनाने'} करने में विफल` : `Failed to ${mode} bill`));
       }
     } catch (err) {
       console.error('Error submitting bill:', err);
-      setError('An error occurred while saving the bill');
+      setError(language === 'hi' ? 'बिल सहेजते समय एक त्रुटि हुई' : 'An error occurred while saving the bill');
     } finally {
       setIsSubmitting(false);
     }
@@ -184,7 +186,7 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-purple-600" />
             <h1 className="text-lg font-semibold">
-              {mode === 'edit' ? 'Edit Bill' : 'New Bill'}
+              {mode === 'edit' ? t('form.bill.edit_title') : t('form.bill.add_title')}
             </h1>
           </div>
         </div>
@@ -202,7 +204,7 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
         <div className="mx-4 mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
           <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-green-800">
-            Bill {mode === 'edit' ? 'updated' : 'created'} successfully!
+            {language === 'hi' ? `बिल सफलतापूर्वक ${mode === 'edit' ? 'अपडेट' : 'बनाया'} किया गया!` : `Bill ${mode === 'edit' ? 'updated' : 'created'} successfully!`}
           </p>
         </div>
       )}
@@ -211,13 +213,13 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
       <form onSubmit={handleSubmit} className="p-4 space-y-4 pb-24">
         {/* Contract */}
         <div className="space-y-2">
-          <Label htmlFor="contractId" className="text-sm font-medium">Contract *</Label>
+          <Label htmlFor="contractId" className="text-sm font-medium">{t('form.bill.contract')} *</Label>
           <Select 
             value={formData.contractId} 
             onValueChange={(value) => handleSelectChange('contractId', value)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select contract" />
+              <SelectValue placeholder={t('form.bill.select_contract')} />
             </SelectTrigger>
             <SelectContent>
               {contracts.map((contract) => (
@@ -234,26 +236,26 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
 
         {/* Bill Number */}
         <div className="space-y-2">
-          <Label htmlFor="billNo" className="text-sm font-medium">Bill Number *</Label>
+          <Label htmlFor="billNo" className="text-sm font-medium">{t('form.bill.bill_no')} *</Label>
           <Input
             id="billNo"
             name="billNo"
             value={formData.billNo}
             onChange={handleInputChange}
-            placeholder="Enter bill number"
+            placeholder={language === 'hi' ? 'बिल संख्या दर्ज करें' : 'Enter bill number'}
             required
           />
         </div>
 
         {/* Zone */}
         <div className="space-y-2">
-          <Label htmlFor="zone" className="text-sm font-medium">Zone *</Label>
+          <Label htmlFor="zone" className="text-sm font-medium">{t('form.bill.zone')} *</Label>
           <Select 
             value={formData.zone} 
             onValueChange={(value) => handleSelectChange('zone', value)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select zone" />
+              <SelectValue placeholder={t('form.bill.select_zone')} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="Chennai">Chennai</SelectItem>
@@ -266,7 +268,7 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
 
         {/* Bill Amount */}
         <div className="space-y-2">
-          <Label htmlFor="billAmount" className="text-sm font-medium">Bill Amount (₹) *</Label>
+          <Label htmlFor="billAmount" className="text-sm font-medium">{language === 'hi' ? 'बिल राशि (₹) *' : 'Bill Amount (₹) *'}</Label>
           <Input
             id="billAmount"
             name="billAmount"
@@ -281,7 +283,7 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
 
         {/* Date of Measurement */}
         <div className="space-y-2">
-          <Label htmlFor="dateOfMeasurement" className="text-sm font-medium">Date of Measurement *</Label>
+          <Label htmlFor="dateOfMeasurement" className="text-sm font-medium">{t('form.bill.date_measurement')} *</Label>
           <Input
             id="dateOfMeasurement"
             name="dateOfMeasurement"
@@ -294,16 +296,16 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
 
         {/* Work Classification */}
         <div className="space-y-2">
-          <Label htmlFor="workClassification" className="text-sm font-medium">Classification</Label>
+          <Label htmlFor="workClassification" className="text-sm font-medium">{language === 'hi' ? 'वर्गीकरण' : 'Classification'}</Label>
           <Select 
             value={formData.workClassification} 
             onValueChange={(value) => handleSelectChange('workClassification', value)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select classification" />
+              <SelectValue placeholder={language === 'hi' ? 'वर्गीकरण चुनें' : 'Select classification'} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">None</SelectItem>
+              <SelectItem value="none">{language === 'hi' ? 'कोई नहीं' : 'None'}</SelectItem>
               {classifications.map((classification) => (
                 <SelectItem key={classification.id} value={classification.id}>
                   {classification.code} - {classification.name}
@@ -315,10 +317,10 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
 
         {/* Optional: Component Amounts */}
         <div className="pt-4 border-t space-y-4">
-          <p className="text-sm font-medium text-gray-700">Optional Component Amounts</p>
+          <p className="text-sm font-medium text-gray-700">{t('form.bill.optional_components')}</p>
           
           <div className="space-y-2">
-            <Label htmlFor="cementAmount" className="text-sm">Cement (₹)</Label>
+            <Label htmlFor="cementAmount" className="text-sm">{t('form.bill.cement')}</Label>
             <Input
               id="cementAmount"
               name="cementAmount"
@@ -331,7 +333,7 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="steelTmtBarsAmount" className="text-sm">Steel TMT Bars (₹)</Label>
+            <Label htmlFor="steelTmtBarsAmount" className="text-sm">{t('form.bill.steel_tmt')}</Label>
             <Input
               id="steelTmtBarsAmount"
               name="steelTmtBarsAmount"
@@ -344,7 +346,7 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="steelAngleChannelAmount" className="text-sm">Steel Angle/Channel (₹)</Label>
+            <Label htmlFor="steelAngleChannelAmount" className="text-sm">{t('form.bill.steel_angle')}</Label>
             <Input
               id="steelAngleChannelAmount"
               name="steelAngleChannelAmount"
@@ -357,7 +359,7 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="steelPlatesAmount" className="text-sm">Steel Plates (₹)</Label>
+            <Label htmlFor="steelPlatesAmount" className="text-sm">{t('form.bill.steel_plates')}</Label>
             <Input
               id="steelPlatesAmount"
               name="steelPlatesAmount"
@@ -370,7 +372,7 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="steelOtherSectionsAmount" className="text-sm">Steel Other Sections (₹)</Label>
+            <Label htmlFor="steelOtherSectionsAmount" className="text-sm">{t('form.bill.steel_other')}</Label>
             <Input
               id="steelOtherSectionsAmount"
               name="steelOtherSectionsAmount"
@@ -395,12 +397,14 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
           {isSubmitting ? (
             <>
               <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2" />
-              Saving...
+              {t('form.bill.saving')}
             </>
           ) : (
             <>
               <Save className="h-4 w-4 mr-2" />
-              {mode === 'edit' ? 'Update Bill' : 'Create Bill'}
+              {mode === 'edit'
+                ? (language === 'hi' ? 'बिल अपडेट करें' : 'Update Bill')
+                : (language === 'hi' ? 'बिल बनाएं' : 'Create Bill')}
             </>
           )}
         </Button>

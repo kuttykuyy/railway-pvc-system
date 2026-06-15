@@ -38,6 +38,7 @@ import { ProvisionalDateNotification } from '@/components/ui/provisional-date-no
 import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
 import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-dialog';
+import { useLanguage } from '@/components/i18n-provider';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { ContextualHelp } from '@/components/contextual-help';
 import { validateDate, validateDateForApi } from '@/lib/date-validation';
@@ -104,6 +105,7 @@ interface ClassificationEntry {
 function NewBillPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t, language } = useLanguage();
   const preselectedContractId = searchParams?.get('contractId');
 
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -812,7 +814,7 @@ function NewBillPageContent() {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-64">
-        <LoadingSpinner size="lg" text="Loading contracts..." />
+        <LoadingSpinner size="lg" text={language === 'hi' ? 'अनुबंध लोड किए जा रहे हैं...' : 'Loading contracts...'} />
       </div>
     );
   }
@@ -820,14 +822,14 @@ function NewBillPageContent() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <BackButton href="/bills" label="Back to Bills" variant="outline" />
+        <BackButton href="/bills" label={t('form.bill.back')} variant="outline" />
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
             <FileText className="h-8 w-8 text-purple-600" />
-            Process New Bill
+            {t('form.bill.add_title')}
           </h1>
           <p className="text-gray-600 mt-2">
-            Add a new running account bill with automatic PVC calculation
+            {language === 'hi' ? 'स्वचालित पीवीसी गणना के साथ एक नया रनिंग अकाउंट बिल जोड़ें' : 'Add a new running account bill with automatic PVC calculation'}
           </p>
         </div>
       </div>
@@ -842,16 +844,20 @@ function NewBillPageContent() {
               </svg>
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-red-800">Railway Posting Details incomplete</p>
+              <p className="text-sm font-semibold text-red-800">
+                {language === 'hi' ? 'रेलवे पोस्टिंग विवरण अपूर्ण' : 'Railway Posting Details incomplete'}
+              </p>
               <p className="mt-0.5 text-xs text-red-600">
-                You must complete your posting details before creating a bill. Missing:{' '}
+                {language === 'hi'
+                  ? 'बिल बनाने से पहले आपको अपना पोस्टिंग विवरण पूरा करना होगा। गायब फ़ील्ड: '
+                  : 'You must complete your posting details before creating a bill. Missing: '}
                 <strong>{roQuota.missingPostingFields?.join(', ')}</strong>.
               </p>
               <a
                 href="/profile#posting"
                 className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
               >
-                Complete Posting Details →
+                {language === 'hi' ? 'पोस्टिंग विवरण पूरा करें →' : 'Complete Posting Details →'}
               </a>
             </div>
           </div>
@@ -864,8 +870,14 @@ function NewBillPageContent() {
         <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 flex items-center gap-3">
           <span className="text-2xl">🎉</span>
           <div>
-            <p className="text-sm font-bold text-green-800">Your first bill is FREE — Free Trial Active</p>
-            <p className="text-xs text-green-700 mt-0.5">Create your first bill at no cost. No credits needed. Watermark will be added to the PDF.</p>
+            <p className="text-sm font-bold text-green-800">
+              {language === 'hi' ? 'आपका पहला बिल मुफ़्त है — मुफ़्त परीक्षण सक्रिय' : 'Your first bill is FREE — Free Trial Active'}
+            </p>
+            <p className="text-xs text-green-700 mt-0.5">
+              {language === 'hi'
+                ? 'बिना किसी लागत के अपना पहला बिल बनाएं। किसी क्रेडिट की आवश्यकता नहीं है। पीडीएफ में वॉटरमार्क जोड़ा जाएगा।'
+                : 'Create your first bill at no cost. No credits needed. Watermark will be added to the PDF.'}
+            </p>
           </div>
         </div>
       )}
@@ -877,12 +889,13 @@ function NewBillPageContent() {
             <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
             <div>
               <h3 className="text-sm font-medium text-yellow-800">
-                Single Bill Creation Under Maintenance
+                {language === 'hi' ? 'एकल बिल निर्माण रखरखाव के अंतर्गत है' : 'Single Bill Creation Under Maintenance'}
               </h3>
               <div className="mt-2 text-sm text-yellow-700">
                 <p>
-                  Single bill creation is currently unavailable due to system maintenance. 
-                  Please try again later or contact your administrator for more information.
+                  {language === 'hi'
+                    ? 'सिस्टम रखरखाव के कारण वर्तमान में एकल बिल निर्माण अनुपलब्ध है। कृपया बाद में पुनः प्रयास करें या अधिक जानकारी के लिए अपने व्यवस्थापक से संपर्क करें।'
+                    : 'Single bill creation is currently unavailable due to system maintenance. Please try again later or contact your administrator for more information.'}
                 </p>
               </div>
             </div>
@@ -899,7 +912,7 @@ function NewBillPageContent() {
             ) : (
               <div className="h-5 w-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-bold">1</div>
             )}
-            <span>Basic Info</span>
+            <span>{language === 'hi' ? 'बुनियादी जानकारी' : 'Basic Info'}</span>
           </div>
           <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
           <div className={`flex items-center gap-2 flex-shrink-0 ${classificationEntries.length > 0 ? 'text-green-600 font-semibold' : 'text-slate-400'}`}>
@@ -908,17 +921,17 @@ function NewBillPageContent() {
             ) : (
               <div className="h-5 w-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-bold">2</div>
             )}
-            <span>Classifications</span>
+            <span>{language === 'hi' ? 'वर्गीकरण' : 'Classifications'}</span>
           </div>
           <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
           <div className="flex items-center gap-2 text-slate-400 flex-shrink-0">
             <div className="h-5 w-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-bold">3</div>
-            <span>Optional Details</span>
+            <span>{language === 'hi' ? 'वैकल्पिक विवरण' : 'Optional Details'}</span>
           </div>
           <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
           <div className="flex items-center gap-2 text-slate-400 flex-shrink-0">
             <div className="h-5 w-5 rounded-full border-2 border-current flex items-center justify-center text-xs font-bold">4</div>
-            <span>Review & Submit</span>
+            <span>{language === 'hi' ? 'समीक्षा करें और सबमिट करें' : 'Review & Submit'}</span>
           </div>
         </div>
       </div>
@@ -934,20 +947,22 @@ function NewBillPageContent() {
               <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-5">
                 <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-purple-600" />
-                  Selected Contract
+                  {language === 'hi' ? 'चयनित अनुबंध' : 'Selected Contract'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-5 space-y-3 text-sm">
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Agreement No:</span>
+                  <span className="text-slate-500">{language === 'hi' ? 'अनुबंध संख्या:' : 'Agreement No:'}</span>
                   <span className="font-semibold text-slate-800">{selectedContract.agreementNo}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Contractor:</span>
+                  <span className="text-slate-500">{language === 'hi' ? 'ठेकेदार:' : 'Contractor:'}</span>
                   <span className="font-semibold text-slate-800">{selectedContract.contractorName}</span>
                 </div>
                 <div className="pt-2 border-t border-slate-100">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Work Description</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    {language === 'hi' ? 'कार्य का विवरण' : 'Work Description'}
+                  </span>
                   <p className="text-slate-700 font-medium text-xs leading-relaxed">{selectedContract.workDescription}</p>
                 </div>
               </CardContent>
@@ -960,20 +975,22 @@ function NewBillPageContent() {
               <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-5">
                 <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-green-600" />
-                  Quarter Information
+                  {language === 'hi' ? 'त्रैमासिक जानकारी' : 'Quarter Information'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-5 flex flex-col justify-center items-center text-center min-h-[160px]">
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Measurement Date</p>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">
+                  {language === 'hi' ? 'माप की तिथि' : 'Measurement Date'}
+                </p>
                 <p className="font-bold text-slate-800 text-lg">
-                  {new Date(formData.dateOfMeasurement).toLocaleDateString('en-IN', {
+                  {new Date(formData.dateOfMeasurement).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN', {
                     day: 'numeric',
                     month: 'long',
                     year: 'numeric'
                   })}
                 </p>
                 <div className="mt-4 px-4 py-2 bg-green-50 text-green-700 rounded-xl border border-green-100 font-semibold text-sm">
-                  Active PVC Quarter: Q{Math.floor((new Date(formData.dateOfMeasurement).getMonth()) / 3) + 1}-{new Date(formData.dateOfMeasurement).getFullYear()}
+                  {language === 'hi' ? 'सक्रिय पीवीसी तिमाही' : 'Active PVC Quarter'}: Q{Math.floor((new Date(formData.dateOfMeasurement).getMonth()) / 3) + 1}-{new Date(formData.dateOfMeasurement).getFullYear()}
                 </div>
               </CardContent>
             </Card>
@@ -990,10 +1007,12 @@ function NewBillPageContent() {
                 <div className="bg-purple-50 p-2 rounded-xl text-purple-600">
                   <FileText className="h-6 w-6" />
                 </div>
-                Bill Details
+                {language === 'hi' ? 'बिल विवरण' : 'Bill Details'}
               </CardTitle>
               <CardDescription className="text-sm text-slate-500 mt-1">
-                Enter the bill information. PVC will be calculated automatically based on the quarter.
+                {language === 'hi'
+                  ? 'बिल की जानकारी दर्ज करें। तिमाही के आधार पर पीवीसी की गणना स्वचालित रूप से की जाएगी।'
+                  : 'Enter the bill information. PVC will be calculated automatically based on the quarter.'}
               </CardDescription>
             </CardHeader>
             <CardContent className="p-6">
@@ -1015,8 +1034,8 @@ function NewBillPageContent() {
                           <Building2 className="h-5 w-5" />
                         </div>
                         <div className="text-left">
-                          <div className="font-semibold text-slate-900">Basic Information</div>
-                          <div className="text-xs text-slate-500">Contract, Bill Number, and Zone</div>
+                          <div className="font-semibold text-slate-900">{t('form.bill.basic_info')}</div>
+                          <div className="text-xs text-slate-500">{t('form.bill.basic_info_desc')}</div>
                         </div>
                         {formData.contractId && formData.billNo && formData.zone && (
                           <CheckCircle2 className="h-5 w-5 text-green-600 ml-auto" />
@@ -1026,11 +1045,11 @@ function NewBillPageContent() {
                     <AccordionContent className="px-4 pb-4 space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="contractId" className="flex items-center gap-2">
-                          Contract <span className="text-red-500">*</span>
+                          {t('form.bill.contract')} <span className="text-red-500">*</span>
                         </Label>
                         <Select value={formData.contractId} onValueChange={handleContractChange}>
                           <SelectTrigger className="bg-white">
-                            <SelectValue placeholder="Select a contract" />
+                            <SelectValue placeholder={t('form.bill.select_contract')} />
                           </SelectTrigger>
                           <SelectContent>
                             {contracts.map((contract) => (
@@ -1041,7 +1060,7 @@ function NewBillPageContent() {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                          Select the contract this bill belongs to. If you haven&apos;t added one yet, go to Contracts &rarr; New Contract first.
+                          {t('form.bill.contract_desc')}
                         </p>
                       </div>
 
@@ -1053,11 +1072,11 @@ function NewBillPageContent() {
                           <div className="flex items-start gap-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs">
                             <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
                             <div className="space-y-1">
-                              <p className="font-semibold text-emerald-900">Carried forward from {latest.billNo || 'previous bill'}</p>
-                              <p className="text-emerald-700">Zone, fuel basis, and bill number auto-filled. Edit below if needed.</p>
+                              <p className="font-semibold text-emerald-900">{t('form.bill.carry_forward')}{latest.billNo || (language === 'hi' ? 'पिछला बिल' : 'previous bill')}</p>
+                              <p className="text-emerald-700">{t('form.bill.auto_fill_msg')}</p>
                               {cumPvc != null && (
                                 <p className="text-emerald-800 font-medium">
-                                  Previous cumulative PVC: ₹{cumPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                  {t('form.bill.prev_cumulative')}₹{cumPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                 </p>
                               )}
                             </div>
@@ -1067,19 +1086,19 @@ function NewBillPageContent() {
 
                       <div className="space-y-2">
                         <Label htmlFor="billNo">
-                          Bill Number <span className="text-red-500">*</span>
+                          {t('form.bill.bill_no')} <span className="text-red-500">*</span>
                         </Label>
                         <Input
                           id="billNo"
                           name="billNo"
                           value={formData.billNo}
                           onChange={handleInputChange}
-                          placeholder="e.g., RA/001/2023"
+                          placeholder={t('form.bill.bill_no_placeholder')}
                           required
                           className="bg-white"
                         />
                         <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                          Enter the unique bill number for this running account (e.g., RA/001/2023).
+                          {t('form.bill.bill_no_desc')}
                         </p>
                         
                         {/* Previous Bills Display */}
@@ -1087,7 +1106,7 @@ function NewBillPageContent() {
                           <div className="mt-3">
                             {isLoadingPreviousBills ? (
                               <div className="text-xs text-gray-600 italic">
-                                Loading previous bills...
+                                {language === 'hi' ? 'पिछले बिल लोड हो रहे हैं...' : 'Loading previous bills...'}
                               </div>
                             ) : previousBills.length > 0 ? (
                               <Accordion type="single" collapsible className="border rounded-lg">
@@ -1095,7 +1114,7 @@ function NewBillPageContent() {
                                   <AccordionTrigger className="px-3 py-2 hover:no-underline text-xs">
                                     <div className="flex items-center gap-2">
                                       <FileText className="h-3 w-3 text-blue-600" />
-                                      <span className="font-medium">Previous Bills ({previousBills.length})</span>
+                                      <span className="font-medium">{t('form.bill.prev_bills')} ({previousBills.length})</span>
                                     </div>
                                   </AccordionTrigger>
                                   <AccordionContent className="px-3 pb-3">
@@ -1106,9 +1125,9 @@ function NewBillPageContent() {
                                           className="flex items-center justify-between p-2 bg-gray-50 rounded text-xs"
                                         >
                                           <div className="flex-1">
-                                            <span className="font-medium text-gray-900">{bill.billNo || `Bill ${index + 1}`}</span>
+                                            <span className="font-medium text-gray-900">{bill.billNo || (language === 'hi' ? `बिल ${index + 1}` : `Bill ${index + 1}`)}</span>
                                             <span className="text-gray-500 ml-2">
-                                              ({new Date(bill.dateOfMeasurement).toLocaleDateString('en-IN', { 
+                                              ({new Date(bill.dateOfMeasurement).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN', { 
                                                 day: '2-digit', 
                                                 month: 'short', 
                                                 year: 'numeric' 
@@ -1126,7 +1145,7 @@ function NewBillPageContent() {
                               </Accordion>
                             ) : (
                               <div className="text-xs text-gray-600 italic">
-                                No previous bills found for this contract
+                                {t('form.bill.no_prev_bills')}
                               </div>
                             )}
                           </div>
@@ -1135,7 +1154,7 @@ function NewBillPageContent() {
 
                       <div className="space-y-2">
                         <Label htmlFor="zone">
-                          Railway Zone <span className="text-red-500">*</span>
+                          {t('form.bill.zone')} <span className="text-red-500">*</span>
                         </Label>
                         {roQuota?.applicable && roQuota.zone ? (
                           // Railway Official — zone is locked to their account zone
@@ -1147,13 +1166,13 @@ function NewBillPageContent() {
                               <p className="text-sm font-semibold text-blue-900">
                                 {getRailwayZoneOptions().find((z) => z.value === roQuota.zone)?.label ?? roQuota.zone}
                               </p>
-                              <p className="text-xs text-blue-600">Zone locked to your Railway Official account</p>
+                              <p className="text-xs text-blue-600">{t('form.bill.zone_locked')}</p>
                             </div>
                           </div>
                         ) : (
                           <Select value={formData.zone} onValueChange={(value) => setFormData(prev => ({ ...prev, zone: value }))}>
                             <SelectTrigger className="bg-white">
-                              <SelectValue placeholder="Select railway zone" />
+                              <SelectValue placeholder={t('form.bill.select_zone')} />
                             </SelectTrigger>
                             <SelectContent>
                               {getRailwayZoneOptions().map(zone => (
@@ -1165,35 +1184,40 @@ function NewBillPageContent() {
                           </Select>
                         )}
                         <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                          Steel prices for PVC will be based on the zone&apos;s nearest city. (Select zone to preview active Steel City: <span className="font-semibold text-slate-700">{formData.zone ? getSteelCityForZone(formData.zone) : 'None'}</span>)
+                          {t('form.bill.zone_desc')} {language === 'hi' ? '(सक्रिय स्टील सिटी का पूर्वावलोकन करने के लिए ज़ोन चुनें: ' : '(Select zone to preview active Steel City: '}
+                          <span className="font-semibold text-slate-700">{formData.zone ? getSteelCityForZone(formData.zone) : (language === 'hi' ? 'कोई नहीं' : 'None')}</span>)
                         </p>
                       </div>
 
                       <div className="space-y-2">
                         <Label htmlFor="fuelPriceType">
-                          Fuel (Diesel) Price Basis
+                          {t('form.bill.fuel_basis')}
                         </Label>
                         <Select value={formData.fuelPriceType} onValueChange={(value) => setFormData(prev => ({ ...prev, fuelPriceType: value }))}>
                           <SelectTrigger className="bg-white">
-                            <SelectValue placeholder="Select fuel price basis" />
+                            <SelectValue placeholder={t('form.bill.select_fuel_basis')} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="four_city_avg">Average of 4 Cities (Delhi, Mumbai, Chennai, Kolkata)</SelectItem>
-                            <SelectItem value="zone_city">Zone City ({formData.zone ? getSteelCityForZone(formData.zone) : '...'})</SelectItem>
+                            <SelectItem value="four_city_avg">{t('form.bill.four_city_avg')}</SelectItem>
+                            <SelectItem value="zone_city">{t('form.bill.zone_city')} ({formData.zone ? getSteelCityForZone(formData.zone) : '...'})</SelectItem>
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-gray-600 flex items-center gap-1">
                           <Info className="h-3 w-3" />
                           {formData.fuelPriceType === 'zone_city' && formData.zone
-                            ? `Diesel prices from ${getSteelCityForZone(formData.zone)} will be used for MPNG Fuel index`
-                            : 'Average diesel prices of Delhi, Mumbai, Chennai & Kolkata will be used'}
+                            ? (language === 'hi'
+                                ? `एमपीएनजी ईंधन सूचकांक के लिए ${getSteelCityForZone(formData.zone)} से डीजल की कीमतों का उपयोग किया जाएगा`
+                                : `Diesel prices from ${getSteelCityForZone(formData.zone)} will be used for MPNG Fuel index`)
+                            : (language === 'hi'
+                                ? 'दिल्ली, मुंबई, चेन्नई और कोलकाता की औसत डीजल कीमतों का उपयोग किया जाएगा'
+                                : 'Average diesel prices of Delhi, Mumbai, Chennai & Kolkata will be used')}
                         </p>
                       </div>
 
                       <div className="space-y-2">
                         <Label htmlFor="dateOfMeasurement" className="flex items-center gap-2">
                           <Calendar className="h-4 w-4" />
-                          Date of Measurement <span className="text-red-500">*</span>
+                          {t('form.bill.date_measurement')} <span className="text-red-500">*</span>
                         </Label>
                         <Input
                           id="dateOfMeasurement"
@@ -1209,27 +1233,31 @@ function NewBillPageContent() {
                           className="bg-white cursor-pointer"
                         />
                         <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                          Enter the date when work was measured. The system automatically detects the correct PVC quarter based on this date.
+                          {t('form.bill.date_measurement_desc')}
                         </p>
                         {availableDateRange && availableDateRange.minDate && availableDateRange.maxDate ? (
                           <p className="text-xs text-blue-600 font-bold flex items-center gap-1.5 animate-blink mt-1">
                             <Info className="h-3.5 w-3.5 text-blue-500 animate-pulse flex-shrink-0" />
                             <span>
-                              Indices available from {new Date(availableDateRange.minDate).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' })} to {new Date(availableDateRange.maxDate).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' })}
+                              {language === 'hi' ? 'सूचकांक उपलब्ध हैं ' : 'Indices available from '}
+                              {new Date(availableDateRange.minDate).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-GB', { timeZone: 'Asia/Kolkata' })}
+                              {language === 'hi' ? ' से ' : ' to '}
+                              {new Date(availableDateRange.maxDate).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-GB', { timeZone: 'Asia/Kolkata' })}
                               <span className="ml-1.5 bg-blue-50 border border-blue-150 text-blue-700 px-1.5 py-0.5 rounded font-black whitespace-nowrap">
-                                (All indices up to date: {new Date(availableDateRange.maxDate).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })})
+                                ({language === 'hi' ? 'सभी सूचकांक अद्यतित हैं: ' : 'All indices up to date: '}
+                                {new Date(availableDateRange.maxDate).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-GB', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })})
                               </span>
                             </span>
                           </p>
                         ) : isLoadingDateRange ? (
                           <p className="text-xs text-gray-500 flex items-center gap-1">
                             <LoadingSpinner className="h-3 w-3" />
-                            Loading available dates...
+                            {t('form.bill.loading_dates')}
                           </p>
                         ) : (
                           <p className="text-xs text-amber-600 flex items-center gap-1">
                             <AlertTriangle className="h-3 w-3" />
-                            No indices available. Please upload indices first.
+                            {t('form.bill.no_indices_warn')}
                           </p>
                         )}
                       </div>
@@ -1244,7 +1272,7 @@ function NewBillPageContent() {
                             className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                           />
                           <Label htmlFor="isFinalPvc" className="cursor-pointer font-medium">
-                            Mark as Final PVC
+                            {t('form.bill.final_pvc')}
                           </Label>
                         </div>
                         
@@ -1253,7 +1281,7 @@ function NewBillPageContent() {
                           <div className="space-y-2 p-3 border border-green-200 rounded-lg bg-green-50 ml-6">
                             <Label htmlFor="dateOfCompletion" className="flex items-center gap-2 text-green-900 font-medium">
                               <Calendar className="h-4 w-4" />
-                              Date of Completion <span className="text-red-500">*</span>
+                              {t('form.bill.date_completion')} <span className="text-red-500">*</span>
                             </Label>
                             <Input
                               id="dateOfCompletion"
@@ -1268,7 +1296,7 @@ function NewBillPageContent() {
                               className="bg-white cursor-pointer"
                             />
                             <p className="text-xs text-green-700">
-                              Required for final PVC claims
+                              {t('form.bill.final_pvc_req')}
                             </p>
                           </div>
                         )}
@@ -1284,8 +1312,8 @@ function NewBillPageContent() {
                           <ClipboardList className="h-5 w-5" />
                         </div>
                         <div className="text-left">
-                          <div className="font-semibold text-slate-900">Work Classifications</div>
-                          <div className="text-xs text-slate-500">Add multiple classifications with amounts</div>
+                          <div className="font-semibold text-slate-900">{t('form.bill.classifications')}</div>
+                          <div className="text-xs text-slate-500">{t('form.bill.classifications_desc')}</div>
                         </div>
                         {classificationEntries.length > 0 && (
                           <CheckCircle2 className="h-5 w-5 text-green-600 ml-auto" />
@@ -1294,7 +1322,7 @@ function NewBillPageContent() {
                     </AccordionTrigger>
                     <AccordionContent className="px-4 pb-4 space-y-4">
                       <p className="text-xs text-slate-500 leading-relaxed mb-2">
-                        Add multiple schedule codes and amounts. (Weights are auto-assigned as per GCC 46A rules)
+                        {t('form.bill.classifications_help')}
                       </p>
                       {/* Fetch Previous Classification Button */}
                       {formData.contractId && previousBills.length > 0 && (
@@ -1302,7 +1330,7 @@ function NewBillPageContent() {
                           <div className="flex items-center gap-2">
                             <Info className="h-4 w-4 text-blue-600" />
                             <span className="text-sm text-blue-900">
-                              Load classification from previous bill?
+                              {t('form.bill.load_prev_classification')}
                             </span>
                           </div>
                           <Button
@@ -1314,11 +1342,11 @@ function NewBillPageContent() {
                             className="bg-white hover:bg-blue-100"
                           >
                             {isFetchingClassification ? (
-                              <LoadingSpinner size="sm" text="Loading..." />
+                              <LoadingSpinner size="sm" text={language === 'hi' ? 'लोड हो रहा है...' : 'Loading...'} />
                             ) : (
                               <>
                                 <ArrowRight className="h-4 w-4 mr-1" />
-                                Fetch Classification
+                                {t('form.bill.fetch_classification')}
                               </>
                             )}
                           </Button>
@@ -1346,12 +1374,12 @@ function NewBillPageContent() {
                           <Layers className="h-5 w-5" />
                         </div>
                         <div className="text-left">
-                          <div className="font-semibold text-slate-900">Non-Schedule Items (Optional)</div>
-                          <div className="text-xs text-slate-500">Items not covered under standard schedule</div>
+                          <div className="font-semibold text-slate-900">{t('form.bill.non_schedule')}</div>
+                          <div className="text-xs text-slate-500">{t('form.bill.non_schedule_desc')}</div>
                         </div>
                         {nonScheduleItems.length > 0 && (
                           <Badge variant="secondary" className="ml-auto bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-200">
-                            {nonScheduleItems.length} items
+                            {nonScheduleItems.length} {language === 'hi' ? 'आइटम' : 'items'}
                           </Badge>
                         )}
                       </div>
@@ -1362,10 +1390,10 @@ function NewBillPageContent() {
                         <div className="flex items-center justify-between">
                           <div>
                             <Label className="text-sm font-semibold text-orange-900">
-                              Non-Schedule Items
+                              {t('form.bill.non_schedule')}
                             </Label>
                             <p className="text-xs text-orange-700 mt-0.5">
-                              Items not covered under standard schedule (will be deducted)
+                              {t('form.bill.non_schedule_help')}
                             </p>
                           </div>
                           <Button
@@ -1375,14 +1403,14 @@ function NewBillPageContent() {
                             onClick={() => setNonScheduleItems([...nonScheduleItems, { description: '', amount: '' }])}
                             className="bg-white hover:bg-orange-100 h-8 text-xs"
                           >
-                            + Add
+                            {language === 'hi' ? '+ जोड़ें' : '+ Add'}
                           </Button>
                         </div>
                         
                         {nonScheduleItems.map((item, index) => (
                           <div key={index} className="grid grid-cols-12 gap-2 items-start p-2 bg-white rounded border border-gray-200">
                             <div className="col-span-7">
-                              <Label className="text-xs text-gray-600 mb-1">Description</Label>
+                              <Label className="text-xs text-gray-600 mb-1">{language === 'hi' ? 'विवरण' : 'Description'}</Label>
                               <Input
                                 value={item.description}
                                 onChange={(e) => {
@@ -1390,12 +1418,12 @@ function NewBillPageContent() {
                                   newItems[index].description = e.target.value;
                                   setNonScheduleItems(newItems);
                                 }}
-                                placeholder="e.g., Special materials..."
+                                placeholder={language === 'hi' ? 'जैसे, विशेष सामग्री...' : 'e.g., Special materials...'}
                                 className="h-8 text-xs"
                               />
                             </div>
                             <div className="col-span-4">
-                              <Label className="text-xs text-gray-600 mb-1">Amount (₹)</Label>
+                              <Label className="text-xs text-gray-600 mb-1">{language === 'hi' ? 'राशि (₹)' : 'Amount (₹)'}</Label>
                               <Input
                                 type="number"
                                 step="0.01"
@@ -1428,14 +1456,14 @@ function NewBillPageContent() {
                         
                         {nonScheduleItems.length === 0 && (
                           <p className="text-xs text-gray-600 italic text-center py-2">
-                            No non-schedule items added yet
+                            {t('form.bill.no_non_schedule')}
                           </p>
                         )}
                         
                         {nonScheduleItems.length > 0 && (
                           <div className="flex justify-end pt-2 border-t border-orange-200">
                             <div className="text-right">
-                              <span className="text-xs font-medium text-orange-900">Total Deduction: </span>
+                              <span className="text-xs font-medium text-orange-900">{t('form.bill.total_deduction')}</span>
                               <span className="text-sm font-bold text-orange-700">
                                 -₹{nonScheduleItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                               </span>
@@ -1454,7 +1482,7 @@ function NewBillPageContent() {
                   <div className="text-sm text-slate-500">
                     <p className="flex items-center gap-1.5">
                       <Info className="h-4 w-4 text-slate-400" />
-                      All fields marked with <span className="text-red-500 font-medium">*</span> are required
+                      {t('form.bill.required_fields_info')}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-start gap-3">
@@ -1465,7 +1493,7 @@ function NewBillPageContent() {
                       disabled={isSaving}
                       className="min-w-[100px] rounded-xl h-10 border-slate-200 text-slate-600 hover:bg-slate-50"
                     >
-                      Cancel
+                      {t('form.bill.cancel')}
                     </Button>
                     <div className="flex flex-col items-center gap-1">
                       <Button
@@ -1475,30 +1503,30 @@ function NewBillPageContent() {
                         className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-emerald-500/10 font-semibold h-10"
                       >
                         {isPreviewLoading ? (
-                          <LoadingSpinner size="sm" text="Calculating..." />
+                          <LoadingSpinner size="sm" text={t('form.bill.calculating')} />
                         ) : (
                           <>
                             <Calculator className="h-4 w-4 mr-2" />
-                            Preview PVC
+                            {t('form.bill.preview_pvc')}
                           </>
                         )}
                       </Button>
                       <p className="text-[10px] text-slate-400 text-center max-w-[160px]">
-                        See PVC result free — pay only to generate the bill
+                        {t('form.bill.preview_free_info')}
                       </p>
                     </div>
                     <Button
                       type="submit"
                       disabled={isSaving || !formData.contractId || !formData.billNo || !formData.zone || !formData.dateOfMeasurement || (roQuota?.applicable === true && roQuota.postingComplete === false)}
-                      title={roQuota?.applicable && roQuota.postingComplete === false ? 'Complete your Railway Posting Details first' : undefined}
+                      title={roQuota?.applicable && roQuota.postingComplete === false ? (language === 'hi' ? 'पहले अपनी रेलवे पोस्टिंग विवरण पूरा करें' : 'Complete your Railway Posting Details first') : undefined}
                       className="bg-purple-600 hover:bg-purple-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-purple-500/10 font-semibold h-10 disabled:opacity-50"
                     >
                       {isSaving ? (
-                        <LoadingSpinner size="sm" text="Processing..." />
+                        <LoadingSpinner size="sm" text={t('form.bill.processing')} />
                       ) : (
                         <>
                           <Save className="h-4 w-4 mr-2" />
-                          Process Bill
+                          {t('form.bill.process_bill')}
                         </>
                       )}
                     </Button>
@@ -1520,18 +1548,18 @@ function NewBillPageContent() {
                 <AlertTriangle className="h-6 w-6 text-amber-600" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900">Confirm Before Submitting</h2>
-                <p className="text-sm text-slate-500 mt-0.5">Bills cannot be edited after creation. Please verify all details.</p>
+                <h2 className="text-base font-bold text-slate-900">{t('form.bill.confirm_title')}</h2>
+                <p className="text-sm text-slate-500 mt-0.5">{t('form.bill.confirm_desc')}</p>
               </div>
             </div>
 
             {/* Checklist */}
             <div className="px-6 py-5 space-y-3">
               {[
-                { label: 'Contract', value: contracts.find(c => c.id === formData.contractId)?.agreementNo || '—' },
-                { label: 'Bill No', value: formData.billNo || '—' },
-                { label: 'Zone', value: formData.zone || '—' },
-                { label: 'Date of Measurement', value: formData.dateOfMeasurement || '—' },
+                { label: language === 'hi' ? 'अनुबंध' : 'Contract', value: contracts.find(c => c.id === formData.contractId)?.agreementNo || '—' },
+                { label: language === 'hi' ? 'बिल संख्या' : 'Bill No', value: formData.billNo || '—' },
+                { label: language === 'hi' ? 'क्षेत्र' : 'Zone', value: formData.zone || '—' },
+                { label: language === 'hi' ? 'माप की तिथि' : 'Date of Measurement', value: formData.dateOfMeasurement || '—' },
               ].map(({ label, value }) => (
                 <div key={label} className="flex items-center justify-between text-sm py-2 border-b border-slate-100 last:border-0">
                   <span className="text-slate-500 font-medium">{label}</span>
@@ -1539,7 +1567,7 @@ function NewBillPageContent() {
                 </div>
               ))}
               <p className="text-xs text-red-600 font-semibold pt-1">
-                ⚠ Once submitted, this bill cannot be edited. Delete and recreate if corrections are needed.
+                {t('form.bill.confirm_warning')}
               </p>
             </div>
 
@@ -1549,13 +1577,13 @@ function NewBillPageContent() {
                 onClick={() => setShowConfirmDialog(false)}
                 className="flex-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold py-2.5 transition-colors"
               >
-                Go Back & Review
+                {t('form.bill.go_back_review')}
               </button>
               <button
                 onClick={handleConfirmAndSubmit}
                 className="flex-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2.5 transition-colors"
               >
-                Yes, Submit Bill
+                {t('form.bill.yes_submit')}
               </button>
             </div>
           </div>
@@ -1590,7 +1618,7 @@ function NewBillPageContent() {
               </div>
               
               <div className="space-y-2">
-                <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">Validation Error</h2>
+                <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">{language === 'hi' ? 'सत्यापन त्रुटि' : 'Validation Error'}</h2>
                 <div className="text-sm text-slate-700 max-h-[30vh] overflow-y-auto leading-relaxed text-left bg-slate-50 border border-slate-100 rounded-xl p-4 mt-2 font-semibold whitespace-pre-line shadow-inner">
                   {error}
                 </div>
@@ -1602,7 +1630,7 @@ function NewBillPageContent() {
                 onClick={() => setError('')}
                 className="w-full h-11 bg-slate-950 hover:bg-slate-900 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98]"
               >
-                Understood
+                {language === 'hi' ? 'समझ गए' : 'Understood'}
               </Button>
             </div>
           </Card>
@@ -1615,47 +1643,47 @@ function NewBillPageContent() {
             {/* SAMPLE watermark header */}
             <div className="relative bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-5 text-white">
               <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none select-none">
-                <span className="text-6xl font-black tracking-widest rotate-[-20deg] text-white">SAMPLE</span>
+                <span className="text-6xl font-black tracking-widest rotate-[-20deg] text-white">{language === 'hi' ? 'नमूना' : 'SAMPLE'}</span>
               </div>
               <div className="relative">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-full">Preview — Not for Submission</span>
+                  <span className="text-xs font-bold uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-full">{language === 'hi' ? 'पूर्वावलोकन — सबमिशन के लिए नहीं' : 'Preview — Not for Submission'}</span>
                   {previewResult.isProvisional && (
-                    <span className="text-xs font-bold bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full">Provisional Indices</span>
+                    <span className="text-xs font-bold bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full">{language === 'hi' ? 'अनंतिम सूचकांक' : 'Provisional Indices'}</span>
                   )}
                 </div>
-                <h2 className="text-xl font-black mt-2">PVC Calculation Preview</h2>
-                <p className="text-emerald-100 text-sm">Quarter: {previewResult.quarter}</p>
+                <h2 className="text-xl font-black mt-2">{language === 'hi' ? 'पीवीसी गणना पूर्वावलोकन' : 'PVC Calculation Preview'}</h2>
+                <p className="text-emerald-100 text-sm">{language === 'hi' ? 'तिमाही' : 'Quarter'}: {previewResult.quarter}</p>
               </div>
             </div>
 
             <div className="p-6 space-y-5">
               {/* Total PVC */}
               <div className="text-center py-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wider mb-1">Total PVC Amount</p>
+                <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wider mb-1">{language === 'hi' ? 'कुल पीवीसी राशि' : 'Total PVC Amount'}</p>
                 <p className="text-4xl font-black text-emerald-700">
                   ₹{previewResult.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                 </p>
                 {previewResult.previousCumulativePvc > 0 && (
                   <p className="text-xs text-slate-500 mt-1">
-                    Cumulative PVC: ₹{previewResult.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                    <span className="text-slate-400"> (prev: ₹{previewResult.previousCumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })})</span>
+                    {language === 'hi' ? 'संचयी पीवीसी: ' : 'Cumulative PVC: '}₹{previewResult.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    <span className="text-slate-400"> ({language === 'hi' ? 'पिछला' : 'prev'}: ₹{previewResult.previousCumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })})</span>
                   </p>
                 )}
               </div>
 
               {/* Component breakdown */}
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Component Breakdown</p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{language === 'hi' ? 'घटक विभाजन' : 'Component Breakdown'}</p>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {[
-                    ['Labour', previewResult.components.labourPvc],
-                    ['Plant & Machinery', previewResult.components.plantPvc],
-                    ['Fuel / Power', previewResult.components.fuelPvc],
-                    ['Other Materials', previewResult.components.materialsPvc],
-                    ['Cement', previewResult.components.cementPvc],
-                    ['Steel', previewResult.components.steelPvc],
-                    ['Explosives', previewResult.components.explosivesPvc],
+                    [language === 'hi' ? 'श्रम (लेबर)' : 'Labour', previewResult.components.labourPvc],
+                    [language === 'hi' ? 'संयंत्र और मशीनरी' : 'Plant & Machinery', previewResult.components.plantPvc],
+                    [language === 'hi' ? 'ईंधन / बिजली' : 'Fuel / Power', previewResult.components.fuelPvc],
+                    [language === 'hi' ? 'अन्य सामग्री' : 'Other Materials', previewResult.components.materialsPvc],
+                    [language === 'hi' ? 'सीमेंट' : 'Cement', previewResult.components.cementPvc],
+                    [language === 'hi' ? 'इस्पात (स्टील)' : 'Steel', previewResult.components.steelPvc],
+                    [language === 'hi' ? 'विस्फोटक' : 'Explosives', previewResult.components.explosivesPvc],
                   ].filter(([, v]) => (v as number) !== 0).map(([label, value]) => (
                     <div key={label as string} className="flex justify-between items-center px-3 py-2 bg-slate-50 rounded-lg">
                       <span className="text-slate-600">{label}</span>
@@ -1672,16 +1700,18 @@ function NewBillPageContent() {
                     {previewResult.isFirstBill ? (
                       <>
                         <p className="font-bold text-amber-800 flex items-center gap-1.5">
-                          🎉 Free Trial — your first bill is <span className="text-2xl text-green-700">FREE</span>
+                          🎉 {language === 'hi' ? 'मुफ़्त परीक्षण — आपका पहला बिल है ' : 'Free Trial — your first bill is '}<span className="text-2xl text-green-700">{language === 'hi' ? 'मुफ़्त' : 'FREE'}</span>
                         </p>
                         <p className="text-xs text-amber-600 mt-0.5">
-                          Regular price ₹{previewResult.fullCost}. One-time free trial for new users.
+                          {language === 'hi' 
+                            ? `नियमित मूल्य ₹${previewResult.fullCost}। नए उपयोगकर्ताओं के लिए एक बार का मुफ़्त परीक्षण।`
+                            : `Regular price ₹${previewResult.fullCost}. One-time free trial for new users.`}
                         </p>
                       </>
                     ) : (
                       <>
-                        <p className="font-semibold text-slate-700">Create this bill for <span className="text-xl font-black">₹{previewResult.billCost}</span></p>
-                        <p className="text-xs text-slate-500 mt-0.5">Deducted from your credit wallet</p>
+                        <p className="font-semibold text-slate-700">{language === 'hi' ? 'इस बिल को बनाएं ' : 'Create this bill for '}<span className="text-xl font-black">₹{previewResult.billCost}</span></p>
+                        <p className="text-xs text-slate-500 mt-0.5">{language === 'hi' ? 'आपके क्रेडिट वॉलेट से काटा जाएगा' : 'Deducted from your credit wallet'}</p>
                       </>
                     )}
                   </div>
@@ -1689,20 +1719,24 @@ function NewBillPageContent() {
               </div>
 
               <p className="text-center text-xs text-slate-400">
-                This is a preview. The actual PDF will be generated after you create the bill.
+                {language === 'hi' 
+                  ? 'यह एक पूर्वावलोकन है। वास्तविक पीडीएफ बिल बनाने के बाद तैयार किया जाएगा।'
+                  : 'This is a preview. The actual PDF will be generated after you create the bill.'}
               </p>
             </div>
 
             <div className="flex gap-3 px-6 pb-6">
               <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setShowPreviewModal(false)}>
-                Edit Bill
+                {language === 'hi' ? 'बिल संपादित करें' : 'Edit Bill'}
               </Button>
               <Button
                 className="flex-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold"
                 onClick={() => { setShowPreviewModal(false); (document.querySelector('form') as HTMLFormElement)?.requestSubmit(); }}
               >
                 <Save className="h-4 w-4 mr-2" />
-                {previewResult.isFirstBill ? 'Create Free Trial Bill' : 'Create Bill'}
+                {previewResult.isFirstBill 
+                  ? (language === 'hi' ? 'मुफ़्त परीक्षण बिल बनाएं' : 'Create Free Trial Bill') 
+                  : (language === 'hi' ? 'बिल बनाएं' : 'Create Bill')}
               </Button>
             </div>
           </div>

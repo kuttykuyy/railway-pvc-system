@@ -28,6 +28,7 @@ import {
   type ValidationResult
 } from '@/lib/validation';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
+import { useLanguage } from './i18n-provider';
 
 interface ContractFormProps {
   initialData?: {
@@ -58,6 +59,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { t, language } = useLanguage();
   const [formData, setFormData] = useState({
     agreementNo: initialData?.agreementNo || '',
     loaNo: initialData?.loaNo || '',
@@ -342,8 +344,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 <FileText className="h-5 w-5" />
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-slate-800 text-base">Basic Information</h3>
-                <p className="text-xs text-slate-500 font-normal mt-0.5">Agreement details and work description</p>
+                <h3 className="font-semibold text-slate-800 text-base">{t('form.contract.basic_info')}</h3>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">{t('form.contract.basic_info_desc')}</p>
               </div>
             </div>
           </AccordionTrigger>
@@ -351,19 +353,19 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="agreementNo" className="text-sm font-semibold text-slate-700">
-                  Agreement Number <span className="text-red-500">*</span>
+                  {t('form.contract.agreement_no')} <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="agreementNo"
                   name="agreementNo"
                   value={formData.agreementNo}
                   onChange={handleInputChange}
-                  placeholder="e.g., SR/MAS/Civil/2023/0019"
+                  placeholder={t('form.contract.agreement_no_placeholder')}
                   required
                   className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${fieldErrors.agreementNo ? 'border-red-500 focus:border-red-500' : ''}`}
                 />
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  The unique reference ID assigned to the final signed contract agreement. This is used for all billing and official communications.
+                  {t('form.contract.agreement_no_desc')}
                 </p>
                 {fieldErrors.agreementNo && (
                   <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.agreementNo}</p>
@@ -372,37 +374,37 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
 
               <div className="space-y-2">
                 <Label htmlFor="loaNo" className="text-sm font-semibold text-slate-700">
-                  LOA Number <span className="text-xs font-normal text-slate-500">(Optional)</span>
+                  {t('form.contract.loa_no')} <span className="text-xs font-normal text-slate-500">({language === 'hi' ? 'वैकल्पिक' : 'Optional'})</span>
                 </Label>
                 <Input
                   id="loaNo"
                   name="loaNo"
                   value={formData.loaNo}
                   onChange={handleInputChange}
-                  placeholder="e.g., LOA/2023/Civil/019"
+                  placeholder={t('form.contract.loa_no_placeholder')}
                   className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
                 />
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Letter of Acceptance reference number, issued to the contractor upon bid approval and prior to the signed agreement.
+                  {t('form.contract.loa_no_desc')}
                 </p>
               </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="contractorName" className="text-sm font-semibold text-slate-700">
-                Contractor Name <span className="text-red-500">*</span>
+                {t('form.contract.contractor_name')} <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="contractorName"
                 name="contractorName"
                 value={formData.contractorName}
                 onChange={handleInputChange}
-                placeholder="e.g., V R RADHAKRISHNAN"
+                placeholder={t('form.contract.contractor_name_placeholder')}
                 required
                 className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${fieldErrors.contractorName ? 'border-red-500 focus:border-red-500' : ''}`}
               />
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                The official name of the executing firm, individual, or joint venture (JV) exactly as it appears in the contract documents.
+                {t('form.contract.contractor_name_desc')}
               </p>
               {fieldErrors.contractorName && (
                 <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.contractorName}</p>
@@ -411,39 +413,39 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
 
             <div className="space-y-2">
               <Label htmlFor="contractorPhone" className="text-sm font-semibold text-slate-700">
-                Contractor Phone (for WhatsApp notifications) <span className="text-xs font-normal text-slate-500">(Optional)</span>
+                {t('form.contract.contractor_phone')} <span className="text-xs font-normal text-slate-500">({language === 'hi' ? 'वैकल्पिक' : 'Optional'})</span>
               </Label>
               <Input
                 id="contractorPhone"
                 name="contractorPhone"
                 value={formData.contractorPhone}
                 onChange={handleInputChange}
-                placeholder="e.g., 9876543210"
+                placeholder={t('form.contract.contractor_phone_placeholder')}
                 type="tel"
                 maxLength={10}
                 className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
               />
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                📱 Enter the contractor's 10-digit mobile number to automatically send generated bill PDFs and PVC calculation worksheets directly to them via WhatsApp.
+                {t('form.contract.contractor_phone_desc')}
               </p>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="workDescription" className="text-sm font-semibold text-slate-700">
-                Work Description <span className="text-red-500">*</span>
+                {t('form.contract.work_desc')} <span className="text-red-500">*</span>
               </Label>
               <Textarea
                 id="workDescription"
                 name="workDescription"
                 value={formData.workDescription}
                 onChange={handleInputChange}
-                placeholder="e.g., MS-VM section (CTR(P)) - 9.065 km"
+                placeholder={t('form.contract.work_desc_placeholder')}
                 rows={3}
                 required
                 className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-none ${fieldErrors.workDescription ? 'border-red-500 focus:border-red-500' : ''}`}
               />
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                A brief description of the scope of work (e.g. sections, lines, track distance, or bridge numbers) for record keeping.
+                {t('form.contract.work_desc_desc')}
               </p>
               {fieldErrors.workDescription && (
                 <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.workDescription}</p>
@@ -460,8 +462,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 <IndianRupee className="h-5 w-5" />
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-slate-800 text-base">Financial Details</h3>
-                <p className="text-xs text-slate-500 font-normal mt-0.5">Contract values and PVC eligibility</p>
+                <h3 className="font-semibold text-slate-800 text-base">{t('form.contract.financial_details')}</h3>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">{t('form.contract.financial_details_desc')}</p>
               </div>
             </div>
           </AccordionTrigger>
@@ -470,8 +472,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
               <div className="flex items-start gap-2.5">
                 <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-slate-600 space-y-1">
-                  <p className="font-semibold text-slate-800 text-sm">GCC Clause 46A.1 - PVC Applicability Criteria</p>
-                  <p className="leading-relaxed">Price Variation Clause (PVC) is applicable only if the tender advertised value exceeds <strong>₹2 Crores</strong> and the contract completion period is greater than <strong>12 months</strong>.</p>
+                  <p className="font-semibold text-slate-800 text-sm">{t('form.contract.pvc_rules_title')}</p>
+                  <p className="leading-relaxed">{t('form.contract.pvc_rules_text')}</p>
                 </div>
               </div>
             </div>
@@ -480,7 +482,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="tenderAdvertisedValue" className="text-sm font-semibold text-slate-700">
-                    Tender Advertised Value (₹) <span className="text-xs font-normal text-slate-500">(Optional)</span>
+                    {t('form.contract.tender_value')} <span className="text-xs font-normal text-slate-500">({language === 'hi' ? 'वैकल्पिक' : 'Optional'})</span>
                   </Label>
                   <BillAmountCalculator
                     onInsertTotal={(total) => {
@@ -503,11 +505,11 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   step="0.01"
                   value={formData.tenderAdvertisedValue}
                   onChange={handleInputChange}
-                  placeholder="e.g., 25000000 (2.5 Crores)"
+                  placeholder={t('form.contract.tender_value_placeholder')}
                   className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-green-500 focus:ring-1 focus:ring-green-500 transition-all ${fieldErrors.tenderAdvertisedValue ? 'border-red-500 focus:border-red-500' : ''}`}
                 />
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  The estimated project value listed in the tender notice. Under GCC Clause 46A.1, this value must exceed ₹2 Crores for PVC to be applicable.
+                  {t('form.contract.tender_value_desc')}
                 </p>
                 {fieldErrors.tenderAdvertisedValue && (
                   <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.tenderAdvertisedValue}</p>
@@ -517,7 +519,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="contractValue" className="text-sm font-semibold text-slate-700">
-                    Agreement Value (₹) <span className="text-xs font-normal text-slate-500">(Optional)</span>
+                    {t('form.contract.agreement_value')} <span className="text-xs font-normal text-slate-500">({language === 'hi' ? 'वैकल्पिक' : 'Optional'})</span>
                   </Label>
                   <BillAmountCalculator
                     onInsertTotal={(total) => {
@@ -540,11 +542,11 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   step="0.01"
                   value={formData.contractValue}
                   onChange={handleInputChange}
-                  placeholder="e.g., 24500000 (2.45 Crores)"
+                  placeholder={t('form.contract.agreement_value_placeholder')}
                   className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-green-500 focus:ring-1 focus:ring-green-500 transition-all ${fieldErrors.contractValue ? 'border-red-500 focus:border-red-500' : ''}`}
                 />
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  The final accepted agreement value after bid evaluation. Used as the baseline for all subsequent bills and percentage variations.
+                  {t('form.contract.agreement_value_desc')}
                 </p>
                 {fieldErrors.contractValue && (
                   <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.contractValue}</p>
@@ -570,8 +572,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                       pvcEligibility.isEligible ? 'text-emerald-900' : 'text-amber-905'
                     }`}>
                       {pvcEligibility.isEligible 
-                        ? 'Price Variation Clause (PVC) is Applicable' 
-                        : 'PVC May Not Be Applicable'}
+                        ? t('form.contract.pvc_applicable') 
+                        : t('form.contract.pvc_not_applicable')}
                     </p>
                     <p className={`text-xs mt-1 leading-relaxed ${
                       pvcEligibility.isEligible ? 'text-emerald-700' : 'text-amber-700'
@@ -603,15 +605,15 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 <Clock className="h-5 w-5" />
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-slate-800 text-base">Project Timeline</h3>
-                <p className="text-xs text-slate-500 font-normal mt-0.5">Duration and key dates</p>
+                <h3 className="font-semibold text-slate-800 text-base">{t('form.contract.timeline')}</h3>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">{t('form.contract.timeline_desc')}</p>
               </div>
             </div>
           </AccordionTrigger>
           <AccordionContent className="pt-2 pb-5 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="completionPeriodMonths" className="text-sm font-semibold text-slate-700">
-                Completion Period (Months) <span className="text-xs font-normal text-slate-500">(Optional)</span>
+                {t('form.contract.completion_period')} <span className="text-xs font-normal text-slate-500">({language === 'hi' ? 'वैकल्पिक' : 'Optional'})</span>
               </Label>
               <Input
                 id="completionPeriodMonths"
@@ -620,11 +622,11 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 min="1"
                 value={formData.completionPeriodMonths}
                 onChange={handleInputChange}
-                placeholder="e.g., 18"
+                placeholder={t('form.contract.completion_period_placeholder')}
                 className={`max-w-sm bg-slate-50/50 border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${fieldErrors.completionPeriodMonths ? 'border-red-500 focus:border-red-500' : ''}`}
               />
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                The total period allowed for contract execution. Under GCC Clause 46A.1, PVC applies only to contracts with a completion period greater than 12 months.
+                {t('form.contract.completion_period_desc')}
               </p>
               {fieldErrors.completionPeriodMonths && (
                 <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.completionPeriodMonths}</p>
@@ -634,7 +636,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
             <div className="space-y-2">
               <Label htmlFor="dateOfOpening" className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
-                Date of Opening <span className="text-red-500">*</span>
+                {t('form.contract.date_opening')} <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="dateOfOpening"
@@ -646,20 +648,19 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 className={`max-w-sm bg-slate-50/50 border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${fieldErrors.dateOfOpening ? 'border-red-500 focus:border-red-500' : ''}`}
               />
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                The tender opening date (or bid submission deadline date). This is required.
+                {t('form.contract.date_opening_desc')}
               </p>
               {fieldErrors.dateOfOpening && (
                 <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.dateOfOpening}</p>
               )}
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mt-2">
                 <p className="text-xs text-slate-650 leading-relaxed">
-                  <span className="font-semibold text-slate-700">Auto-calculation:</span> The base month for PVC index calculations will be set automatically to <strong>one month prior</strong> to this opening month (as per GCC Clause 46A.2).
+                  <span className="font-semibold text-slate-700">{t('form.contract.auto_calc_title')}</span> {t('form.contract.auto_calc_desc')}
                 </p>
               </div>
             </div>
           </AccordionContent>
         </AccordionItem>
-
 
         {/* Schedules Section */}
         <AccordionItem value="schedules" className="border border-slate-200 bg-white rounded-xl shadow-sm hover:shadow transition-all duration-200 px-5">
@@ -669,12 +670,12 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 <ListOrdered className="h-5 w-5" />
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-slate-800 text-base">Schedules</h3>
-                <p className="text-xs text-slate-500 font-normal mt-0.5">Add schedule items for this contract</p>
+                <h3 className="font-semibold text-slate-800 text-base">{t('form.contract.schedules')}</h3>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">{t('form.contract.schedules_desc')}</p>
               </div>
               {schedules.length > 0 && (
                 <span className="ml-auto mr-2 text-xs bg-violet-50 text-violet-750 px-2.5 py-0.5 rounded-full font-semibold border border-violet-100">
-                  {schedules.length} items
+                  {language === 'hi' ? `${schedules.length} आइटम` : `${schedules.length} items`}
                 </span>
               )}
             </div>
@@ -684,7 +685,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
               <div className="flex items-start gap-2.5">
                 <Info className="h-5 w-5 text-violet-600 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-slate-650">
-                  <p className="leading-relaxed">Add contract schedules (e.g. Schedule A, Schedule B) here. These will appear as selection dropdowns during bill creation, making it simple to link individual billing items to the correct schedule.</p>
+                  <p className="leading-relaxed">{t('form.contract.schedules_help')}</p>
                 </div>
               </div>
             </div>
@@ -692,7 +693,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
             {/* Schedules */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-sm font-semibold text-slate-700">Schedules</Label>
+                <Label className="text-sm font-semibold text-slate-700">{t('form.contract.schedules')}</Label>
                 <Button
                   type="button"
                   variant="outline"
@@ -701,7 +702,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   className="h-8 text-xs bg-white border-slate-200 text-slate-700 hover:bg-violet-50 hover:text-violet-750 transition-colors"
                 >
                   <Plus className="h-3 w-3 mr-1" />
-                  Add Schedule
+                  {t('form.contract.add_schedule')}
                 </Button>
               </div>
               {schedules.map((schedule, index) => (
@@ -714,7 +715,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                       newSchedules[index] = e.target.value;
                       setSchedules(newSchedules);
                     }}
-                    placeholder={`e.g., Schedule ${String.fromCharCode(65 + index)} - Earthwork`}
+                    placeholder={language === 'hi' ? `जैसे, अनुसूची ${String.fromCharCode(65 + index)} - मिट्टी का काम` : `e.g., Schedule ${String.fromCharCode(65 + index)} - Earthwork`}
                     className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all flex-1"
                   />
                   <Button
@@ -729,7 +730,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 </div>
               ))}
               {schedules.length === 0 && (
-                <p className="text-xs text-slate-400 italic text-center py-2">No schedules added yet</p>
+                <p className="text-xs text-slate-400 italic text-center py-2">{t('form.contract.no_schedules')}</p>
               )}
             </div>
           </AccordionContent>
@@ -743,8 +744,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 <Mail className="h-5 w-5" />
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-slate-800 text-base">Covering Letter Details</h3>
-                <p className="text-xs text-slate-500 font-normal mt-0.5">Information for covering letter generation</p>
+                <h3 className="font-semibold text-slate-800 text-base">{t('form.contract.covering_letter')}</h3>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">{t('form.contract.covering_letter_desc')}</p>
               </div>
             </div>
           </AccordionTrigger>
@@ -753,8 +754,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
               <div className="flex items-start gap-2.5">
                 <Info className="h-5 w-5 text-teal-600 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-slate-650">
-                  <p className="font-semibold text-slate-800 mb-0.5">Automated Bill Submission Letters</p>
-                  <p className="leading-relaxed">Organization and division details will be automatically extracted from the agreement number to generate printable PDF covering letters for bill submissions.</p>
+                  <p className="font-semibold text-slate-800 mb-0.5">{t('form.contract.cov_letter_help_title')}</p>
+                  <p className="leading-relaxed">{t('form.contract.cov_letter_help_text')}</p>
                 </div>
               </div>
             </div>
@@ -762,25 +763,25 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="coveringLetterDesignation" className="text-sm font-semibold text-slate-700">
-                  Designation <span className="text-xs font-normal text-slate-500">(Optional)</span>
+                  {t('form.contract.designation')} <span className="text-xs font-normal text-slate-500">({language === 'hi' ? 'वैकल्पिक' : 'Optional'})</span>
                 </Label>
                 <Input
                   id="coveringLetterDesignation"
                   name="coveringLetterDesignation"
                   value={formData.coveringLetterDesignation}
                   onChange={handleInputChange}
-                  placeholder="e.g., Sr. Divisional Engineer/Con/MAS"
+                  placeholder={t('form.contract.designation_placeholder')}
                   className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all"
                 />
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  The formal designation of the railway official to whom the bill covering letter is addressed (e.g., Sr. Divisional Engineer/Con/MAS).
+                  {t('form.contract.designation_desc')}
                 </p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="loaDate" className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
-                  LOA Date <span className="text-xs font-normal text-slate-500">(Optional)</span>
+                  {t('form.contract.loa_date')} <span className="text-xs font-normal text-slate-500">({language === 'hi' ? 'वैकल्पिक' : 'Optional'})</span>
                 </Label>
                 <Input
                   id="loaDate"
@@ -791,7 +792,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all"
                 />
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  The date when the Letter of Acceptance (LOA) was officially signed or issued.
+                  {t('form.contract.loa_date_desc')}
                 </p>
               </div>
             </div>
@@ -806,8 +807,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 <Package className="h-5 w-5" />
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-slate-800 text-base">Railway Materials & Compliance</h3>
-                <p className="text-xs text-slate-500 font-normal mt-0.5">Materials supplied by Railway</p>
+                <h3 className="font-semibold text-slate-800 text-base">{language === 'hi' ? 'रेलवे सामग्री और अनुपालन' : 'Railway Materials & Compliance'}</h3>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">{language === 'hi' ? 'रेलवे द्वारा आपूर्ति की गई सामग्री' : 'Materials supplied by Railway'}</p>
               </div>
             </div>
           </AccordionTrigger>
@@ -816,8 +817,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
               <div className="flex items-start gap-2.5">
                 <Info className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-slate-600">
-                  <p className="font-semibold text-slate-800 mb-0.5">GCC Clause 46A.1 Material Exclusion Rule</p>
-                  <p className="leading-relaxed">The cost of materials supplied by the Railway (either free-of-cost or at fixed rates) must be deducted/excluded from billing values for PVC calculation purposes.</p>
+                  <p className="font-semibold text-slate-800 mb-0.5">{language === 'hi' ? 'जीसीसी क्लॉज 46ए.1 सामग्री बहिष्करण नियम' : 'GCC Clause 46A.1 Material Exclusion Rule'}</p>
+                  <p className="leading-relaxed">{language === 'hi' ? 'रेलवे द्वारा आपूर्ति की गई सामग्री की लागत (या तो मुफ्त या निश्चित दरों पर) को पीवीसी गणना के लिए बिलिंग मानों से घटाया/बाहर किया जाना चाहिए।' : 'The cost of materials supplied by the Railway (either free-of-cost or at fixed rates) must be deducted/excluded from billing values for PVC calculation purposes.'}</p>
                 </div>
               </div>
             </div>
@@ -834,26 +835,26 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   htmlFor="hasRailwaySuppliedMaterials"
                   className="text-sm font-semibold text-slate-700 cursor-pointer"
                 >
-                  Materials supplied by Railway (excluded from PVC as per GCC 46A.1)
+                  {language === 'hi' ? 'रेलवे द्वारा आपूर्ति की गई सामग्री (जीसीसी 46ए.1 के अनुसार पीवीसी से बाहर)' : 'Materials supplied by Railway (excluded from PVC as per GCC 46A.1)'}
                 </Label>
               </div>
 
               {formData.hasRailwaySuppliedMaterials && (
                 <div className="space-y-2 ml-6 p-4 bg-slate-50/50 rounded-xl border border-slate-150">
                   <Label htmlFor="railwaySuppliedMaterialsNote" className="text-sm font-semibold text-slate-700">
-                    Details of Railway-Supplied Materials
+                    {language === 'hi' ? 'रेलवे-आपूर्ति की गई सामग्री का विवरण' : 'Details of Railway-Supplied Materials'}
                   </Label>
                   <Textarea
                     id="railwaySuppliedMaterialsNote"
                     name="railwaySuppliedMaterialsNote"
                     value={formData.railwaySuppliedMaterialsNote}
                     onChange={handleInputChange}
-                    placeholder="e.g., Steel rails supplied free of cost, Cement at fixed rate"
+                    placeholder={language === 'hi' ? 'जैसे, स्टील रेल मुफ्त आपूर्ति, निश्चित दर पर सीमेंट' : 'e.g., Steel rails supplied free of cost, Cement at fixed rate'}
                     rows={3}
                     className="text-xs bg-white border-slate-200 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all resize-none"
                   />
                   <p className="text-xs text-slate-500 leading-relaxed mt-1">
-                    Describe the materials, quantities, or conditions under which Railway supplies these items to ensure accurate auditing.
+                    {language === 'hi' ? 'सटीक ऑडिटिंग सुनिश्चित करने के लिए उन सामग्रियों, मात्राओं या शर्तों का वर्णन करें जिनके तहत रेलवे इन वस्तुओं की आपूर्ति करता है।' : 'Describe the materials, quantities, or conditions under which Railway supplies these items to ensure accurate auditing.'}
                   </p>
                 </div>
               )}
@@ -871,7 +872,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
           disabled={isLoading}
           className="border-slate-250 text-slate-600 hover:bg-slate-50 rounded-xl px-6"
         >
-          Cancel
+          {t('form.bill.cancel')}
         </Button>
         <Button
           type="submit"
@@ -879,11 +880,11 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
           className="bg-blue-600 hover:bg-blue-750 text-white font-semibold shadow-md shadow-blue-500/10 rounded-xl px-6"
         >
           {isLoading ? (
-            <LoadingSpinner size="sm" text={isEdit ? "Updating..." : "Creating..."} />
+            <LoadingSpinner size="sm" text={isEdit ? (language === 'hi' ? 'अपडेट किया जा रहा है...' : 'Updating...') : (language === 'hi' ? 'बनाया जा रहा है...' : 'Creating...')} />
           ) : (
             <>
               <Save className="h-4 w-4 mr-2" />
-              {isEdit ? 'Update Contract' : 'Create Contract'}
+              {isEdit ? (language === 'hi' ? 'अनुबंध अपडेट करें' : 'Update Contract') : (language === 'hi' ? 'अनुबंध बनाएं' : 'Create Contract')}
             </>
           )}
         </Button>
