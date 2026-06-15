@@ -193,6 +193,9 @@ export async function POST(request: NextRequest) {
       }, { status: 402 });
     }
 
+    let isBillFree = paymentValidation.isFree;
+    let calculatedBillCost = paymentValidation.requiredPayment || 0;
+
     // ===== STEP 2B: Railway Official checks =====
     if (user!.role === 'railway_official') {
       // 1. Posting details must be complete
@@ -306,7 +309,7 @@ export async function POST(request: NextRequest) {
     // ===== STEP 4B: Block trial if this agreement number already claimed globally =====
     // Only applies to actual trial users — not admins, railway officials, or free accounts
     const isActualTrialBill =
-      paymentValidation.isFree &&
+      isBillFree &&
       user.isTrialActive &&
       user.role !== 'admin' &&
       user.role !== 'superadmin' &&
@@ -321,12 +324,29 @@ export async function POST(request: NextRequest) {
           where: { normalizedAgreementNo: normalizedNo }
         });
         if (alreadyClaimed) {
-          return NextResponse.json({
-            error: 'Payment required',
-            reason: 'A free trial has already been used for this Agreement Number. Please add credits to continue.',
-            requiredPayment: null,
-            isFree: false
-          }, { status: 402 });
+          // Agreement has already claimed a free trial.
+          // Check if this user has enough credit balance to pay for the bill instead of using a trial.
+          const currentBalance = user.customerAccount?.creditBalance || 0;
+          const userBillCount = await prisma.bill.count({ where: { contract: { userId: user.id } } });
+          const isFirstBill = userBillCount === 0;
+          
+          const billingSettings = await getBillingSettings();
+          const fullCost = billingSettings.billCost || 199;
+          const costToCharge = isFirstBill ? 99 : fullCost;
+
+          if (currentBalance >= costToCharge) {
+            // User can afford the bill, downgrade from free trial to paid bill
+            isBillFree = false;
+            calculatedBillCost = costToCharge;
+            logger.log(`⚠️ Agreement ${contract.agreementNo} already claimed a trial globally. User has ₹${currentBalance} credits, charging ₹${costToCharge} instead of free trial.`);
+          } else {
+            return NextResponse.json({
+              error: 'Payment required',
+              reason: 'A free trial has already been used for this Agreement Number. Please add credits to continue.',
+              requiredPayment: costToCharge,
+              isFree: false
+            }, { status: 402 });
+          }
         }
       }
     }
@@ -408,9 +428,6 @@ export async function POST(request: NextRequest) {
     logger.log('🔍 ===== STEEL TYPES EXTRACTED =====\n');
     
     // ===== STEP 9: Create Bill Record with Steel Types =====
-    const billingSettings = await getBillingSettings();
-    const billCost = billingSettings.billCost || 199; // Default matches BILL_PROCESSING_COST in admin settings
-    
     const bill = await prisma.bill.create({
       data: {
         contractId,
@@ -431,8 +448,8 @@ export async function POST(request: NextRequest) {
         isFinalPvc: isFinalPvc || false,
         dateOfCompletion: dateOfCompletion ? new Date(dateOfCompletion) : null,
         nonScheduleItems: nonScheduleItems || [],
-        isChargeable: !paymentValidation.isFree,
-        processingFee: paymentValidation.isFree ? 0 : billCost,
+        isChargeable: !isBillFree,
+        processingFee: isBillFree ? 0 : calculatedBillCost,
         subClassifications: []
       }
     });
@@ -660,7 +677,7 @@ export async function POST(request: NextRequest) {
     const { processPaymentForBill } = await import('@/lib/payment-validation');
     
     // Apply PVC check credit to bill processing fee
-    const billProcessingFee = paymentValidation.requiredPayment || 0;
+    const billProcessingFee = isBillFree ? 0 : calculatedBillCost;
     const finalBillAmount = Math.max(0, billProcessingFee - pvcCheckCredit);
     
     if (pvcCheckCredit > 0) {
@@ -670,7 +687,7 @@ export async function POST(request: NextRequest) {
     const paymentResult = await processPaymentForBill(
       user.id,
       bill.id,
-      paymentValidation.isFree ? 'free_account' : 'credit_balance',
+      isBillFree ? 'free_account' : 'credit_balance',
       undefined, // No payment reference for automatic processing
       undefined, // No Razorpay data
       finalBillAmount,
