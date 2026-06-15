@@ -25,6 +25,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     pathname === '/terms' ||
     pathname === '/refund' ||
     pathname === '/contact' ||
+    pathname === '/payment-guide' ||
     pathname === '/help';
 
   const showAds = AD_ELIGIBLE_PAGES.includes(pathname || '');

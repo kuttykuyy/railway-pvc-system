@@ -1,22 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
-  Gift, 
+  Building2, 
+  Mail, 
+  Phone, 
+  CreditCard, 
+  IndianRupee, 
+  Loader2, 
   CheckCircle, 
-  Zap,
-  FileText,
-  Phone,
-  User,
-  CreditCard,
-  IndianRupee,
-  Loader2
+  FileText, 
+  Clock 
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { BackButton } from '@/components/ui/back-button';
 
 interface BillingSettings {
@@ -30,7 +28,6 @@ interface BillingSettings {
 }
 
 export default function PaymentGuidePage() {
-  const router = useRouter();
   const [billingSettings, setBillingSettings] = useState<BillingSettings | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -56,141 +53,178 @@ export default function PaymentGuidePage() {
     ? 0 
     : billingSettings?.customProcessingFee !== null && billingSettings?.customProcessingFee !== undefined
       ? billingSettings.customProcessingFee
-      : billingSettings?.billCost || 199; // Default matches BILL_PROCESSING_COST in admin settings
+      : billingSettings?.billCost || 199;
 
   const freeTrialText = billingSettings?.freeTrialBills === 1 
-    ? 'First 1 bill is free' 
-    : `First ${billingSettings?.freeTrialBills || 1} bills are free`;
+    ? 'First 1 bill is free (Trial Active)' 
+    : `First ${billingSettings?.freeTrialBills || 1} bills are free (Trial Active)`;
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50">
-      {/* Header */}
-      <div className="bg-white/80 backdrop-blur-sm border-b sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <BackButton href="/" variant="ghost" label="Back" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Credit Top-up Guide</h1>
-                <p className="text-gray-600">How to add credits for Railway PVC bill processing</p>
-              </div>
-            </div>
-            <Link href="/bills/new">
-              <Button className="bg-gradient-to-r from-blue-600 to-orange-600 hover:from-blue-700 hover:to-orange-700">
-                <Zap className="h-4 w-4 mr-2" />
-                Process Bill
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
+    <div className="relative min-h-screen pb-16 space-y-8 overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
+      {/* Decorative Light Backdrops */}
+      <div className="absolute top-0 right-10 w-96 h-96 bg-blue-300/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute top-1/3 -left-20 w-80 h-80 bg-indigo-300/10 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-10 right-20 w-[450px] h-[450px] bg-purple-300/5 blur-[150px] rounded-full pointer-events-none" />
 
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* Contact Information */}
-        <Card className="mb-8 border-0 shadow-lg bg-gradient-to-r from-blue-50 to-indigo-50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-3 text-blue-800 text-xl">
-              <Phone className="h-6 w-6" />
-              Contact for Credit Top-up
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-white p-6 rounded-lg border border-blue-200">
-              <div className="flex items-center gap-4 mb-4">
-                <User className="h-6 w-6 text-blue-600" />
-                <div>
-                  <div className="text-xl font-bold text-gray-900">Prasath Kumar</div>
-                  <div className="text-gray-600">System Administrator</div>
+      <div className="container mx-auto px-4 py-8 max-w-4xl relative z-10 space-y-8">
+        <BackButton href="/contact" variant="outline" className="mb-4 border-slate-200/80 bg-white/80 hover:bg-slate-50 text-slate-600 hover:text-slate-800" />
+        
+        <Card className="border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl overflow-hidden">
+          <CardHeader className="p-8 sm:p-10 border-b border-slate-100 bg-gradient-to-r from-blue-500/5 to-indigo-500/5">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-blue-50 border border-blue-100 rounded-2xl text-blue-600">
+                <CreditCard className="h-7 w-7" />
+              </div>
+              <div>
+                <CardTitle className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                  Credit Top-up Guide
+                </CardTitle>
+                <div className="flex items-center gap-2 text-xs text-slate-400 mt-1 font-medium">
+                  <Clock className="h-3.5 w-3.5 text-slate-400" />
+                  Instant Account Recharge
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <Phone className="h-6 w-6 text-green-600" />
-                <a 
-                  href="tel:+919944776689" 
-                  className="text-xl font-semibold text-green-700 hover:text-green-800 hover:underline transition-colors"
-                >
-                  +91 9944776689
-                </a>
+            </div>
+          </CardHeader>
+          
+          <CardContent className="p-8 sm:p-10 prose prose-slate max-w-none space-y-8 text-slate-600 leading-relaxed text-sm sm:text-base">
+            <section className="space-y-4">
+              <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
+                <span className="w-1.5 h-5 bg-blue-500 rounded-full" />
+                1. Contact Division Administrator
+              </h3>
+              <p>
+                To process bills beyond the initial free trial limit, coordinate directly with our Tiruchirappalli Division Administrator to add prepaid credits to your account.
+              </p>
+
+              <div className="p-6 bg-slate-50/60 border border-slate-100 rounded-2xl max-w-md space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
+                    <Building2 className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 font-light">Division Administrator</p>
+                    <p className="text-sm font-bold text-slate-800">Prasath Kumar</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
+                    <Phone className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 font-light">Official Phone</p>
+                    <a href="tel:+919944776689" className="text-sm font-bold text-indigo-600 hover:underline">+91 9944776689</a>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
+                    <Mail className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 font-light">Email Address</p>
+                    <a href="mailto:admin@irpvc.in" className="text-sm font-bold text-emerald-600 hover:underline">admin@irpvc.in</a>
+                  </div>
+                </div>
               </div>
+            </section>
+
+            <section className="space-y-4">
+              <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
+                <span className="w-1.5 h-5 bg-blue-500 rounded-full" />
+                2. Pricing & Account Settings
+              </h3>
+              <p>
+                Credits are applied on a pay-as-you-go basis for every bill processed.
+              </p>
+
+              <div className="grid md:grid-cols-2 gap-6 pt-2">
+                <div className="p-5 bg-slate-50/60 border border-slate-100 rounded-2xl space-y-2">
+                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                    <IndianRupee className="h-4 w-4 text-blue-500" /> Current Plan Rate
+                  </h4>
+                  {loading ? (
+                    <div className="flex items-center gap-2 text-slate-400 py-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                      <span className="text-xs">Loading billing details...</span>
+                    </div>
+                  ) : billingSettings?.isFreeAccount ? (
+                    <div className="space-y-1">
+                      <p className="text-sm font-extrabold text-emerald-600">Free Account Tier</p>
+                      <p className="text-xs text-slate-500 font-light">Unlimited bills. No processing fees.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="text-sm font-extrabold text-slate-800">
+                        ₹{effectiveBillCost.toLocaleString()} <span className="text-xs text-slate-500 font-light">/ bill</span>
+                      </p>
+                      <p className="text-xs text-slate-500 font-light">{freeTrialText}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-5 bg-slate-50/60 border border-slate-100 rounded-2xl space-y-2">
+                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                    <CheckCircle className="h-4 w-4 text-emerald-500" /> What is Included
+                  </h4>
+                  <ul className="list-disc pl-4 space-y-1 text-xs text-slate-500">
+                    <li>Full PVC calculations (GCC compliant)</li>
+                    <li>Detailed Excel & PDF report generation</li>
+                    <li>Automatic price index lookups</li>
+                    <li>No monthly commitment or hidden fees</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
+                <span className="w-1.5 h-5 bg-blue-500 rounded-full" />
+                3. Simple Recharge Steps
+              </h3>
+              <p>
+                Follow this quick procedure to top-up your credit balance:
+              </p>
+
+              <div className="p-6 bg-slate-50/60 border border-slate-100 rounded-2xl">
+                <ol className="space-y-4 text-sm">
+                  {[
+                    { step: 1, title: 'Initiate Contact', desc: 'Call +91 9944776689 or email admin@irpvc.in to request credits.' },
+                    { step: 2, title: 'Provide Account Details', desc: 'Mention your registered account name and email address.' },
+                    { step: 3, title: 'Complete Payment', desc: 'Send payment via bank transfer or UPI as instructed by the administrator.' },
+                    { step: 4, title: 'Confirmation', desc: 'Once verified, your credits will be added to your balance immediately.' },
+                  ].map((item) => (
+                    <li key={item.step} className="flex gap-4">
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center text-xs font-black">
+                        {item.step}
+                      </div>
+                      <div className="space-y-0.5">
+                        <h5 className="font-bold text-slate-800 text-sm">{item.title}</h5>
+                        <p className="text-xs text-slate-500 font-light">{item.desc}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </section>
+
+            <div className="flex flex-wrap gap-4 pt-4 border-t border-slate-100 justify-end">
+              <Link href="/bills/new">
+                <Button variant="outline" className="border-slate-200 text-slate-700 hover:bg-slate-50 font-bold px-6 py-2.5 rounded-xl transition-all">
+                  <FileText className="h-4.5 w-4.5 mr-2" />
+                  Process Bills
+                </Button>
+              </Link>
+              <a href="tel:+919944776689">
+                <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold px-6 py-2.5 rounded-xl shadow-md transition-all">
+                  <Phone className="h-4.5 w-4.5 mr-2" />
+                  Call for Top-up
+                </Button>
+              </a>
             </div>
           </CardContent>
         </Card>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="border-amber-200 bg-amber-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-amber-800">
-                <IndianRupee className="h-5 w-5" />
-                Billing Information
-              </CardTitle>
-              <CardDescription className="text-amber-700">
-                Credit system pricing and trial details
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-5 w-5 animate-spin text-amber-600" />
-                </div>
-              ) : (
-                <ul className="space-y-2 text-amber-700">
-                  {billingSettings?.isFreeAccount ? (
-                    <>
-                      <li>• <strong>Free Account</strong> - unlimited bills</li>
-                      <li>• No processing fees</li>
-                    </>
-                  ) : (
-                    <>
-                      <li>• {freeTrialText} (trial)</li>
-                      <li>• ₹{effectiveBillCost.toLocaleString()} per bill after trial</li>
-                    </>
-                  )}
-                  <li>• Contact required for top-up</li>
-                  <li>• Full PVC calculations included</li>
-                  <li>• Detailed PDF reports included</li>
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-blue-200 bg-blue-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-blue-800">
-                <CreditCard className="h-5 w-5" />
-                How to Top-up Credits
-              </CardTitle>
-              <CardDescription className="text-blue-700">
-                Simple steps to add credits
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ol className="space-y-2 text-blue-700">
-                <li>1. Call +91 9944776689</li>
-                <li>2. Speak with Prasath Kumar</li>
-                <li>3. Mention your account details</li>
-                <li>4. Make payment as instructed</li>
-                <li>5. Credits will be added promptly</li>
-              </ol>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="text-center mt-8 space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a href="tel:+919944776689">
-              <Button size="lg" className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700">
-                <Phone className="h-5 w-5 mr-2" />
-                Call for Credit Top-up
-              </Button>
-            </a>
-            <Link href="/bills/new">
-              <Button size="lg" variant="outline" className="border-2">
-                <FileText className="h-5 w-5 mr-2" />
-                Process Bills
-              </Button>
-            </Link>
-          </div>
-        </div>
       </div>
     </div>
   );

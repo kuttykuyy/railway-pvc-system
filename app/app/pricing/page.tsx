@@ -27,115 +27,62 @@ export default function PricingPage() {
             Simple, Transparent Pricing
           </h1>
           <p className="text-sm sm:text-base text-slate-500 font-normal">
-            Choose the volume that fits your railway contract management. Pay only for what you process, with deep discounts for higher volumes.
+            Pay only for what you process with a simple flat-rate credit system. Start with a free trial on your first bill.
           </p>
         </div>
 
         {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto pt-4">
-          {[
-            { 
-              title: 'Standard Volume', 
-              cost: '199', 
-              desc: 'For 1 to 5 bills per day', 
-              detail: 'Base rate billing', 
-              highlight: false, 
-              border: 'border-slate-100 hover:border-blue-200',
-              icon: Zap,
-              iconColor: 'text-indigo-600 bg-indigo-50 border-indigo-100'
-            },
-            { 
-              title: 'Medium Volume', 
-              cost: '159', 
-              desc: 'For 6 to 10 bills per day', 
-              detail: '20% volume discount', 
-              highlight: true, 
-              border: 'border-blue-200 ring-4 ring-blue-100/50',
-              icon: Building2,
-              iconColor: 'text-blue-600 bg-blue-50 border-blue-100'
-            },
-            { 
-              title: 'High Volume', 
-              cost: '119', 
-              desc: 'For 11+ bills per day', 
-              detail: '40% volume discount', 
-              highlight: false, 
-              border: 'border-slate-100 hover:border-indigo-200',
-              icon: Crown,
-              iconColor: 'text-purple-600 bg-purple-50 border-purple-100'
-            },
-          ].map((tier, idx) => {
-            const IconComp = tier.icon;
-            return (
-              <Card 
-                key={idx} 
-                className={`flex flex-col justify-between border ${tier.border} rounded-3xl transition-all duration-300 relative overflow-hidden ${
-                  tier.highlight 
-                    ? 'bg-gradient-to-b from-blue-50/50 to-white shadow-[0_20px_50px_rgba(37,99,235,0.08)] scale-105 z-10' 
-                    : 'bg-white/70 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)]'
-                } hover:shadow-lg hover:-translate-y-0.5`}
-              >
-                {tier.highlight && (
-                  <div className="absolute top-0 right-0 bg-blue-600 text-[10px] text-white font-extrabold px-3.5 py-1 rounded-bl-2xl tracking-wider uppercase">
-                    Most Popular
-                  </div>
-                )}
+        <div className="max-w-xl mx-auto pt-4">
+          <Card className="flex flex-col justify-between border border-blue-200 rounded-3xl transition-all duration-300 relative overflow-hidden bg-gradient-to-b from-blue-50/50 to-white shadow-[0_20px_50px_rgba(37,99,235,0.08)] hover:shadow-lg">
+            <div className="absolute top-0 right-0 bg-blue-600 text-[10px] text-white font-extrabold px-3.5 py-1 tracking-wider uppercase">
+              Flat Rate
+            </div>
+            
+            <CardHeader className="text-center pb-6 pt-8">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 border text-blue-600 bg-blue-50 border-blue-100">
+                <Zap className="h-6 w-6" />
+              </div>
+              <CardTitle className="text-xl font-black text-slate-800 mb-2">Standard Plan</CardTitle>
+              <div className="flex items-baseline justify-center gap-0.5 mt-2">
+                <IndianRupee className="h-6 w-6 text-blue-600 font-bold" />
+                <span className="text-4xl font-black tracking-tight text-blue-600">199</span>
+                <span className="text-xs text-slate-500 font-medium ml-1">/ bill</span>
+              </div>
+              <p className="text-xs text-slate-500 font-light mt-1">Pay-as-you-go credit structure. No hidden fees.</p>
+            </CardHeader>
+            
+            <CardContent className="space-y-6 flex-grow flex flex-col justify-between">
+              <ul className="space-y-3.5 text-sm">
+                {[
+                  'GCC 2022 Compliant calculations',
+                  'Unlimited contracts & registries',
+                  'Detailed PDF & Excel reports',
+                  'Automated WPI/JPC index tracking',
+                  'Real-time fuel/steel indices data',
+                  'Bulk bill processing support',
+                  'Covering letters & abstracts tools',
+                  '24/7 dedicated support access',
+                ].map((feature, fIdx) => (
+                  <li key={fIdx} className="flex items-start gap-2.5">
+                    <Check className="h-4 w-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <span className="text-slate-600 font-normal text-xs sm:text-sm">{feature}</span>
+                  </li>
+                ))}
+              </ul>
+              
+              <div className="space-y-3 pt-6 border-t border-slate-100">
+                <span className="block text-center text-[10px] font-extrabold px-3 py-1 rounded-lg text-emerald-700 bg-emerald-50">
+                  First Bill is FREE (Trial Active)
+                </span>
                 
-                <CardHeader className="text-center pb-6 pt-8">
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 border ${tier.iconColor}`}>
-                    <IconComp className="h-6 w-6" />
-                  </div>
-                  <CardTitle className="text-xl font-black text-slate-800 mb-2">{tier.title}</CardTitle>
-                  <div className="flex items-baseline justify-center gap-0.5 mt-2">
-                    <IndianRupee className={`h-6 w-6 ${tier.highlight ? 'text-blue-600 font-bold' : 'text-slate-700'}`} />
-                    <span className={`text-4xl font-black tracking-tight ${tier.highlight ? 'text-blue-600' : 'text-slate-900'}`}>{tier.cost}</span>
-                    <span className="text-xs text-slate-500 font-medium ml-1">/ bill</span>
-                  </div>
-                  <p className="text-xs text-slate-500 font-light mt-1">{tier.desc}</p>
-                </CardHeader>
-                
-                <CardContent className="space-y-6 flex-grow flex flex-col justify-between">
-                  <ul className="space-y-3.5 text-sm">
-                    {[
-                      'GCC 2022 Compliant calculations',
-                      'Unlimited contracts & registries',
-                      'Detailed PDF & Excel reports',
-                      'Automated WPI/JPC index tracking',
-                      'Real-time fuel/steel indices data',
-                      'Bulk bill processing support',
-                      'Covering letters & abstracts tools',
-                      '24/7 dedicated support access',
-                    ].map((feature, fIdx) => (
-                      <li key={fIdx} className="flex items-start gap-2.5">
-                        <Check className="h-4 w-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-slate-600 font-normal text-xs sm:text-sm">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  
-                  <div className="space-y-3 pt-6 border-t border-slate-100">
-                    <span className={`block text-center text-[10px] font-extrabold px-3 py-1 rounded-lg ${
-                      tier.highlight 
-                        ? 'text-blue-700 bg-blue-100/70' 
-                        : 'text-emerald-700 bg-emerald-50'
-                    }`}>
-                      {tier.detail}
-                    </span>
-                    
-                    <Link href="/auth/signin?mode=signup" className="block w-full">
-                      <Button className={`w-full font-bold py-5 rounded-xl transition-all shadow-md ${
-                        tier.highlight 
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/10' 
-                          : 'bg-slate-900 hover:bg-slate-800 text-white'
-                      }`}>
-                        Get Started
-                      </Button>
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                <Link href="/auth/signin?mode=signup" className="block w-full">
+                  <Button className="w-full font-bold py-5 rounded-xl transition-all shadow-md bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/10">
+                    Get Started
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Exemption & CTA Footer */}

@@ -231,40 +231,20 @@ export default function AboutUsPage() {
               </p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto pt-2">
-              {[
-                { title: 'Standard Volume', cost: '₹199', desc: '1 to 5 bills per day', detail: 'Base rate billing', highlight: false, border: 'border-slate-100 hover:border-blue-200' },
-                { title: 'Medium Volume', cost: '₹159', desc: '6 to 10 bills per day', detail: '20% volume discount', highlight: true, border: 'border-blue-200 ring-2 ring-blue-100' },
-                { title: 'High Volume', cost: '₹119', desc: '11+ bills per day', detail: '40% volume discount', highlight: false, border: 'border-slate-100 hover:border-indigo-200' },
-              ].map((tier, idx) => (
-                <div 
-                  key={idx} 
-                  className={`p-6 rounded-2xl text-center space-y-3 transition-all duration-300 relative overflow-hidden ${
-                    tier.highlight 
-                      ? 'bg-gradient-to-b from-blue-50/50 to-white shadow-[0_8px_30px_rgba(37,99,235,0.08)]' 
-                      : 'bg-white/80'
-                  } border ${tier.border} hover:shadow-lg hover:-translate-y-0.5`}
-                >
-                  {tier.highlight && (
-                    <div className="absolute top-0 right-0 bg-blue-600 text-[9px] text-white font-extrabold px-3 py-1 rounded-bl-xl tracking-wider uppercase">
-                      Most Popular
-                    </div>
-                  )}
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">{tier.title}</span>
-                  <div className="flex items-baseline justify-center gap-0.5">
-                    <span className={`text-4xl font-black ${tier.highlight ? 'text-blue-600' : 'text-slate-900'}`}>{tier.cost}</span>
-                    <span className="text-xs text-slate-500">/ bill</span>
-                  </div>
-                  <p className="text-xs text-slate-600 font-medium leading-none">{tier.desc}</p>
-                  <span className={`inline-block text-[10px] font-extrabold px-2.5 py-0.5 rounded-md ${
-                    tier.highlight 
-                      ? 'text-blue-700 bg-blue-100/70' 
-                      : 'text-emerald-700 bg-emerald-50'
-                  }`}>
-                    {tier.detail}
-                  </span>
+            <div className="max-w-md mx-auto pt-2">
+              <div className="p-8 rounded-3xl text-center space-y-4 transition-all duration-300 relative overflow-hidden bg-gradient-to-b from-blue-50/50 to-white shadow-[0_8px_30px_rgba(37,99,235,0.08)] border border-blue-200 hover:shadow-lg">
+                <span className="text-xs font-bold text-blue-600 uppercase tracking-widest block">Flat Rate Pricing</span>
+                <div className="flex items-baseline justify-center gap-0.5">
+                  <span className="text-5xl font-black text-slate-900">₹199</span>
+                  <span className="text-sm text-slate-500 font-medium">/ bill</span>
                 </div>
-              ))}
+                <p className="text-sm text-slate-655 font-medium leading-relaxed">
+                  Simple pay-as-you-go credit system. No monthly subscription or lock-in.
+                </p>
+                <span className="inline-block text-[11px] font-extrabold px-3 py-1 rounded-md text-emerald-700 bg-emerald-100/70">
+                  First Bill is FREE (Trial Active)
+                </span>
+              </div>
             </div>
 
             <div className="max-w-3xl mx-auto text-center pt-4 border-t border-slate-100">
