@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS = [
   },
   {
     key: 'FREE_TRIAL_BILLS',
-    value: '3',
+    value: '1',
     description: 'Number of free trial bills for new users',
     dataType: 'number'
   },
