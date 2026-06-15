@@ -327,12 +327,10 @@ export async function POST(request: NextRequest) {
           // Agreement has already claimed a free trial.
           // Check if this user has enough credit balance to pay for the bill instead of using a trial.
           const currentBalance = user.customerAccount?.creditBalance || 0;
-          const userBillCount = await prisma.bill.count({ where: { contract: { userId: user.id } } });
-          const isFirstBill = userBillCount === 0;
           
           const billingSettings = await getBillingSettings();
           const fullCost = billingSettings.billCost || 199;
-          const costToCharge = isFirstBill ? 99 : fullCost;
+          const costToCharge = fullCost;
 
           if (currentBalance >= costToCharge) {
             // User can afford the bill, downgrade from free trial to paid bill

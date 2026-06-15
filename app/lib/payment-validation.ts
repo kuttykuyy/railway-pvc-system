@@ -92,11 +92,7 @@ export async function validateBillProcessing(
     const { getBillingSettings } = await import('./admin-settings');
     const billingSettings = await getBillingSettings();
     const fullCost = billingSettings.billCost || 199;
-
-    // First-bill discount: ₹99 if this user has never created a bill before
-    const userBillCount = await prisma.bill.count({ where: { contract: { userId: user.id } } });
-    const isFirstBill = userBillCount === 0;
-    const billCost = isFirstBill ? 99 : fullCost;
+    const billCost = fullCost;
 
     // Check if user has sufficient balance in their customer account
     const currentBalance = user.customerAccount?.creditBalance || 0;
@@ -105,10 +101,8 @@ export async function validateBillProcessing(
       return {
         canProcess: true,
         requiredPayment: billCost,
-        reason: isFirstBill
-          ? `First bill discount! ₹${billCost} will be deducted (normally ₹${fullCost})`
-          : `Payment of ₹${billCost} will be deducted from account balance (₹${currentBalance} available)`,
-        isFirstBill,
+        reason: `Payment of ₹${billCost} will be deducted from account balance (₹${currentBalance} available)`,
+        isFirstBill: false,
       };
     }
 
@@ -116,10 +110,8 @@ export async function validateBillProcessing(
     return {
       canProcess: false,
       requiredPayment: billCost,
-      reason: isFirstBill
-        ? `First bill is only ₹${billCost}! Add ₹${billCost - currentBalance} more credits to get started.`
-        : `Insufficient balance. Required: ₹${billCost}, Available: ₹${currentBalance}. Please add credits to continue.`,
-      isFirstBill,
+      reason: `Insufficient balance. Required: ₹${billCost}, Available: ₹${currentBalance}. Please add credits to continue.`,
+      isFirstBill: false,
     };
 
   } catch (error) {
