@@ -44,6 +44,7 @@ const mobileNavSections = [
     items: [
       { name: 'Abstract', href: '/reports/abstract', icon: Calculator, adminOnly: false },
       { name: 'Steel PVC Forecast', href: '/pvc-forecast', icon: TrendingUp, adminOnly: false },
+      { name: 'Tendering Estimator', href: '/tendering-estimator', icon: BarChart3, adminOnly: false },
       { name: 'Price Indices', href: '/indices', icon: TrendingUp, adminOnly: false },
       { name: 'Component Index Documents', href: '/indices/component-documents', icon: FileText, adminOnly: true },
       { name: 'Classifications', href: '/classifications', icon: ListChecks, adminOnly: true },

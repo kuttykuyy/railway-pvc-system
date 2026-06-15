@@ -294,6 +294,30 @@ export default function MobileDashboard() {
         <QuickAction icon={TrendingUp} label={t('dash.forecast')} href="/pvc-forecast" />
       </div>
 
+      {/* Tendering Estimator Promotion Banner */}
+      <Card className="rounded-2xl border-indigo-100 bg-gradient-to-r from-indigo-50/50 to-blue-50/30 p-4 shadow-sm relative overflow-hidden group hover:border-indigo-200 transition-colors">
+        <div className="absolute top-0 right-0 bg-indigo-600 text-[9px] text-white font-extrabold px-2.5 py-0.5 rounded-bl-xl tracking-wider uppercase">
+          New
+        </div>
+        <div className="flex items-start gap-3.5">
+          <div className="p-3 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-xl shrink-0">
+            <BarChart3 className="h-5 w-5" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-1.5">
+              Tendering PVC Estimator
+            </h4>
+            <p className="text-xs text-slate-500 font-light leading-relaxed">
+              Calculate projected escalations & loading margins for new railway tenders.
+            </p>
+            <Link href="/tendering-estimator" className="inline-flex items-center text-xs font-bold text-indigo-600 hover:text-indigo-700 mt-1">
+              Start simulation
+              <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+            </Link>
+          </div>
+        </div>
+      </Card>
+
       {/* 5. Key metrics */}
       <div className="grid grid-cols-2 gap-3">
         <MetricCard value={stats?.totalContracts ?? 0} label={t('dash.active_contracts')} />
