@@ -22,6 +22,7 @@ import { useSession } from 'next-auth/react';
 import { getClientRoleInfo } from '@/lib/role-auth';
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
+import { useLanguage } from '../i18n-provider';
 
 interface DashboardStats {
   totalContracts: number;
@@ -76,6 +77,7 @@ export default function MobileDashboard() {
   const [creditBalance, setCreditBalance] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
+  const { t, language } = useLanguage();
 
   useEffect(() => {
     const updateOnlineStatus = () => setIsOnline(navigator.onLine);
@@ -199,9 +201,9 @@ export default function MobileDashboard() {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
+    if (hour < 12) return t('dash.good_morning');
+    if (hour < 17) return t('dash.good_afternoon');
+    return t('dash.good_evening');
   };
 
   const initial = (session?.user?.name?.[0] || session?.user?.email?.[0] || 'U').toUpperCase();
@@ -253,7 +255,7 @@ export default function MobileDashboard() {
       {!isOnline && (
         <div className="inline-flex items-center gap-2 rounded-full bg-red-50 border border-red-100 px-3 py-1.5 text-xs font-medium text-red-700">
           <WifiOff className="h-3.5 w-3.5 animate-pulse" />
-          Offline mode
+          {t('dash.offline_mode')}
         </div>
       )}
 
@@ -262,7 +264,7 @@ export default function MobileDashboard() {
         <div>
           <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">{getGreeting()}</p>
           <h1 className="text-xl font-extrabold text-slate-900 mt-0.5">
-            {session?.user?.name || session?.user?.email?.split('@')[0] || 'User'}
+            {session?.user?.name || session?.user?.email?.split('@')[0] || (language === 'hi' ? 'उपयोगकर्ता' : 'User')}
           </h1>
         </div>
         <div className="h-10 w-10 rounded-full bg-violet-600 text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-violet-100">
@@ -272,30 +274,30 @@ export default function MobileDashboard() {
 
       {/* 3. Credit balance gradient card */}
       <div className="rounded-2xl bg-gradient-to-br from-violet-600 to-violet-700 p-5 text-white shadow-lg shadow-violet-200">
-        <p className="text-xs text-violet-100 font-semibold tracking-wide">Available Credits</p>
+        <p className="text-xs text-violet-100 font-semibold tracking-wide">{t('dash.available_credits')}</p>
         <p className="text-3xl font-extrabold mt-1">₹{creditBalance.toLocaleString('en-IN')}</p>
         <div className="flex gap-3 mt-4">
           <Button size="sm" variant="secondary" className="flex-1 bg-white/20 text-white hover:bg-white/30 border-0 rounded-xl h-9 text-xs font-semibold" asChild>
-            <Link href="/billing">Top Up</Link>
+            <Link href="/billing">{t('dash.top_up')}</Link>
           </Button>
           <Button size="sm" variant="outline" className="flex-1 border-white/30 text-white hover:bg-white/10 bg-transparent rounded-xl h-9 text-xs font-semibold" asChild>
-            <Link href="/profile">History</Link>
+            <Link href="/profile">{t('dash.history')}</Link>
           </Button>
         </div>
       </div>
 
       {/* 4. Quick actions grid */}
       <div className="grid grid-cols-4 gap-3">
-        <QuickAction icon={Plus} label="New Bill" href="/bills/new" />
-        <QuickAction icon={Building2} label="Contract" href="/contracts/new" />
-        <QuickAction icon={BarChart3} label="Reports" href="/reports/abstract" />
-        <QuickAction icon={TrendingUp} label="Forecast" href="/pvc-forecast" />
+        <QuickAction icon={Plus} label={t('dash.new_bill')} href="/bills/new" />
+        <QuickAction icon={Building2} label={t('dash.contract')} href="/contracts/new" />
+        <QuickAction icon={BarChart3} label={t('dash.reports')} href="/reports/abstract" />
+        <QuickAction icon={TrendingUp} label={t('dash.forecast')} href="/pvc-forecast" />
       </div>
 
       {/* 5. Key metrics */}
       <div className="grid grid-cols-2 gap-3">
-        <MetricCard value={stats?.totalContracts ?? 0} label="Active Contracts" />
-        <MetricCard value={stats?.totalBills ?? 0} label="Bills Generated" />
+        <MetricCard value={stats?.totalContracts ?? 0} label={t('dash.active_contracts')} />
+        <MetricCard value={stats?.totalBills ?? 0} label={t('dash.bills_generated')} />
       </div>
 
       {/* 6. Recent activity list */}
@@ -304,10 +306,10 @@ export default function MobileDashboard() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-bold flex items-center text-slate-800">
               <Activity className="h-4.5 w-4.5 mr-2 text-violet-600" />
-              Recent Activity
+              {t('dash.recent_activity')}
             </CardTitle>
             <Button variant="ghost" size="sm" className="text-xs text-violet-600 hover:text-violet-700 hover:bg-violet-50/50 h-7 px-2 rounded-lg" asChild>
-              <Link href="/activity">View All</Link>
+              <Link href="/activity">{t('dash.view_all')}</Link>
             </Button>
           </div>
         </CardHeader>
@@ -315,7 +317,7 @@ export default function MobileDashboard() {
           {recentItems.length === 0 ? (
             <div className="text-center py-8 text-slate-400">
               <Activity className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-xs">No recent activity</p>
+              <p className="text-xs">{t('dash.no_recent_activity')}</p>
             </div>
           ) : (
             recentItems.map((item) => (
@@ -362,7 +364,7 @@ export default function MobileDashboard() {
           {recentItems.length > 0 && (
             <Button variant="outline" size="sm" className="w-full rounded-xl border-slate-100 hover:bg-slate-50 text-slate-700 text-xs font-semibold h-9" asChild>
               <Link href="/activity">
-                View All Activity
+                {t('dash.view_all_activity')}
               </Link>
             </Button>
           )}
@@ -376,7 +378,7 @@ export default function MobileDashboard() {
             <Button asChild variant="ghost" className="w-full justify-between h-12 px-4 rounded-none hover:bg-slate-50 text-slate-700 text-xs font-bold">
               <Link href="/admin" className="flex items-center">
                 <Building2 className="h-4 w-4 mr-2 text-violet-600" />
-                Admin Panel
+                {t('dash.admin_panel')}
                 <ChevronRight className="h-4 w-4 ml-auto text-slate-400" />
               </Link>
             </Button>

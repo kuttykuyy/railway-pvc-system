@@ -6,6 +6,7 @@ import { Home, FileText, Building2, Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import MobileNavigation from './mobile-navigation';
+import { useLanguage } from '../i18n-provider';
 
 const tabs = [
   { name: 'Home', href: '/dashboard', icon: Home },
@@ -15,6 +16,16 @@ const tabs = [
 
 export default function BottomNavigation() {
   const pathname = usePathname();
+  const { t } = useLanguage();
+
+  const getTabTranslation = (name: string) => {
+    switch (name) {
+      case 'Home': return t('nav.home');
+      case 'Bills': return t('nav.bills');
+      case 'Contracts': return t('nav.contracts');
+      default: return name;
+    }
+  };
 
   return (
     <>
@@ -33,7 +44,7 @@ export default function BottomNavigation() {
               >
                 <tab.icon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 2} />
                 <span className={cn('text-[10px] font-medium', isActive && 'font-semibold')}>
-                  {tab.name}
+                  {getTabTranslation(tab.name)}
                 </span>
               </Link>
             );
@@ -47,7 +58,7 @@ export default function BottomNavigation() {
                 aria-label="More menu"
               >
                 <Menu className="h-5 w-5" />
-                <span className="text-[10px] font-medium">More</span>
+                <span className="text-[10px] font-medium">{t('nav.more')}</span>
               </button>
             </SheetTrigger>
             <SheetContent side="left" className="w-[85vw] max-w-sm p-0 border-r-0">

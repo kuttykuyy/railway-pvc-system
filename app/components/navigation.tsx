@@ -15,6 +15,7 @@ import {
 import { RazorpayTopupDialog } from '@/components/ui/razorpay-topup-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { getClientRoleInfo } from '@/lib/role-auth';
+import { useLanguage } from './i18n-provider';
 import { 
   Building2,
   Calculator,
@@ -105,6 +106,44 @@ export default function Navigation() {
   const [showTopupDialog, setShowTopupDialog] = useState(false);
   const [creditData, setCreditData] = useState<CreditBalance | null>(null);
   const [billingSettings, setBillingSettings] = useState<BillingSettings | null>(null);
+
+  const { language, setLanguage, t } = useLanguage();
+
+  const getNavTranslationKey = (name: string): string => {
+    switch (name) {
+      case 'Contract Management': return 'nav.contract_management';
+      case 'Admin Settings': return 'nav.admin_settings';
+      case 'Dashboard': return 'nav.dashboard';
+      case 'Contracts': return 'nav.contracts';
+      case 'PVC Bills': return 'nav.bills';
+      case 'Bill Approvals': return 'nav.approvals';
+      case 'Abstract of Bills': return 'nav.abstract';
+      case 'Steel PVC Forecast': return 'nav.forecast';
+      case 'Price Indices': return 'nav.price_indices';
+      case 'PVC Check Analytics': return 'nav.analytics';
+      case 'Report Templates': return 'nav.templates';
+      case 'Work Classifications': return 'nav.classifications';
+      case 'Extension Categories': return 'nav.extensions';
+      case 'Price Indices Management': return 'nav.indices_manage';
+      case 'Component Index Documents': return 'nav.component_docs';
+      case 'GST Invoices': return 'nav.gst_invoices';
+      case 'User Management': return 'nav.users';
+      case 'Role & Permissions': return 'nav.permissions';
+      case 'Railway Official Limits': return 'nav.railway_limits';
+      case 'WhatsApp Logs': return 'nav.whatsapp_logs';
+      case 'Profile': return 'nav.profile';
+      case 'Profile & Settings': return 'nav.profile_billing';
+      case 'Profile & Billing': return 'nav.profile_billing';
+      case 'Sign Out': return 'nav.sign_out';
+      case 'Top-up': return 'nav.topup';
+      default: return '';
+    }
+  };
+
+  const translateNav = (name: string) => {
+    const key = getNavTranslationKey(name);
+    return key ? t(key) : name;
+  };
 
   // Get user role information
   const { isAdmin, isRailwayOfficial, role } = getClientRoleInfo(session);
@@ -251,7 +290,7 @@ export default function Navigation() {
                     >
                       <Link href={item.href}>
                         <ItemIcon className="h-4 w-4" />
-                        <span>{item.name}</span>
+                        <span>{translateNav(item.name)}</span>
                       </Link>
                     </Button>
                   );
@@ -274,7 +313,7 @@ export default function Navigation() {
                           )}
                         >
                           <GroupIcon className="h-4 w-4" />
-                          <span>{group.name}</span>
+                          <span>{translateNav(group.name)}</span>
                           <ChevronDown className="h-3 w-3" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -292,7 +331,7 @@ export default function Navigation() {
                                 )}
                               >
                                 <ItemIcon className="h-4 w-4" />
-                                <span>{item.name}</span>
+                                <span>{translateNav(item.name)}</span>
                               </Link>
                             </DropdownMenuItem>
                           );
@@ -358,11 +397,42 @@ export default function Navigation() {
                       )}
                     >
                       <Plus className="h-4 w-4 mr-1" />
-                      Top-up
+                      {translateNav('Top-up')}
                     </Button>
                   </div>
                 )}
                 
+                {/* Language Toggle */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 p-0 text-gray-700 hover:bg-gray-100 rounded-xl" title="Select Language">
+                      <span className="text-sm font-bold tracking-tight">
+                        {language === 'en' ? 'EN' : 'हि'}
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-24 bg-white/95 backdrop-blur-sm">
+                    <DropdownMenuItem 
+                      onClick={() => setLanguage('en')}
+                      className={cn(
+                        "cursor-pointer font-medium text-xs",
+                        language === 'en' && "bg-blue-50 text-blue-700 font-semibold"
+                      )}
+                    >
+                      English
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => setLanguage('hi')}
+                      className={cn(
+                        "cursor-pointer font-medium text-xs",
+                        language === 'hi' && "bg-blue-50 text-blue-700 font-semibold"
+                      )}
+                    >
+                      हिन्दी
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 {/* Theme Toggle */}
                 <ThemeToggle />
 
@@ -389,7 +459,7 @@ export default function Navigation() {
                       <DropdownMenuItem asChild>
                         <Link href="/profile" className="flex items-center cursor-pointer">
                           <User className="mr-2 h-4 w-4" />
-                          <span>Profile & Settings</span>
+                          <span>{translateNav('Profile & Settings')}</span>
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem 
@@ -397,7 +467,7 @@ export default function Navigation() {
                         className="text-red-600 hover:text-red-700 focus:text-red-700 cursor-pointer"
                       >
                         <LogOut className="mr-2 h-4 w-4" />
-                        <span>Sign Out</span>
+                        <span>{translateNav('Sign Out')}</span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -570,43 +640,43 @@ export default function Navigation() {
                     );
                   })}
                   
-                  {/* User Menu Actions */}
-                  <div className="pt-2 border-t border-gray-200 mt-2 space-y-1">
-                    <Button
-                      asChild
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start text-gray-700 hover:bg-gray-100"
-                    >
-                      <Link href="/profile" onClick={() => setIsOpen(false)}>
-                        <User className="h-4 w-4" />
-                        <span className="ml-2">Profile & Settings</span>
-                      </Link>
-                    </Button>
-                    <Button
-                      asChild
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start text-gray-700 hover:bg-gray-100"
-                    >
-                      <Link href="/profile" onClick={() => setIsOpen(false)}>
-                        <CreditCard className="h-4 w-4" />
-                        <span className="ml-2">Profile & Billing</span>
-                      </Link>
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        handleSignOut();
-                        setIsOpen(false);
-                      }}
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      <span className="ml-2">Sign Out</span>
-                    </Button>
-                  </div>
+                    {/* User Menu Actions */}
+                    <div className="pt-2 border-t border-gray-200 mt-2 space-y-1">
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start text-gray-700 hover:bg-gray-100"
+                      >
+                        <Link href="/profile" onClick={() => setIsOpen(false)}>
+                          <User className="h-4 w-4" />
+                          <span className="ml-2">{translateNav('Profile & Settings')}</span>
+                        </Link>
+                      </Button>
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start text-gray-700 hover:bg-gray-100"
+                      >
+                        <Link href="/profile" onClick={() => setIsOpen(false)}>
+                          <CreditCard className="h-4 w-4" />
+                          <span className="ml-2">{translateNav('Profile & Billing')}</span>
+                        </Link>
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          handleSignOut();
+                          setIsOpen(false);
+                        }}
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        <span className="ml-2">{translateNav('Sign Out')}</span>
+                      </Button>
+                    </div>
                 </>
               ) : !isOnAuthPage ? (
                 <div className="flex flex-col space-y-2">

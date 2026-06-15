@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getClientRoleInfo } from '@/lib/role-auth';
+import { useLanguage } from '../i18n-provider';
 
 const mobileNavSections = [
   {
@@ -78,21 +79,61 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
   const [isOpen, setIsOpen] = useState(false);
   
   const { isAdmin, isRailwayOfficial, role } = getClientRoleInfo(session);
+  const { language, setLanguage, t } = useLanguage();
   
   // Get role display label
   const getRoleLabel = (role: string) => {
     switch (role) {
       case 'admin':
-        return 'Admin';
+        return language === 'hi' ? 'एडमिन' : 'Admin';
       case 'pending_railway_official':
-        return 'Pending Official';
+        return language === 'hi' ? 'लंबित अधिकारी' : 'Pending Official';
       case 'railway_official':
-        return 'Railway Official';
+        return language === 'hi' ? 'रेलवे अधिकारी' : 'Railway Official';
       case 'contractor':
-        return 'Contractor';
+        return language === 'hi' ? 'ठेकेदार' : 'Contractor';
       default:
-        return 'Contractor';
+        return language === 'hi' ? 'ठेकेदार' : 'Contractor';
     }
+  };
+
+  const getNavTranslationKey = (name: string): string => {
+    switch (name) {
+      // Sections
+      case 'Main': return 'nav.main_section';
+      case 'Reports & Data': return 'nav.reports_section';
+      case 'Account': return 'nav.account_section';
+      // Items
+      case 'Dashboard': return 'nav.dashboard';
+      case 'Contracts': return 'nav.contracts';
+      case 'Bills': return 'nav.bills';
+      case 'Approvals': return 'nav.approvals';
+      case 'Abstract': return 'nav.abstract';
+      case 'Steel PVC Forecast': return 'nav.forecast';
+      case 'Price Indices': return 'nav.price_indices';
+      case 'Component Index Documents': return 'nav.component_docs';
+      case 'Classifications': return 'nav.classifications';
+      case 'Report Templates': return 'nav.templates';
+      case 'Extension Subcategories': return 'nav.extensions';
+      case 'Profile': return 'nav.profile';
+      case 'Profile & Billing': return 'nav.profile_billing';
+      case 'PVC Check Analytics': return 'nav.analytics';
+      case 'User Management': return 'nav.users';
+      case 'User Permissions': return 'nav.permissions';
+      case 'WhatsApp Logs': return 'nav.whatsapp_logs';
+      // Quick actions
+      case 'New Bill': return 'dash.new_bill';
+      case 'New Contract': return 'dash.contract';
+      default: return '';
+    }
+  };
+
+  const translateNav = (name: string) => {
+    const key = getNavTranslationKey(name);
+    if (key === 'dash.contract') {
+      return language === 'hi' ? 'नया अनुबंध' : 'New Contract';
+    }
+    return key ? t(key) : name;
   };
   
   const filteredQuickActions = quickActions.filter(action => !action.adminOnly || isAdmin);
@@ -123,9 +164,35 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
     <div className="flex flex-col h-full bg-white">
       {/* Header */}
       <SheetHeader className="px-6 py-5 bg-gradient-to-br from-purple-600 to-purple-700 text-white">
-        <SheetTitle className="text-left text-white text-xl font-bold">
-          IR-PVC
-        </SheetTitle>
+        <div className="flex items-center justify-between">
+          <SheetTitle className="text-left text-white text-xl font-bold">
+            IR-PVC
+          </SheetTitle>
+          <div className="flex items-center space-x-1 bg-white/10 rounded-lg p-0.5 border border-white/20">
+            <button
+              onClick={() => setLanguage('en')}
+              className={cn(
+                "px-2.5 py-1 text-xs font-semibold rounded-md transition-all duration-150",
+                language === 'en'
+                  ? "bg-white text-purple-700 shadow-sm"
+                  : "text-purple-100 hover:text-white"
+              )}
+            >
+              EN
+            </button>
+            <button
+              onClick={() => setLanguage('hi')}
+              className={cn(
+                "px-2.5 py-1 text-xs font-semibold rounded-md transition-all duration-150",
+                language === 'hi'
+                  ? "bg-white text-purple-700 shadow-sm"
+                  : "text-purple-100 hover:text-white"
+              )}
+            >
+              हिन्दी
+            </button>
+          </div>
+        </div>
         {session?.user && (
           <div className="flex items-center space-x-3 mt-3 pt-3 border-t border-purple-500">
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
@@ -135,7 +202,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium text-white truncate">
-                {session.user.name || 'User'}
+                {session.user.name || (language === 'hi' ? 'उपयोगकर्ता' : 'User')}
               </div>
               <div className="text-xs text-purple-200 truncate">
                 {session.user.email}
@@ -163,7 +230,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
                   <div className={`flex flex-col items-center justify-center p-4 rounded-xl ${action.color} text-white hover:shadow-lg transition-all duration-200 transform hover:scale-105`}>
                     <action.icon className="h-6 w-6 mb-2" />
                     <span className="text-xs font-medium text-center">
-                      {action.name}
+                      {translateNav(action.name)}
                     </span>
                   </div>
                 </NavLink>
@@ -178,7 +245,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
         {filteredSections.map((section, idx) => (
           <div key={section.title} className="px-4 py-3">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-3">
-              {section.title}
+              {translateNav(section.title)}
             </h3>
             <div className="space-y-1">
               {section.items.map((item) => (
@@ -197,7 +264,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
                     "h-5 w-5",
                     pathname === item.href ? "text-purple-600" : "text-gray-500"
                   )} />
-                  <span className="flex-1 text-sm">{item.name}</span>
+                  <span className="flex-1 text-sm">{translateNav(item.name)}</span>
                 </NavLink>
               ))}
             </div>
@@ -216,7 +283,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
           className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
         >
           <LogOut className="h-4 w-4 mr-3" />
-          Sign Out
+          {t('nav.sign_out')}
         </Button>
       </div>
     </div>
