@@ -11,12 +11,14 @@ export async function extractLayoutText(pdfBuffer: Buffer): Promise<string> {
   // trying to require('./pdf.worker.js') which fails in Next.js standalone builds.
   if (typeof globalThis !== 'undefined' && !(globalThis as any).pdfjsWorker) {
     try {
+      // @ts-ignore
       (globalThis as any).pdfjsWorker = await import('pdfjs-dist/legacy/build/pdf.worker.mjs');
     } catch {
       // Ignore — pdfjs will try other fallback paths
     }
   }
 
+  // @ts-ignore
   const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
 
   const doc = await pdfjsLib.getDocument({

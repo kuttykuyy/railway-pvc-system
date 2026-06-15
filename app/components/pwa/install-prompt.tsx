@@ -3,8 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { X, Download, Smartphone } from 'lucide-react';
+import { X, Smartphone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -107,48 +106,29 @@ export default function InstallPrompt() {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm">
-      <Card className="shadow-lg border-purple-200">
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center space-x-2">
-              <Smartphone className="h-5 w-5 text-purple-600" />
-              <CardTitle className="text-base">Install App</CardTitle>
+    <div className="fixed bottom-20 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm animate-in slide-in-from-bottom-4">
+      <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-4">
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
+            <Smartphone className="h-5 w-5 text-violet-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-slate-900">Install IR-PVC</p>
+            <p className="text-xs text-slate-500 mt-0.5">Add to home screen for quick access and offline use.</p>
+            <div className="flex gap-2 mt-3">
+              <Button size="sm" className="flex-1 bg-violet-600 hover:bg-violet-700 rounded-xl font-semibold" onClick={handleInstallClick}>
+                Install
+              </Button>
+              <Button size="sm" variant="ghost" className="flex-1 text-slate-500 hover:bg-slate-50 rounded-xl font-semibold" onClick={handleDismiss}>
+                Later
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDismiss}
-              className="h-6 w-6 p-0"
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </div>
-          <CardDescription className="text-sm">
-            Install Railway PVC on your device for quick access and offline functionality.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="flex space-x-2">
-            <Button
-              onClick={handleInstallClick}
-              size="sm"
-              className="flex-1"
-            >
-              <Download className="h-4 w-4 mr-1" />
-              Install
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDismiss}
-              className="flex-1"
-            >
-              Later
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          <button onClick={handleDismiss} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-50">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

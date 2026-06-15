@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import Script from 'next/script';
 import Navigation from '@/components/navigation';
-import MobileNavigation from '@/components/mobile/mobile-navigation';
+import BottomNavigation from '@/components/mobile/bottom-navigation';
 import InstallPrompt from '@/components/pwa/install-prompt';
 import PushNotifications from '@/components/pwa/push-notifications';
 import OfflineIndicator from '@/components/mobile/offline-indicator';
@@ -49,7 +49,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         
         {/* Mobile Navigation */}
         <div className="lg:hidden">
-          <MobileNavigation />
+          <BottomNavigation />
         </div>
         
         {/* Main Content - No max-w-7xl, no padding around it, completely full-width */}
@@ -75,7 +75,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
       
       {/* Mobile Navigation */}
       <div className="lg:hidden">
-        <MobileNavigation />
+        <BottomNavigation />
       </div>
       
       {/* Main Content */}

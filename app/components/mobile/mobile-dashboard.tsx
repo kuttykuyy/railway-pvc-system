@@ -1,31 +1,25 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
   Building2, 
   FileText, 
-  Calculator, 
   TrendingUp, 
   AlertCircle,
   CheckCircle,
   Clock,
-  DollarSign,
   Activity,
   ChevronRight,
-  Zap,
-  Wifi,
-  WifiOff
+  WifiOff,
+  Plus,
+  BarChart3,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { getClientRoleInfo } from '@/lib/role-auth';
-import QuickActions from './quick-actions';
-// Removed direct PWA import to prevent issues
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
 
@@ -49,11 +43,37 @@ interface RecentItem {
   amount?: number;
 }
 
+function QuickAction({ icon: Icon, label, href }: { icon: any; label: string; href: string }) {
+  return (
+    <Link
+      href={href}
+      className="flex flex-col items-center justify-center p-3 bg-white rounded-2xl border border-slate-100 hover:border-violet-100 hover:bg-violet-50/30 transition-all duration-200 shadow-[0_2px_8px_rgba(0,0,0,0.02)]"
+    >
+      <div className="h-10 w-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center mb-1.5">
+        <Icon className="h-5 w-5" strokeWidth={2} />
+      </div>
+      <span className="text-[10px] font-semibold text-slate-700 text-center tracking-tight leading-none">
+        {label}
+      </span>
+    </Link>
+  );
+}
+
+function MetricCard({ value, label }: { value: number | string; label: string }) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+      <p className="text-2xl font-extrabold text-slate-900">{value}</p>
+      <p className="text-xs text-slate-500 mt-0.5 font-medium">{label}</p>
+    </div>
+  );
+}
+
 export default function MobileDashboard() {
   const { data: session } = useSession();
   const { isAdmin } = getClientRoleInfo(session);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
+  const [creditBalance, setCreditBalance] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
 
@@ -81,9 +101,11 @@ export default function MobileDashboard() {
         try {
           const cachedStats = JSON.parse(localStorage.getItem('dashboard_stats') || 'null');
           const cachedItems = JSON.parse(localStorage.getItem('recent_items') || '[]');
+          const cachedBalance = JSON.parse(localStorage.getItem('credit_balance') || '0');
           
           if (cachedStats) setStats(cachedStats);
           if (cachedItems) setRecentItems(cachedItems);
+          setCreditBalance(cachedBalance);
           
           if (cachedStats && cachedItems) {
             setIsLoading(false);
@@ -94,10 +116,11 @@ export default function MobileDashboard() {
         }
       }
 
-      // Load dashboard stats
-      const [statsResponse, itemsResponse] = await Promise.all([
+      // Load dashboard stats, recent items, and credits balance
+      const [statsResponse, itemsResponse, balanceResponse] = await Promise.all([
         fetch('/api/dashboard/stats'),
-        fetch('/api/dashboard/recent')
+        fetch('/api/dashboard/recent'),
+        fetch('/api/credits/balance')
       ]);
 
       if (statsResponse.ok) {
@@ -120,6 +143,16 @@ export default function MobileDashboard() {
         }
       }
 
+      if (balanceResponse.ok) {
+        const balanceData = await balanceResponse.json();
+        setCreditBalance(balanceData.balance || 0);
+        try {
+          localStorage.setItem('credit_balance', JSON.stringify(balanceData.balance || 0));
+        } catch (e) {
+          console.error('Error caching balance:', e);
+        }
+      }
+
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       
@@ -127,9 +160,11 @@ export default function MobileDashboard() {
       try {
         const cachedStats = JSON.parse(localStorage.getItem('dashboard_stats') || 'null');
         const cachedItems = JSON.parse(localStorage.getItem('recent_items') || '[]');
+        const cachedBalance = JSON.parse(localStorage.getItem('credit_balance') || '0');
         
         if (cachedStats) setStats(cachedStats);
         if (cachedItems) setRecentItems(cachedItems);
+        setCreditBalance(cachedBalance);
       } catch (e) {
         console.error('Error loading fallback cached data:', e);
       }
@@ -154,219 +189,178 @@ export default function MobileDashboard() {
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'bill':
-        return <FileText className="h-4 w-4" />;
+        return <FileText className="h-4 w-4 text-slate-500" />;
       case 'contract':
-        return <Building2 className="h-4 w-4" />;
-      case 'payment':
-        return <DollarSign className="h-4 w-4" />;
+        return <Building2 className="h-4 w-4 text-slate-500" />;
       default:
-        return <Activity className="h-4 w-4" />;
+        return <Activity className="h-4 w-4 text-slate-500" />;
     }
   };
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  const initial = (session?.user?.name?.[0] || session?.user?.email?.[0] || 'U').toUpperCase();
+
   if (isLoading && !stats) {
     return (
-      <div className="space-y-4">
-        {/* Connection Status */}
-        <Card className="p-3">
-          <div className="flex items-center space-x-2">
-            {isOnline ? (
-              <Wifi className="h-4 w-4 text-green-600" />
-            ) : (
-              <WifiOff className="h-4 w-4 text-red-600" />
-            )}
-            <span className="text-sm font-medium">
-              {isOnline ? 'Connected' : 'Offline Mode'}
-            </span>
-            {!isOnline && (
-              <Badge variant="outline" className="text-xs">
-                Limited
-              </Badge>
-            )}
+      <div className="space-y-4 lg:hidden pb-4">
+        {/* Loading Header Skeleton */}
+        <div className="flex items-center justify-between mt-2">
+          <div className="space-y-1">
+            <Skeleton className="h-4 w-24 rounded-lg" />
+            <Skeleton className="h-6 w-36 rounded-lg" />
           </div>
-        </Card>
+          <Skeleton className="h-10 w-10 rounded-full" />
+        </div>
 
-        {/* Loading Skeleton */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Credit Card Skeleton */}
+        <Skeleton className="h-36 w-full rounded-2xl" />
+
+        {/* Quick Actions Skeleton */}
+        <div className="grid grid-cols-4 gap-3">
           {[...Array(4)].map((_, i) => (
-            <Card key={i} className="p-3">
-              <Skeleton className="h-16 w-full" />
-            </Card>
+            <Skeleton key={i} className="h-20 w-full rounded-2xl" />
           ))}
         </div>
+
+        {/* Key Metrics Skeleton */}
+        <div className="grid grid-cols-2 gap-3">
+          <Skeleton className="h-20 w-full rounded-2xl" />
+          <Skeleton className="h-20 w-full rounded-2xl" />
+        </div>
         
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-32" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {[...Array(3)].map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        {/* Recent Activity Skeleton */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-4 space-y-4">
+          <Skeleton className="h-6 w-32 rounded-lg" />
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full rounded-xl" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 pb-4">
-      {/* Connection Status */}
-      <Card className="p-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            {isOnline ? (
-              <Wifi className="h-4 w-4 text-green-600" />
-            ) : (
-              <WifiOff className="h-4 w-4 text-red-600" />
-            )}
-            <span className="text-sm font-medium">
-              {isOnline ? 'Connected' : 'Offline Mode'}
-            </span>
-            {!isOnline && (
-              <Badge variant="outline" className="text-xs">
-                Limited
-              </Badge>
-            )}
-          </div>
-          
-          <div className="text-xs text-gray-500">
-            Last updated: {typeof window !== 'undefined' ? format(toISTDate(new Date()), 'HH:mm') : '--:--'}
-          </div>
+    <div className="space-y-4 pb-4 lg:hidden">
+      {/* 1. Connection status chip */}
+      {!isOnline && (
+        <div className="inline-flex items-center gap-2 rounded-full bg-red-50 border border-red-100 px-3 py-1.5 text-xs font-medium text-red-700">
+          <WifiOff className="h-3.5 w-3.5 animate-pulse" />
+          Offline mode
         </div>
-      </Card>
-
-      {/* Welcome Message */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Welcome back{session?.user?.name ? `, ${session.user.name}` : ''}!
-              </h2>
-              <p className="text-sm text-gray-600">
-                {isAdmin ? 'Admin Dashboard' : 'Your dashboard overview'}
-              </p>
-            </div>
-            <div className="p-2 bg-purple-100 rounded-full">
-              <Zap className="h-5 w-5 text-purple-600" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Quick Actions */}
-      <QuickActions stats={stats || undefined} />
-
-      {/* Key Metrics */}
-      {stats && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center">
-              <TrendingUp className="h-4 w-4 mr-2" />
-              Key Metrics
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-center">
-              <div className="p-3 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-800">
-                  ₹{(stats.totalRevenue / 100000).toFixed(1)}L
-                </div>
-                <div className="text-xs text-green-600">Total Revenue</div>
-              </div>
-              
-              <div className="p-3 bg-blue-50 rounded-lg">
-                <div className="text-2xl font-bold text-blue-800">
-                  {stats.processingRate}%
-                </div>
-                <div className="text-xs text-blue-600">Success Rate</div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-              <div>
-                <div className="text-sm font-medium text-orange-800">
-                  This Month
-                </div>
-                <div className="text-xs text-orange-600">
-                  {stats.thisMonthBills} bills processed
-                </div>
-              </div>
-              <div className="text-xl font-bold text-orange-800">
-                {stats.thisMonthBills}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       )}
 
-      {/* Recent Activity */}
-      <Card>
-        <CardHeader className="pb-3">
+      {/* 2. Greeting header with avatar */}
+      <div className="flex items-center justify-between mt-2">
+        <div>
+          <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">{getGreeting()}</p>
+          <h1 className="text-xl font-extrabold text-slate-900 mt-0.5">
+            {session?.user?.name || session?.user?.email?.split('@')[0] || 'User'}
+          </h1>
+        </div>
+        <div className="h-10 w-10 rounded-full bg-violet-600 text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-violet-100">
+          {initial}
+        </div>
+      </div>
+
+      {/* 3. Credit balance gradient card */}
+      <div className="rounded-2xl bg-gradient-to-br from-violet-600 to-violet-700 p-5 text-white shadow-lg shadow-violet-200">
+        <p className="text-xs text-violet-100 font-semibold tracking-wide">Available Credits</p>
+        <p className="text-3xl font-extrabold mt-1">₹{creditBalance.toLocaleString('en-IN')}</p>
+        <div className="flex gap-3 mt-4">
+          <Button size="sm" variant="secondary" className="flex-1 bg-white/20 text-white hover:bg-white/30 border-0 rounded-xl h-9 text-xs font-semibold" asChild>
+            <Link href="/billing">Top Up</Link>
+          </Button>
+          <Button size="sm" variant="outline" className="flex-1 border-white/30 text-white hover:bg-white/10 bg-transparent rounded-xl h-9 text-xs font-semibold" asChild>
+            <Link href="/profile">History</Link>
+          </Button>
+        </div>
+      </div>
+
+      {/* 4. Quick actions grid */}
+      <div className="grid grid-cols-4 gap-3">
+        <QuickAction icon={Plus} label="New Bill" href="/bills/new" />
+        <QuickAction icon={Building2} label="Contract" href="/contracts/new" />
+        <QuickAction icon={BarChart3} label="Reports" href="/reports/abstract" />
+        <QuickAction icon={TrendingUp} label="Forecast" href="/pvc-forecast" />
+      </div>
+
+      {/* 5. Key metrics */}
+      <div className="grid grid-cols-2 gap-3">
+        <MetricCard value={stats?.totalContracts ?? 0} label="Active Contracts" />
+        <MetricCard value={stats?.totalBills ?? 0} label="Bills Generated" />
+      </div>
+
+      {/* 6. Recent activity list */}
+      <Card className="rounded-2xl shadow-sm border-slate-100 bg-white">
+        <CardHeader className="pb-3 pt-4 px-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center">
-              <Activity className="h-4 w-4 mr-2" />
+            <CardTitle className="text-sm font-bold flex items-center text-slate-800">
+              <Activity className="h-4.5 w-4.5 mr-2 text-violet-600" />
               Recent Activity
             </CardTitle>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/activity" className="text-xs">
-                View All
-              </Link>
+            <Button variant="ghost" size="sm" className="text-xs text-violet-600 hover:text-violet-700 hover:bg-violet-50/50 h-7 px-2 rounded-lg" asChild>
+              <Link href="/activity">View All</Link>
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 px-4 pb-4">
           {recentItems.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No recent activity</p>
+            <div className="text-center py-8 text-slate-400">
+              <Activity className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              <p className="text-xs">No recent activity</p>
             </div>
           ) : (
             recentItems.map((item) => (
-              <div
+              <Link
+                href={item.type === 'bill' ? `/bills/${item.id}` : item.type === 'contract' ? `/contracts/${item.id}` : '#'}
                 key={item.id}
-                className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex items-center space-x-3 p-3 rounded-xl border border-slate-50 hover:bg-slate-50/50 transition-colors"
               >
                 <div className="flex-shrink-0">
-                  <div className="p-1.5 rounded bg-gray-100">
+                  <div className="p-2 rounded-xl bg-slate-50 text-slate-600">
                     {getTypeIcon(item.type)}
                   </div>
                 </div>
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-xs font-bold text-slate-800 truncate">
                       {item.title}
                     </p>
                     {getStatusIcon(item.status)}
                   </div>
                   
-                  <div className="flex items-center justify-between mt-1">
-                    <p className="text-xs text-gray-500 truncate">
+                  <div className="flex items-center justify-between mt-0.5">
+                    <p className="text-[10px] text-slate-500 truncate">
                       {item.subtitle}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-[10px] text-slate-400">
                       {format(toISTDate(new Date(item.timestamp)), 'MMM d')}
                     </p>
                   </div>
                   
                   {item.amount && (
-                    <p className="text-xs font-medium text-green-600 mt-1">
+                    <p className="text-xs font-bold text-green-600 mt-1">
                       ₹{item.amount.toLocaleString('en-IN')}
                     </p>
                   )}
                 </div>
                 
-                <ChevronRight className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              </div>
+                <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
+              </Link>
             ))
           )}
 
           {recentItems.length > 0 && (
-            <Button variant="outline" size="sm" className="w-full" asChild>
+            <Button variant="outline" size="sm" className="w-full rounded-xl border-slate-100 hover:bg-slate-50 text-slate-700 text-xs font-semibold h-9" asChild>
               <Link href="/activity">
                 View All Activity
               </Link>
@@ -375,15 +369,15 @@ export default function MobileDashboard() {
         </CardContent>
       </Card>
 
-      {/* Admin Panel Link */}
+      {/* 7. Admin panel link */}
       {isAdmin && (
-        <Card>
-          <CardContent className="p-4">
-            <Button asChild variant="outline" className="w-full">
+        <Card className="rounded-2xl border-slate-100 shadow-sm overflow-hidden">
+          <CardContent className="p-0">
+            <Button asChild variant="ghost" className="w-full justify-between h-12 px-4 rounded-none hover:bg-slate-50 text-slate-700 text-xs font-bold">
               <Link href="/admin" className="flex items-center">
-                <Building2 className="h-4 w-4 mr-2" />
+                <Building2 className="h-4 w-4 mr-2 text-violet-600" />
                 Admin Panel
-                <ChevronRight className="h-4 w-4 ml-auto" />
+                <ChevronRight className="h-4 w-4 ml-auto text-slate-400" />
               </Link>
             </Button>
           </CardContent>

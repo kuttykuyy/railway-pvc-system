@@ -74,22 +74,22 @@ export default function ServiceWorkerUpdate() {
   if (!showUpdate) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-sm animate-in slide-in-from-bottom-4">
-      <div className="bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-lg shadow-2xl p-4 border border-violet-400">
+    <div className="fixed bottom-20 right-4 left-4 md:left-auto z-50 max-w-sm animate-in slide-in-from-bottom-4">
+      <div className="bg-gradient-to-br from-violet-600 to-violet-700 text-white rounded-2xl shadow-xl p-4 border border-violet-500/30">
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0 mt-0.5">
-            <RefreshCw className="h-5 w-5" />
+            <RefreshCw className="h-5 w-5 text-violet-100" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold mb-1">New Version Available! 🎉</p>
-            <p className="text-xs text-violet-100 mb-3">
+            <p className="text-xs text-violet-100 mb-3 leading-relaxed">
               A new version of the app is ready. Click update to get the latest features and fixes.
             </p>
             <div className="flex gap-2">
               <Button
                 size="sm"
                 onClick={handleUpdate}
-                className="bg-white text-violet-600 hover:bg-violet-50 font-medium text-xs h-8"
+                className="bg-white text-violet-700 hover:bg-violet-50 font-semibold text-xs h-8 rounded-xl"
               >
                 <RefreshCw className="h-3 w-3 mr-1.5" />
                 Update Now
@@ -98,7 +98,7 @@ export default function ServiceWorkerUpdate() {
                 size="sm"
                 variant="ghost"
                 onClick={() => setShowUpdate(false)}
-                className="text-white hover:bg-violet-700/50 h-8 text-xs"
+                className="text-violet-100 hover:text-white hover:bg-white/10 h-8 text-xs rounded-xl"
               >
                 Later
               </Button>
@@ -106,7 +106,7 @@ export default function ServiceWorkerUpdate() {
           </div>
           <button
             onClick={() => setShowUpdate(false)}
-            className="flex-shrink-0 text-violet-200 hover:text-white transition-colors"
+            className="flex-shrink-0 text-violet-200 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
           >
             <X className="h-4 w-4" />
           </button>

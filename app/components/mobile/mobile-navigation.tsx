@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -6,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
@@ -44,7 +43,6 @@ const mobileNavSections = [
     items: [
       { name: 'Abstract', href: '/reports/abstract', icon: Calculator, adminOnly: false },
       { name: 'Steel PVC Forecast', href: '/pvc-forecast', icon: TrendingUp, adminOnly: false },
-
       { name: 'Price Indices', href: '/indices', icon: TrendingUp, adminOnly: false },
       { name: 'Component Index Documents', href: '/indices/component-documents', icon: FileText, adminOnly: true },
       { name: 'Classifications', href: '/classifications', icon: ListChecks, adminOnly: true },
@@ -70,7 +68,11 @@ const quickActions = [
   { name: 'New Contract', href: '/contracts/new', icon: Building2, color: 'bg-gradient-to-br from-blue-500 to-blue-600', adminOnly: true },
 ];
 
-export default function MobileNavigation() {
+interface MobileNavigationProps {
+  asSheet?: boolean;
+}
+
+export default function MobileNavigation({ asSheet = false }: MobileNavigationProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [isOpen, setIsOpen] = useState(false);
@@ -89,7 +91,7 @@ export default function MobileNavigation() {
       case 'contractor':
         return 'Contractor';
       default:
-        return 'Contractor'; // Default to Contractor
+        return 'Contractor';
     }
   };
   
@@ -97,9 +99,7 @@ export default function MobileNavigation() {
   const filteredSections = mobileNavSections.map(section => ({
     ...section,
     items: section.items.filter(item => {
-      // Admin-only items
       if ((item as any).adminOnly && !isAdmin) return false;
-      // Railway official-only items
       if ((item as any).railwayOfficialOnly && !isRailwayOfficial) return false;
       return true;
     })
@@ -109,6 +109,122 @@ export default function MobileNavigation() {
     signOut({ callbackUrl: '/auth/signin' });
     setIsOpen(false);
   };
+
+  const NavLink = ({ href, onClick, className, children }: { href: string; onClick?: () => void; className?: string; children: React.ReactNode }) => {
+    const content = (
+      <Link href={href} onClick={onClick} className={className}>
+        {children}
+      </Link>
+    );
+    return asSheet ? <SheetClose asChild>{content}</SheetClose> : content;
+  };
+
+  const menuContent = (
+    <div className="flex flex-col h-full bg-white">
+      {/* Header */}
+      <SheetHeader className="px-6 py-5 bg-gradient-to-br from-purple-600 to-purple-700 text-white">
+        <SheetTitle className="text-left text-white text-xl font-bold">
+          IR-PVC
+        </SheetTitle>
+        {session?.user && (
+          <div className="flex items-center space-x-3 mt-3 pt-3 border-t border-purple-500">
+            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+              <span className="text-lg font-medium text-white">
+                {session.user.name?.[0] || session.user.email?.[0] || 'U'}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-white truncate">
+                {session.user.name || 'User'}
+              </div>
+              <div className="text-xs text-purple-200 truncate">
+                {session.user.email}
+              </div>
+              <div className="text-xs text-purple-200 font-medium mt-0.5">
+                {getRoleLabel(role)}
+              </div>
+            </div>
+          </div>
+        )}
+      </SheetHeader>
+
+      <div className="flex-1 overflow-y-auto py-2">
+        {/* Quick Actions */}
+        {filteredQuickActions.length > 0 && (
+          <div className="px-4 py-3">
+            <div className="grid grid-cols-2 gap-3">
+              {filteredQuickActions.map((action) => (
+                <NavLink
+                  key={action.href}
+                  href={action.href}
+                  onClick={() => setIsOpen(false)}
+                  className="group"
+                >
+                  <div className={`flex flex-col items-center justify-center p-4 rounded-xl ${action.color} text-white hover:shadow-lg transition-all duration-200 transform hover:scale-105`}>
+                    <action.icon className="h-6 w-6 mb-2" />
+                    <span className="text-xs font-medium text-center">
+                      {action.name}
+                    </span>
+                  </div>
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {filteredQuickActions.length > 0 && <Separator className="my-2" />}
+
+        {/* Navigation Sections */}
+        {filteredSections.map((section, idx) => (
+          <div key={section.title} className="px-4 py-3">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-3">
+              {section.title}
+            </h3>
+            <div className="space-y-1">
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className={cn(
+                    "flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-150",
+                    pathname === item.href
+                      ? "bg-purple-50 text-purple-700 font-medium"
+                      : "text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+                  )}
+                >
+                  <item.icon className={cn(
+                    "h-5 w-5",
+                    pathname === item.href ? "text-purple-600" : "text-gray-500"
+                  )} />
+                  <span className="flex-1 text-sm">{item.name}</span>
+                </NavLink>
+              ))}
+            </div>
+            {idx < filteredSections.length - 1 && (
+              <Separator className="mt-3" />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Footer - Sign Out */}
+      <div className="border-t bg-gray-50 px-4 py-3">
+        <Button
+          onClick={handleSignOut}
+          variant="ghost"
+          className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
+        >
+          <LogOut className="h-4 w-4 mr-3" />
+          Sign Out
+        </Button>
+      </div>
+    </div>
+  );
+
+  if (asSheet) {
+    return menuContent;
+  }
 
   return (
     <>
@@ -123,106 +239,7 @@ export default function MobileNavigation() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-[85vw] max-w-sm p-0">
-                <div className="flex flex-col h-full">
-                  {/* Header */}
-                  <SheetHeader className="px-6 py-5 bg-gradient-to-br from-purple-600 to-purple-700 text-white">
-                    <SheetTitle className="text-left text-white text-xl font-bold">
-                      IR-PVC
-                    </SheetTitle>
-                    {session?.user && (
-                      <div className="flex items-center space-x-3 mt-3 pt-3 border-t border-purple-500">
-                        <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                          <span className="text-lg font-medium text-white">
-                            {session.user.name?.[0] || session.user.email?.[0] || 'U'}
-                          </span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-white truncate">
-                            {session.user.name || 'User'}
-                          </div>
-                          <div className="text-xs text-purple-200 truncate">
-                            {session.user.email}
-                          </div>
-                          <div className="text-xs text-purple-200 font-medium mt-0.5">
-                            {getRoleLabel(role)}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </SheetHeader>
-
-                  <div className="flex-1 overflow-y-auto py-2">
-                    {/* Quick Actions */}
-                    {filteredQuickActions.length > 0 && (
-                      <div className="px-4 py-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          {filteredQuickActions.map((action) => (
-                            <Link
-                              key={action.href}
-                              href={action.href}
-                              onClick={() => setIsOpen(false)}
-                              className="group"
-                            >
-                              <div className={`flex flex-col items-center justify-center p-4 rounded-xl ${action.color} text-white hover:shadow-lg transition-all duration-200 transform hover:scale-105`}>
-                                <action.icon className="h-6 w-6 mb-2" />
-                                <span className="text-xs font-medium text-center">
-                                  {action.name}
-                                </span>
-                              </div>
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {filteredQuickActions.length > 0 && <Separator className="my-2" />}
-
-                    {/* Navigation Sections */}
-                    {filteredSections.map((section, idx) => (
-                      <div key={section.title} className="px-4 py-3">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-3">
-                          {section.title}
-                        </h3>
-                        <div className="space-y-1">
-                          {section.items.map((item) => (
-                            <Link
-                              key={item.href}
-                              href={item.href}
-                              onClick={() => setIsOpen(false)}
-                              className={cn(
-                                "flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-150",
-                                pathname === item.href
-                                  ? "bg-purple-50 text-purple-700 font-medium"
-                                  : "text-gray-700 hover:bg-gray-50 active:bg-gray-100"
-                              )}
-                            >
-                              <item.icon className={cn(
-                                "h-5 w-5",
-                                pathname === item.href ? "text-purple-600" : "text-gray-500"
-                              )} />
-                              <span className="flex-1 text-sm">{item.name}</span>
-                            </Link>
-                          ))}
-                        </div>
-                        {idx < filteredSections.length - 1 && (
-                          <Separator className="mt-3" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Footer - Sign Out */}
-                  <div className="border-t bg-gray-50 px-4 py-3">
-                    <Button
-                      onClick={handleSignOut}
-                      variant="ghost"
-                      className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <LogOut className="h-4 w-4 mr-3" />
-                      Sign Out
-                    </Button>
-                  </div>
-                </div>
+                {menuContent}
               </SheetContent>
             </Sheet>
             
