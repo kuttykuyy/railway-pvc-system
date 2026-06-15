@@ -61,10 +61,10 @@ export function Footer() {
               <li className="flex items-start space-x-2">
                 <Mail className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
                 <a 
-                  href="mailto:admin@irpvc.in" 
+                  href="mailto:admin@illall.in" 
                   className="text-gray-300 hover:text-blue-400 transition-colors break-all"
                 >
-                  admin@irpvc.in
+                  admin@illall.in
                 </a>
               </li>
               <li className="flex items-start space-x-2">

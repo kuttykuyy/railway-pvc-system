@@ -124,7 +124,7 @@ export default function PaymentGuidePage() {
                   </div>
                   <div>
                     <p className="text-xs text-slate-400 font-light">Email Address</p>
-                    <a href="mailto:admin@irpvc.in" className="text-sm font-bold text-emerald-600 hover:underline">admin@irpvc.in</a>
+                    <a href="mailto:admin@illall.in" className="text-sm font-bold text-emerald-600 hover:underline">admin@illall.in</a>
                   </div>
                 </div>
               </div>
@@ -190,7 +190,7 @@ export default function PaymentGuidePage() {
               <div className="p-6 bg-slate-50/60 border border-slate-100 rounded-2xl">
                 <ol className="space-y-4 text-sm">
                   {[
-                    { step: 1, title: 'Initiate Contact', desc: 'Call +91 9944776689 or email admin@irpvc.in to request credits.' },
+                    { step: 1, title: 'Initiate Contact', desc: 'Call +91 9944776689 or email admin@illall.in to request credits.' },
                     { step: 2, title: 'Provide Account Details', desc: 'Mention your registered account name and email address.' },
                     { step: 3, title: 'Complete Payment', desc: 'Send payment via bank transfer or UPI as instructed by the administrator.' },
                     { step: 4, title: 'Confirmation', desc: 'Once verified, your credits will be added to your balance immediately.' },

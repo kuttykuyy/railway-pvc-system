@@ -106,9 +106,12 @@ export default function HomePage() {
                     priority
                   />
                 </div>
-                <div className="mt-8 text-center relative z-10">
-                  <p className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-2">Developed By</p>
-                  <p className="text-base sm:text-lg text-slate-700 font-medium leading-tight">Southern Railway Contractors Association<br/><span className="text-slate-500">Tiruchirappalli Division</span></p>
+                 <div className="mt-8 text-center relative z-10">
+                  <p className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-2">Developed For</p>
+                  <p className="text-base sm:text-lg text-slate-700 font-semibold leading-tight">Southern Railway Contractors Association<br/><span className="text-slate-500 font-medium">Tiruchirappalli Division</span></p>
+                  <p className="text-xs text-slate-400 font-normal mt-4 border-t border-slate-100 pt-3">
+                    Powered by <strong className="text-indigo-600 font-semibold">ILLALL TECH</strong>
+                  </p>
                 </div>
               </div>
             </div>

@@ -154,7 +154,7 @@ export function CreditTopupDialog({ currentBalance, children }: CreditTopupDialo
                 📞 Contact Information
               </div>
               <div className="text-xs text-blue-700 space-y-1">
-                 <div>📧 Email: admin@irpvc.in</div>
+                 <div>📧 Email: admin@illall.in</div>
                 <div>💬 WhatsApp: +91 9944776689</div>
               </div>
             </div>
