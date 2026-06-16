@@ -6,24 +6,15 @@
 
 import { prisma } from './db';
 
-// @ts-ignore
-const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.mjs');
-pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-
 /**
- * Extracts raw text from a base64-encoded PDF using pdfjs-dist.
- * Returns all page text joined with newlines.
+ * Extracts raw text from a base64-encoded PDF using pdf-parse (no canvas required).
  */
 async function extractTextFromPdf(base64: string): Promise<string> {
+  // Dynamic import avoids bundling issues in Next.js serverless functions
+  const pdfParse = (await import('pdf-parse')).default;
   const buffer = Buffer.from(base64, 'base64');
-  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer), disableWorker: true }).promise;
-  const pageTexts: string[] = [];
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    pageTexts.push(content.items.map((item: any) => item.str).join(' '));
-  }
-  return pageTexts.join('\n');
+  const data = await pdfParse(buffer);
+  return data.text;
 }
 
 const PPAC_BASE_URL = 'https://ppac.gov.in';
