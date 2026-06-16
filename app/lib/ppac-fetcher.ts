@@ -249,32 +249,32 @@ Rules:
   
   // Parse JSON from response - try multiple extraction strategies
   let jsonStr = '';
-  
-  // Strategy 1: Extract from markdown code block ```json ... ```
-  const codeBlockMatch = content.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
-  if (codeBlockMatch) {
-    jsonStr = codeBlockMatch[1];
-    logger.log('[PPAC Fetcher] Extracted JSON from code block');
+
+  // Strategy 1: Try entire content as JSON (handles {"prices":[...]} and [...] directly)
+  const trimmed = content.trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    jsonStr = trimmed;
+    logger.log('[PPAC Fetcher] Using entire content as JSON');
   }
-  
-  // Strategy 2: Direct JSON array match
+
+  // Strategy 2: Extract array from markdown code block ```json ... ```
+  if (!jsonStr) {
+    const codeBlockMatch = content.match(/```(?:json)?\s*([\[{][\s\S]*?[\]}])\s*```/);
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1];
+      logger.log('[PPAC Fetcher] Extracted JSON from code block');
+    }
+  }
+
+  // Strategy 3: Extract bare JSON array from anywhere in the response
   if (!jsonStr) {
     const directMatch = content.match(/\[\s*\{[\s\S]*\}\s*\]/);
     if (directMatch) {
       jsonStr = directMatch[0];
-      logger.log('[PPAC Fetcher] Extracted JSON via direct match');
+      logger.log('[PPAC Fetcher] Extracted JSON array via direct match');
     }
   }
-  
-  // Strategy 3: Try parsing the entire content as JSON
-  if (!jsonStr) {
-    const trimmed = content.trim();
-    if (trimmed.startsWith('[')) {
-      jsonStr = trimmed;
-      logger.log('[PPAC Fetcher] Using entire content as JSON');
-    }
-  }
-  
+
   if (!jsonStr) {
     console.error('[PPAC Fetcher] Failed to extract JSON. Full AI response:', content);
     throw new Error('Failed to extract JSON from AI response');
