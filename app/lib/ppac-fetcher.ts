@@ -10,10 +10,11 @@ import { prisma } from './db';
  * Extracts raw text from a base64-encoded PDF using pdf-parse (no canvas required).
  */
 async function extractTextFromPdf(base64: string): Promise<string> {
-  // Dynamic import avoids bundling issues in Next.js serverless functions
-  const pdfParse = (await import('pdf-parse')).default;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pdfParse = require('pdf-parse');
   const buffer = Buffer.from(base64, 'base64');
-  const data = await pdfParse(buffer);
+  const fn = typeof pdfParse === 'function' ? pdfParse : pdfParse.default;
+  const data = await fn(buffer);
   return data.text;
 }
 
