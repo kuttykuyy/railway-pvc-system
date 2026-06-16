@@ -291,7 +291,7 @@ export default function MobileDashboard() {
         <QuickAction icon={Plus} label={t('dash.new_bill')} href="/bills/new" />
         <QuickAction icon={Building2} label={t('dash.contract')} href="/contracts/new" />
         <QuickAction icon={BarChart3} label={t('dash.reports')} href="/reports/abstract" />
-        <QuickAction icon={TrendingUp} label={t('dash.forecast')} href="/pvc-forecast" />
+        <QuickAction icon={BarChart3} label={t('dash.forecast')} href="/tendering-estimator" />
       </div>
 
       {/* Tendering Estimator Promotion Banner */}

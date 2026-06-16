@@ -64,7 +64,6 @@ const navigationGroups = [
       { name: 'PVC Bills', href: '/bills', icon: FileText, adminOnly: false },
       { name: 'Bill Approvals', href: '/approvals', icon: CheckSquare, railwayOfficialOnly: true },
       { name: 'Abstract of Bills', href: '/reports/abstract', icon: Calculator, adminOnly: false },
-      { name: 'Steel PVC Forecast', href: '/pvc-forecast', icon: TrendingUp, adminOnly: false },
       { name: 'Tendering Estimator', href: '/tendering-estimator', icon: BarChart3, adminOnly: false },
     ]
   },
