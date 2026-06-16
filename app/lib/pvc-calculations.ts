@@ -571,7 +571,7 @@ export function calculateClassificationBasedPvcWithComponentsAndSteps(
           indexSource: `WPI Iron & Steel Composite (${gccVersion})`,
         };
       }
-    } else
+    } else {
     // Map steel type codes to index names
     const steelTypeMap: { [key: string]: string } = {
       'TMT': 'Steel TMT Bars',
@@ -660,6 +660,7 @@ export function calculateClassificationBasedPvcWithComponentsAndSteps(
         };
       }
     }
+    } // end else (post-Apr-2022 GCC)
   }
 
   const explosivesAvg = indexMap.get('RBI Explosives');
