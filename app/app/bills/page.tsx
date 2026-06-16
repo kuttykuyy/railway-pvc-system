@@ -22,7 +22,6 @@ import { CardGridSkeleton } from '@/components/ui/skeletons/card-skeleton';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { BillStatusBadge } from '@/components/bills/bill-status-badge';
 import { useSession } from 'next-auth/react';
-import { IndicesAvailabilityIndicator } from '@/components/indices-availability-indicator';
 import { WhatsAppSendDialog } from '@/components/whatsapp-send-dialog';
 import { RazorpayTopupDialog } from '@/components/ui/razorpay-topup-dialog';
 
@@ -1160,9 +1159,6 @@ export default function BillsPage() {
           )}
         </div>
       </div>
-
-      {/* Indices Availability Indicator - Prominent display */}
-      <IndicesAvailabilityIndicator />
 
       {/* Search & Filters Panel - Clean Layout */}
       <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl">

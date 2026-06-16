@@ -16,7 +16,6 @@ import { toast } from 'react-hot-toast';
 import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-dialog';
 import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
-import { IndicesAvailabilityIndicator } from '@/components/indices-availability-indicator';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 
 interface Contract {
@@ -479,8 +478,6 @@ export default function BulkBillCreationPage() {
           </div>
         </div>
       )}
-
-      <div className="mb-6"><IndicesAvailabilityIndicator /></div>
 
       <Card>
         <CardHeader>
