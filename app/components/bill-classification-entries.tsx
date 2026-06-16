@@ -324,12 +324,19 @@ export function BillClassificationEntries({
                     <Select
                       value={selectedGroup?.id || ''}
                       onValueChange={(groupId) => {
+                        if (!groupId) return;
                         const group = classificationGroups.find(g => g.id === groupId);
-                        if (group && group.subClassifications.length > 0) {
-                          // Auto-select first sub-classification in the group
-                          const firstSub = group.subClassifications[0];
-                          updateEntry(index, 'subClassificationId', firstSub.id);
-                        }
+                        if (!group) return;
+                        // Clear old sub-classification then set new one
+                        const newEntries = [...entries];
+                        const firstSub = group.subClassifications.find(s => s.isDefault) || group.subClassifications[0];
+                        newEntries[index] = {
+                          ...newEntries[index],
+                          subClassificationId: firstSub?.id || '',
+                          subClassification: firstSub,
+                        };
+                        setEntries(newEntries);
+                        onChange(newEntries);
                       }}
                     >
                       <SelectTrigger id={`group-${index}`}>
@@ -351,7 +358,7 @@ export function BillClassificationEntries({
                       <Label htmlFor={`sub-${index}`}>Sub-Classification</Label>
                       <Select
                         value={entry.subClassificationId || ''}
-                        onValueChange={(value) => updateEntry(index, 'subClassificationId', value)}
+                        onValueChange={(value) => { if (value) updateEntry(index, 'subClassificationId', value); }}
                       >
                         <SelectTrigger id={`sub-${index}`}>
                           <SelectValue placeholder="Select sub-classification" />
