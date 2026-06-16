@@ -10,7 +10,7 @@ import { prisma } from './db';
  * Extracts raw text from a base64-encoded PDF using pdf-parse (no canvas required).
  */
 async function extractTextFromPdf(base64: string): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const pdfParse = require('pdf-parse');
   const buffer = Buffer.from(base64, 'base64');
   const fn = typeof pdfParse === 'function' ? pdfParse : pdfParse.default;
