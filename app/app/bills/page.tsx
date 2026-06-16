@@ -1042,14 +1042,58 @@ export default function BillsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="space-y-4">
-          <div className="h-24 bg-muted animate-pulse rounded-lg" />
-          {viewMode === 'grid' ? (
-            <CardGridSkeleton count={6} />
-          ) : (
-            <TableSkeleton columns={7} rows={5} showCheckbox />
-          )}
+      <div className="space-y-6 px-4 sm:px-0 animate-pulse">
+        {/* Header skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-slate-100 p-6 rounded-2xl">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-purple-100" />
+            <div className="space-y-2">
+              <div className="h-7 w-40 bg-slate-200 rounded-lg" />
+              <div className="h-4 w-64 bg-slate-100 rounded-md" />
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <div className="h-11 w-28 bg-slate-100 rounded-xl" />
+            <div className="h-11 w-28 bg-purple-100 rounded-xl" />
+          </div>
+        </div>
+
+        {/* Filters skeleton */}
+        <div className="bg-white border border-slate-100 rounded-2xl p-5">
+          <div className="flex flex-wrap gap-3">
+            <div className="h-10 w-64 bg-slate-100 rounded-xl" />
+            <div className="h-10 w-36 bg-slate-100 rounded-xl" />
+            <div className="h-10 w-36 bg-slate-100 rounded-xl" />
+            <div className="h-10 w-28 bg-slate-100 rounded-xl ml-auto" />
+          </div>
+        </div>
+
+        {/* Table skeleton */}
+        <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
+          {/* Table header */}
+          <div className="flex items-center gap-4 px-5 py-3 border-b border-slate-100 bg-slate-50/60">
+            <div className="w-4 h-4 bg-slate-200 rounded" />
+            {[100, 140, 80, 90, 90, 80, 70].map((w, i) => (
+              <div key={i} className="h-3 rounded-md bg-slate-200" style={{ width: w }} />
+            ))}
+          </div>
+          {/* Table rows */}
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-4 px-5 py-4 border-b border-slate-50"
+              style={{ opacity: 1 - i * 0.12 }}
+            >
+              <div className="w-4 h-4 bg-slate-100 rounded" />
+              <div className="h-4 w-24 bg-slate-100 rounded-md" />
+              <div className="h-4 w-36 bg-slate-100 rounded-md" />
+              <div className="h-5 w-16 bg-purple-100 rounded-full" />
+              <div className="h-4 w-20 bg-slate-100 rounded-md" />
+              <div className="h-4 w-20 bg-slate-100 rounded-md" />
+              <div className="h-5 w-14 bg-emerald-100 rounded-full" />
+              <div className="h-8 w-8 bg-slate-100 rounded-lg ml-auto" />
+            </div>
+          ))}
         </div>
       </div>
     );
