@@ -4,13 +4,13 @@ import { toISTDate } from '@/lib/ist-utils';
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { format, parse, isValid, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
+import { format, parse, startOfMonth, endOfMonth } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertCircle, CheckCircle, Trash2, Download, Plus, Save, FileSpreadsheet, Loader2, Globe, Zap } from "lucide-react";
+import { AlertCircle, Trash2, Plus, Save, FileSpreadsheet, Loader2, Globe, Zap } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { getClientRoleInfo } from "@/lib/role-auth";
 
@@ -31,12 +31,9 @@ export default function FuelPricesPage() {
 
   const [fuelPrices, setFuelPrices] = useState<FuelPrice[]>([]);
   const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(
     format(toISTDate(new Date()), "yyyy-MM")
   );
-  const [manualEntries, setManualEntries] = useState<FuelPrice[]>([]);
-  const [bulkInput, setBulkInput] = useState("");
   // PPAC Auto-fetch state
   const [ppacFetching, setPpacFetching] = useState(false);
   const [ppacPdfInfo, setPpacPdfInfo] = useState<{url: string; filename: string; date?: string} | null>(null);
@@ -94,148 +91,6 @@ export default function FuelPricesPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Parse bulk input (format: date, delhi, mumbai, chennai, kolkata)
-  const parseBulkInput = () => {
-    const lines = bulkInput.trim().split("\n");
-    const parsed: FuelPrice[] = [];
-    const errors: string[] = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      // Try different formats: comma, tab, or multiple spaces
-      const parts = line.split(/[,\t]+|\s{2,}/).map((p) => p.trim());
-
-      if (parts.length < 5) {
-        // Try parsing as: DD-Mon-YY Delhi Mumbai Chennai Kolkata
-        const dateMatch = line.match(/(\d{1,2}-\w{3}-\d{2,4})/i);
-        if (dateMatch) {
-          const numbers = line.match(/[\d.]+/g);
-          if (numbers && numbers.length >= 5) {
-            const dateStr = dateMatch[1];
-            const parsedDate = parse(dateStr, "dd-MMM-yy", new Date());
-            
-            if (isValid(parsedDate)) {
-              parsed.push({
-                date: format(parsedDate, "yyyy-MM-dd"),
-                delhi: parseFloat(numbers[1]),
-                mumbai: parseFloat(numbers[2]),
-                chennai: parseFloat(numbers[3]),
-                kolkata: parseFloat(numbers[4]),
-                source: "PPAC",
-              });
-              continue;
-            }
-          }
-        }
-        errors.push(`Line ${i + 1}: Invalid format`);
-        continue;
-      }
-
-      // Parse date (try multiple formats)
-      let parsedDate: Date | null = null;
-      const dateStr = parts[0];
-
-      // Try DD-Mon-YY format (e.g., 01-Feb-25)
-      parsedDate = parse(dateStr, "dd-MMM-yy", new Date());
-      if (!isValid(parsedDate)) {
-        parsedDate = parse(dateStr, "dd-MMM-yyyy", new Date());
-      }
-      if (!isValid(parsedDate)) {
-        parsedDate = parse(dateStr, "yyyy-MM-dd", new Date());
-      }
-      if (!isValid(parsedDate)) {
-        parsedDate = parse(dateStr, "dd/MM/yyyy", new Date());
-      }
-
-      if (!isValid(parsedDate)) {
-        errors.push(`Line ${i + 1}: Invalid date format "${dateStr}"`);
-        continue;
-      }
-
-      const delhi = parseFloat(parts[1]);
-      const mumbai = parseFloat(parts[2]);
-      const chennai = parseFloat(parts[3]);
-      const kolkata = parseFloat(parts[4]);
-
-      if (isNaN(delhi) || isNaN(mumbai) || isNaN(chennai) || isNaN(kolkata)) {
-        errors.push(`Line ${i + 1}: Invalid price values`);
-        continue;
-      }
-
-      parsed.push({
-        date: format(parsedDate, "yyyy-MM-dd"),
-        delhi,
-        mumbai,
-        chennai,
-        kolkata,
-        source: "PPAC",
-      });
-    }
-
-    if (errors.length > 0) {
-      toast.error(`Found ${errors.length} errors. Check console for details.`);
-      console.error("Parse errors:", errors);
-    }
-
-    if (parsed.length > 0) {
-      setManualEntries(parsed);
-      toast.success(`Parsed ${parsed.length} entries`);
-    }
-  };
-
-  // Import parsed entries to database
-  const importEntries = async () => {
-    if (manualEntries.length === 0) {
-      toast.error("No entries to import");
-      return;
-    }
-
-    try {
-      setImporting(true);
-      const response = await fetch("/api/indices/fuel-prices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prices: manualEntries }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        toast.success(data.message);
-        setManualEntries([]);
-        setBulkInput("");
-        fetchFuelPrices();
-        // Auto-sync to MPNG indices
-        handleSyncToMPNG();
-      } else {
-        toast.error(data.error || "Failed to import");
-      }
-    } catch (error) {
-      console.error("Error importing:", error);
-      toast.error("Failed to import fuel prices");
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  // Generate template for month
-  const generateTemplate = () => {
-    const monthDate = parse(selectedMonth, "yyyy-MM", new Date());
-    const days = eachDayOfInterval({
-      start: startOfMonth(monthDate),
-      end: endOfMonth(monthDate),
-    });
-
-    const template = days
-      .map((day) => `${format(day, "dd-MMM-yy")}\t94.77\t103.50\t100.80\t104.95`)
-      .join("\n");
-
-    setBulkInput(template);
-    toast.success("Template generated. Update prices and click Parse.");
   };
 
   // Delete prices for month
@@ -636,90 +491,6 @@ export default function FuelPricesPage() {
               </CardContent>
             </Card>
 
-            {/* Manual Import Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Manual Import / Paste Data</CardTitle>
-                <CardDescription>
-                  Paste data from PPAC website or enter manually. Format: Date, Delhi, Mumbai, Chennai, Kolkata
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={generateTemplate}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Generate Template for {selectedMonth}
-                  </Button>
-                </div>
-                <div>
-                  <Label>Bulk Input (paste from PPAC or Excel)</Label>
-                  <textarea
-                    className="w-full h-64 p-3 border rounded-md font-mono text-sm"
-                    placeholder={`Paste data here. Supported formats:\n\n01-Feb-25  94.77  103.50  100.80  104.95\n02-Feb-25  94.77  103.50  100.80  104.95\n\nOR\n\n2025-02-01, 94.77, 103.50, 100.80, 104.95\n2025-02-02, 94.77, 103.50, 100.80, 104.95`}
-                    value={bulkInput}
-                    onChange={(e) => setBulkInput(e.target.value)}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={parseBulkInput} disabled={!bulkInput.trim()}>
-                    Parse Data
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setBulkInput("");
-                      setManualEntries([]);
-                    }}
-                  >
-                    Clear
-                  </Button>
-                </div>
-                {manualEntries.length > 0 && (
-                  <div className="border rounded-lg p-4 space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h3 className="font-semibold flex items-center gap-2">
-                        <CheckCircle className="h-5 w-5 text-green-600" />
-                        {manualEntries.length} entries parsed
-                      </h3>
-                      <Button onClick={importEntries} disabled={importing}>
-                        <Save className="h-4 w-4 mr-2" />
-                        {importing ? "Importing..." : "Import to Database"}
-                      </Button>
-                    </div>
-                    <div className="max-h-64 overflow-y-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Date</TableHead>
-                            <TableHead className="text-right">Delhi</TableHead>
-                            <TableHead className="text-right">Mumbai</TableHead>
-                            <TableHead className="text-right">Chennai</TableHead>
-                            <TableHead className="text-right">Kolkata</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {manualEntries.slice(0, 10).map((entry, idx) => (
-                            <TableRow key={idx}>
-                              <TableCell>{entry.date}</TableCell>
-                              <TableCell className="text-right">{entry.delhi.toFixed(2)}</TableCell>
-                              <TableCell className="text-right">{entry.mumbai.toFixed(2)}</TableCell>
-                              <TableCell className="text-right">{entry.chennai.toFixed(2)}</TableCell>
-                              <TableCell className="text-right">{entry.kolkata.toFixed(2)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                      {manualEntries.length > 10 && (
-                        <div className="text-sm text-muted-foreground text-center py-2">
-                          ... and {manualEntries.length - 10} more entries
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
             {/* MPNG Sync Card */}
             <Card className="border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50">
               <CardContent className="pt-4 pb-4">
@@ -776,13 +547,24 @@ export default function FuelPricesPage() {
                 <div className="flex items-center gap-4">
                   <div>
                     <Label htmlFor="month">Month</Label>
-                    <Input
+                    <select
                       id="month"
-                      type="month"
                       value={selectedMonth}
                       onChange={(e) => setSelectedMonth(e.target.value)}
-                      className="w-40"
-                    />
+                      className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    >
+                      {Array.from({ length: 24 }, (_, i) => {
+                        const d = new Date();
+                        d.setDate(1);
+                        d.setMonth(d.getMonth() - 12 + i);
+                        const val = format(d, "yyyy-MM");
+                        return (
+                          <option key={val} value={val}>
+                            {format(d, "MMM yyyy")}
+                          </option>
+                        );
+                      })}
+                    </select>
                   </div>
                   <Button
                     variant="destructive"
