@@ -10,8 +10,20 @@ import { prisma } from './db';
  * Extracts raw text from a base64-encoded PDF using pdf-parse (no canvas required).
  */
 async function extractTextFromPdf(base64: string): Promise<string> {
+  // pdfjs-dist (bundled inside pdf-parse) references these canvas globals at
+  // module-init time even when only doing text extraction. Stub them out so
+  // the module loads without crashing in Vercel's serverless environment.
+  if (typeof (globalThis as any).DOMMatrix === 'undefined') {
+    (globalThis as any).DOMMatrix = class DOMMatrix { constructor() {} };
+  }
+  if (typeof (globalThis as any).ImageData === 'undefined') {
+    (globalThis as any).ImageData = class ImageData { constructor() {} };
+  }
+  if (typeof (globalThis as any).Path2D === 'undefined') {
+    (globalThis as any).Path2D = class Path2D { constructor() {} };
+  }
+
   const buffer = Buffer.from(base64, 'base64');
-  // pdf-parse ships CommonJS; use Function cast to avoid ESM type issues
   const mod = await import('pdf-parse');
   const fn = (typeof mod === 'function' ? mod : (mod as any).default ?? mod) as (buf: Buffer) => Promise<{ text: string }>;
   const data = await fn(buffer);
