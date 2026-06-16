@@ -7,27 +7,52 @@
 import { prisma } from './db';
 
 /**
- * Extracts raw text from a base64-encoded PDF using pdf-parse (no canvas required).
+ * Extracts raw text from a base64-encoded PDF without any external library.
+ * Uses Node.js built-in zlib to decompress FlateDecode streams, then extracts
+ * text from BT...ET blocks. Works in Vercel serverless with no canvas APIs.
  */
 async function extractTextFromPdf(base64: string): Promise<string> {
-  // pdfjs-dist (bundled inside pdf-parse) references these canvas globals at
-  // module-init time even when only doing text extraction. Stub them out so
-  // the module loads without crashing in Vercel's serverless environment.
-  if (typeof (globalThis as any).DOMMatrix === 'undefined') {
-    (globalThis as any).DOMMatrix = class DOMMatrix { constructor() {} };
-  }
-  if (typeof (globalThis as any).ImageData === 'undefined') {
-    (globalThis as any).ImageData = class ImageData { constructor() {} };
-  }
-  if (typeof (globalThis as any).Path2D === 'undefined') {
-    (globalThis as any).Path2D = class Path2D { constructor() {} };
+  const { inflateSync } = await import('zlib');
+  const buf = Buffer.from(base64, 'base64');
+  const pdfStr = buf.toString('binary');
+  const texts: string[] = [];
+
+  // Find every stream...endstream block in the PDF
+  const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let streamMatch;
+  while ((streamMatch = streamRegex.exec(pdfStr)) !== null) {
+    let streamData = Buffer.from(streamMatch[1], 'binary');
+
+    // Most content streams are zlib-compressed (FlateDecode); try decompressing
+    try { streamData = inflateSync(streamData); } catch { /* uncompressed stream */ }
+
+    const s = streamData.toString('latin1');
+
+    // Extract text operators from BT...ET blocks
+    const btEtRegex = /BT([\s\S]*?)ET/g;
+    let btMatch;
+    while ((btMatch = btEtRegex.exec(s)) !== null) {
+      const block = btMatch[1];
+      // (text) Tj
+      const tjRegex = /\(([^)\\]*(?:\\.[^)\\]*)*)\)\s*Tj/g;
+      let tjM;
+      while ((tjM = tjRegex.exec(block)) !== null) {
+        texts.push(tjM[1].replace(/\\([()\\])/g, '$1'));
+      }
+      // [(text)...] TJ
+      const tjArrRegex = /\[([^\]]*)\]\s*TJ/g;
+      let arrM;
+      while ((arrM = tjArrRegex.exec(block)) !== null) {
+        const innerRegex = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g;
+        let innerM;
+        while ((innerM = innerRegex.exec(arrM[1])) !== null) {
+          texts.push(innerM[1].replace(/\\([()\\])/g, '$1'));
+        }
+      }
+    }
   }
 
-  const buffer = Buffer.from(base64, 'base64');
-  const mod = await import('pdf-parse');
-  const fn = (typeof mod === 'function' ? mod : (mod as any).default ?? mod) as (buf: Buffer) => Promise<{ text: string }>;
-  const data = await fn(buffer);
-  return data.text;
+  return texts.join(' ');
 }
 
 const PPAC_BASE_URL = 'https://ppac.gov.in';
