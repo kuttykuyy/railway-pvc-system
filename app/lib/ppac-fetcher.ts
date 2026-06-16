@@ -6,6 +6,26 @@
 
 import { prisma } from './db';
 
+// @ts-ignore
+const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.mjs');
+pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+
+/**
+ * Extracts raw text from a base64-encoded PDF using pdfjs-dist.
+ * Returns all page text joined with newlines.
+ */
+async function extractTextFromPdf(base64: string): Promise<string> {
+  const buffer = Buffer.from(base64, 'base64');
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer), disableWorker: true }).promise;
+  const pageTexts: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    pageTexts.push(content.items.map((item: any) => item.str).join(' '));
+  }
+  return pageTexts.join('\n');
+}
+
 const PPAC_BASE_URL = 'https://ppac.gov.in';
 const PPAC_RSP_PAGE = 'https://ppac.gov.in/retail-selling-price-rsp-of-petrol-diesel-and-domestic-lpg/rsp-of-petrol-and-diesel-in-metro-cities-since-16-6-2017';
 
@@ -130,7 +150,9 @@ export async function downloadPPACPdf(url: string): Promise<string> {
 }
 
 /**
- * Calls AbacusAI RouteLLM to extract fuel prices from PDF
+ * Calls AbacusAI RouteLLM to extract fuel prices from PDF.
+ * Extracts PDF text locally first (route-llm is text-only), then sends
+ * the raw table text to the LLM for structured JSON extraction.
  */
 export async function extractFuelPricesWithAI(base64: string): Promise<FuelPriceEntry[]> {
   const apiKey = process.env.ABACUSAI_API_KEY;
@@ -138,7 +160,16 @@ export async function extractFuelPricesWithAI(base64: string): Promise<FuelPrice
     throw new Error('ABACUSAI_API_KEY not configured');
   }
 
-  logger.log('[PPAC Fetcher] Calling AI to extract diesel prices...');
+  // Extract text from PDF locally — route-llm doesn't support file attachments
+  logger.log('[PPAC Fetcher] Extracting text from PDF...');
+  const pdfText = await extractTextFromPdf(base64);
+  logger.log(`[PPAC Fetcher] Extracted ${pdfText.length} chars of PDF text`);
+
+  if (!pdfText.trim()) {
+    throw new Error('No text could be extracted from the PPAC PDF (scanned/image PDF?)');
+  }
+
+  logger.log('[PPAC Fetcher] Calling RouteLLM to parse diesel prices from text...');
 
   const requestBody = JSON.stringify({
     model: 'route-llm',
@@ -147,38 +178,25 @@ export async function extractFuelPricesWithAI(base64: string): Promise<FuelPrice
     messages: [
       {
         role: 'user',
-        content: [
-          {
-            type: 'file',
-            file: {
-              filename: 'ppac-diesel-prices.pdf',
-              file_data: `data:application/pdf;base64,${base64}`,
-            },
-          },
-          {
-            type: 'text',
-            text: `Extract all DIESEL/HSD prices from this PPAC (Petroleum Planning & Analysis Cell) PDF document.
+        content: `Extract all DIESEL/HSD retail selling prices from the following PPAC (Petroleum Planning & Analysis Cell) text data for Delhi, Mumbai, Chennai, and Kolkata.
 
-The PDF contains daily retail selling prices for Delhi, Mumbai, Chennai, and Kolkata.
+IMPORTANT: Extract DIESEL/HSD prices only (NOT Petrol/MS prices). In PPAC tables, Diesel prices are usually in the right half.
 
-IMPORTANT: Extract DIESEL/HSD prices (NOT Petrol/MS prices). In PPAC documents, Diesel prices are usually in the right half of the table.
-
-Return the data as a JSON array with this exact format:
-[
+Return a JSON object with a single key "prices" containing an array:
+{"prices": [
   {"date": "YYYY-MM-DD", "delhi": 87.67, "mumbai": 90.03, "chennai": 92.39, "kolkata": 92.02},
   ...
-]
+]}
 
 Rules:
 1. Use YYYY-MM-DD date format (e.g., 2025-02-15)
-2. All price values should be numbers (not strings)
-3. Extract ALL rows from the document
-4. Return a JSON object with a single key "prices" containing the array, like: {"prices": [...]}
-5. For dates like "15-Feb-25", convert to "2025-02-15"
-6. Make sure to extract DIESEL prices, not Petrol
-7. Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`,
-          },
-        ],
+2. All price values must be numbers (not strings)
+3. Extract ALL date rows present in the text
+4. For dates like "15-Feb-25" convert to "2025-02-15", for "15/02/2025" convert to "2025-02-15"
+5. Respond with raw JSON only — no markdown, no code blocks
+
+PDF TEXT:
+${pdfText.substring(0, 12000)}`,
       },
     ],
   });
