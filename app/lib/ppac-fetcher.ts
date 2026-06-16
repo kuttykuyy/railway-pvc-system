@@ -280,18 +280,42 @@ Rules:
     throw new Error('Failed to extract JSON from AI response');
   }
   
-  let parsedJson = JSON.parse(jsonStr);
-  
-  // Handle both {"prices": [...]} and direct [...] formats
-  const pricesArray = Array.isArray(parsedJson) ? parsedJson : (parsedJson.prices || parsedJson.data || Object.values(parsedJson).find(v => Array.isArray(v)));
-  if (!Array.isArray(pricesArray)) {
-    console.error('[PPAC Fetcher] Parsed JSON is not an array:', typeof parsedJson);
+  // Parse JSON — fall back to extracting complete entries if response was truncated
+  let pricesArray: any[] | null = null;
+  try {
+    const parsedJson = JSON.parse(jsonStr);
+    pricesArray = Array.isArray(parsedJson)
+      ? parsedJson
+      : (parsedJson.prices || parsedJson.data || Object.values(parsedJson).find((v: any) => Array.isArray(v)) as any[] || null);
+  } catch (parseError: any) {
+    // Response was truncated mid-JSON — extract all complete price objects via regex
+    logger.warn(`[PPAC Fetcher] JSON parse failed (${parseError.message}), attempting partial recovery...`);
+    const entryPattern = /\{\s*"date"\s*:\s*"(\d{4}-\d{2}-\d{2})"\s*,\s*"delhi"\s*:\s*([\d.]+)\s*,\s*"mumbai"\s*:\s*([\d.]+)\s*,\s*"chennai"\s*:\s*([\d.]+)\s*,\s*"kolkata"\s*:\s*([\d.]+)\s*\}/g;
+    const recovered: FuelPriceEntry[] = [];
+    let match;
+    while ((match = entryPattern.exec(content)) !== null) {
+      recovered.push({
+        date: match[1],
+        delhi: parseFloat(match[2]),
+        mumbai: parseFloat(match[3]),
+        chennai: parseFloat(match[4]),
+        kolkata: parseFloat(match[5]),
+      });
+    }
+    if (recovered.length > 0) {
+      logger.log(`[PPAC Fetcher] Recovered ${recovered.length} entries from truncated response`);
+      pricesArray = recovered;
+    }
+  }
+
+  if (!Array.isArray(pricesArray) || pricesArray.length === 0) {
+    console.error('[PPAC Fetcher] Could not extract price entries from AI response');
     throw new Error('AI response does not contain a valid prices array');
   }
-  
+
   const prices: FuelPriceEntry[] = pricesArray;
   logger.log(`[PPAC Fetcher] Extracted ${prices.length} diesel price entries`);
-  
+
   return prices;
 }
 
