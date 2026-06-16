@@ -10,8 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, CheckCircle, Upload, Trash2, Download, Plus, Save, FileSpreadsheet, Loader2, Globe, Zap } from "lucide-react";
+import { AlertCircle, CheckCircle, Trash2, Download, Plus, Save, FileSpreadsheet, Loader2, Globe, Zap } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { getClientRoleInfo } from "@/lib/role-auth";
 
@@ -469,21 +468,259 @@ export default function FuelPricesPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="view" className="space-y-4">
-        <div className="flex justify-between items-center">
-          <TabsList>
-            <TabsTrigger value="view">View Prices</TabsTrigger>
-            {isAdmin && <TabsTrigger value="import">Import Data</TabsTrigger>}
-          </TabsList>
+      <div className="space-y-4">
+        <div className="flex justify-end">
           <Button onClick={handleDownloadExcel} variant="outline" className="gap-2">
             <FileSpreadsheet className="h-4 w-4" />
             Download All Data (Excel)
           </Button>
         </div>
 
-        <TabsContent value="view" className="space-y-4">
-          {/* MPNG Sync Card - Admin Only */}
-          {isAdmin && (
+        {/* Admin import tools */}
+        {isAdmin && (
+          <>
+            {/* PPAC Auto-Fetch Card */}
+            <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="h-5 w-5 text-blue-600" />
+                  Auto-Fetch from PPAC Website
+                </CardTitle>
+                <CardDescription>
+                  Automatically download and import the latest diesel prices from ppac.gov.in
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <Button
+                    variant="outline"
+                    onClick={checkPPAC}
+                    disabled={ppacFetching}
+                    className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                  >
+                    {ppacFetching ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Checking...
+                      </>
+                    ) : (
+                      <>
+                        <Globe className="h-4 w-4 mr-2" />
+                        Check PPAC
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handlePPACFetch}
+                    disabled={ppacFetching}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    {ppacFetching ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Fetching...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-4 w-4 mr-2" />
+                        Fetch &amp; Import Now
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {ppacPdfInfo && (
+                  <div className="text-sm bg-white/50 rounded p-3 border border-blue-100">
+                    <p><strong>Latest PDF:</strong> {ppacPdfInfo.filename}</p>
+                    {ppacPdfInfo.date && (
+                      <p className="text-muted-foreground">PDF Date: {ppacPdfInfo.date}</p>
+                    )}
+                    <a
+                      href={ppacPdfInfo.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline text-xs"
+                    >
+                      View PDF on PPAC website →
+                    </a>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Single Entry Card */}
+            <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-5 w-5 text-green-600" />
+                  Add Single Entry
+                </CardTitle>
+                <CardDescription>
+                  Manually enter diesel price for a specific date
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-end">
+                  <div className="col-span-2 md:col-span-1">
+                    <Label htmlFor="entry-date">Date</Label>
+                    <Input
+                      id="entry-date"
+                      type="date"
+                      value={singleEntry.date}
+                      onChange={(e) => setSingleEntry({ ...singleEntry, date: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="entry-delhi">Delhi (₹/L)</Label>
+                    <Input
+                      id="entry-delhi"
+                      type="number"
+                      step="0.01"
+                      placeholder="94.77"
+                      value={singleEntry.delhi}
+                      onChange={(e) => setSingleEntry({ ...singleEntry, delhi: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="entry-mumbai">Mumbai (₹/L)</Label>
+                    <Input
+                      id="entry-mumbai"
+                      type="number"
+                      step="0.01"
+                      placeholder="103.54"
+                      value={singleEntry.mumbai}
+                      onChange={(e) => setSingleEntry({ ...singleEntry, mumbai: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="entry-chennai">Chennai (₹/L)</Label>
+                    <Input
+                      id="entry-chennai"
+                      type="number"
+                      step="0.01"
+                      placeholder="100.84"
+                      value={singleEntry.chennai}
+                      onChange={(e) => setSingleEntry({ ...singleEntry, chennai: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="entry-kolkata">Kolkata (₹/L)</Label>
+                    <Input
+                      id="entry-kolkata"
+                      type="number"
+                      step="0.01"
+                      placeholder="105.45"
+                      value={singleEntry.kolkata}
+                      onChange={(e) => setSingleEntry({ ...singleEntry, kolkata: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Button
+                      onClick={saveSingleEntry}
+                      disabled={savingSingle}
+                      className="w-full bg-green-600 hover:bg-green-700"
+                    >
+                      {savingSingle ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Save
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Manual Import Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Manual Import / Paste Data</CardTitle>
+                <CardDescription>
+                  Paste data from PPAC website or enter manually. Format: Date, Delhi, Mumbai, Chennai, Kolkata
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={generateTemplate}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Generate Template for {selectedMonth}
+                  </Button>
+                </div>
+                <div>
+                  <Label>Bulk Input (paste from PPAC or Excel)</Label>
+                  <textarea
+                    className="w-full h-64 p-3 border rounded-md font-mono text-sm"
+                    placeholder={`Paste data here. Supported formats:\n\n01-Feb-25  94.77  103.50  100.80  104.95\n02-Feb-25  94.77  103.50  100.80  104.95\n\nOR\n\n2025-02-01, 94.77, 103.50, 100.80, 104.95\n2025-02-02, 94.77, 103.50, 100.80, 104.95`}
+                    value={bulkInput}
+                    onChange={(e) => setBulkInput(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={parseBulkInput} disabled={!bulkInput.trim()}>
+                    Parse Data
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setBulkInput("");
+                      setManualEntries([]);
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </div>
+                {manualEntries.length > 0 && (
+                  <div className="border rounded-lg p-4 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-semibold flex items-center gap-2">
+                        <CheckCircle className="h-5 w-5 text-green-600" />
+                        {manualEntries.length} entries parsed
+                      </h3>
+                      <Button onClick={importEntries} disabled={importing}>
+                        <Save className="h-4 w-4 mr-2" />
+                        {importing ? "Importing..." : "Import to Database"}
+                      </Button>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead className="text-right">Delhi</TableHead>
+                            <TableHead className="text-right">Mumbai</TableHead>
+                            <TableHead className="text-right">Chennai</TableHead>
+                            <TableHead className="text-right">Kolkata</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {manualEntries.slice(0, 10).map((entry, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell>{entry.date}</TableCell>
+                              <TableCell className="text-right">{entry.delhi.toFixed(2)}</TableCell>
+                              <TableCell className="text-right">{entry.mumbai.toFixed(2)}</TableCell>
+                              <TableCell className="text-right">{entry.chennai.toFixed(2)}</TableCell>
+                              <TableCell className="text-right">{entry.kolkata.toFixed(2)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      {manualEntries.length > 10 && (
+                        <div className="text-sm text-muted-foreground text-center py-2">
+                          ... and {manualEntries.length - 10} more entries
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* MPNG Sync Card */}
             <Card className="border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50">
               <CardContent className="pt-4 pb-4">
                 <div className="flex items-center justify-between flex-wrap gap-3">
@@ -524,9 +761,10 @@ export default function FuelPricesPage() {
                 </div>
               </CardContent>
             </Card>
-          )}
+          </>
+        )}
 
-          <Card>
+        <Card>
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
@@ -565,8 +803,6 @@ export default function FuelPricesPage() {
                 <div className="text-center py-8 text-muted-foreground">
                   <AlertCircle className="h-8 w-8 mx-auto mb-2" />
                   No fuel prices found for {selectedMonth}.
-                  <br />
-                  Go to Import Data tab to add prices.
                 </div>
               ) : (
                 <>
@@ -635,282 +871,7 @@ export default function FuelPricesPage() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-
-        {isAdmin && <TabsContent value="import" className="space-y-4">
-          {/* PPAC Auto-Fetch Card */}
-          <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5 text-blue-600" />
-                Auto-Fetch from PPAC Website
-              </CardTitle>
-              <CardDescription>
-                Automatically download and import the latest diesel prices from ppac.gov.in
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-4 flex-wrap">
-                <Button
-                  variant="outline"
-                  onClick={checkPPAC}
-                  disabled={ppacFetching}
-                  className="border-blue-300 text-blue-700 hover:bg-blue-100"
-                >
-                  {ppacFetching ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Checking...
-                    </>
-                  ) : (
-                    <>
-                      <Globe className="h-4 w-4 mr-2" />
-                      Check PPAC
-                    </>
-                  )}
-                </Button>
-                <Button
-                  onClick={handlePPACFetch}
-                  disabled={ppacFetching}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  {ppacFetching ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Fetching...
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="h-4 w-4 mr-2" />
-                      Fetch &amp; Import Now
-                    </>
-                  )}
-                </Button>
-              </div>
-              {ppacPdfInfo && (
-                <div className="text-sm bg-white/50 rounded p-3 border border-blue-100">
-                  <p><strong>Latest PDF:</strong> {ppacPdfInfo.filename}</p>
-                  {ppacPdfInfo.date && (
-                    <p className="text-muted-foreground">PDF Date: {ppacPdfInfo.date}</p>
-                  )}
-                  <a 
-                    href={ppacPdfInfo.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline text-xs"
-                  >
-                    View PDF on PPAC website →
-                  </a>
-                </div>
-              )}
-              <div className="text-sm text-muted-foreground bg-white/50 rounded p-3">
-                <strong>How it works:</strong> Automatically scrapes the PPAC website for the latest 
-                diesel price PDF, downloads it, extracts prices using AI, and imports to the database.
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Single Entry Card */}
-          <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Plus className="h-5 w-5 text-green-600" />
-                Add Single Entry
-              </CardTitle>
-              <CardDescription>
-                Manually enter diesel price for a specific date
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-end">
-                <div className="col-span-2 md:col-span-1">
-                  <Label htmlFor="entry-date">Date</Label>
-                  <Input
-                    id="entry-date"
-                    type="date"
-                    value={singleEntry.date}
-                    onChange={(e) => setSingleEntry({ ...singleEntry, date: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="entry-delhi">Delhi (₹/L)</Label>
-                  <Input
-                    id="entry-delhi"
-                    type="number"
-                    step="0.01"
-                    placeholder="94.77"
-                    value={singleEntry.delhi}
-                    onChange={(e) => setSingleEntry({ ...singleEntry, delhi: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="entry-mumbai">Mumbai (₹/L)</Label>
-                  <Input
-                    id="entry-mumbai"
-                    type="number"
-                    step="0.01"
-                    placeholder="103.54"
-                    value={singleEntry.mumbai}
-                    onChange={(e) => setSingleEntry({ ...singleEntry, mumbai: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="entry-chennai">Chennai (₹/L)</Label>
-                  <Input
-                    id="entry-chennai"
-                    type="number"
-                    step="0.01"
-                    placeholder="100.84"
-                    value={singleEntry.chennai}
-                    onChange={(e) => setSingleEntry({ ...singleEntry, chennai: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="entry-kolkata">Kolkata (₹/L)</Label>
-                  <Input
-                    id="entry-kolkata"
-                    type="number"
-                    step="0.01"
-                    placeholder="105.45"
-                    value={singleEntry.kolkata}
-                    onChange={(e) => setSingleEntry({ ...singleEntry, kolkata: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Button 
-                    onClick={saveSingleEntry} 
-                    disabled={savingSingle}
-                    className="w-full bg-green-600 hover:bg-green-700"
-                  >
-                    {savingSingle ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4 mr-2" />
-                        Save
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Manual Import Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Manual Import / Paste Data</CardTitle>
-              <CardDescription>
-                Paste data from PPAC website or enter manually. Format: Date, Delhi, Mumbai, Chennai, Kolkata
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={generateTemplate}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Generate Template for {selectedMonth}
-                </Button>
-              </div>
-
-              <div>
-                <Label>Bulk Input (paste from PPAC or Excel)</Label>
-                <textarea
-                  className="w-full h-64 p-3 border rounded-md font-mono text-sm"
-                  placeholder={`Paste data here. Supported formats:\n\n01-Feb-25  94.77  103.50  100.80  104.95\n02-Feb-25  94.77  103.50  100.80  104.95\n\nOR\n\n2025-02-01, 94.77, 103.50, 100.80, 104.95\n2025-02-02, 94.77, 103.50, 100.80, 104.95`}
-                  value={bulkInput}
-                  onChange={(e) => setBulkInput(e.target.value)}
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <Button onClick={parseBulkInput} disabled={!bulkInput.trim()}>
-                  Parse Data
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setBulkInput("");
-                    setManualEntries([]);
-                  }}
-                >
-                  Clear
-                </Button>
-              </div>
-
-              {/* Preview parsed entries */}
-              {manualEntries.length > 0 && (
-                <div className="border rounded-lg p-4 space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-semibold flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5 text-green-600" />
-                      {manualEntries.length} entries parsed
-                    </h3>
-                    <Button onClick={importEntries} disabled={importing}>
-                      <Save className="h-4 w-4 mr-2" />
-                      {importing ? "Importing..." : "Import to Database"}
-                    </Button>
-                  </div>
-
-                  <div className="max-h-64 overflow-y-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead className="text-right">Delhi</TableHead>
-                          <TableHead className="text-right">Mumbai</TableHead>
-                          <TableHead className="text-right">Chennai</TableHead>
-                          <TableHead className="text-right">Kolkata</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {manualEntries.slice(0, 10).map((entry, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>{entry.date}</TableCell>
-                            <TableCell className="text-right">{entry.delhi.toFixed(2)}</TableCell>
-                            <TableCell className="text-right">{entry.mumbai.toFixed(2)}</TableCell>
-                            <TableCell className="text-right">{entry.chennai.toFixed(2)}</TableCell>
-                            <TableCell className="text-right">{entry.kolkata.toFixed(2)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    {manualEntries.length > 10 && (
-                      <div className="text-sm text-muted-foreground text-center py-2">
-                        ... and {manualEntries.length - 10} more entries
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Instructions */}
-          <Card>
-            <CardHeader>
-              <CardTitle>How to Get PPAC Data</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <ol className="list-decimal list-inside space-y-2">
-                <li>Visit <a href="https://ppac.gov.in" target="_blank" className="text-blue-600 underline">PPAC Website (ppac.gov.in)</a></li>
-                <li>Go to "Retail Selling Price of Diesel" section</li>
-                <li>Select the desired date range</li>
-                <li>Copy the table data (Date, Delhi, Mumbai, Chennai, Kolkata columns)</li>
-                <li>Paste in the text area above</li>
-                <li>Click "Parse Data" to validate</li>
-                <li>Click "Import to Database" to save</li>
-              </ol>
-              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded">
-                <strong>Note:</strong> The system will automatically calculate monthly averages from daily prices
-                and display them in the MPNG Fuel section of PDF reports.
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>}
-      </Tabs>
+      </div>
     </div>
   );
 }
