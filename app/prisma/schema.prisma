@@ -217,6 +217,7 @@ model Contract {
   completionPeriodMonths       Int?
   contractValue                Float?
   hasRailwaySuppliedMaterials  Boolean              @default(false)
+  gccVersion                   GccVersion?
   pvcApplicable                Boolean              @default(true)
   pvcEligibilityNote           String?
   railwaySuppliedMaterialsNote String?
@@ -364,6 +365,13 @@ enum ComponentType {
   ANGLE_CHANNEL
   PLATES
   OTHER_SECTIONS
+}
+
+enum GccVersion {
+  GCC_JULY_2014    // Tenders up to October 2018
+  GCC_NOV_2018     // Tenders November 2018 – June 2020
+  GCC_JULY_2020    // Tenders July 2020 – March 2022
+  GCC_APR_2022     // Tenders April 2022 onwards
 }
 
 model LabourIndexDocument {

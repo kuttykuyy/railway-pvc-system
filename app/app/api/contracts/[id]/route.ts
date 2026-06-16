@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateApiAccess } from '@/lib/payment-validation';
 import { parseAgreementNumber } from '@/lib/railway-division-helper';
+import { deriveGccVersion } from '@/lib/gcc-version';
 
 export const dynamic = "force-dynamic";
 
@@ -189,7 +190,8 @@ export async function PUT(
         schedules: schedules !== undefined ? (Array.isArray(schedules) ? schedules.filter((s: string) => s && s.trim()) : []) : undefined,
         ...(dateOfOpening && {
           dateOfOpening: new Date(dateOfOpening),
-          baseMonth: new Date(new Date(dateOfOpening).setMonth(new Date(dateOfOpening).getMonth() - 1))
+          baseMonth: new Date(new Date(dateOfOpening).setMonth(new Date(dateOfOpening).getMonth() - 1)),
+          gccVersion: deriveGccVersion(new Date(dateOfOpening))
         })
       },
       include: {
