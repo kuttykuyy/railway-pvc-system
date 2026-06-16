@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
 
     const baseIndices: Record<string, number> = {};
     const historicalTrends: Record<string, { month: Date; value: number }[]> = {};
+    const dataFreshness: Record<string, string> = {};
 
     // Determine Base Indices and load histories for non-steel components
     const nonSteelKeys = Object.keys(nonSteelMapping) as Array<keyof typeof nonSteelMapping>;
@@ -148,6 +149,10 @@ export async function POST(request: NextRequest) {
         month: v.month,
         value: v.value
       }));
+      const lastEntry = priceIndex.monthlyValues[priceIndex.monthlyValues.length - 1];
+      if (lastEntry) {
+        dataFreshness[key] = lastEntry.month.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+      }
     }
 
     // Combine multiple steel indices into a single virtual steel index
@@ -190,6 +195,10 @@ export async function POST(request: NextRequest) {
     }
     steelHistoryMerged.sort((a, b) => a.month.getTime() - b.month.getTime());
     historicalTrends['steel'] = steelHistoryMerged;
+    if (steelHistoryMerged.length > 0) {
+      const lastSteel = steelHistoryMerged[steelHistoryMerged.length - 1];
+      dataFreshness['steel'] = lastSteel.month.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+    }
 
     const keys: Array<keyof Omit<CoefficientSet, 'fixed'>> = [
       'labor', 'cement', 'steel', 'fuel', 'materials', 'machinery', 'explosives'
@@ -399,6 +408,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
+      dataFreshness,
       contractDetails: {
         totalValue,
         duration,

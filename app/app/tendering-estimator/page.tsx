@@ -14,7 +14,8 @@ import { Loader2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   TrendingUp, TrendingDown, Minus, Info, BarChart3, Calculator, Percent,
-  Sparkles, CheckCircle2, AlertTriangle, ArrowRight, Download, Calendar, HelpCircle
+  Sparkles, CheckCircle2, AlertTriangle, ArrowRight, Download, Calendar, HelpCircle,
+  BrainCircuit, RefreshCw, ShieldAlert, Lightbulb, Target, Activity
 } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -86,6 +87,11 @@ export default function TenderingEstimatorPage() {
   const [forecastResult, setForecastResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // AI insights state
+  const [aiInsights, setAiInsights] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const zoneOptions = useMemo(() => getRailwayZoneOptions(), []);
 
@@ -189,6 +195,8 @@ export default function TenderingEstimatorPage() {
 
     setLoading(true);
     setError(null);
+    setAiInsights(null);
+    setAiError(null);
 
     try {
       const response = await fetch('/api/pvc-forecast/tendering', {
@@ -216,6 +224,29 @@ export default function TenderingEstimatorPage() {
       setError(err.message || 'An error occurred during calculations');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateAiInsights = async () => {
+    if (!forecastResult) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const response = await fetch('/api/pvc-forecast/tendering/ai-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(forecastResult),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setAiInsights(data.analysis);
+      } else {
+        setAiError(data.error || 'Failed to generate AI insights');
+      }
+    } catch (err: any) {
+      setAiError(err.message || 'AI analysis failed');
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -606,6 +637,171 @@ export default function TenderingEstimatorPage() {
                     </p>
                   </div>
                 </div>
+              </Card>
+
+              {/* Data Freshness + AI Insights Trigger */}
+              <Card className="border border-violet-100 bg-gradient-to-r from-violet-50/60 to-indigo-50/60 backdrop-blur-md rounded-2xl p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-violet-100 text-violet-700 rounded-xl shrink-0">
+                      <BrainCircuit className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-slate-800 text-sm">AI Market Intelligence</h4>
+                      <p className="text-xs text-slate-500 mt-0.5 font-light">
+                        Get AI-powered analysis of index trends, market risks, and bid strategy recommendations based on real-time index data.
+                      </p>
+                      {forecastResult?.dataFreshness && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {Object.entries(forecastResult.dataFreshness).map(([key, val]) => (
+                            <span key={key} className="inline-flex items-center gap-1 text-[10px] font-semibold bg-white border border-violet-100 text-slate-500 px-2 py-0.5 rounded-full">
+                              <Activity className="h-2.5 w-2.5 text-emerald-500" />
+                              {key}: {String(val)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleGenerateAiInsights}
+                    disabled={aiLoading}
+                    className="shrink-0 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-bold rounded-xl px-5 py-2.5 shadow-md"
+                  >
+                    {aiLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Analysing...
+                      </>
+                    ) : aiInsights ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Regenerate
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Generate AI Insights
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {aiError && (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-700 font-medium flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    {aiError}
+                  </div>
+                )}
+
+                {aiInsights && (
+                  <div className="mt-5 space-y-5">
+                    {/* Market Outlook */}
+                    <div className="p-4 bg-white/80 rounded-xl border border-violet-100">
+                      <h5 className="text-xs font-black text-violet-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Activity className="h-3.5 w-3.5" /> Market Outlook
+                      </h5>
+                      <p className="text-sm text-slate-700 leading-relaxed">{aiInsights.marketOutlook}</p>
+                    </div>
+
+                    {/* Key Findings */}
+                    {aiInsights.keyFindings?.length > 0 && (
+                      <div className="p-4 bg-white/80 rounded-xl border border-blue-100">
+                        <h5 className="text-xs font-black text-blue-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                          <Target className="h-3.5 w-3.5" /> Key Findings
+                        </h5>
+                        <ul className="space-y-2">
+                          {aiInsights.keyFindings.map((f: string, i: number) => (
+                            <li key={i} className="flex items-start gap-2 text-xs text-slate-700">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
+                              {f}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Bid Strategy */}
+                    {aiInsights.bidStrategy && (
+                      <div className="p-4 bg-white/80 rounded-xl border border-emerald-100">
+                        <h5 className="text-xs font-black text-emerald-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                          <Lightbulb className="h-3.5 w-3.5" /> Bid Strategy
+                        </h5>
+                        <p className="text-sm font-bold text-slate-800 mb-3">{aiInsights.bidStrategy.headline}</p>
+                        <div className="space-y-2 text-xs text-slate-600">
+                          {aiInsights.bidStrategy.loading && (
+                            <p><span className="font-semibold text-slate-700">Loading Justification: </span>{aiInsights.bidStrategy.loading}</p>
+                          )}
+                          {aiInsights.bidStrategy.fixedComponentRisk && (
+                            <p><span className="font-semibold text-slate-700">Fixed Component Risk: </span>{aiInsights.bidStrategy.fixedComponentRisk}</p>
+                          )}
+                          {aiInsights.bidStrategy.contingency && (
+                            <p><span className="font-semibold text-slate-700">Contingency: </span>{aiInsights.bidStrategy.contingency}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Red Flags & Opportunities */}
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      {aiInsights.redFlags?.length > 0 && (
+                        <div className="p-4 bg-white/80 rounded-xl border border-red-100">
+                          <h5 className="text-xs font-black text-red-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                            <ShieldAlert className="h-3.5 w-3.5" /> Red Flags
+                          </h5>
+                          <ul className="space-y-2">
+                            {aiInsights.redFlags.map((f: string, i: number) => (
+                              <li key={i} className="flex items-start gap-2 text-xs text-slate-700">
+                                <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
+                                {f}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {aiInsights.opportunities?.length > 0 && (
+                        <div className="p-4 bg-white/80 rounded-xl border border-emerald-100">
+                          <h5 className="text-xs font-black text-emerald-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                            <TrendingUp className="h-3.5 w-3.5" /> Opportunities
+                          </h5>
+                          <ul className="space-y-2">
+                            {aiInsights.opportunities.map((o: string, i: number) => (
+                              <li key={i} className="flex items-start gap-2 text-xs text-slate-700">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                                {o}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Component Insights */}
+                    {aiInsights.componentInsights?.length > 0 && (
+                      <div className="p-4 bg-white/80 rounded-xl border border-amber-100">
+                        <h5 className="text-xs font-black text-amber-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                          <BarChart3 className="h-3.5 w-3.5" /> Component-Level Insights
+                        </h5>
+                        <div className="space-y-3">
+                          {aiInsights.componentInsights.map((c: any, i: number) => (
+                            <div key={i} className="border-l-2 border-amber-200 pl-3">
+                              <p className="text-[11px] font-black text-slate-700 uppercase">{c.component}</p>
+                              <p className="text-xs text-slate-600 mt-0.5">{c.insight}</p>
+                              {c.action && <p className="text-xs text-amber-700 font-semibold mt-1">→ {c.action}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Confidence Note */}
+                    {aiInsights.confidenceNote && (
+                      <p className="text-[10px] text-slate-400 font-light italic px-1">
+                        {aiInsights.confidenceNote}
+                      </p>
+                    )}
+                  </div>
+                )}
               </Card>
 
               {/* Escalation Scenario Cash-Flow Chart */}
