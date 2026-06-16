@@ -130,7 +130,7 @@ export async function downloadPPACPdf(url: string): Promise<string> {
 }
 
 /**
- * Calls Abacus AI to extract fuel prices from PDF
+ * Calls AbacusAI RouteLLM to extract fuel prices from PDF
  */
 export async function extractFuelPricesWithAI(base64: string): Promise<FuelPriceEntry[]> {
   const apiKey = process.env.ABACUSAI_API_KEY;
@@ -139,9 +139,9 @@ export async function extractFuelPricesWithAI(base64: string): Promise<FuelPrice
   }
 
   logger.log('[PPAC Fetcher] Calling AI to extract diesel prices...');
-  
+
   const requestBody = JSON.stringify({
-    model: 'gpt-5.4-mini',
+    model: 'route-llm',
     max_tokens: 16000,
     response_format: { type: 'json_object' },
     messages: [
@@ -186,15 +186,15 @@ Rules:
   const MAX_RETRIES = 2;
   let lastError: Error | null = null;
   let content = '';
-  
+
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       logger.log(`[PPAC Fetcher] AI request attempt ${attempt}/${MAX_RETRIES}...`);
-      
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout
-      
-      const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
+
+      const response = await fetch('https://routellm.abacus.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -203,12 +203,11 @@ Rules:
         body: requestBody,
         signal: controller.signal,
       });
-      
+
       clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorText = await response.text();
-        // Check if it's a timeout/server error worth retrying
         if ((response.status >= 500 || response.status === 524) && attempt < MAX_RETRIES) {
           logger.warn(`[PPAC Fetcher] AI API error ${response.status} on attempt ${attempt}, retrying in 5s...`);
           lastError = new Error(`AI API error ${response.status}: ${errorText.substring(0, 200)}`);
@@ -222,7 +221,7 @@ Rules:
       content = data.choices?.[0]?.message?.content || '';
       lastError = null;
       break; // Success, exit retry loop
-      
+
     } catch (error: any) {
       if (error.name === 'AbortError') {
         lastError = new Error(`AI API request timed out after 90s (attempt ${attempt}/${MAX_RETRIES})`);
@@ -233,7 +232,7 @@ Rules:
         lastError = error;
         logger.warn(`[PPAC Fetcher] Request failed on attempt ${attempt}: ${error.message}`);
       }
-      
+
       if (attempt < MAX_RETRIES) {
         logger.log(`[PPAC Fetcher] Retrying in 5s...`);
         await new Promise(resolve => setTimeout(resolve, 5000));
