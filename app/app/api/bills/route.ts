@@ -298,7 +298,8 @@ export async function POST(request: NextRequest) {
         originalCompletionDate: true,
         currentCompletionDate: true,
         contractorName: true,
-        contractorPhone: true
+        contractorPhone: true,
+        gccVersion: true
       }
     });
     
@@ -461,7 +462,7 @@ export async function POST(request: NextRequest) {
     const fuelIndexName = getFuelIndexNameForBill(effectiveZone, fuelPriceType);
     const allIndices = [
       'Labour', 'RBI Plant Machinery', fuelIndexName, 'RBI Other Materials',
-      'RBI Cement', 'RBI Explosives',
+      'RBI Cement', 'RBI Explosives', 'WPI Steel Composite',
       ...steelIndexNames
     ];
     logger.log(`📊 Using steel indices for zone "${effectiveZone}" (city: ${getSteelCityForZone(effectiveZone)}):`, steelIndexNames);
@@ -517,7 +518,8 @@ export async function POST(request: NextRequest) {
               amount: parseFloat(entry.amount),
               steelTypes: entrySteelTypes
             },
-            quarterlyAverages
+            quarterlyAverages,
+            contract.gccVersion
           );
           
           // Create entry with PVC breakdown

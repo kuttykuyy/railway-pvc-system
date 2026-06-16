@@ -159,9 +159,28 @@ function calculateSteelPvc(
   billAmount: number,
   indexMap: Map<string, QuarterlyAverage>,
   steelPercentage: number,
-  steelTypes?: string[]
+  steelTypes?: string[],
+  gccVersion?: string | null
 ): number {
   if (steelPercentage <= 0) return 0;
+
+  // Pre-April 2022 GCC: use single composite WPI Iron & Steel index
+  const isPreAprGcc = gccVersion === 'GCC_JULY_2014' || gccVersion === 'GCC_NOV_2018' || gccVersion === 'GCC_JULY_2020';
+  if (isPreAprGcc) {
+    const compositeIdx = indexMap.get('WPI Steel Composite');
+    if (compositeIdx) {
+      const pvc = calculatePvcComponent(billAmount, compositeIdx.average, compositeIdx.baseValue, steelPercentage);
+      logger.log(`📊 Steel PVC (pre-2022 GCC composite WPI):`, {
+        gccVersion,
+        base: compositeIdx.baseValue,
+        avg: compositeIdx.average,
+        pvc
+      });
+      return pvc;
+    }
+    logger.log(`⚠️ WPI Steel Composite index not found for pre-2022 GCC contract — steel PVC will be 0`);
+    return 0;
+  }
 
   // Map steel type codes to base index names
   const steelTypeMap: { [key: string]: string } = {
@@ -261,7 +280,8 @@ export async function calculateDynamicClassificationPvc(
   billAmount: number,
   quarterlyAverages: QuarterlyAverage[],
   workClassificationCode?: string | null,
-  steelTypes?: string[]  // Optional array of steel types: ["TMT", "ANGLE_CHANNEL", "PLATES", "OTHER_SECTIONS"]
+  steelTypes?: string[],  // Optional array of steel types: ["TMT", "ANGLE_CHANNEL", "PLATES", "OTHER_SECTIONS"]
+  gccVersion?: string | null
 ): Promise<{
   labourPvc: number;
   plantMachineryPvc: number;
@@ -353,7 +373,7 @@ export async function calculateDynamicClassificationPvc(
     : 0;
 
   // For steel, use helper function with optional steel types
-  const steelPvc = calculateSteelPvc(billAmount, indexMap, components.steel, steelTypes);
+  const steelPvc = calculateSteelPvc(billAmount, indexMap, components.steel, steelTypes, gccVersion);
 
   const explosivesAvg = indexMap.get('RBI Explosives');
   const explosivesPvc = (explosivesAvg && components.explosives > 0)
@@ -389,7 +409,8 @@ export function calculateClassificationBasedPvcWithComponentsAndSteps(
     otherMaterials: number;
     explosives: number;
     steelTypes?: string[];
-  }
+  },
+  gccVersion?: string | null
 ): {
   labourPvc: number;
   plantMachineryPvc: number;
@@ -534,6 +555,23 @@ export function calculateClassificationBasedPvcWithComponentsAndSteps(
 
   // For steel, use selected steel types if available, otherwise use default behavior
   if (components.steel > 0) {
+    // Pre-April 2022 GCC: use single composite WPI index
+    const isPreAprGcc = gccVersion === 'GCC_JULY_2014' || gccVersion === 'GCC_NOV_2018' || gccVersion === 'GCC_JULY_2020';
+    if (isPreAprGcc) {
+      const compositeIdx = indexMap.get('WPI Steel Composite');
+      if (compositeIdx) {
+        const steelCalc = calculatePvcComponentWithSteps(billAmount, compositeIdx.average, compositeIdx.baseValue, components.steel, 'Steel');
+        steelPvc = steelCalc.finalPvc;
+        detailedSteps.steel = {
+          ...steelCalc,
+          averageIndex: compositeIdx.average,
+          baseIndex: compositeIdx.baseValue,
+          componentPercentage: components.steel,
+          componentName: 'Steel (Composite WPI)',
+          indexSource: `WPI Iron & Steel Composite (${gccVersion})`,
+        };
+      }
+    } else
     // Map steel type codes to index names
     const steelTypeMap: { [key: string]: string } = {
       'TMT': 'Steel TMT Bars',
@@ -670,7 +708,8 @@ export async function calculateClassificationEntryPvc(
     amount: number;
     steelTypes?: string[];
   },
-  quarterlyAverages: QuarterlyAverage[]
+  quarterlyAverages: QuarterlyAverage[],
+  gccVersion?: string | null
 ): Promise<{
   labourPvc: number;
   plantMachineryPvc: number;
@@ -751,7 +790,7 @@ export async function calculateClassificationEntryPvc(
     : 0;
   
   // For steel, use entry-specific steel types
-  const steelPvc = calculateSteelPvc(entry.amount, indexMap, components.steel, entry.steelTypes);
+  const steelPvc = calculateSteelPvc(entry.amount, indexMap, components.steel, entry.steelTypes, gccVersion);
   
   const explosivesAvg = indexMap.get('RBI Explosives');
   const explosivesPvc = (explosivesAvg && components.explosives > 0)

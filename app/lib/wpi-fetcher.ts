@@ -14,7 +14,7 @@ export const WPI_MAPPINGS: Record<string, { code: string; name: string; wpiName:
     wpiName: 'e. Manufacture of cement, lime and plaster'
   },
   'RBI Plant Machinery': {
-    code: '1318110000', 
+    code: '1318110000',
     name: 'RBI Plant Machinery',
     wpiName: 'k. Manufacture of machinery for mining, quarrying and construction'
   },
@@ -25,8 +25,15 @@ export const WPI_MAPPINGS: Record<string, { code: string; name: string; wpiName:
   },
   'RBI Other Materials': {
     code: '1000000000',
-    name: 'RBI Other Materials', 
+    name: 'RBI Other Materials',
     wpiName: 'All commodities'
+  },
+  // Pre-April 2022 GCC: single composite iron & steel WPI index
+  // Used for GCC_JULY_2014, GCC_NOV_2018, GCC_JULY_2020 contracts
+  'WPI Steel Composite': {
+    code: '1314000000',
+    name: 'WPI Steel Composite',
+    wpiName: '(N). MANUFACTURE OF BASIC METALS'
   }
 };
 

@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
         extensionType: true,
         originalCompletionDate: true,
         userId: true,
+        gccVersion: true,
       },
     });
     if (!contract) return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
     const fuelIndexName = getFuelIndexNameForBill(zone, fuelPriceType);
     const allIndices = [
       'Labour', 'RBI Plant Machinery', fuelIndexName, 'RBI Other Materials',
-      'RBI Cement', 'RBI Explosives', ...steelIndexNames,
+      'RBI Cement', 'RBI Explosives', 'WPI Steel Composite', ...steelIndexNames,
     ];
     const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, calculationMethod);
 
@@ -112,7 +113,8 @@ export async function POST(request: NextRequest) {
 
       const pvc = await calculateClassificationEntryPvc(
         { subClassificationId: entry.subClassificationId, classificationId: entry.classificationId, amount: parseFloat(entry.amount), steelTypes: entrySteelTypes },
-        quarterlyAverages
+        quarterlyAverages,
+        contract.gccVersion
       );
 
       labourPvc += pvc.labourPvc;
