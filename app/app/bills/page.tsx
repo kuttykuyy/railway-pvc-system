@@ -38,6 +38,7 @@ interface Contract {
   currentCompletionDate: string | null;
   coveringLetterDesignation?: string | null;
   loaDate?: Date | string | null;
+  user?: { id: string; name: string; email: string } | null;
 }
 
 interface ReportTemplate {
@@ -2074,6 +2075,14 @@ export default function BillsPage() {
                               Created: {format(toISTDate(new Date(bill.createdAt)), 'dd MMM yyyy, HH:mm')}
                             </span>
                           </div>
+                          {bill.contract?.user?.name && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <User className="h-4 w-4 text-indigo-400 flex-shrink-0" />
+                              <span className="text-xs text-slate-500">
+                                By: <span className="font-medium text-slate-700">{bill.contract.user.name}</span>
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
