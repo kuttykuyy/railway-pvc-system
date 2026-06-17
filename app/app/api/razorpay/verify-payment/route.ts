@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { verifyRazorpaySignature, fetchPaymentDetails } from '@/lib/razorpay';
 import { prisma } from '@/lib/db';
 import { sendPaymentConfirmation } from '@/lib/whatsapp-mydreams';
+import { createZohoInvoice } from '@/lib/zoho-books';
 
 export async function POST(request: NextRequest) {
   const requestId = Date.now().toString(36);
@@ -298,6 +299,27 @@ export async function POST(request: NextRequest) {
       logger.log(`[${requestId}] ⚠️ User has no phone number, skipping WhatsApp notification`);
     }
 
+    // Create Zoho Books sales invoice
+    let zohoInvoiceNumber = tempInvoiceNumber;
+    let zohoInvoiceId = null;
+    try {
+      const zohoResult = await createZohoInvoice({
+        customerName: user.name || user.email,
+        customerEmail: user.email,
+        creditAmount: transaction.creditAmount,
+        gstAmount: transaction.gstAmount,
+        totalAmount: transaction.totalAmount,
+        razorpayOrderId: razorpay_order_id,
+        razorpayPaymentId: razorpay_payment_id,
+      });
+      zohoInvoiceNumber = zohoResult.invoiceNumber;
+      zohoInvoiceId = zohoResult.invoiceId;
+      logger.log(`[${requestId}] ✅ Zoho Books invoice created: ${zohoInvoiceNumber}`);
+    } catch (zohoError: any) {
+      console.error(`[${requestId}] ⚠️ Zoho Books invoice creation failed:`, zohoError.message);
+      // Don't fail payment if Zoho fails
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Payment verified successfully',
@@ -306,7 +328,8 @@ export async function POST(request: NextRequest) {
       totalAmount: transaction.totalAmount,
       newBalance,
       transactionId: transaction.id,
-      invoiceNumber: tempInvoiceNumber,
+      invoiceNumber: zohoInvoiceNumber,
+      zohoInvoiceId,
     });
   } catch (error: any) {
     console.error(`[${requestId}] ❌ Error verifying payment:`, error);
