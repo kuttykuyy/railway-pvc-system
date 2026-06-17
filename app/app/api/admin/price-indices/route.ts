@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 
 // GET /api/admin/price-indices — list all price indices with data counts
 export async function GET(request: NextRequest) {
-  const authError = await validateAdminAccess(request);
-  if (authError) return authError;
+  const { authorized, message } = await validateAdminAccess(request);
+  if (!authorized) return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
 
   const indices = await prisma.priceIndex.findMany({
     include: {
@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
 
 // DELETE /api/admin/price-indices?name=WPI+Steel+Composite — delete by name
 export async function DELETE(request: NextRequest) {
-  const authError = await validateAdminAccess(request);
-  if (authError) return authError;
+  const { authorized, message } = await validateAdminAccess(request);
+  if (!authorized) return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
 
   const name = request.nextUrl.searchParams.get('name');
   if (!name) {
