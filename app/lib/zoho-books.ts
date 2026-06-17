@@ -7,6 +7,52 @@ const ZOHO_TOKEN_URL = 'https://accounts.zoho.in/oauth/v2/token';
 const ZOHO_API_BASE = 'https://www.zohoapis.in/books/v3';
 const ORG_ID = process.env.ZOHO_ORGANIZATION_ID!;
 
+// GSTIN state code (first 2 digits) → Zoho Books place_of_supply name
+const GSTIN_STATE_MAP: Record<string, string> = {
+  '01': 'Jammu and Kashmir',
+  '02': 'Himachal Pradesh',
+  '03': 'Punjab',
+  '04': 'Chandigarh',
+  '05': 'Uttarakhand',
+  '06': 'Haryana',
+  '07': 'Delhi',
+  '08': 'Rajasthan',
+  '09': 'Uttar Pradesh',
+  '10': 'Bihar',
+  '11': 'Sikkim',
+  '12': 'Arunachal Pradesh',
+  '13': 'Nagaland',
+  '14': 'Manipur',
+  '15': 'Mizoram',
+  '16': 'Tripura',
+  '17': 'Meghalaya',
+  '18': 'Assam',
+  '19': 'West Bengal',
+  '20': 'Jharkhand',
+  '21': 'Odisha',
+  '22': 'Chhattisgarh',
+  '23': 'Madhya Pradesh',
+  '24': 'Gujarat',
+  '26': 'Dadra and Nagar Haveli and Daman and Diu',
+  '27': 'Maharashtra',
+  '28': 'Andhra Pradesh',
+  '29': 'Karnataka',
+  '30': 'Goa',
+  '31': 'Lakshadweep',
+  '32': 'Kerala',
+  '33': 'Tamil Nadu',
+  '34': 'Puducherry',
+  '35': 'Andaman and Nicobar Islands',
+  '36': 'Telangana',
+  '37': 'Andhra Pradesh',
+  '38': 'Ladakh',
+};
+
+export function getStateFromGstin(gstin?: string | null): string | null {
+  if (!gstin || gstin.length < 2) return null;
+  return GSTIN_STATE_MAP[gstin.substring(0, 2)] || null;
+}
+
 // Get a fresh access token using the refresh token
 async function getAccessToken(): Promise<string> {
   const params = new URLSearchParams({
@@ -29,9 +75,9 @@ async function getAccessToken(): Promise<string> {
 async function findOrCreateContact(
   token: string,
   name: string,
-  email: string
+  email: string,
+  gstin?: string | null
 ): Promise<string> {
-  // Search by email
   const searchRes = await fetch(
     `${ZOHO_API_BASE}/contacts?organization_id=${ORG_ID}&email=${encodeURIComponent(email)}`,
     { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
@@ -42,7 +88,13 @@ async function findOrCreateContact(
     return searchData.contacts[0].contact_id;
   }
 
-  // Create new contact
+  const contactBody: any = {
+    contact_name: name,
+    contact_type: 'customer',
+    email,
+  };
+  if (gstin) contactBody.gst_no = gstin;
+
   const createRes = await fetch(
     `${ZOHO_API_BASE}/contacts?organization_id=${ORG_ID}`,
     {
@@ -51,11 +103,7 @@ async function findOrCreateContact(
         Authorization: `Zoho-oauthtoken ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        contact_name: name,
-        contact_type: 'customer',
-        email,
-      }),
+      body: JSON.stringify(contactBody),
     }
   );
   const createData = await createRes.json();
@@ -76,16 +124,19 @@ export interface ZohoInvoiceResult {
 export async function createZohoInvoice(params: {
   customerName: string;
   customerEmail: string;
-  creditAmount: number;   // base amount (excl. GST)
+  gstin?: string | null;
+  creditAmount: number;
   gstAmount: number;
   totalAmount: number;
   razorpayOrderId: string;
   razorpayPaymentId: string;
 }): Promise<ZohoInvoiceResult> {
   const token = await getAccessToken();
-  const contactId = await findOrCreateContact(token, params.customerName, params.customerEmail);
+  const contactId = await findOrCreateContact(token, params.customerName, params.customerEmail, params.gstin);
 
-  const invoiceBody = {
+  const placeOfSupply = getStateFromGstin(params.gstin);
+
+  const invoiceBody: any = {
     customer_id: contactId,
     reference_number: params.razorpayOrderId,
     notes: `Razorpay Payment ID: ${params.razorpayPaymentId}`,
@@ -100,6 +151,10 @@ export async function createZohoInvoice(params: {
       },
     ],
   };
+
+  if (placeOfSupply) {
+    invoiceBody.place_of_supply = placeOfSupply;
+  }
 
   const res = await fetch(
     `${ZOHO_API_BASE}/invoices?organization_id=${ORG_ID}`,

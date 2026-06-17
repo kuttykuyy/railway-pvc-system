@@ -14,7 +14,7 @@ async function getTransactionsWithUsers() {
   const userIds = [...new Set(transactions.map(t => t.userId))];
   const users = await prisma.user.findMany({
     where: { id: { in: userIds } },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, gstin: true },
   });
   const userMap = new Map(users.map(u => [u.id, u]));
 
@@ -34,6 +34,8 @@ export async function GET(request: NextRequest) {
       orderId: t.orderId,
       email: t.user?.email,
       name: t.user?.name,
+      gstin: t.user?.gstin,
+      placeOfSupply: t.user?.gstin ? t.user.gstin.substring(0, 2) : null,
       creditAmount: t.creditAmount,
       gstAmount: t.gstAmount,
       totalAmount: t.totalAmount,
@@ -60,6 +62,7 @@ export async function POST(request: NextRequest) {
       const invoice = await createZohoInvoice({
         customerName: txn.user.name || txn.user.email,
         customerEmail: txn.user.email,
+        gstin: txn.user.gstin,
         creditAmount: txn.creditAmount,
         gstAmount: txn.gstAmount,
         totalAmount: txn.totalAmount,

@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
       include: { customerAccount: true },
+      // gstin is on the base user model
     });
 
     if (!user) {
@@ -306,6 +307,7 @@ export async function POST(request: NextRequest) {
       const zohoResult = await createZohoInvoice({
         customerName: user.name || user.email,
         customerEmail: user.email,
+        gstin: user.gstin,
         creditAmount: transaction.creditAmount,
         gstAmount: transaction.gstAmount,
         totalAmount: transaction.totalAmount,
