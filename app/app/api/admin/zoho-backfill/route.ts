@@ -5,16 +5,28 @@ import { createZohoInvoice } from '@/lib/zoho-books';
 
 export const dynamic = 'force-dynamic';
 
+async function getTransactionsWithUsers() {
+  const transactions = await prisma.razorpayTransaction.findMany({
+    where: { status: 'success' },
+    orderBy: { completedAt: 'asc' },
+  });
+
+  const userIds = [...new Set(transactions.map(t => t.userId))];
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, name: true, email: true },
+  });
+  const userMap = new Map(users.map(u => [u.id, u]));
+
+  return transactions.map(t => ({ ...t, user: userMap.get(t.userId) }));
+}
+
 // GET /api/admin/zoho-backfill — preview how many transactions need invoices
 export async function GET(request: NextRequest) {
   const { authorized, message } = await validateAdminAccess(request);
   if (!authorized) return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
 
-  const transactions = await prisma.razorpayTransaction.findMany({
-    where: { status: 'success' },
-    include: { user: { select: { name: true, email: true } } },
-    orderBy: { completedAt: 'asc' },
-  });
+  const transactions = await getTransactionsWithUsers();
 
   return NextResponse.json({
     total: transactions.length,
@@ -35,12 +47,7 @@ export async function POST(request: NextRequest) {
   const { authorized, message } = await validateAdminAccess(request);
   if (!authorized) return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
 
-  const transactions = await prisma.razorpayTransaction.findMany({
-    where: { status: 'success' },
-    include: { user: { select: { name: true, email: true } } },
-    orderBy: { completedAt: 'asc' },
-  });
-
+  const transactions = await getTransactionsWithUsers();
   const results: { orderId: string; status: 'created' | 'failed'; invoiceNumber?: string; error?: string }[] = [];
 
   for (const txn of transactions) {
