@@ -46,7 +46,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const fuelIndexName = getFuelIndexNameForBill(bill.zone, bill.fuelPriceType);
     const allIndices = [
       'Labour', 'RBI Plant Machinery', fuelIndexName, 'RBI Other Materials',
-      'RBI Cement', 'RBI Explosives', 'WPI Steel Composite',
+      'RBI Cement', 'RBI Explosives',
       ...steelIndexNames
     ];
     
@@ -81,10 +81,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     
     // Calculate PVC with detailed steps
     const pvcResultsWithSteps = calculateClassificationBasedPvcWithComponentsAndSteps(
-      bill.billAmount,
-      quarterlyAverages,
-      classificationComponents,
-      bill.contract.gccVersion
+      bill.billAmount, 
+      quarterlyAverages, 
+      classificationComponents
     );
 
     // Calculate enhanced cement PVC with detailed steps

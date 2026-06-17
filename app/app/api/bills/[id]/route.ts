@@ -251,8 +251,7 @@ export async function PUT(
         baseMonth: true,
         isExtended: true,
         extensionType: true,
-        originalCompletionDate: true,
-        gccVersion: true
+        originalCompletionDate: true
       }
     });
     
@@ -336,7 +335,7 @@ export async function PUT(
     const fuelIndexName = getFuelIndexNameForBill(zone, fuelPriceType);
     const allIndices = [
       'Labour', 'RBI Plant Machinery', fuelIndexName, 'RBI Other Materials',
-      'RBI Cement', 'RBI Explosives', 'WPI Steel Composite',
+      'RBI Cement', 'RBI Explosives',
       ...steelIndexNames
     ];
     
@@ -390,8 +389,7 @@ export async function PUT(
               amount: parseFloat(entry.amount),
               steelTypes: entrySteelTypes
             },
-            quarterlyAverages,
-            contract.gccVersion
+            quarterlyAverages
           );
           
           // Create entry with PVC breakdown

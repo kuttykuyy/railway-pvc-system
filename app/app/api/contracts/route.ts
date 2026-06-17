@@ -6,7 +6,6 @@ import { getBaseMonth } from '@/lib/pvc-calculations';
 import { getUserAccessibleContracts } from '@/lib/permissions';
 import { checkPvcEligibility, generateEligibilityNote } from '@/lib/gcc-compliance';
 import { normalizeAgreementNo } from '@/lib/railway-division-helper';
-import { deriveGccVersion } from '@/lib/gcc-version';
 
 // Helper function to ensure base month values are available
 async function ensureBaseMonthValues(baseMonth: Date) {
@@ -247,7 +246,6 @@ export async function POST(request: NextRequest) {
         tenderAdvertisedValue: tenderAdvertisedValue || null,
         contractValue: contractValue || null,
         completionPeriodMonths: completionPeriodMonths || null,
-        gccVersion: deriveGccVersion(openingDate),
         pvcApplicable: pvcEligibilityResult.isEligible,
         pvcEligibilityNote,
         hasRailwaySuppliedMaterials: hasRailwaySuppliedMaterials || false,
