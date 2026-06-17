@@ -17,7 +17,17 @@ export async function GET(request: NextRequest) {
       select: { id: true, name: true }
     });
     const citySpecificPattern = / - (Delhi|Mumbai|Chennai|Kolkata)$/;
-    const priceIndices = allPriceIndices.filter(idx => !citySpecificPattern.test(idx.name));
+    const coreIndices = allPriceIndices.filter(idx => !citySpecificPattern.test(idx.name));
+
+    // Only count indices that actually have some monthly data — exclude orphaned index records
+    const indicesWithData = await prisma.monthlyIndexValue.findMany({
+      where: { priceIndexId: { in: coreIndices.map(i => i.id) } },
+      select: { priceIndexId: true },
+      distinct: ['priceIndexId'],
+    });
+    const activeIndexIdSet = new Set(indicesWithData.map(i => i.priceIndexId));
+    const priceIndices = coreIndices.filter(idx => activeIndexIdSet.has(idx.id));
+
     const coreIndexIds = priceIndices.map(idx => idx.id);
     const totalIndicesCount = priceIndices.length;
     
