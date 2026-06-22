@@ -81,6 +81,7 @@ const navigationGroups = [
       { name: 'User Management', href: '/admin/users', icon: User, adminOnly: true },
       { name: 'Role & Permissions', href: '/admin/user-permissions', icon: ShieldCheck, adminOnly: true },
       { name: 'Railway Official Limits', href: '/admin/railway-official-settings', icon: ShieldCheck, adminOnly: true },
+      { name: 'Credit Statements', href: '/admin/credit-statements', icon: Wallet, adminOnly: true },
       { name: 'WhatsApp Logs', href: '/admin/whatsapp-logs', icon: MessageSquare, adminOnly: true },
     ]
   }

@@ -23,7 +23,8 @@ import {
   BarChart3,
   ListChecks,
   UserCircle,
-  MessageSquare
+  MessageSquare,
+  Wallet
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getClientRoleInfo } from '@/lib/role-auth';
@@ -59,6 +60,7 @@ const mobileNavSections = [
       { name: 'PVC Check Analytics', href: '/admin/analytics', icon: TrendingUp, adminOnly: true },
       { name: 'User Management', href: '/admin/users', icon: User, adminOnly: true },
       { name: 'User Permissions', href: '/admin/user-permissions', icon: Settings, adminOnly: true },
+      { name: 'Credit Statements', href: '/admin/credit-statements', icon: Wallet, adminOnly: true },
       { name: 'WhatsApp Logs', href: '/admin/whatsapp-logs', icon: MessageSquare, adminOnly: true },
     ]
   }

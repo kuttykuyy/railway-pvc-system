@@ -4,13 +4,14 @@ import { validateAdminAccess } from '@/lib/role-auth';
 
 export const dynamic = 'force-dynamic';
 
-// GET /api/admin/credit-statements?type=all|add|deduct&page=1&limit=50
+// GET /api/admin/credit-statements?type=all|add|deduct&userId=xxx&page=1&limit=50
 export async function GET(request: NextRequest) {
   const { authorized, message } = await validateAdminAccess(request);
   if (!authorized) return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
 
   const params = request.nextUrl.searchParams;
   const type = params.get('type') || 'all';
+  const userId = params.get('userId') || '';
   const page = parseInt(params.get('page') || '1');
   const limit = parseInt(params.get('limit') || '50');
   const skip = (page - 1) * limit;
@@ -18,8 +19,9 @@ export async function GET(request: NextRequest) {
   const where: any = {};
   if (type === 'add') where.type = 'add';
   if (type === 'deduct') where.type = 'deduct';
+  if (userId) where.userId = userId;
 
-  const [transactions, total, summary] = await Promise.all([
+  const [transactions, total, summary, users] = await Promise.all([
     prisma.creditTransaction.findMany({
       where,
       include: {
@@ -32,8 +34,16 @@ export async function GET(request: NextRequest) {
     prisma.creditTransaction.count({ where }),
     prisma.creditTransaction.groupBy({
       by: ['type'],
+      where,
       _sum: { amount: true },
       _count: true,
+    }),
+    prisma.user.findMany({
+      where: {
+        creditTransactions: { some: {} },
+      },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: 'asc' },
     }),
   ]);
 
@@ -60,5 +70,6 @@ export async function GET(request: NextRequest) {
       totalUsage: Math.abs(totalUsage?._sum.amount || 0),
       usageCount: totalUsage?._count || 0,
     },
+    users,
   });
 }

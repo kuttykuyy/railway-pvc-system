@@ -6,8 +6,9 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getClientRoleInfo } from '@/lib/role-auth';
-import { TrendingUp, TrendingDown, Wallet, ArrowUpCircle, ArrowDownCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, ArrowUpCircle, ArrowDownCircle, ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import { BackButton } from '@/components/ui/back-button';
 
 interface Transaction {
@@ -30,6 +31,12 @@ interface Summary {
   usageCount: number;
 }
 
+interface UserOption {
+  id: string;
+  name: string | null;
+  email: string;
+}
+
 type FilterType = 'all' | 'add' | 'deduct';
 
 export default function CreditStatementsPage() {
@@ -37,8 +44,10 @@ export default function CreditStatementsPage() {
   const router = useRouter();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [users, setUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterType>('all');
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -47,16 +56,18 @@ export default function CreditStatementsPage() {
     const roleInfo = getClientRoleInfo(session);
     if (!roleInfo.isAdmin) { router.push('/dashboard'); return; }
     fetchData();
-  }, [session, status, filter, page]);
+  }, [session, status, filter, selectedUserId, page]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/credit-statements?type=${filter}&page=${page}&limit=30`);
+      const userParam = selectedUserId ? `&userId=${selectedUserId}` : '';
+      const res = await fetch(`/api/admin/credit-statements?type=${filter}&page=${page}&limit=30${userParam}`);
       const data = await res.json();
       setTransactions(data.transactions || []);
       setSummary(data.summary || null);
       setTotalPages(data.pagination?.totalPages || 1);
+      if (data.users) setUsers(data.users);
     } catch {
     } finally {
       setLoading(false);
@@ -117,19 +128,37 @@ export default function CreditStatementsPage() {
         </div>
       )}
 
-      {/* Filter */}
-      <div className="flex gap-2">
-        {(['all', 'add', 'deduct'] as FilterType[]).map(f => (
-          <Button
-            key={f}
-            variant={filter === f ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => { setFilter(f); setPage(1); }}
-            className="capitalize"
-          >
-            {f === 'add' ? 'Topups' : f === 'deduct' ? 'Usage' : 'All'}
-          </Button>
-        ))}
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-2">
+          {(['all', 'add', 'deduct'] as FilterType[]).map(f => (
+            <Button
+              key={f}
+              variant={filter === f ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => { setFilter(f); setPage(1); }}
+              className="capitalize"
+            >
+              {f === 'add' ? 'Topups' : f === 'deduct' ? 'Usage' : 'All'}
+            </Button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-slate-500" />
+          <Select value={selectedUserId} onValueChange={(v) => { setSelectedUserId(v === 'all' ? '' : v); setPage(1); }}>
+            <SelectTrigger className="w-[220px] h-8 text-xs">
+              <SelectValue placeholder="All Users" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Users</SelectItem>
+              {users.map(u => (
+                <SelectItem key={u.id} value={u.id}>
+                  {u.name || u.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Transactions Table */}
