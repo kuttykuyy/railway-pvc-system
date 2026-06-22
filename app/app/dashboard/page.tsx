@@ -286,6 +286,41 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Cross-Promotion: Our Tools */}
+      <div className="mt-6">
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">More Tools for Railway Contractors</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <a href="https://primerp.in?ref=irpvc" target="_blank" rel="noopener noreferrer"
+            className="group bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-5 hover:shadow-md hover:border-blue-200 transition-all">
+            <div className="flex items-start gap-4">
+              <div className="bg-blue-600 text-white rounded-lg p-2.5 font-bold text-xs shrink-0">ERP</div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-gray-900 text-sm group-hover:text-blue-700 transition-colors">PRIME ERP</h3>
+                <p className="text-xs text-gray-600 mt-1 leading-relaxed">Complete project management — USSOR/DSR billing, measurements, deviation statements, labour attendance & 30+ reports.</p>
+                <div className="flex items-center gap-2 mt-3">
+                  <span className="text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">14-Day Free Trial</span>
+                  <span className="text-[10px] text-blue-600 font-medium group-hover:underline">Try PRIME ERP →</span>
+                </div>
+              </div>
+            </div>
+          </a>
+          <a href="https://irwcms.primerp.in?ref=irpvc" target="_blank" rel="noopener noreferrer"
+            className="group bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-xl p-5 hover:shadow-md hover:border-emerald-200 transition-all">
+            <div className="flex items-start gap-4">
+              <div className="bg-emerald-600 text-white rounded-lg p-2.5 font-bold text-xs shrink-0">eMB</div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-gray-900 text-sm group-hover:text-emerald-700 transition-colors">IRWCMS Auto-Fill</h3>
+                <p className="text-xs text-gray-600 mt-1 leading-relaxed">Chrome extension to auto-fill eMB data in IRWCMS. Stop manual data entry — fill forms with one click.</p>
+                <div className="flex items-center gap-2 mt-3">
+                  <span className="text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">Free Trial Available</span>
+                  <span className="text-[10px] text-emerald-600 font-medium group-hover:underline">Try Auto-Fill →</span>
+                </div>
+              </div>
+            </div>
+          </a>
+        </div>
+      </div>
     </div>
   );
 }
