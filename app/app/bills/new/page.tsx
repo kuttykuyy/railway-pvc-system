@@ -42,6 +42,7 @@ import { useLanguage } from '@/components/i18n-provider';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { ContextualHelp } from '@/components/contextual-help';
 import { validateDate, validateDateForApi } from '@/lib/date-validation';
+import { PromoPopup } from '@/components/promo-popup';
 
 interface Contract {
   id: string;
@@ -821,6 +822,7 @@ function NewBillPageContent() {
 
   return (
     <div className="space-y-6">
+      <PromoPopup />
       <div className="flex items-center gap-4">
         <BackButton href="/bills" label={t('form.bill.back')} variant="outline" />
         <div>

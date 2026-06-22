@@ -9,6 +9,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { DashboardSkeleton } from '@/components/ui/skeletons/dashboard-skeleton';
 import { ErrorDisplay } from '@/components/ui/error-display';
+import { PromoPopup } from '@/components/promo-popup';
 import Link from 'next/link';
 
 interface DashboardData {
@@ -42,7 +43,6 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [hasFreeTrial, setHasFreeTrial] = useState<boolean | null>(null);
-  const [showPromo, setShowPromo] = useState(false);
   const isAdmin = (session?.user as any)?.role === 'admin';
 
   useEffect(() => {
@@ -51,13 +51,6 @@ export default function DashboardPage() {
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d) setHasFreeTrial(!!d.hasFreeTrial); })
       .catch(() => {});
-
-    // Show promo popup once per session
-    const promoDismissed = sessionStorage.getItem('promo_dismissed');
-    if (!promoDismissed) {
-      const timer = setTimeout(() => setShowPromo(true), 2000);
-      return () => clearTimeout(timer);
-    }
   }, []);
 
   const fetchDashboardData = async (isRefresh = false) => {
@@ -330,45 +323,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Promo Popup */}
-      {showPromo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-          onClick={() => { setShowPromo(false); sessionStorage.setItem('promo_dismissed', '1'); }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-300"
-            onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
-              <p className="text-white/80 text-xs font-medium uppercase tracking-wider">From the makers of IR-PVC</p>
-              <h2 className="text-white text-lg font-bold mt-1">More Tools for Railway Contractors</h2>
-            </div>
-            <div className="p-5 space-y-4">
-              <a href="https://primerp.in?ref=irpvc" target="_blank" rel="noopener noreferrer"
-                className="group flex items-start gap-4 p-4 rounded-xl border border-blue-100 hover:bg-blue-50 transition-colors">
-                <div className="bg-blue-600 text-white rounded-lg p-2.5 font-bold text-xs shrink-0">ERP</div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-gray-900 text-sm group-hover:text-blue-700">PRIME ERP</h3>
-                  <p className="text-xs text-gray-500 mt-1">USSOR/DSR billing, measurements, deviation statements, labour attendance & 30+ reports.</p>
-                  <span className="inline-block mt-2 text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">14-Day Free Trial</span>
-                </div>
-              </a>
-              <a href="https://irwcms.primerp.in?ref=irpvc" target="_blank" rel="noopener noreferrer"
-                className="group flex items-start gap-4 p-4 rounded-xl border border-emerald-100 hover:bg-emerald-50 transition-colors">
-                <div className="bg-emerald-600 text-white rounded-lg p-2.5 font-bold text-xs shrink-0">eMB</div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-gray-900 text-sm group-hover:text-emerald-700">IRWCMS Auto-Fill</h3>
-                  <p className="text-xs text-gray-500 mt-1">Chrome extension to auto-fill eMB data in IRWCMS. Stop manual data entry — fill forms with one click.</p>
-                  <span className="inline-block mt-2 text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">Free Trial Available</span>
-                </div>
-              </a>
-            </div>
-            <div className="px-6 pb-5 flex justify-end">
-              <button onClick={() => { setShowPromo(false); sessionStorage.setItem('promo_dismissed', '1'); }}
-                className="text-xs text-gray-400 hover:text-gray-600 font-medium">
-                Maybe Later
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PromoPopup />
     </div>
   );
 }
