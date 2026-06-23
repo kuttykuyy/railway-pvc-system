@@ -2,12 +2,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Building2 } from 'lucide-react';
 import { BackButton } from '@/components/ui/back-button';
 import ContractForm from '@/components/contract-form';
-import { PromoPopup } from '@/components/promo-popup';
 
 export default function NewContractPage() {
   return (
     <div className="space-y-6 sm:space-y-8 px-4 sm:px-0">
-      <PromoPopup />
       <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
           <BackButton 

@@ -24,6 +24,7 @@ import { BillStatusBadge } from '@/components/bills/bill-status-badge';
 import { useSession } from 'next-auth/react';
 import { WhatsAppSendDialog } from '@/components/whatsapp-send-dialog';
 import { RazorpayTopupDialog } from '@/components/ui/razorpay-topup-dialog';
+import { PromoBanner } from '@/components/promo-banner';
 
 interface Contract {
   id: string;
@@ -1107,6 +1108,7 @@ export default function BillsPage() {
 
   return (
     <div className="space-y-6 sm:space-y-8 px-4 sm:px-0">
+      <PromoBanner />
       {/* Premium, Clean Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-slate-100 p-6 rounded-2xl shadow-sm">
         <div className="space-y-1">

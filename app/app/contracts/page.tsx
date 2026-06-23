@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 
 import { PostingDetailsNotice } from '@/components/posting-details-notice';
+import { PromoBanner } from '@/components/promo-banner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -390,6 +391,7 @@ export default function ContractsPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
+      <PromoBanner />
       <PostingDetailsNotice />
 
       {/* ── Page header ─────────────────────────────────────────────────── */}
