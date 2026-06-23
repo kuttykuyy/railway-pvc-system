@@ -24,7 +24,8 @@ import {
   ListChecks,
   UserCircle,
   MessageSquare,
-  Wallet
+  Wallet,
+  Gift
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getClientRoleInfo } from '@/lib/role-auth';
@@ -57,6 +58,7 @@ const mobileNavSections = [
     items: [
       { name: 'Profile', href: '/profile', icon: UserCircle, adminOnly: false },
       { name: 'Profile & Billing', href: '/profile', icon: CreditCard, adminOnly: false },
+      { name: 'Refer & Earn', href: '/referrals', icon: Gift, adminOnly: false },
       { name: 'PVC Check Analytics', href: '/admin/analytics', icon: TrendingUp, adminOnly: true },
       { name: 'User Management', href: '/admin/users', icon: User, adminOnly: true },
       { name: 'User Permissions', href: '/admin/user-permissions', icon: Settings, adminOnly: true },
@@ -119,6 +121,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
       case 'Extension Subcategories': return 'nav.extensions';
       case 'Profile': return 'nav.profile';
       case 'Profile & Billing': return 'nav.profile_billing';
+      case 'Refer & Earn': return '';
       case 'PVC Check Analytics': return 'nav.analytics';
       case 'User Management': return 'nav.users';
       case 'User Permissions': return 'nav.permissions';

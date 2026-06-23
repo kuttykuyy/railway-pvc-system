@@ -43,7 +43,8 @@ import {
   AlertCircle,
   MessageSquare,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  Gift
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -65,6 +66,7 @@ const navigationGroups = [
       { name: 'Bill Approvals', href: '/approvals', icon: CheckSquare, railwayOfficialOnly: true },
       { name: 'Abstract of Bills', href: '/reports/abstract', icon: Calculator, adminOnly: false },
       { name: 'Tendering Estimator', href: '/tendering-estimator', icon: BarChart3, adminOnly: false },
+      { name: 'Refer & Earn', href: '/referrals', icon: Gift, adminOnly: false },
     ]
   },
   {
@@ -122,6 +124,7 @@ export default function Navigation() {
       case 'Abstract of Bills': return 'nav.abstract';
       case 'Steel PVC Forecast': return 'nav.forecast';
       case 'Tendering Estimator': return 'nav.tendering_estimator';
+      case 'Refer & Earn': return '';
       case 'Price Indices': return 'nav.price_indices';
       case 'PVC Check Analytics': return 'nav.analytics';
       case 'Report Templates': return 'nav.templates';

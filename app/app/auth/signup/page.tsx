@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ export default function SignUpPage() {
   const [fullName, setFullName] = useState('');
   const [accountType, setAccountType] = useState<'contractor' | 'railway_official'>('contractor');
   const [railwayZone, setRailwayZone] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -34,6 +35,11 @@ export default function SignUpPage() {
   
   const router = useRouter();
   const zoneOptions = getRailwayZoneOptions();
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('ref');
+    if (code) setReferralCode(code.toUpperCase());
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,7 +83,7 @@ export default function SignUpPage() {
       const response = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, fullName, whatsappNumber, accountType, railwayZone }),
+        body: JSON.stringify({ email, password, fullName, whatsappNumber, accountType, railwayZone, referralCode }),
       });
       const data = await response.json();
 
@@ -221,6 +227,26 @@ export default function SignUpPage() {
                   <p className="text-sm text-red-600">{fieldErrors.email}</p>
                 )}
               </div>
+
+              {accountType === 'contractor' && (
+                <div className="space-y-2">
+                  <Label htmlFor="referralCode" className="text-sm font-semibold text-gray-700">
+                    Referral Code <span className="font-normal text-gray-400">(optional)</span>
+                  </Label>
+                  <Input
+                    id="referralCode"
+                    type="text"
+                    value={referralCode}
+                    onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                    placeholder="IRXXXXXXXXXX"
+                    className="h-11 px-4 bg-gray-50 border-gray-200 focus:bg-white transition-colors uppercase"
+                    maxLength={16}
+                  />
+                  <p className="text-xs text-gray-500">
+                    After your first qualifying Rs. 1,000 top-up, both accounts receive Rs. 199 credit.
+                  </p>
+                </div>
+              )}
               
               <div className="space-y-2">
                 <Label htmlFor="whatsappNumber" className="text-sm font-semibold text-gray-700">WhatsApp Number</Label>

@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { prisma } from '@/lib/db';
 import { sendPaymentConfirmation } from '@/lib/whatsapp-mydreams';
 import { sendSlackAlert } from '@/lib/slack-webhook';
+import { processReferralReward } from '@/lib/referrals';
 
 /**
  * POST /api/razorpay/webhook
@@ -198,6 +199,16 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
 
   logger.log(`[${requestId}] ✅ Payment processed successfully via webhook`);
   logger.log(`[${requestId}] Credits: ₹${transaction.creditAmount} added. GST invoice will be generated when user provides billing details.`);
+
+  await processReferralReward(user.id, transaction.id)
+    .then((result) => {
+      if (result.rewarded) {
+        logger.log(`[${requestId}] Referral rewards credited successfully`);
+      }
+    })
+    .catch((error) => {
+      console.error(`[${requestId}] Referral reward processing failed:`, error);
+    });
 
   await sendSlackAlert('info', 'Razorpay payment credited', {
     'Request ID': requestId,

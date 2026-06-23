@@ -84,6 +84,7 @@ model User {
   contractLimitOverride Int?
   resetToken            String?
   resetTokenExpiry      DateTime?
+  referralCode          String?                @unique
   accounts              Account[]
   sessions              Session[]
   billApprovalHistory   BillApprovalHistory[]
@@ -104,10 +105,13 @@ model User {
   telegramConversations  TelegramConversation[]
   whatsappLogs          WhatsAppLog[]
   apiKeys               ApiKey[]
+  referralsMade         Referral[]             @relation("ReferralReferrer")
+  referralReceived      Referral?              @relation("ReferralReferred")
 
   @@index([email])
   @@index([role])
   @@index([createdAt])
+  @@index([referralCode])
 }
 
 model VerificationToken {
@@ -718,6 +722,29 @@ model CreditTransaction {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("credit_transactions")
+}
+
+model Referral {
+  id                      String    @id @default(cuid())
+  code                    String
+  referrerUserId          String
+  referredUserId          String    @unique
+  status                  String    @default("signed_up")
+  qualifyingTransactionId String?   @unique
+  referrerReward          Float     @default(199)
+  referredReward          Float     @default(199)
+  createdAt               DateTime  @default(now())
+  qualifiedAt             DateTime?
+  rewardedAt              DateTime?
+  rejectedAt              DateTime?
+  rejectionReason         String?
+  referrer                 User      @relation("ReferralReferrer", fields: [referrerUserId], references: [id], onDelete: Cascade)
+  referredUser             User      @relation("ReferralReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  @@index([referrerUserId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("referrals")
 }
 
 model AdminSettings {

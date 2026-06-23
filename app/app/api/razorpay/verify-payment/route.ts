@@ -7,6 +7,7 @@ import { verifyRazorpaySignature, fetchPaymentDetails } from '@/lib/razorpay';
 import { prisma } from '@/lib/db';
 import { sendPaymentConfirmation } from '@/lib/whatsapp-mydreams';
 import { createZohoInvoice } from '@/lib/zoho-books';
+import { processReferralReward } from '@/lib/referrals';
 
 export async function POST(request: NextRequest) {
   const requestId = Date.now().toString(36);
@@ -88,6 +89,10 @@ export async function POST(request: NextRequest) {
     // Check if already processed (by webhook or previous verification)
     if (transaction.status === 'success') {
       logger.log(`[${requestId}] Transaction already processed (likely by webhook)`);
+
+      await processReferralReward(transaction.userId, transaction.id).catch((error) => {
+        console.error(`[${requestId}] Referral reward reconciliation failed:`, error);
+      });
       
       // Determine actual credits added based on GST option
       const transactionNotes = transaction.notes as any;
@@ -224,6 +229,16 @@ export async function POST(request: NextRequest) {
     });
     logger.log(`[${requestId}] Credit transaction record created`);
 
+    await processReferralReward(user.id, transaction.id)
+      .then((result) => {
+        if (result.rewarded) {
+          logger.log(`[${requestId}] Referral rewards credited successfully`);
+        }
+      })
+      .catch((error) => {
+        console.error(`[${requestId}] Referral reward processing failed:`, error);
+      });
+
     // Generate temporary invoice number (will be finalized when user provides billing details)
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
@@ -342,4 +357,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

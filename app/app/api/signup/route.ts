@@ -11,11 +11,18 @@ import { isEmailVerificationRequired } from '@/lib/admin-settings';
 import { validatePassword } from '@/lib/password-strength';
 import { RAILWAY_ZONE_STEEL_CITY_MAP } from '@/lib/zone-steel-city-mapping';
 import { getOfficialRailwayEmailDomainHelp, isOfficialRailwayEmail } from '@/lib/official-email';
+import {
+  findEligibleReferrer,
+  generateUniqueReferralCode,
+  normalizeReferralCode,
+  REFERRAL_REWARD,
+} from '@/lib/referrals';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, fullName, whatsappNumber, accountType, railwayZone } = await request.json();
+    const { email, password, fullName, whatsappNumber, accountType, railwayZone, referralCode } = await request.json();
     const normalizedEmail = email?.toLowerCase()?.trim();
+    const normalizedReferralCode = normalizeReferralCode(referralCode);
 
 
     if (!email || !password || !fullName || !whatsappNumber) {
@@ -94,6 +101,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let referrer: Awaited<ReturnType<typeof findEligibleReferrer>> = null;
+    if (normalizedReferralCode) {
+      if (resolvedAccountType !== 'contractor') {
+        return NextResponse.json(
+          { error: 'Referral rewards are currently available for contractor accounts only' },
+          { status: 400 }
+        );
+      }
+
+      referrer = await findEligibleReferrer(normalizedReferralCode);
+      if (!referrer) {
+        return NextResponse.json(
+          { error: 'Invalid or inactive referral code' },
+          { status: 400 }
+        );
+      }
+
+      if (referrer.email.toLowerCase() === normalizedEmail) {
+        return NextResponse.json(
+          { error: 'You cannot use your own referral code' },
+          { status: 400 }
+        );
+      }
+
+      if (referrer.phone && referrer.phone === whatsappNumber) {
+        return NextResponse.json(
+          { error: 'This WhatsApp number is already associated with the referring account' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Hash password with bcrypt
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
@@ -104,6 +143,7 @@ export async function POST(request: NextRequest) {
     // Generate verification token (only if verification is required)
     const token = emailVerificationRequired ? randomBytes(32).toString('hex') : null;
     const expires = emailVerificationRequired ? new Date(Date.now() + 24 * 60 * 60 * 1000) : null; // 24 hours from now
+    const newUserReferralCode = await generateUniqueReferralCode();
 
     // Create user with customer account in a transaction
     const result = await prisma.$transaction(async (prisma: any) => {
@@ -120,7 +160,8 @@ export async function POST(request: NextRequest) {
           emailVerified: emailVerificationRequired ? null : new Date(), // Auto-verify if not required
           freeTrialUsed: 0,
           isTrialActive: false,
-          totalBillsProcessed: 0
+          totalBillsProcessed: 0,
+          referralCode: newUserReferralCode,
         }
       });
 
@@ -145,6 +186,19 @@ export async function POST(request: NextRequest) {
             token,
             expires,
           }
+        });
+      }
+
+      if (referrer) {
+        await prisma.referral.create({
+          data: {
+            code: normalizedReferralCode,
+            referrerUserId: referrer.id,
+            referredUserId: user.id,
+            status: 'signed_up',
+            referrerReward: REFERRAL_REWARD,
+            referredReward: REFERRAL_REWARD,
+          },
         });
       }
 
