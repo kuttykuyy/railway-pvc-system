@@ -384,13 +384,45 @@ export async function POST(request: NextRequest) {
         for (const page of copiedPages) mergedPdf.addPage(page);
       }
 
-      const mergedBytes = await mergedPdf.save();
-      const mergedBuffer = Buffer.from(mergedBytes);
+      const mergedBytes = new Uint8Array(await mergedPdf.save());
+
+      // Append component index documents to the combined IR report.
+      // The IR branch returns early, so it must perform the same embedding
+      // that the detailed format performs at the end of this route.
+      const firstBill = bills[0];
+      const componentIndexStartDate = bills.reduce((earliest, bill) => {
+        const baseMonth = bill.contract.baseMonth
+          ? new Date(bill.contract.baseMonth)
+          : addMonths(new Date(bill.contract.dateOfOpening), -1);
+        return baseMonth < earliest ? baseMonth : earliest;
+      }, firstBill.contract.baseMonth
+        ? new Date(firstBill.contract.baseMonth)
+        : addMonths(new Date(firstBill.contract.dateOfOpening), -1));
+
+      const componentIndexEndDate = bills.reduce((latest, bill) => {
+        const measurementDate = new Date(bill.dateOfMeasurement);
+        return measurementDate > latest ? measurementDate : latest;
+      }, new Date(firstBill.dateOfMeasurement));
+
+      let irFinalBytes = mergedBytes;
+      try {
+        const componentTypes = anyBillHasSteel(bills) ? undefined : NON_STEEL_COMPONENT_TYPES;
+        irFinalBytes = await embedComponentIndicesRange(mergedBytes, {
+          startDate: componentIndexStartDate,
+          endDate: componentIndexEndDate,
+          componentTypes,
+        });
+      } catch (error) {
+        console.error('Bulk IR PDF: error embedding component index documents:', error);
+      }
+
+      const mergedBuffer = Buffer.from(irFinalBytes);
 
       return new Response(mergedBuffer, {
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="IR_PVC_Statements_${bills.length}_Bills_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf"`,
+          'X-RateLimit-Remaining': rateLimit.remaining.toString(),
         },
       });
     }
