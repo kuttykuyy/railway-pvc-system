@@ -1,32 +1,51 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
 
 export function PromoPopup() {
   const [show, setShow] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     const dismissed = sessionStorage.getItem('promo_dismissed');
     if (!dismissed) {
       const timer = setTimeout(() => setShow(true), 2000);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [mounted]);
 
   const dismiss = () => {
     setShow(false);
     sessionStorage.setItem('promo_dismissed', '1');
   };
 
-  if (!show) return null;
+  if (!mounted || !show) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={dismiss}>
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-300"
-        onClick={e => e.stopPropagation()}>
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
-          <p className="text-white/80 text-xs font-medium uppercase tracking-wider">From the makers of IR-PVC</p>
-          <h2 className="text-white text-lg font-bold mt-1">More Tools for Railway Contractors</h2>
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={dismiss}
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-300"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-start justify-between">
+          <div>
+            <p className="text-white/80 text-xs font-medium uppercase tracking-wider">From the makers of IR-PVC</p>
+            <h2 className="text-white text-lg font-bold mt-1">More Tools for Railway Contractors</h2>
+          </div>
+          <button onClick={dismiss} className="text-white/60 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0 ml-2">
+            <X className="h-5 w-5" />
+          </button>
         </div>
         <div className="p-5 space-y-4">
           <a href="https://primerp.in?ref=irpvc" target="_blank" rel="noopener noreferrer"
@@ -54,6 +73,7 @@ export function PromoPopup() {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
