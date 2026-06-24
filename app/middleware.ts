@@ -122,6 +122,6 @@ export const config = {
      * - ads.txt (AdSense ads.txt)
      * - public folder
      */
-    "/((?!api/auth|api/public|api/v1|api/external|api/whatsapp/webhook|api/telegram|api/razorpay/webhook|_next/static|_next/image|favicon|manifest.json|sw.js|icons/|public|api/signup|sitemap.xml|robots.txt|ads.txt).*)",
+    "/((?!api/auth|api/public|api/v1|api/external|api/whatsapp/webhook|api/telegram|api/razorpay/webhook|_next/static|_next/image|favicon|manifest.json|sw.js|icons/|public|api/signup|sitemap.xml|robots.txt|ads.txt|about|pricing|refund|privacy|terms|contact|payment-guide|logo.png|.*\\.(?:html|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
   ],
 };

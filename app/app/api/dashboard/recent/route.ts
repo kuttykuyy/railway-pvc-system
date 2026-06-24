@@ -1,8 +1,9 @@
-﻿
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { advancedCache } from '@/lib/advanced-cache';
 
 // Force dynamic rendering for this route
 export const dynamic = 'force-dynamic';
@@ -21,6 +22,12 @@ export async function GET(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const cacheKey = `dashboard:recent:${user.id}`;
+    const cachedRecent = advancedCache.get(cacheKey);
+    if (cachedRecent) {
+      return NextResponse.json(cachedRecent);
     }
 
     const isAdmin = user.role === 'admin';
@@ -118,6 +125,9 @@ export async function GET(request: NextRequest) {
     const sortedItems = recentItems
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 10);
+
+    // Cache for 30 seconds, tagged by dashboard and specific user ID
+    advancedCache.set(cacheKey, sortedItems, 30000, ['dashboard', `user:${user.id}`]);
 
     return NextResponse.json(sortedItems);
   } catch (error) {

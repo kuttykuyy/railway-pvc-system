@@ -107,6 +107,7 @@ model User {
   apiKeys               ApiKey[]
   referralsMade         Referral[]             @relation("ReferralReferrer")
   referralReceived      Referral?              @relation("ReferralReferred")
+  reviewRewardSubmission ReviewRewardSubmission?
 
   @@index([email])
   @@index([role])
@@ -745,6 +746,26 @@ model Referral {
   @@index([status])
   @@index([createdAt])
   @@map("referrals")
+}
+
+model ReviewRewardSubmission {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  platform       String
+  reviewText     String
+  proofUrl       String
+  status         String    @default("pending")
+  rewardAmount   Float?
+  submittedAt    DateTime  @default(now())
+  reviewedAt     DateTime?
+  reviewedById   String?
+  reviewedByEmail String?
+  rejectionReason String?
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([submittedAt])
+  @@map("review_reward_submissions")
 }
 
 model AdminSettings {

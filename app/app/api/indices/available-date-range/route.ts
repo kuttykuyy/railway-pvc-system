@@ -1,6 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { advancedCache } from '@/lib/advanced-cache';
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,12 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const isFinal = searchParams.get('isFinal') === 'true';
     const debug = searchParams.get('debug') === 'true';
+
+    const cacheKey = `available-date-range:${isFinal}:${debug}`;
+    const cachedResult = advancedCache.get(cacheKey);
+    if (cachedResult) {
+      return NextResponse.json(cachedResult);
+    }
     
     // Get CORE price indices only (exclude city-specific variants)
     const allPriceIndices = await prisma.priceIndex.findMany({
@@ -123,6 +130,8 @@ export async function GET(request: NextRequest) {
     if (debug && incompleteMonths.length > 0) {
       response.incompleteMonths = incompleteMonths.slice(-6);
     }
+
+    advancedCache.set(cacheKey, response, 3600000, ['indices']); // Cache for 1 hour
 
     return NextResponse.json(response);
 

@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { advancedCache } from '@/lib/advanced-cache';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
@@ -303,6 +304,9 @@ export async function POST(request: NextRequest) {
       }
     }
     
+    // Invalidate cached indices
+    advancedCache.invalidateByTag('indices');
+
     return NextResponse.json({
       success: true,
       count: results.length,

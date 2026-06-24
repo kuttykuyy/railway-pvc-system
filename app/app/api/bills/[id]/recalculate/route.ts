@@ -6,6 +6,7 @@ import { calculateClassificationBasedPvcWithComponents, calculateDedicatedCement
 import { calculateExtensionCompliantPvc, savePvcExtensionCompliance } from '@/lib/extension-compliance';
 import { recalculateCumulativePvcForContract } from '@/lib/recalculateCumulativePvc';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
+import { advancedCache } from '@/lib/advanced-cache';
 
 export const dynamic = "force-dynamic";
 
@@ -447,8 +448,10 @@ export async function POST(
     });
     
     // Recalculate cumulative PVC for all bills in this contract
-    // This ensures correct cumulative values even when bills are recalculated
     await recalculateCumulativePvcForContract(bill.contractId);
+    
+    // Invalidate cached PDFs for this bill as the values have changed
+    advancedCache.invalidateByPattern(new RegExp("^pdf-report:" + billId + ":.*"));
     
     // Return updated bill
     const updatedBill = await prisma.bill.findUnique({

@@ -1,6 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath, revalidateTag } from 'next/cache';
+import { advancedCache } from '@/lib/advanced-cache';
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,12 @@ export async function POST(request: NextRequest) {
     revalidateTag('bills');
     revalidateTag('indices');
     revalidateTag('pvc-calculations');
+    
+    // Clear advanced memory caches
+    advancedCache.invalidateByTag('indices');
+    advancedCache.invalidateByTag('bills');
+    advancedCache.invalidateByTag('classifications');
+    advancedCache.invalidateByTag('dashboard');
     
     return NextResponse.json({
       success: true,

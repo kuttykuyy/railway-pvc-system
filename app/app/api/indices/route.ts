@@ -2,12 +2,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateAdminAccess } from '@/lib/role-auth';
+import { advancedCache } from '@/lib/advanced-cache';
 
 export const dynamic = "force-dynamic";
 
 // GET /api/indices - Get all price indices with latest monthly values
 export async function GET() {
   try {
+    const cacheKey = 'indices:all';
+    const cachedIndices = advancedCache.get(cacheKey);
+    if (cachedIndices) {
+      return NextResponse.json(cachedIndices);
+    }
+
     const indices = await prisma.priceIndex.findMany({
       orderBy: { name: 'asc' },
       include: {
@@ -17,6 +24,8 @@ export async function GET() {
         }
       }
     });
+    
+    advancedCache.set(cacheKey, indices, 3600000, ['indices']); // Cache for 1 hour
     
     return NextResponse.json(indices);
   } catch (error) {

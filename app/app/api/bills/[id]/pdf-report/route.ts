@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { advancedCache } from '@/lib/advanced-cache';
 import { getQuarterMonths, getQuarterFromDate, calculateDedicatedCementPvcWithSteps, calculateDedicatedSteelPvcWithSteps, calculateWeightedComponents, calculatePvcComponentWithSteps } from '@/lib/pvc-calculations';
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
@@ -143,10 +144,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
         
         const billId = id;
-    const { searchParams } = new URL(request.url);
-    const templateId = searchParams.get('templateId');
-    const publicAccess = searchParams.get('public_access');
-    const publicToken = searchParams.get('token');
+        const { searchParams } = new URL(request.url);
+        const templateId = searchParams.get('templateId');
+        
+        // Check cache before running heavy PDF compiling
+        const cacheKey = `pdf-report:${billId}:${templateId || 'default'}`;
+        const cachedPdf = advancedCache.get(cacheKey);
+        if (cachedPdf) {
+          console.log(`[PDF Cache] Hit for: ${cacheKey}`);
+          return new Response(Buffer.from(cachedPdf as any), {
+            headers: {
+              'Content-Type': 'application/pdf',
+              'Content-Disposition': `attachment; filename="PVC_Report_${billId}.pdf"`,
+              'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+            }
+          });
+        }
+        
+        const publicAccess = searchParams.get('public_access');
+        const publicToken = searchParams.get('token');
     
     // Check if this is a public access request with valid token
     let isPublicAccessValid = false;
@@ -4225,6 +4241,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const pdfBuffer = Buffer.from(finalPdfBytes);
+
+    // Save to advanced cache for 10 minutes, tagged with 'bills' and specific bill ID
+    advancedCache.set(cacheKey, pdfBuffer, 600000, ['bills', `bill:${billId}`]);
 
     return new Response(pdfBuffer, {
       headers: {

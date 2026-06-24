@@ -154,26 +154,34 @@ export default function Navigation() {
   // Get user role information
   const { isAdmin, isRailwayOfficial, role } = getClientRoleInfo(session);
 
-  // Fetch credit balance + billing settings in a single parallel round-trip
+  // Fetch credit balance and static billing settings
   useEffect(() => {
     if (status !== 'authenticated') return;
 
-    const fetchNavData = async () => {
+    const fetchStaticBillingSettings = async () => {
       try {
-        const [balanceRes, settingsRes] = await Promise.all([
-          fetch('/api/credits/balance'),
-          fetch('/api/settings/billing'),
-        ]);
-        if (balanceRes.ok) setCreditData(await balanceRes.json());
+        const settingsRes = await fetch('/api/settings/billing');
         if (settingsRes.ok) setBillingSettings(await settingsRes.json());
       } catch (err) {
-        console.error('Failed to fetch nav data:', err);
+        console.error('Failed to fetch static billing settings:', err);
       }
     };
 
-    fetchNavData();
-    // Refresh every 60s instead of 30s — halves the polling load
-    const interval = setInterval(fetchNavData, 60000);
+    const fetchBalance = async () => {
+      try {
+        const balanceRes = await fetch('/api/credits/balance');
+        if (balanceRes.ok) setCreditData(await balanceRes.json());
+      } catch (err) {
+        console.error('Failed to fetch credit balance:', err);
+      }
+    };
+
+    // Load static settings and initial balance
+    fetchStaticBillingSettings();
+    fetchBalance();
+
+    // Poll only credit balance every 60 seconds
+    const interval = setInterval(fetchBalance, 60000);
     return () => clearInterval(interval);
   }, [status]);
 

@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getQuarterFromDate, calculateDedicatedCementPvc, calculateDedicatedSteelPvc, calculateClassificationEntryPvc } from '@/lib/pvc-calculations';
+import { advancedCache } from '@/lib/advanced-cache';
 import { getQuarterlyAverages } from '@/lib/db-utils';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -82,6 +83,9 @@ export async function DELETE(
     await prisma.bill.delete({
       where: { id }
     });
+
+    // Invalidate cached PDFs for this bill
+    advancedCache.invalidateByPattern(new RegExp("^pdf-report:" + id + ":.*"));
 
     return NextResponse.json({ message: 'Bill deleted successfully' });
   } catch (error) {
@@ -600,6 +604,9 @@ export async function PUT(
     console.log(`   Total PVC: ₹${totalPvc.toFixed(2)}`);
     console.log(`✅ ===== NEW BILL API: UPDATE COMPLETE =====\n`);
     
+    // Invalidate cached PDFs for this bill
+    advancedCache.invalidateByPattern(new RegExp("^pdf-report:" + id + ":.*"));
+
     return NextResponse.json(updatedBill);
     
   } catch (error) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
+import { advancedCache } from '@/lib/advanced-cache';
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +101,9 @@ export async function POST(request: NextRequest) {
         }
       });
       
+      // Invalidate cached indices
+      advancedCache.invalidateByTag('indices');
+
       return NextResponse.json(monthlyValue);
     }
   } catch (error) {
@@ -162,6 +166,9 @@ export async function PUT(request: NextRequest) {
       results.push(monthlyValue);
     }
     
+    // Invalidate cached indices
+    advancedCache.invalidateByTag('indices');
+
     return NextResponse.json(results);
   } catch (error) {
     console.error('Error updating monthly values:', error);
@@ -202,6 +209,9 @@ export async function DELETE(request: NextRequest) {
         }
       });
       
+      // Invalidate cached indices
+      advancedCache.invalidateByTag('indices');
+      
       return NextResponse.json({
         success: true,
         deletedCount: result.count,
@@ -222,6 +232,9 @@ export async function DELETE(request: NextRequest) {
           month: monthDate
         }
       });
+
+      // Invalidate cached indices
+      advancedCache.invalidateByTag('indices');
 
       return NextResponse.json({
         success: true,
