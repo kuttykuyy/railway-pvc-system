@@ -14,12 +14,20 @@ export async function extractLayoutText(pdfBuffer: Buffer): Promise<string> {
       // @ts-ignore
       (globalThis as any).pdfjsWorker = await import('pdfjs-dist/legacy/build/pdf.worker.mjs');
     } catch {
-      // Ignore — pdfjs will try other fallback paths
+      try {
+        // @ts-ignore
+        (globalThis as any).pdfjsWorker = await import('pdfjs-dist/legacy/build/pdf.worker.js');
+      } catch {
+        // Ignore - pdfjs will try other fallback paths
+      }
     }
   }
 
   // @ts-ignore
-  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs').catch(async () => {
+    // @ts-ignore
+    return import('pdfjs-dist/legacy/build/pdf.js');
+  });
 
   const doc = await pdfjsLib.getDocument({
     data: new Uint8Array(pdfBuffer),

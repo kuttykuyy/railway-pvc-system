@@ -302,6 +302,24 @@ model PriceIndex {
   @@map("price_indices")
 }
 
+model DsrCementCoefficient {
+  id                    String   @id @default(cuid())
+  dsrCode               String   @unique
+  description           String
+  workUnit              String
+  cementQuantityPerUnit Float
+  cementUnit            String   @default("MT")
+  source                String   @default("DSR 2021 Analysis of Rates")
+  notes                 String?
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([dsrCode])
+  @@index([isActive])
+  @@map("dsr_cement_coefficients")
+}
+
 model MonthlyIndexValue {
   id            String     @id @default(cuid())
   priceIndexId  String
