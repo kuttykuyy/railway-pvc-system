@@ -1,0 +1,260 @@
+'use client';
+
+import { ChangeEvent, useRef, useState } from 'react';
+import { AlertCircle, CheckCircle2, FileText, Loader2, Upload } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+interface CementAnalysisSummary {
+  matchedItemCount: number;
+  unmatchedItemCount: number;
+  cementQuantity: number;
+  cementAmount?: number | null;
+  hasCementAmount?: boolean;
+}
+
+interface CementAnalysisResultItem {
+  dsrCode: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  cementQuantity: number;
+  cementAmount?: number | null;
+  coefficient?: {
+    cementCoefficient: number;
+    coefficientUnit: string;
+  } | null;
+  matched?: boolean;
+}
+
+export interface CementAnalysisData {
+  cementRatePerUnit?: number | null;
+  results: CementAnalysisResultItem[];
+  summary: CementAnalysisSummary;
+  warnings?: string[];
+}
+
+interface BillPdfCementAnalyzerProps {
+  title?: string;
+  compact?: boolean;
+  disabled?: boolean;
+  onApplyCementAmount?: (amount: number, data: CementAnalysisData) => void;
+}
+
+function formatNumber(value: number | null | undefined, fractionDigits = 3) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
+  return value.toLocaleString('en-IN', {
+    maximumFractionDigits: fractionDigits,
+  });
+}
+
+function formatAmount(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
+  return `Rs ${value.toLocaleString('en-IN', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}`;
+}
+
+export function BillPdfCementAnalyzer({
+  title = 'AI Bill PDF Cement Analysis',
+  compact = false,
+  disabled = false,
+  onApplyCementAmount,
+}: BillPdfCementAnalyzerProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [cementRatePerUnit, setCementRatePerUnit] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [result, setResult] = useState<CementAnalysisData | null>(null);
+  const [fileName, setFileName] = useState('');
+
+  const handlePdfUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast.error('Please upload a PDF bill file.');
+      return;
+    }
+
+    try {
+      setIsAnalyzing(true);
+      setFileName(file.name);
+
+      const formData = new FormData();
+      formData.append('file', file);
+      if (cementRatePerUnit.trim()) {
+        formData.append('cementRatePerUnit', cementRatePerUnit.trim());
+      }
+
+      const response = await fetch('/api/bills/cement-analysis', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json.error || 'Failed to analyze bill PDF');
+      }
+
+      const data = json.data as CementAnalysisData;
+      setResult(data);
+
+      const cementAmount = data.summary?.cementAmount;
+      if (typeof cementAmount === 'number' && cementAmount > 0 && onApplyCementAmount) {
+        onApplyCementAmount(cementAmount, data);
+      }
+
+      toast.success(`Found ${data.summary.matchedItemCount} cement item(s)`);
+    } catch (error: any) {
+      console.error('Bill PDF cement analysis failed:', error);
+      toast.error(error.message || 'Failed to analyze bill PDF');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  return (
+    <Card className="border-blue-200 bg-blue-50/40">
+      <CardHeader className={compact ? 'p-4 pb-2' : 'p-5 pb-3'}>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <FileText className="h-4 w-4 text-blue-700" />
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className={compact ? 'p-4 pt-0 space-y-3' : 'p-5 pt-0 space-y-4'}>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="space-y-2">
+            <Label htmlFor="cementRatePerUnit">Cement rate per MT</Label>
+            <Input
+              id="cementRatePerUnit"
+              type="number"
+              min="0"
+              step="0.01"
+              value={cementRatePerUnit}
+              onChange={(event) => setCementRatePerUnit(event.target.value)}
+              placeholder="Enter rate to calculate cement amount"
+              disabled={disabled || isAnalyzing}
+            />
+          </div>
+          <div>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={handlePdfUpload}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => inputRef.current?.click()}
+              disabled={disabled || isAnalyzing}
+              className="w-full md:w-auto"
+            >
+              {isAnalyzing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="mr-2 h-4 w-4" />
+              )}
+              {isAnalyzing ? 'Analyzing...' : 'Upload Bill PDF'}
+            </Button>
+          </div>
+        </div>
+
+        {fileName && (
+          <div className="text-xs text-muted-foreground">Last file: {fileName}</div>
+        )}
+
+        {result && (
+          <div className="space-y-3 rounded-lg border bg-white p-3">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              <div>
+                <div className="text-[11px] text-muted-foreground">Matched items</div>
+                <Badge variant="secondary">{result.summary.matchedItemCount}</Badge>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">Needs coefficient</div>
+                <Badge variant={result.summary.unmatchedItemCount > 0 ? 'destructive' : 'secondary'}>
+                  {result.summary.unmatchedItemCount}
+                </Badge>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">Cement quantity</div>
+                <div className="text-sm font-semibold">{formatNumber(result.summary.cementQuantity)} MT</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">Cement amount</div>
+                <div className="text-sm font-semibold">{formatAmount(result.summary.cementAmount)}</div>
+              </div>
+            </div>
+
+            {result.summary.cementAmount === null || result.summary.cementAmount === undefined ? (
+              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                Add cement rate per MT and upload again to calculate the bill cement amount.
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                Cement amount was calculated from DSR coefficients and applied to the bill form.
+              </div>
+            )}
+
+            {(result.warnings || []).map((warning) => (
+              <div key={warning} className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {warning}
+              </div>
+            ))}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="border-b bg-muted/60">
+                  <tr>
+                    <th className="px-2 py-2 text-left font-medium">DSR</th>
+                    <th className="px-2 py-2 text-left font-medium">Description</th>
+                    <th className="px-2 py-2 text-right font-medium">Qty</th>
+                    <th className="px-2 py-2 text-right font-medium">Coeff.</th>
+                    <th className="px-2 py-2 text-right font-medium">Cement</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {result.results.slice(0, compact ? 5 : 10).map((item, index) => (
+                    <tr key={`${item.dsrCode}-${index}`}>
+                      <td className="whitespace-nowrap px-2 py-2 font-medium">{item.dsrCode || '-'}</td>
+                      <td className="max-w-[360px] px-2 py-2">
+                        <div className="line-clamp-2">{item.description}</div>
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right">
+                        {formatNumber(item.quantity, 2)} {item.unit}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right">
+                        {item.coefficient ? formatNumber(item.coefficient.cementCoefficient, 5) : '-'}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
+                        {formatNumber(item.cementQuantity)} MT
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {result.results.length > (compact ? 5 : 10) && (
+              <div className="text-xs text-muted-foreground">
+                Showing first {compact ? 5 : 10} of {result.results.length} extracted cement items.
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

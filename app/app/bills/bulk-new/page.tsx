@@ -16,6 +16,7 @@ import { toast } from 'react-hot-toast';
 import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-dialog';
 import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
+import { BillPdfCementAnalyzer } from '@/components/bills/bill-pdf-cement-analyzer';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 
 interface Contract {
@@ -65,6 +66,7 @@ interface BillRow {
   id: string;
   billNo: string;
   dateOfMeasurement: string;
+  cementAmount: number | string | '';
   classificationEntries: ClassificationEntry[];
 }
 
@@ -84,6 +86,7 @@ export default function BulkBillCreationPage() {
       id: Math.random().toString(36).substr(2, 9),
       billNo: '',
       dateOfMeasurement: '',
+      cementAmount: '',
       classificationEntries: [],
     },
   ]);
@@ -171,6 +174,7 @@ export default function BulkBillCreationPage() {
         id: Math.random().toString(36).substr(2, 9),
         billNo: '',
         dateOfMeasurement: '',
+        cementAmount: '',
         classificationEntries: [],
       },
     ]);
@@ -231,13 +235,13 @@ export default function BulkBillCreationPage() {
   };
 
   const downloadTemplate = () => {
-    const headers = ['billNo', 'measurementDate', 'classificationCode', 'classificationAmount', 'description', 'itemNumber', 'quantity', 'agreementRate'];
+    const headers = ['billNo', 'measurementDate', 'classificationCode', 'classificationAmount', 'cementAmount', 'description', 'itemNumber', 'quantity', 'agreementRate'];
     const rows = [
-      ['B1', '2026-04-15', 'CIVIL', '300000', 'Earthwork', '1', '10', '30000'],
-      ['B1', '2026-04-15', 'CONCRETE', '400000', 'Concrete work', '2', '20', '20000'],
-      ['B1', '2026-04-15', 'STEEL', '300000', 'Steel work', '3', '15', '20000'],
-      ['B2', '2026-04-20', 'CIVIL', '200000', 'Earthwork', '1', '', ''],
-      ['B2', '2026-04-20', 'TRACK', '600000', 'Track work', '2', '', ''],
+      ['B1', '2026-04-15', 'CIVIL', '300000', '85000', 'Earthwork', '1', '10', '30000'],
+      ['B1', '2026-04-15', 'CONCRETE', '400000', '85000', 'Concrete work', '2', '20', '20000'],
+      ['B1', '2026-04-15', 'STEEL', '300000', '85000', 'Steel work', '3', '15', '20000'],
+      ['B2', '2026-04-20', 'CIVIL', '200000', '', 'Earthwork', '1', '', ''],
+      ['B2', '2026-04-20', 'TRACK', '600000', '', 'Track work', '2', '', ''],
     ];
     const csvContent = [headers, ...rows]
       .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
@@ -292,6 +296,7 @@ export default function BulkBillCreationPage() {
           id: Math.random().toString(36).substr(2, 9),
           billNo,
           dateOfMeasurement: measurementDate,
+          cementAmount: parseAmount(getImportValue(importRow, ['cementAmount', 'cement'])) || '',
           classificationEntries: [],
         };
 
@@ -386,7 +391,7 @@ export default function BulkBillCreationPage() {
             steelAngleChannelAmount: 0,
             steelPlatesAmount: 0,
             steelOtherSectionsAmount: 0,
-            cementAmount: 0,
+            cementAmount: parseAmount(row.cementAmount),
             classificationEntries: row.classificationEntries.map(entry => ({
               subClassificationId: entry.subClassificationId,
               amount: entry.amount === '' || entry.amount === null || entry.amount === undefined
@@ -575,6 +580,23 @@ export default function BulkBillCreationPage() {
                 </p>
               </div>
 
+              <BillPdfCementAnalyzer
+                compact
+                disabled={isSaving}
+                title="AI PDF Cement Analysis"
+                onApplyCementAmount={(amount) => {
+                  setBillRows((prev) => {
+                    const emptyIndex = prev.findIndex(row => parseAmount(row.cementAmount) <= 0);
+                    const targetIndex = emptyIndex >= 0 ? emptyIndex : 0;
+                    return prev.map((row, index) => index === targetIndex
+                      ? { ...row, cementAmount: amount.toFixed(2) }
+                      : row
+                    );
+                  });
+                  toast.success('Cement amount applied to a bulk bill row');
+                }}
+              />
+
               <div className="border rounded-lg overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -584,6 +606,7 @@ export default function BulkBillCreationPage() {
                         <th className="px-2 py-2 text-left text-xs font-medium">Bill No *</th>
                         <th className="px-2 py-2 text-left text-xs font-medium">Date of Measurement *</th>
                         <th className="px-2 py-2 text-left text-xs font-medium">Classifications *</th>
+                        <th className="px-2 py-2 text-left text-xs font-medium">Cement Amount</th>
                         <th className="px-2 py-2 text-left text-xs font-medium">Class Total</th>
                         <th className="px-2 py-2 text-center text-xs font-medium">Action</th>
                       </tr>
@@ -635,6 +658,18 @@ export default function BulkBillCreationPage() {
                                 </span>
                               )}
                             </div>
+                          </td>
+                          <td className="px-2 py-2">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.cementAmount}
+                              onChange={(e) => updateBillRow(row.id, 'cementAmount', e.target.value)}
+                              placeholder="0.00"
+                              disabled={isSaving}
+                              className="w-28 h-8 text-xs"
+                            />
                           </td>
                           <td className="px-2 py-2">
                             <div className="text-xs font-medium">

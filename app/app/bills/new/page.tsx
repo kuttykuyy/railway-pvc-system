@@ -38,6 +38,7 @@ import { ProvisionalDateNotification } from '@/components/ui/provisional-date-no
 import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
 import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-dialog';
+import { BillPdfCementAnalyzer } from '@/components/bills/bill-pdf-cement-analyzer';
 import { useLanguage } from '@/components/i18n-provider';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { ContextualHelp } from '@/components/contextual-help';
@@ -1023,6 +1024,14 @@ function NewBillPageContent() {
                     <StatusMessage type="error" title="Error" message={error} />
                   </div>
                 )}
+
+                <BillPdfCementAnalyzer
+                  onApplyCementAmount={(amount) => {
+                    setFormData(prev => ({ ...prev, cementAmount: amount.toFixed(2) }));
+                    setOpenAccordion(prev => Array.from(new Set([...prev, 'optional'])));
+                    toast.success('Cement amount applied to this bill');
+                  }}
+                />
 
                 {/* Accordion for organized sections */}
                 <Accordion type="multiple" value={openAccordion} onValueChange={setOpenAccordion} className="space-y-4">
