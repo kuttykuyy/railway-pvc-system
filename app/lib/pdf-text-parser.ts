@@ -1,4 +1,11 @@
 import { logger } from './logger';
+
+// Polyfill DOMMatrix for server-side Next.js environments
+if (typeof globalThis !== 'undefined' && !('DOMMatrix' in globalThis)) {
+  // @ts-ignore
+  globalThis.DOMMatrix = class DOMMatrix {};
+}
+
 /**
  * Text-based PDF parser for Indian Railway running account bills.
  * Extracts bill data using regex pattern matching on text extracted via pdfjs-dist.

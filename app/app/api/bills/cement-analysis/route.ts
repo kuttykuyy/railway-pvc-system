@@ -1,3 +1,9 @@
+// Polyfill DOMMatrix for server-side Next.js environments
+if (typeof globalThis !== 'undefined' && !('DOMMatrix' in globalThis)) {
+  // @ts-ignore
+  globalThis.DOMMatrix = class DOMMatrix {};
+}
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateApiAccess } from '@/lib/payment-validation';
