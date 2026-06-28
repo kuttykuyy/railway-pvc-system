@@ -578,6 +578,12 @@ ${markdownPart}
     }))
     .filter((summary: { schedule: string; amountIncludingSpecialCondition: number }) => summary.schedule && summary.amountIncludingSpecialCondition >= 0);
 
+  // DEBUG LOGGING
+  console.info('[cement-analysis-debug] Raw AI Parsed Schedule Summary:', scheduleSummary);
+  console.info('[cement-analysis-debug] Raw AI Parsed Schedule Summary Total (parsed):', parsed.scheduleSummaryTotal);
+  console.info('[cement-analysis-debug] Raw AI Items count:', items.length);
+  console.info('[cement-analysis-debug] Raw AI Items:', items.map((i: any) => ({ desc: i.description, amt: i.amountSinceLastBill, dsr: i.dsrCode, itemNo: i.itemNo })));
+
   // Filter out any extracted item that is actually a duplicate of a Schedule Summary row
   const filteredItems = items.filter((item: ExtractedBillItem) => {
     const itemDesc = String(item.description || '').toLowerCase();
@@ -604,9 +610,10 @@ ${markdownPart}
           normDesc.startsWith(`schedulesummary`) ||
           normDesc === 'total' ||
           normDesc === 'summary' ||
-          (normDesc.includes(normSched) && (normDesc.includes('total') || normDesc.includes('summary') || normDesc.includes('sum') || itemDesc.length < 35)) ||
           normDsr === normSched ||
-          normNo === normSched;
+          normNo === normSched ||
+          // Heuristic: description contains the schedule name, and DSR code is empty/invalid
+          (normDesc.includes(normSched) && (!itemDsr || itemDsr === schedName || normDsr.includes('total') || normDsr.includes('sch') || itemDesc.length < 50));
         
         if (isSummaryText) {
           console.log(`[Reconciliation Filter] Filtered out schedule summary row from items:`, item);
@@ -622,6 +629,11 @@ ${markdownPart}
     0,
   );
   const scheduleSummaryTotal = Number(toFiniteNumber(parsed.scheduleSummaryTotal) || summedScheduleTotal);
+
+  console.info('[cement-analysis-debug] Computed Summed Schedule Total:', summedScheduleTotal);
+  console.info('[cement-analysis-debug] Final Reconciled Schedule Summary Total:', scheduleSummaryTotal);
+  console.info('[cement-analysis-debug] Filtered Items count:', filteredItems.length);
+  console.info('[cement-analysis-debug] Filtered Items:', filteredItems.map((i: any) => ({ desc: i.description, amt: i.amountSinceLastBill })));
   if (!(scheduleSummaryTotal > 0)) {
     throw new Error('AI could not extract the Schedule Summary amount including special condition.');
   }

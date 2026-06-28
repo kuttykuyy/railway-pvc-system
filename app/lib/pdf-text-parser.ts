@@ -6,6 +6,21 @@ if (typeof globalThis !== 'undefined' && !('DOMMatrix' in globalThis)) {
   globalThis.DOMMatrix = class DOMMatrix {};
 }
 
+// Pre-load the worker module onto globalThis before importing pdf.js
+if (typeof globalThis !== 'undefined' && !(globalThis as any).pdfjsWorker) {
+  try {
+    // @ts-ignore
+    (globalThis as any).pdfjsWorker = require('pdfjs-dist/legacy/build/pdf.worker.mjs');
+  } catch {
+    try {
+      // @ts-ignore
+      (globalThis as any).pdfjsWorker = require('pdfjs-dist/legacy/build/pdf.worker.js');
+    } catch {
+      // Ignore
+    }
+  }
+}
+
 /**
  * Text-based PDF parser for Indian Railway running account bills.
  * Extracts bill data using regex pattern matching on text extracted via pdfjs-dist.
