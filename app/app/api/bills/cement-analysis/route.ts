@@ -19,6 +19,10 @@ interface ExtractedBillItem {
   amountSinceLastBill?: number;
   agreementRate?: number;
   schedule?: string;
+  scheduleGroup?: string;
+  chapter?: string;
+  sourceBook?: 'USSR_2021' | 'DSR_2021' | 'NON_SCHEDULE' | 'UNKNOWN';
+  requiresDsrCementCoefficient?: boolean;
   isCementAffected?: boolean;
   isSteelItem?: boolean;
   steelType?: 'TMT' | 'ANGLE_CHANNEL' | 'PLATES' | 'OTHER_SECTIONS' | '';
@@ -27,6 +31,8 @@ interface ExtractedBillItem {
   confidence?: 'high' | 'medium' | 'low';
   reason?: string;
 }
+
+type SourceBook = NonNullable<ExtractedBillItem['sourceBook']>;
 
 function toFiniteNumber(value: unknown): number | undefined {
   if (typeof value === 'string') value = value.replace(/,/g, '').trim();
@@ -37,22 +43,75 @@ function toFiniteNumber(value: unknown): number | undefined {
 function normalizeExtractedItem(item: any): ExtractedBillItem {
   const steelTypes = new Set(['TMT', 'ANGLE_CHANNEL', 'PLATES', 'OTHER_SECTIONS']);
   const steelType = String(item?.steelType || '').trim().toUpperCase();
+  const itemNo = String(item?.itemNo || item?.dsrCode || '').trim();
+  const schedule = String(item?.schedule || '').trim();
+  const sourceText = `${item?.sourceBook || ''} ${schedule} ${itemNo}`.toUpperCase();
+  let sourceBook: SourceBook = 'UNKNOWN';
+  if (/USSR[\s-]*2021|USSR_2021/.test(sourceText) || /^\d{6}(?:\D|$)/.test(itemNo)) {
+    sourceBook = 'USSR_2021';
+  } else if (/DSR[\s-]*2021|DSR_2021/.test(sourceText) || /\d+(?:\.\d+)+/.test(itemNo)) {
+    sourceBook = 'DSR_2021';
+  } else if (/NON[\s-]*SCHEDULE|NON_SCHEDULE|\bNS\b/.test(sourceText)) {
+    sourceBook = 'NON_SCHEDULE';
+  }
+
+  const isCementAffected = item?.isCementAffected === true;
   return {
     dsrCode: String(item?.dsrCode || item?.itemNo || '').trim(),
-    itemNo: String(item?.itemNo || item?.dsrCode || '').trim(),
+    itemNo,
     description: String(item?.description || '').trim(),
     unit: String(item?.unit || '').trim(),
     quantitySinceLastBill: toFiniteNumber(item?.quantitySinceLastBill) || 0,
     agreementRate: toFiniteNumber(item?.agreementRate),
     amountSinceLastBill: toFiniteNumber(item?.amountSinceLastBill),
-    schedule: String(item?.schedule || '').trim(),
-    isCementAffected: item?.isCementAffected === true,
+    schedule,
+    scheduleGroup: String(item?.scheduleGroup || '').trim(),
+    chapter: String(item?.chapter || '').trim(),
+    sourceBook,
+    requiresDsrCementCoefficient: isCementAffected && sourceBook !== 'USSR_2021',
+    isCementAffected,
     isSteelItem: item?.isSteelItem === true,
     steelType: steelTypes.has(steelType) ? steelType as ExtractedBillItem['steelType'] : '',
     suggestedClassificationCode: String(item?.suggestedClassificationCode || '').trim().toUpperCase(),
     suggestedClassificationReason: String(item?.suggestedClassificationReason || '').trim(),
     confidence: ['high', 'medium', 'low'].includes(item?.confidence) ? item.confidence : 'low',
     reason: String(item?.reason || '').trim(),
+  };
+}
+
+function applyDeterministicClassification(
+  item: ExtractedBillItem,
+  classificationGroupCode: string,
+): ExtractedBillItem {
+  const suggestedCode = String(item.suggestedClassificationCode || '').toUpperCase();
+  const isGroup6 = classificationGroupCode === '6' || suggestedCode.startsWith('6');
+  if (!isGroup6) return item;
+
+  const text = `${item.schedule || ''} ${item.scheduleGroup || ''} ${item.chapter || ''} ${item.description}`.toLowerCase();
+  const isGirderProcess = /fabricat|assembl|erect|launch/.test(text) && /girder|bridge/.test(text);
+  const excludesSteel = /excluding steel|without steel|steel supplied by railway|free issue steel/.test(text);
+  const includesSteel = /including steel|with steel|contractor.{0,30}suppl/.test(text);
+
+  let code = '6A';
+  let reason = 'General bridge/protection item outside the separate supply and girder categories.';
+  if (isGirderProcess && excludesSteel) {
+    code = '6E';
+    reason = 'Girder fabrication/assembly/erection/launching excluding steel.';
+  } else if (isGirderProcess && includesSteel) {
+    code = '6D';
+    reason = 'Girder fabrication/assembly/erection/launching including contractor-supplied steel.';
+  } else if (item.sourceBook === 'USSR_2021' && (/cement/i.test(item.schedule || '') || suggestedCode === '6C')) {
+    code = '6C';
+    reason = 'Separate USSR cement supply item.';
+  } else if (item.isSteelItem || /item\s*-?\s*steel|steel supply/.test(text)) {
+    code = '6B';
+    reason = 'Separate steel supply item.';
+  }
+
+  return {
+    ...item,
+    suggestedClassificationCode: code,
+    suggestedClassificationReason: reason,
   };
 }
 
@@ -63,15 +122,20 @@ interface ExtractedBillDetails {
   measurementDate?: string;
   grossBillAmount?: number;
   netBillAmount?: number;
+  classificationGroupCode?: string;
   items: ExtractedBillItem[];
+}
+
+function isDirectCementSupplyItem(item: ExtractedBillItem): boolean {
+  return item.suggestedClassificationCode === '6C'
+    || (item.sourceBook === 'USSR_2021' && /cement/i.test(`${item.schedule} ${item.description}`) && !item.isCementAffected);
 }
 
 function deriveCementRatePerMt(items: ExtractedBillItem[]): number | null {
   const cementSupplyItem = items.find(item => {
     const unit = item.unit.trim().toUpperCase().replace(/\s+/g, ' ');
     const isPerMt = ['MT', 'M.T.', 'TONNE', 'METRIC TONNE', 'METRIC TON'].includes(unit);
-    const isDirectCementSupply = item.suggestedClassificationCode === '6C'
-      || (!item.isCementAffected && /\bcement\b/i.test(item.description));
+    const isDirectCementSupply = isDirectCementSupplyItem(item);
     return isPerMt && isDirectCementSupply;
   });
 
@@ -201,6 +265,7 @@ Return JSON only:
   "measurementDate": "YYYY-MM-DD date of measurement, passed bill date, or bill date if visible",
   "grossBillAmount": number,
   "netBillAmount": number,
+  "classificationGroupCode": "GCC main work group code such as 6 for Bridges & Protection Work",
   "items": [
     {
       "dsrCode": "DSR code like 4.1.6 or 5.1.2",
@@ -211,6 +276,9 @@ Return JSON only:
       "agreementRate": number,
       "amountSinceLastBill": number,
       "schedule": "schedule name/part if visible",
+      "scheduleGroup": "group name such as Schedule-A if visible",
+      "chapter": "chapter heading if visible",
+      "sourceBook": "USSR_2021|DSR_2021|NON_SCHEDULE|UNKNOWN",
       "isCementAffected": boolean,
       "isSteelItem": boolean,
       "steelType": "TMT|ANGLE_CHANNEL|PLATES|OTHER_SECTIONS|blank",
@@ -224,10 +292,12 @@ Return JSON only:
 
 Rules:
 - Extract every payable work item from the current bill, not only cement items.
+- Extract the complete schedule heading, schedule group, chapter, and source book for every item.
+- Mark sourceBook USSR_2021 when the heading says USSR-2021 or the item uses the six-digit USSR format such as 025090. Mark DSR_2021 only for DSR schedule items/codes.
 - Use amountSinceLastBill/current payable amount for this bill, not cumulative amount.
 - grossBillAmount should be the sum/total of current payable work item amounts when visible.
 - For date, return ISO YYYY-MM-DD. If multiple dates exist, prefer measurement/bill passed/current bill date.
-- Mark isCementAffected true only where cement is consumed inside the work, such as concrete, RCC, mortar, plaster, pointing, flooring, masonry, precast CC blocks.
+- Mark isCementAffected true where cement is consumed inside the work, but USSR_2021 work items will not use DSR coefficients because USSR bills pay cement separately.
 - Do not mark pure cement supply items such as "Ordinary Portland Cement 43 grade" as cement-affected work.
 - Mark reinforcement, structural steel, TMT, bars, plates, channels, angles as steel items.
 - For steelType use TMT only for reinforcement/TMT bars; ANGLE_CHANNEL for angles/channels/joists; PLATES for plates; and OTHER_SECTIONS for wire rope, mesh, rounds, coils, or other steel products.
@@ -238,7 +308,7 @@ Rules:
 - amountSinceLastBill must be the current payable amount including special condition if available.
 - If the PDF has split decimals across lines, reconstruct them.
 - suggestedClassificationCode should be filled only when the work category is clear from text; otherwise use an empty string.
-- GCC-2022 ACS-2 classification: direct steel supply items are 6B, direct cement supply items are 6C, and ordinary work items not separately covered by 6B/6C/6D/6E are 6A. A work description mentioning cement does not make it 6C; 6C is only the separately paid cement supply item.
+- For Bridges & Protection Work use classificationGroupCode 6. Within Group 6: general work is 6A; separate steel supply is 6B; separate cement supply is 6C; girder fabrication/assembly/erection/launching including contractor-supplied steel is 6D; the same work excluding steel is 6E. A work description mentioning cement does not make it 6C.
 - Reconcile the sum of amountSinceLastBill for payable rows against the bill's current Bill Amount. Re-read split OCR digits when the difference is material.
 - Keep JSON compact. Return each payable item once and do not repeat table headings, notes, or cumulative values in descriptions.
 - If uncertain, include the item with confidence "low".
@@ -291,6 +361,13 @@ ${billMarkdown}
     );
   }
 
+  const classificationGroupCode = String(parsed.classificationGroupCode || '').trim();
+  const items = Array.isArray(parsed.items)
+    ? parsed.items
+      .map(normalizeExtractedItem)
+      .map((item: ExtractedBillItem) => applyDeterministicClassification(item, classificationGroupCode))
+    : [];
+
   return {
     billNo: parsed.billNo || '',
     agreementNo: parsed.agreementNo || '',
@@ -298,7 +375,8 @@ ${billMarkdown}
     measurementDate: parsed.measurementDate || '',
     grossBillAmount: toFiniteNumber(parsed.grossBillAmount),
     netBillAmount: toFiniteNumber(parsed.netBillAmount),
-    items: Array.isArray(parsed.items) ? parsed.items.map(normalizeExtractedItem) : [],
+    classificationGroupCode,
+    items,
   };
 }
 
@@ -326,10 +404,16 @@ export async function POST(request: NextRequest) {
 
     const billDetails = await extractBillDetailsWithAi(file, request.nextUrl.origin);
     const extractedItems = billDetails.items;
-    const cementItems = extractedItems.filter(item => item.isCementAffected);
+    const directCementSupplyItems = extractedItems.filter(isDirectCementSupplyItem);
+    const cementItems = extractedItems.filter(item => item.isCementAffected || isDirectCementSupplyItem(item));
     const steelItems = extractedItems.filter(item => item.isSteelItem);
-    const cementRatePerUnit = deriveCementRatePerMt(extractedItems);
-    const dsrCodes = Array.from(new Set(cementItems.map(item => normalizeDsrCode(item.dsrCode)).filter(Boolean)));
+    const coefficientItems = cementItems.filter(item => item.requiresDsrCementCoefficient);
+    const directCementSupplyAmount = directCementSupplyItems
+      .reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
+    const directCementSupplyQuantity = directCementSupplyItems
+      .reduce((sum, item) => sum + Number(item.quantitySinceLastBill || 0), 0);
+    const cementRatePerUnit = coefficientItems.length > 0 ? deriveCementRatePerMt(extractedItems) : null;
+    const dsrCodes = Array.from(new Set(coefficientItems.map(item => normalizeDsrCode(item.dsrCode)).filter(Boolean)));
 
     const coefficients = await prisma.dsrCementCoefficient.findMany({
       where: {
@@ -339,7 +423,7 @@ export async function POST(request: NextRequest) {
     });
     const coefficientByCode = new Map(coefficients.map(item => [item.dsrCode, item]));
 
-    const calculationItems = cementItems.map(item => {
+    const calculationItems = coefficientItems.map(item => {
       const dsrCode = normalizeDsrCode(item.dsrCode);
       return {
         dsrCode,
@@ -352,13 +436,31 @@ export async function POST(request: NextRequest) {
     });
 
     const results = calculateDsrCementRequirement(calculationItems, cementRatePerUnit);
-    const summary = summarizeCementCalculation(results);
+    const coefficientSummary = summarizeCementCalculation(results);
+    const cementAmountSource = directCementSupplyAmount > 0
+      ? 'USSR_SEPARATE_SUPPLY'
+      : coefficientSummary.hasCementAmount
+        ? 'DSR_COEFFICIENT'
+        : null;
+    const summary = {
+      ...coefficientSummary,
+      matchedItemCount: directCementSupplyItems.length > 0
+        ? directCementSupplyItems.length
+        : coefficientSummary.matchedItemCount,
+      cementQuantity: directCementSupplyItems.length > 0
+        ? directCementSupplyQuantity
+        : coefficientSummary.cementQuantity,
+      cementAmount: directCementSupplyAmount > 0
+        ? directCementSupplyAmount
+        : coefficientSummary.hasCementAmount ? coefficientSummary.cementAmount : null,
+      hasCementAmount: directCementSupplyAmount > 0 || coefficientSummary.hasCementAmount,
+    };
 
     const warnings: string[] = [];
     if (summary.unmatchedItemCount > 0) {
       warnings.push(`${summary.unmatchedItemCount} item(s) need DSR cement coefficients before cement amount can be finalized.`);
     }
-    if (summary.cementQuantity > 0 && !cementRatePerUnit) {
+    if (coefficientItems.length > 0 && summary.cementQuantity > 0 && !cementRatePerUnit) {
       warnings.push('No MT cement supply rate was found in the uploaded bill.');
     }
 
@@ -368,8 +470,10 @@ export async function POST(request: NextRequest) {
         billDetails,
         extractedItems,
         cementItems,
+        coefficientItems,
         steelItems,
         cementRatePerUnit,
+        cementAmountSource,
         results,
         summary,
         warnings,

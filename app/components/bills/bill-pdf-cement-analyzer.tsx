@@ -39,6 +39,10 @@ export interface ExtractedBillItem {
   agreementRate?: number;
   amountSinceLastBill?: number;
   schedule?: string;
+  scheduleGroup?: string;
+  chapter?: string;
+  sourceBook?: 'USSR_2021' | 'DSR_2021' | 'NON_SCHEDULE' | 'UNKNOWN';
+  requiresDsrCementCoefficient?: boolean;
   isCementAffected?: boolean;
   isSteelItem?: boolean;
   steelType?: 'TMT' | 'ANGLE_CHANNEL' | 'PLATES' | 'OTHER_SECTIONS' | '';
@@ -54,6 +58,7 @@ export interface ExtractedBillDetails {
   measurementDate?: string;
   grossBillAmount?: number;
   netBillAmount?: number;
+  classificationGroupCode?: string;
   items: ExtractedBillItem[];
 }
 
@@ -61,8 +66,10 @@ export interface CementAnalysisData {
   billDetails?: ExtractedBillDetails;
   extractedItems?: ExtractedBillItem[];
   cementItems?: ExtractedBillItem[];
+  coefficientItems?: ExtractedBillItem[];
   steelItems?: ExtractedBillItem[];
   cementRatePerUnit?: number | null;
+  cementAmountSource?: 'USSR_SEPARATE_SUPPLY' | 'DSR_COEFFICIENT' | null;
   results: CementAnalysisResultItem[];
   summary: CementAnalysisSummary;
   warnings?: string[];
@@ -237,6 +244,11 @@ export function BillPdfCementAnalyzer({
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 No cement supply rate was found in the bill, so the cement amount could not be calculated automatically.
               </div>
+            ) : result.cementAmountSource === 'USSR_SEPARATE_SUPPLY' ? (
+              <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                Cement amount was taken directly from the separate USSR cement supply item; no DSR coefficient was used.
+              </div>
             ) : (
               <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
                 <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -269,9 +281,13 @@ export function BillPdfCementAnalyzer({
                       <td className="whitespace-nowrap px-2 py-2 font-medium">{item.itemNo || item.dsrCode || '-'}</td>
                       <td className="max-w-[420px] px-2 py-2">
                         <div className="line-clamp-2">{item.description}</div>
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          {[item.schedule, item.scheduleGroup, item.chapter, item.sourceBook].filter(Boolean).join(' / ') || 'Schedule not identified'}
+                        </div>
                         <div className="mt-1 flex flex-wrap gap-1">
                           {item.isCementAffected && <Badge variant="outline">Cement</Badge>}
-                            {item.isSteelItem && <Badge variant="outline">Steel: {item.steelType || 'Review type'}</Badge>}
+                          {item.isCementAffected && item.sourceBook === 'USSR_2021' && <Badge variant="outline">Separate cement supply</Badge>}
+                          {item.isSteelItem && <Badge variant="outline">Steel: {item.steelType || 'Review type'}</Badge>}
                         </div>
                       </td>
                       <td className="whitespace-nowrap px-2 py-2 text-right">
