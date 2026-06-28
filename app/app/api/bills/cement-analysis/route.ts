@@ -642,9 +642,7 @@ ${markdownPart}
   const amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
   const amountsReconciled = Math.abs(amountDifference) <= 0.05;
   if (!amountsReconciled) {
-    throw new Error(
-      `Extracted item total Rs ${itemAmountTotal.toFixed(2)} does not match Schedule Summary amount including special condition Rs ${scheduleSummaryTotal.toFixed(2)} (difference Rs ${amountDifference.toFixed(2)}).`,
-    );
+    console.warn(`[Reconciliation Warning] Extracted item total Rs ${itemAmountTotal.toFixed(2)} does not match Schedule Summary amount Rs ${scheduleSummaryTotal.toFixed(2)} (diff: Rs ${amountDifference.toFixed(2)}). Proceeding with fallback.`);
   }
 
   return {
@@ -742,6 +740,9 @@ export async function POST(request: NextRequest) {
     };
 
     const warnings: string[] = [];
+    if (billDetails && !billDetails.amountsReconciled) {
+      warnings.push(`Extracted item total Rs ${billDetails.itemAmountTotal?.toFixed(2)} does not match Schedule Summary amount Rs ${billDetails.scheduleSummaryTotal?.toFixed(2)} (difference: Rs ${billDetails.amountDifference?.toFixed(2)}). Please review the extracted items below.`);
+    }
     if (summary.unmatchedItemCount > 0) {
       warnings.push(`${summary.unmatchedItemCount} item(s) need DSR cement coefficients before cement amount can be finalized.`);
     }
