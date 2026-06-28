@@ -66,10 +66,23 @@ interface ExtractedBillDetails {
   items: ExtractedBillItem[];
 }
 
-function parseNumber(value: FormDataEntryValue | null): number | null {
-  if (value === null) return null;
-  const parsed = Number(String(value).replace(/,/g, '').trim());
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+function deriveCementRatePerMt(items: ExtractedBillItem[]): number | null {
+  const cementSupplyItem = items.find(item => {
+    const unit = item.unit.trim().toUpperCase().replace(/\s+/g, ' ');
+    const isPerMt = ['MT', 'M.T.', 'TONNE', 'METRIC TONNE', 'METRIC TON'].includes(unit);
+    const isDirectCementSupply = item.suggestedClassificationCode === '6C'
+      || (!item.isCementAffected && /\bcement\b/i.test(item.description));
+    return isPerMt && isDirectCementSupply;
+  });
+
+  if (!cementSupplyItem) return null;
+
+  const quantity = Number(cementSupplyItem.quantitySinceLastBill || 0);
+  const amount = Number(cementSupplyItem.amountSinceLastBill || 0);
+  if (quantity > 0 && amount > 0) return amount / quantity;
+
+  const agreementRate = Number(cementSupplyItem.agreementRate || 0);
+  return agreementRate > 0 ? agreementRate : null;
 }
 
 function parseAiJson(content: string) {
@@ -298,7 +311,6 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const cementRatePerUnit = parseNumber(formData.get('cementRatePerUnit'));
 
     if (!file) {
       return NextResponse.json({ error: 'No PDF file provided' }, { status: 400 });
@@ -316,6 +328,7 @@ export async function POST(request: NextRequest) {
     const extractedItems = billDetails.items;
     const cementItems = extractedItems.filter(item => item.isCementAffected);
     const steelItems = extractedItems.filter(item => item.isSteelItem);
+    const cementRatePerUnit = deriveCementRatePerMt(extractedItems);
     const dsrCodes = Array.from(new Set(cementItems.map(item => normalizeDsrCode(item.dsrCode)).filter(Boolean)));
 
     const coefficients = await prisma.dsrCementCoefficient.findMany({
@@ -341,6 +354,14 @@ export async function POST(request: NextRequest) {
     const results = calculateDsrCementRequirement(calculationItems, cementRatePerUnit);
     const summary = summarizeCementCalculation(results);
 
+    const warnings: string[] = [];
+    if (summary.unmatchedItemCount > 0) {
+      warnings.push(`${summary.unmatchedItemCount} item(s) need DSR cement coefficients before cement amount can be finalized.`);
+    }
+    if (summary.cementQuantity > 0 && !cementRatePerUnit) {
+      warnings.push('No MT cement supply rate was found in the uploaded bill.');
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -351,9 +372,7 @@ export async function POST(request: NextRequest) {
         cementRatePerUnit,
         results,
         summary,
-        warnings: summary.unmatchedItemCount > 0
-          ? [`${summary.unmatchedItemCount} item(s) need DSR cement coefficients before cement amount can be finalized.`]
-          : [],
+        warnings,
       },
     });
   } catch (error: any) {

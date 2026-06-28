@@ -7,8 +7,6 @@ import { toast } from 'react-hot-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 interface CementAnalysisSummary {
   matchedItemCount: number;
@@ -101,7 +99,6 @@ export function BillPdfCementAnalyzer({
   onApplyBillDetails,
 }: BillPdfCementAnalyzerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [cementRatePerUnit, setCementRatePerUnit] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<CementAnalysisData | null>(null);
   const [fileName, setFileName] = useState('');
@@ -122,9 +119,6 @@ export function BillPdfCementAnalyzer({
 
       const formData = new FormData();
       formData.append('file', file);
-      if (cementRatePerUnit.trim()) {
-        formData.append('cementRatePerUnit', cementRatePerUnit.trim());
-      }
 
       const response = await fetch('/api/bills/cement-analysis', {
         method: 'POST',
@@ -166,20 +160,7 @@ export function BillPdfCementAnalyzer({
         </CardTitle>
       </CardHeader>
       <CardContent className={compact ? 'p-4 pt-0 space-y-3' : 'p-5 pt-0 space-y-4'}>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
-          <div className="space-y-2">
-            <Label htmlFor="cementRatePerUnit">Cement rate per MT</Label>
-            <Input
-              id="cementRatePerUnit"
-              type="number"
-              min="0"
-              step="0.01"
-              value={cementRatePerUnit}
-              onChange={(event) => setCementRatePerUnit(event.target.value)}
-              placeholder="Enter rate to calculate cement amount"
-              disabled={disabled || isAnalyzing}
-            />
-          </div>
+        <div className="flex justify-start">
           <div>
             <input
               ref={inputRef}
@@ -254,7 +235,7 @@ export function BillPdfCementAnalyzer({
             {result.summary.cementAmount === null || result.summary.cementAmount === undefined ? (
               <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Add cement rate per MT and upload again to calculate the bill cement amount.
+                No cement supply rate was found in the bill, so the cement amount could not be calculated automatically.
               </div>
             ) : (
               <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
