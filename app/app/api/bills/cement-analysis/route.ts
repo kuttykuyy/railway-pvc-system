@@ -81,6 +81,59 @@ function parseAiJson(content: string) {
   return JSON.parse(cleaned);
 }
 
+async function requestAiExtraction(
+  apiKey: string,
+  fileName: string,
+  fileData: string,
+  prompt: string,
+  maxTokens: number
+) {
+  const response = await fetch('https://routellm.abacus.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'route-llm',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'file',
+              file: {
+                filename: fileName,
+                file_data: fileData,
+              },
+            },
+            { type: 'text', text: prompt },
+          ],
+        },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0,
+      max_tokens: maxTokens,
+    }),
+  });
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => '');
+    throw new Error(`AI extraction failed: ${details || response.statusText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || !content.trim()) {
+    throw new Error('AI extraction returned no content.');
+  }
+
+  return {
+    content,
+    finishReason: String(data.choices?.[0]?.finish_reason || 'unknown'),
+  };
+}
+
 async function extractBillDetailsWithAi(file: File): Promise<ExtractedBillDetails> {
   const apiKey = process.env.ABACUSAI_API_KEY;
   if (!apiKey) {
@@ -132,12 +185,14 @@ Rules:
 - For steelType use TMT only for reinforcement/TMT bars; ANGLE_CHANNEL for angles/channels/joists; PLATES for plates; and OTHER_SECTIONS for wire rope, mesh, rounds, coils, or other steel products.
 - Use the DSR code printed in the bill, not the schedule serial number.
 - For non-schedule cement/concrete items without a DSR code, return dsrCode as MIX-1:2:4, MIX-1:3:6, MIX-1:1.5:3, etc. based on the visible mix ratio.
-- quantitySinceLastBill must be the current payable quantity for this bill. If current quantity is zero, include it only if the item is needed for audit and set quantitySinceLastBill to 0.
+- quantitySinceLastBill must be the current payable quantity for this bill.
+- Exclude rows where both current quantity and current payable amount are zero. Do not return cumulative-only or audit-only rows.
 - amountSinceLastBill must be the current payable amount including special condition if available.
 - If the PDF has split decimals across lines, reconstruct them.
 - suggestedClassificationCode should be filled only when the work category is clear from text; otherwise use an empty string.
 - GCC-2022 ACS-2 classification: direct steel supply items are 6B, direct cement supply items are 6C, and ordinary work items not separately covered by 6B/6C/6D/6E are 6A. A work description mentioning cement does not make it 6C; 6C is only the separately paid cement supply item.
 - Reconcile the sum of amountSinceLastBill for payable rows against the bill's current Bill Amount. Re-read split OCR digits when the difference is material.
+- Keep JSON compact. Return each payable item once and do not repeat table headings, notes, or cumulative values in descriptions.
 - If uncertain, include the item with confidence "low".
 
 Paired reference learned from a verified signed bill and its final PVC report:
@@ -150,45 +205,41 @@ Paired reference learned from a verified signed bill and its final PVC report:
 - 052270, galvanized steel wire rope net, Schedule A: qty 5781.89 Sqm, rate 1293.376, current agreement-rate amount 7478157.76, but amountSinceLastBill MUST be 7327965.90 from the "including special condition" column; classification 6B; steelType OTHER_SECTIONS.
 - The six expected current payable amounts total 18785783.07; a one-paise difference from the printed floating-point bill total is acceptable.`;
 
-  const response = await fetch('https://routellm.abacus.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'route-llm',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'file',
-              file: {
-                filename: file.name,
-                file_data: fileData,
-              },
-            },
-            { type: 'text', text: prompt },
-          ],
-        },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.1,
-      max_tokens: 5000,
-    }),
-  });
+  let parsed: any;
+  let firstFailure: unknown;
 
-  if (!response.ok) {
-    const details = await response.text().catch(() => '');
-    throw new Error(`AI extraction failed: ${details || response.statusText}`);
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const retryInstruction = attempt === 2
+      ? `\n\nRETRY: The previous response was invalid or truncated JSON. Return one compact JSON object only. Include only nonzero current-payable rows, shorten descriptions to the minimum text needed to identify and classify each item, and close every array and object.`
+      : '';
+    const result = await requestAiExtraction(
+      apiKey,
+      file.name,
+      fileData,
+      prompt + retryInstruction,
+      attempt === 1 ? 10000 : 12000
+    );
+
+    try {
+      parsed = parseAiJson(result.content);
+      break;
+    } catch (error) {
+      firstFailure ||= error;
+      console.warn('[bill-extraction] Invalid AI JSON', {
+        attempt,
+        finishReason: result.finishReason,
+        contentLength: result.content.length,
+        parseError: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error('AI extraction returned no content.');
+  if (!parsed) {
+    throw new Error(
+      `AI returned invalid JSON after retry. Please upload the bill again.${firstFailure instanceof Error ? ` ${firstFailure.message}` : ''}`
+    );
+  }
 
-  const parsed = parseAiJson(content);
   return {
     billNo: parsed.billNo || '',
     agreementNo: parsed.agreementNo || '',
