@@ -79,39 +79,86 @@ function normalizeExtractedItem(item: any): ExtractedBillItem {
   };
 }
 
-function applyDeterministicClassification(
-  item: ExtractedBillItem,
-  classificationGroupCode: string,
-): ExtractedBillItem {
-  const suggestedCode = String(item.suggestedClassificationCode || '').toUpperCase();
-  const isGroup6 = classificationGroupCode === '6' || suggestedCode.startsWith('6');
-  if (!isGroup6) return item;
+const MAIN_CLASSIFICATION_RULES: Array<{ code: string; label: string; patterns: RegExp[] }> = [
+  { code: '1', label: 'Earthwork in Formation', patterns: [/\bearth\s*work\b/i, /\bformation\b/i, /\bembankment\b/i, /\bcutting\b/i, /\bcompaction\b/i] },
+  { code: '2', label: 'Ballast Supply Works', patterns: [/\bballast\b/i, /\bstone chips\b/i, /\bcrushed stone\b/i] },
+  { code: '5', label: 'Building Works', patterns: [/\bbuilding\b/i, /\bquarters?\b/i, /\bmasonry\b/i, /\bplaster(?:ing)?\b/i] },
+  { code: '6', label: 'Bridges & Protection Work', patterns: [/\bbridge\b/i, /\bculvert\b/i, /\bR[OU]B\b/i, /\bprotection work\b/i, /\brockfall\b/i] },
+  { code: '7', label: 'Permanent Way Linking', patterns: [/\bpermanent way\b/i, /\btrack (?:laying|linking)\b/i, /\brailway track\b/i, /\bsleepers?\b/i] },
+  { code: '8', label: 'Platform & Passenger Amenities', patterns: [/\bplatform\b/i, /\bpassenger amenit/i, /\bwaiting room\b/i, /\bshelter\b/i] },
+];
+
+function inferMainClassification(workDescription: string, item?: ExtractedBillItem) {
+  const contractText = String(workDescription || '');
+  const itemText = item
+    ? `${item.schedule || ''} ${item.scheduleGroup || ''} ${item.chapter || ''} ${item.description}`
+    : '';
+  const tunnelText = `${contractText} ${itemText}`;
+  if (/\btunnel(?:ling|ing)?\b|\bTBM\b|\bunderground\b/i.test(tunnelText)) {
+    const usesExplosives = /\bexplosive|\bblasting\b|drill and blast/i.test(tunnelText);
+    return {
+      code: usesExplosives ? '4' : '3',
+      label: usesExplosives ? 'Tunnelling Works (With Explosives)' : 'Tunnelling Works (Without Explosives)',
+      reason: usesExplosives ? 'Tunnel scope with blasting/explosives.' : 'Tunnel scope without blasting/explosives evidence.',
+    };
+  }
+
+  const scored = MAIN_CLASSIFICATION_RULES.map(rule => {
+    const contractMatches = rule.patterns.filter(pattern => pattern.test(contractText)).length;
+    const itemMatches = rule.patterns.filter(pattern => pattern.test(itemText)).length;
+    return { ...rule, score: contractMatches * 4 + itemMatches };
+  }).sort((left, right) => right.score - left.score);
+
+  const best = scored[0];
+  if (!best || best.score === 0 || best.score === (scored[1]?.score || 0)) {
+    return { code: '9', label: 'Any Other Works', reason: 'No unique match to GCC main groups 1-8.' };
+  }
+  return { code: best.code, label: best.label, reason: `Matched ${best.label} from contract and schedule evidence.` };
+}
+
+function looksLikeDirectCementSupply(item: ExtractedBillItem): boolean {
+  const text = `${item.schedule || ''} ${item.scheduleGroup || ''} ${item.description}`;
+  const unit = item.unit.trim().toUpperCase().replace(/\s+/g, ' ');
+  const isCementUnit = ['MT', 'M.T.', 'TONNE', 'METRIC TONNE', 'METRIC TON', 'BAG', 'BAGS'].includes(unit);
+  return !item.isCementAffected && isCementUnit && /\bcement\b|ordinary portland|OPC\b|PPC\b/i.test(text);
+}
+
+function applyDeterministicClassification(item: ExtractedBillItem, workDescription: string): ExtractedBillItem {
+  const main = inferMainClassification(workDescription, item);
+  if (main.code === '2' || main.code === '7') {
+    return {
+      ...item,
+      suggestedClassificationCode: main.code,
+      suggestedClassificationReason: `${main.reason} This group has a single classification.`,
+    };
+  }
 
   const text = `${item.schedule || ''} ${item.scheduleGroup || ''} ${item.chapter || ''} ${item.description}`.toLowerCase();
-  const isGirderProcess = /fabricat|assembl|erect|launch/.test(text) && /girder|bridge/.test(text);
+  const supportsFabricationClasses = main.code !== '1';
+  const isFabrication = /fabricat|assembl|erect|launch/.test(text);
   const excludesSteel = /excluding steel|without steel|steel supplied by railway|free issue steel/.test(text);
   const includesSteel = /including steel|with steel|contractor.{0,30}suppl/.test(text);
 
-  let code = '6A';
-  let reason = 'General bridge/protection item outside the separate supply and girder categories.';
-  if (isGirderProcess && excludesSteel) {
-    code = '6E';
-    reason = 'Girder fabrication/assembly/erection/launching excluding steel.';
-  } else if (isGirderProcess && includesSteel) {
-    code = '6D';
-    reason = 'Girder fabrication/assembly/erection/launching including contractor-supplied steel.';
-  } else if (item.sourceBook === 'USSR_2021' && (/cement/i.test(item.schedule || '') || suggestedCode === '6C')) {
-    code = '6C';
-    reason = 'Separate USSR cement supply item.';
+  let suffix = 'A';
+  let subReason = 'General work item.';
+  if (supportsFabricationClasses && isFabrication && excludesSteel) {
+    suffix = 'E';
+    subReason = 'Fabrication/assembly/erection work excluding steel supply.';
+  } else if (supportsFabricationClasses && isFabrication && includesSteel) {
+    suffix = 'D';
+    subReason = 'Fabrication/assembly/erection work including contractor-supplied steel.';
+  } else if (looksLikeDirectCementSupply(item)) {
+    suffix = 'C';
+    subReason = 'Separate cement/grout supply item.';
   } else if (item.isSteelItem || /item\s*-?\s*steel|steel supply/.test(text)) {
-    code = '6B';
-    reason = 'Separate steel supply item.';
+    suffix = 'B';
+    subReason = 'Separate steel supply item.';
   }
 
   return {
     ...item,
-    suggestedClassificationCode: code,
-    suggestedClassificationReason: reason,
+    suggestedClassificationCode: `${main.code}${suffix}`,
+    suggestedClassificationReason: `${main.reason} ${subReason}`,
   };
 }
 
@@ -122,13 +169,13 @@ interface ExtractedBillDetails {
   measurementDate?: string;
   grossBillAmount?: number;
   netBillAmount?: number;
+  workDescription?: string;
   classificationGroupCode?: string;
   items: ExtractedBillItem[];
 }
 
 function isDirectCementSupplyItem(item: ExtractedBillItem): boolean {
-  return item.suggestedClassificationCode === '6C'
-    || (item.sourceBook === 'USSR_2021' && /cement/i.test(`${item.schedule} ${item.description}`) && !item.isCementAffected);
+  return /^\d+C$/.test(String(item.suggestedClassificationCode || '')) || looksLikeDirectCementSupply(item);
 }
 
 function deriveCementRatePerMt(items: ExtractedBillItem[]): number | null {
@@ -308,6 +355,7 @@ function mergeParsedBillParts(parts: any[]) {
     billNo: firstText('billNo'),
     agreementNo: firstText('agreementNo'),
     contractorName: firstText('contractorName'),
+    workDescription: firstText('workDescription'),
     measurementDate: firstText('measurementDate'),
     grossBillAmount: lastNumber('grossBillAmount'),
     netBillAmount: lastNumber('netBillAmount'),
@@ -378,6 +426,7 @@ Return JSON only:
   "billNo": "visible RA bill number / CC bill number / bill identifier",
   "agreementNo": "agreement or contract number if visible",
   "contractorName": "contractor name if visible",
+  "workDescription": "complete Name of Work / contract scope if visible",
   "measurementDate": "YYYY-MM-DD date of measurement, passed bill date, or bill date if visible",
   "grossBillAmount": number,
   "netBillAmount": number,
@@ -424,7 +473,8 @@ Rules:
 - amountSinceLastBill must be the current payable amount including special condition if available.
 - If the PDF has split decimals across lines, reconstruct them.
 - suggestedClassificationCode should be filled only when the work category is clear from text; otherwise use an empty string.
-- For Bridges & Protection Work use classificationGroupCode 6. Within Group 6: general work is 6A; separate steel supply is 6B; separate cement supply is 6C; girder fabrication/assembly/erection/launching including contractor-supplied steel is 6D; the same work excluding steel is 6E. A work description mentioning cement does not make it 6C.
+- Select classificationGroupCode from the actual Name of Work: 1 earthwork in formation; 2 ballast supply; 3 tunnelling without explosives; 4 tunnelling with explosives; 5 building works; 6 bridges/protection; 7 permanent-way linking; 8 platforms/passenger amenities; 9 other works. Never default to 6 because of the reference example.
+- After selecting the main group, general items use A; separate steel supply uses B; separate cement/grout supply uses C; fabrication/erection including steel uses D; fabrication/erection excluding steel uses E. Groups 2 and 7 have no suffix.
 - Reconcile the sum of amountSinceLastBill for payable rows against the bill's current Bill Amount. Re-read split OCR digits when the difference is material.
 - Keep JSON compact. Return each payable item once and do not repeat table headings, notes, or cumulative values in descriptions.
 - If uncertain, include the item with confidence "low".
@@ -466,17 +516,28 @@ ${markdownPart}
 
   const parsed = mergeParsedBillParts(parsedParts);
 
-  const classificationGroupCode = String(parsed.classificationGroupCode || '').trim();
+  const workDescription = String(parsed.workDescription || '').trim();
+  const inferredMainClassification = inferMainClassification(workDescription);
   const items = Array.isArray(parsed.items)
     ? parsed.items
       .map(normalizeExtractedItem)
-      .map((item: ExtractedBillItem) => applyDeterministicClassification(item, classificationGroupCode))
+      .map((item: ExtractedBillItem) => applyDeterministicClassification(item, workDescription))
     : [];
+  const groupCounts = items.reduce<Record<string, number>>((counts, item) => {
+    const group = String(item.suggestedClassificationCode || '').match(/^\d+/)?.[0];
+    if (group) counts[group] = (counts[group] || 0) + 1;
+    return counts;
+  }, {});
+  const dominantItemGroup = Object.entries(groupCounts).sort((left, right) => right[1] - left[1])[0]?.[0];
+  const classificationGroupCode = inferredMainClassification.code === '9' && dominantItemGroup
+    ? dominantItemGroup
+    : inferredMainClassification.code;
 
   return {
     billNo: parsed.billNo || '',
     agreementNo: parsed.agreementNo || '',
     contractorName: parsed.contractorName || '',
+    workDescription,
     measurementDate: parsed.measurementDate || '',
     grossBillAmount: toFiniteNumber(parsed.grossBillAmount),
     netBillAmount: toFiniteNumber(parsed.netBillAmount),

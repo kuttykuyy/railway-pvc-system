@@ -55,6 +55,7 @@ export interface ExtractedBillDetails {
   billNo?: string;
   agreementNo?: string;
   contractorName?: string;
+  workDescription?: string;
   measurementDate?: string;
   grossBillAmount?: number;
   netBillAmount?: number;
