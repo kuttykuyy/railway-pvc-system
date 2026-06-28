@@ -43,6 +43,7 @@ import { useLanguage } from '@/components/i18n-provider';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { ContextualHelp } from '@/components/contextual-help';
 import { validateDate, validateDateForApi } from '@/lib/date-validation';
+import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
 
 
 interface Contract {
@@ -492,7 +493,10 @@ function NewBillPageContent() {
           amount,
           description: item.description || '',
           steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
-          scheduleItem: item.schedule || '',
+          scheduleItem: matchExtractedSchedule(
+            selectedContract?.schedules || [],
+            [item.schedule, item.scheduleGroup, item.chapter],
+          ),
           itemNumber: item.itemNo || item.dsrCode || '',
           quantity: item.quantitySinceLastBill || '',
           agreementRate: item.agreementRate || '',

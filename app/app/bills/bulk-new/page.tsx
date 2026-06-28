@@ -18,6 +18,7 @@ import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
 import { BillPdfCementAnalyzer, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
+import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
 
 interface Contract {
   id: string;
@@ -26,6 +27,7 @@ interface Contract {
   workDescription: string;
   dateOfOpening: string;
   baseMonth: string;
+  schedules?: string[];
 }
 
 interface SubClassification {
@@ -384,7 +386,10 @@ export default function BulkBillCreationPage() {
           amount: Number(item.amountSinceLastBill || 0),
           description: item.description || '',
           steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
-          scheduleItem: item.schedule || '',
+          scheduleItem: matchExtractedSchedule(
+            selectedContract?.schedules || [],
+            [item.schedule, item.scheduleGroup, item.chapter],
+          ),
           itemNumber: item.itemNo || item.dsrCode || '',
           quantity: item.quantitySinceLastBill || '',
           agreementRate: item.agreementRate || '',
@@ -829,6 +834,7 @@ export default function BulkBillCreationPage() {
               onChange={(entries) => updateClassificationEntries(editingBillId, entries)}
               classificationGroups={classificationGroups}
               workDescription={selectedContract?.workDescription}
+              contractSchedules={selectedContract?.schedules || []}
               contractId={selectedContract?.id}
               measurementDate={getEditingBill()?.dateOfMeasurement || undefined}
             />
