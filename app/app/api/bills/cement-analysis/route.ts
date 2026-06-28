@@ -477,7 +477,7 @@ Return JSON only:
 
 Rules:
 - Extract every payable work item from the current bill, not only cement items.
-- Extract Schedule Summary separately. Use only the current bill "Amount including Special Condition" column, never Amount Upto Last Bill or Total Upto Date.
+- Extract Schedule Summary separately. Use only the current bill "Amount including Special Condition" column, never Amount Upto Last Bill or Total Upto Date. Do not extract Schedule Summary rows (such as Schedule A, Schedule B, or total rows) as items in the "items" array.
 - Extract the complete schedule heading, schedule group, chapter, and source book for every item.
 - Mark sourceBook USSR_2021 when the heading says USSR-2021 or the item uses the six-digit USSR format such as 025090. Mark DSR_2021 only for DSR schedule items/codes.
 - Use amountSinceLastBill/current payable amount for this bill, not cumulative amount.
@@ -492,7 +492,8 @@ Rules:
 - quantitySinceLastBill must be the current payable quantity for this bill.
 - Exclude rows where both current quantity and current payable amount are zero. Do not return cumulative-only or audit-only rows.
 - amountSinceLastBill must be the current payable amount including special condition if available.
-- The sum of every amountSinceLastBill must equal scheduleSummaryTotal within normal paise rounding. Re-read the source columns before returning JSON when it does not match.
+- The "items" array must only contain detailed payable work items. Do not include schedule summary totals, rebate rows, or grand total rows in the "items" array.
+- The sum of every amountSinceLastBill for detailed items must equal scheduleSummaryTotal within normal paise rounding. Re-read the source columns before returning JSON when it does not match.
 - If the PDF has split decimals across lines, reconstruct them.
 - suggestedClassificationCode should be filled only when the work category is clear from text; otherwise use an empty string.
 - Select classificationGroupCode only from the actual Name of Work: 1 earthwork in formation; 2 ballast supply; 3 tunnelling without explosives; 4 tunnelling with explosives; 5 building works; 6 bridges/protection; 7 permanent-way linking; 8 platforms/passenger amenities; 9 other works. Schedule, chapter, and item descriptions must never change the main classification. Never default to 6 because of the reference example.
@@ -552,6 +553,36 @@ ${markdownPart}
       amountIncludingSpecialCondition: Number(toFiniteNumber(summary?.amountIncludingSpecialCondition) || 0),
     }))
     .filter((summary: { schedule: string; amountIncludingSpecialCondition: number }) => summary.schedule && summary.amountIncludingSpecialCondition >= 0);
+
+  // Filter out any extracted item that is actually a duplicate of a Schedule Summary row
+  const filteredItems = items.filter((item: ExtractedBillItem) => {
+    const itemDesc = String(item.description || '').toLowerCase();
+    const itemDsr = String(item.dsrCode || '').toLowerCase();
+    const itemNo = String(item.itemNo || '').toLowerCase();
+    const itemAmt = Number(item.amountSinceLastBill || 0);
+
+    for (const summary of scheduleSummary) {
+      const schedName = summary.schedule.toLowerCase();
+      const schedAmount = summary.amountIncludingSpecialCondition;
+
+      if (Math.abs(itemAmt - schedAmount) <= 1.0) {
+        const isSummaryText = 
+          itemDesc === schedName || 
+          itemDesc === `total of ${schedName}` ||
+          itemDesc.startsWith(`schedule summary`) ||
+          (itemDesc.includes(schedName) && (itemDesc.includes('total') || itemDesc.includes('summary') || itemDesc.length < 25)) ||
+          itemDsr === schedName ||
+          itemNo === schedName;
+        
+        if (isSummaryText) {
+          console.log(`[Reconciliation Filter] Filtered out schedule summary row from items:`, item);
+          return false;
+        }
+      }
+    }
+    return true;
+  });
+
   const summedScheduleTotal = scheduleSummary.reduce(
     (sum: number, summary: { amountIncludingSpecialCondition: number }) => sum + summary.amountIncludingSpecialCondition,
     0,
@@ -561,7 +592,7 @@ ${markdownPart}
     throw new Error('AI could not extract the Schedule Summary amount including special condition.');
   }
 
-  const itemAmountTotal = items.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
+  const itemAmountTotal = filteredItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
   const amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
   const amountsReconciled = Math.abs(amountDifference) <= 0.05;
   if (!amountsReconciled) {
@@ -584,7 +615,7 @@ ${markdownPart}
     itemAmountTotal,
     amountDifference,
     amountsReconciled,
-    items,
+    items: filteredItems,
   };
 }
 
