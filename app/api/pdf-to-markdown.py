@@ -13,6 +13,7 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.post("/")
+@app.post("/api/pdf-to-markdown")
 async def convert_pdf_to_markdown(
     file: UploadFile = File(...),
     x_markitdown_secret: str | None = Header(default=None),
