@@ -135,6 +135,11 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
     };
   }
 
+  // Use the AI's classification suffix if valid, otherwise determine it deterministically
+  const aiCode = String(item.suggestedClassificationCode || '').trim().toUpperCase();
+  const aiSuffixMatch = aiCode.match(/^[1-9]?([A-E])$/);
+  const aiSuffix = aiSuffixMatch ? aiSuffixMatch[1] : null;
+
   const text = `${item.schedule || ''} ${item.scheduleGroup || ''} ${item.chapter || ''} ${item.description}`.toLowerCase();
   const supportsFabricationClasses = main.code !== '1';
   const isFabrication = /fabricat|assembl|erect|launch/.test(text);
@@ -143,18 +148,25 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
 
   let suffix = 'A';
   let subReason = 'General work item.';
-  if (supportsFabricationClasses && isFabrication && excludesSteel) {
-    suffix = 'E';
-    subReason = 'Fabrication/assembly/erection work excluding steel supply.';
-  } else if (supportsFabricationClasses && isFabrication && includesSteel) {
-    suffix = 'D';
-    subReason = 'Fabrication/assembly/erection work including contractor-supplied steel.';
-  } else if (looksLikeDirectCementSupply(item)) {
-    suffix = 'C';
-    subReason = 'Separate cement/grout supply item.';
-  } else if (item.isSteelItem || /item\s*-?\s*steel|steel supply/.test(text)) {
-    suffix = 'B';
-    subReason = 'Separate steel supply item.';
+
+  if (aiSuffix && (supportsFabricationClasses || !['D', 'E'].includes(aiSuffix))) {
+    suffix = aiSuffix;
+    subReason = `AI suggested suffix ${aiSuffix} based on item characteristics.`;
+  } else {
+    // Deterministic fallback
+    if (supportsFabricationClasses && isFabrication && excludesSteel) {
+      suffix = 'E';
+      subReason = 'Fabrication/assembly/erection work excluding steel supply (fallback).';
+    } else if (supportsFabricationClasses && isFabrication && includesSteel) {
+      suffix = 'D';
+      subReason = 'Fabrication/assembly/erection work including contractor-supplied steel (fallback).';
+    } else if (looksLikeDirectCementSupply(item)) {
+      suffix = 'C';
+      subReason = 'Separate cement/grout supply item (fallback).';
+    } else if (item.isSteelItem || /item\s*-?\s*steel|steel supply/.test(text)) {
+      suffix = 'B';
+      subReason = 'Separate steel supply item (fallback).';
+    }
   }
 
   return {
@@ -687,6 +699,41 @@ export async function POST(request: NextRequest) {
 
     const billDetails = await extractBillDetailsWithAi(file, request.nextUrl.origin);
     const extractedItems = billDetails.items;
+    const rawDsrCodes = Array.from(new Set(extractedItems.map(item => normalizeDsrCode(item.dsrCode)).filter(Boolean)));
+    const coefficients = await prisma.dsrCementCoefficient.findMany({
+      where: {
+        dsrCode: { in: rawDsrCodes },
+        isActive: true,
+      },
+    });
+    const coefficientByCode = new Map(coefficients.map(item => [item.dsrCode, item]));
+
+    // Refine items classification and cement flags using database coefficients
+    for (const item of extractedItems) {
+      const dsrCode = normalizeDsrCode(item.dsrCode);
+      const coefficient = coefficientByCode.get(dsrCode);
+
+      if (coefficient) {
+        item.isCementAffected = true;
+        if (item.sourceBook !== 'USSR_2021') {
+          item.requiresDsrCementCoefficient = true;
+        }
+
+        const currentCode = String(item.suggestedClassificationCode || '');
+        const mainCode = currentCode.charAt(0);
+
+        if (mainCode && mainCode !== '2' && mainCode !== '7') {
+          if (looksLikeDirectCementSupply(item)) {
+            item.suggestedClassificationCode = `${mainCode}C`;
+            item.suggestedClassificationReason = `Refined classification: Separate cement supply item (confirmed by DSR coefficient ${coefficient.dsrCode})`;
+          } else {
+            item.suggestedClassificationCode = `${mainCode}A`;
+            item.suggestedClassificationReason = `Refined classification: General concrete/masonry item (confirmed by DSR coefficient ${coefficient.dsrCode})`;
+          }
+        }
+      }
+    }
+
     const directCementSupplyItems = extractedItems.filter(isDirectCementSupplyItem);
     const cementItems = extractedItems.filter(item => item.isCementAffected || isDirectCementSupplyItem(item));
     const steelItems = extractedItems.filter(item => item.isSteelItem);
@@ -696,15 +743,6 @@ export async function POST(request: NextRequest) {
     const directCementSupplyQuantity = directCementSupplyItems
       .reduce((sum, item) => sum + Number(item.quantitySinceLastBill || 0), 0);
     const cementRatePerUnit = coefficientItems.length > 0 ? deriveCementRatePerMt(extractedItems) : null;
-    const dsrCodes = Array.from(new Set(coefficientItems.map(item => normalizeDsrCode(item.dsrCode)).filter(Boolean)));
-
-    const coefficients = await prisma.dsrCementCoefficient.findMany({
-      where: {
-        dsrCode: { in: dsrCodes },
-        isActive: true,
-      },
-    });
-    const coefficientByCode = new Map(coefficients.map(item => [item.dsrCode, item]));
 
     const calculationItems = coefficientItems.map(item => {
       const dsrCode = normalizeDsrCode(item.dsrCode);
