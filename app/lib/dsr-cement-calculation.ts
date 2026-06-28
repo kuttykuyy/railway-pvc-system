@@ -41,8 +41,8 @@ function normalizeCode(code: string): string {
 export function normalizeDsrCode(code: string): string {
   const normalized = normalizeCode(code);
   if (/^MIX-/i.test(normalized)) return normalized.toUpperCase();
-  const match = normalized.match(/\d+(?:\.\d+)+/);
-  return match ? match[0] : normalized;
+  const match = normalized.match(/\d+(?:\.\d+)+[A-Za-z0-9.]*/);
+  return match ? match[0].toUpperCase() : normalized.toUpperCase();
 }
 
 export function inferCementCoefficientFromMix(
