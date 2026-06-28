@@ -585,18 +585,28 @@ ${markdownPart}
     const itemNo = String(item.itemNo || '').toLowerCase();
     const itemAmt = Number(item.amountSinceLastBill || 0);
 
+    const normDesc = itemDesc.replace(/[^a-z0-9]/g, '').replace('schedule', 'sch');
+    const normDsr = itemDsr.replace(/[^a-z0-9]/g, '').replace('schedule', 'sch');
+    const normNo = itemNo.replace(/[^a-z0-9]/g, '').replace('schedule', 'sch');
+
     for (const summary of scheduleSummary) {
       const schedName = summary.schedule.toLowerCase();
       const schedAmount = summary.amountIncludingSpecialCondition;
+      const normSched = schedName.replace(/[^a-z0-9]/g, '').replace('schedule', 'sch');
 
       if (Math.abs(itemAmt - schedAmount) <= 1.0) {
         const isSummaryText = 
-          itemDesc === schedName || 
-          itemDesc === `total of ${schedName}` ||
-          itemDesc.startsWith(`schedule summary`) ||
-          (itemDesc.includes(schedName) && (itemDesc.includes('total') || itemDesc.includes('summary') || itemDesc.length < 25)) ||
-          itemDsr === schedName ||
-          itemNo === schedName;
+          normDesc === normSched || 
+          normDesc === `totalof${normSched}` ||
+          normDesc === `totalamountof${normSched}` ||
+          normDesc === `subtotalof${normSched}` ||
+          normDesc.startsWith(`schsummary`) ||
+          normDesc.startsWith(`schedulesummary`) ||
+          normDesc === 'total' ||
+          normDesc === 'summary' ||
+          (normDesc.includes(normSched) && (normDesc.includes('total') || normDesc.includes('summary') || normDesc.includes('sum') || itemDesc.length < 35)) ||
+          normDsr === normSched ||
+          normNo === normSched;
         
         if (isSummaryText) {
           console.log(`[Reconciliation Filter] Filtered out schedule summary row from items:`, item);
