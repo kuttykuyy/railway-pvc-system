@@ -60,6 +60,14 @@ export interface ExtractedBillDetails {
   grossBillAmount?: number;
   netBillAmount?: number;
   classificationGroupCode?: string;
+  scheduleSummary?: Array<{
+    schedule: string;
+    amountIncludingSpecialCondition: number;
+  }>;
+  scheduleSummaryTotal?: number;
+  itemAmountTotal?: number;
+  amountDifference?: number;
+  amountsReconciled?: boolean;
   items: ExtractedBillItem[];
 }
 
@@ -237,6 +245,13 @@ export function BillPdfCementAnalyzer({
                   <div className="text-muted-foreground">Steel Items</div>
                   <div className="font-semibold">{result.steelItems?.length || 0}</div>
                 </div>
+              </div>
+            )}
+
+            {result.billDetails?.amountsReconciled && (
+              <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                Item total {formatAmount(result.billDetails.itemAmountTotal)} matches the Schedule Summary amount including special condition.
               </div>
             )}
 

@@ -88,14 +88,10 @@ const MAIN_CLASSIFICATION_RULES: Array<{ code: string; label: string; patterns: 
   { code: '8', label: 'Platform & Passenger Amenities', patterns: [/\bplatform\b/i, /\bpassenger amenit/i, /\bwaiting room\b/i, /\bshelter\b/i] },
 ];
 
-function inferMainClassification(workDescription: string, item?: ExtractedBillItem) {
+function inferMainClassification(workDescription: string) {
   const contractText = String(workDescription || '');
-  const itemText = item
-    ? `${item.schedule || ''} ${item.scheduleGroup || ''} ${item.chapter || ''} ${item.description}`
-    : '';
-  const tunnelText = `${contractText} ${itemText}`;
-  if (/\btunnel(?:ling|ing)?\b|\bTBM\b|\bunderground\b/i.test(tunnelText)) {
-    const usesExplosives = /\bexplosive|\bblasting\b|drill and blast/i.test(tunnelText);
+  if (/\btunnel(?:ling|ing)?\b|\bTBM\b|\bunderground\b/i.test(contractText)) {
+    const usesExplosives = /\bexplosive|\bblasting\b|drill and blast/i.test(contractText);
     return {
       code: usesExplosives ? '4' : '3',
       label: usesExplosives ? 'Tunnelling Works (With Explosives)' : 'Tunnelling Works (Without Explosives)',
@@ -105,15 +101,14 @@ function inferMainClassification(workDescription: string, item?: ExtractedBillIt
 
   const scored = MAIN_CLASSIFICATION_RULES.map(rule => {
     const contractMatches = rule.patterns.filter(pattern => pattern.test(contractText)).length;
-    const itemMatches = rule.patterns.filter(pattern => pattern.test(itemText)).length;
-    return { ...rule, score: contractMatches * 4 + itemMatches };
+    return { ...rule, score: contractMatches };
   }).sort((left, right) => right.score - left.score);
 
   const best = scored[0];
   if (!best || best.score === 0 || best.score === (scored[1]?.score || 0)) {
     return { code: '9', label: 'Any Other Works', reason: 'No unique match to GCC main groups 1-8.' };
   }
-  return { code: best.code, label: best.label, reason: `Matched ${best.label} from contract and schedule evidence.` };
+  return { code: best.code, label: best.label, reason: `Matched ${best.label} from Name of Work.` };
 }
 
 function looksLikeDirectCementSupply(item: ExtractedBillItem): boolean {
@@ -124,7 +119,7 @@ function looksLikeDirectCementSupply(item: ExtractedBillItem): boolean {
 }
 
 function applyDeterministicClassification(item: ExtractedBillItem, workDescription: string): ExtractedBillItem {
-  const main = inferMainClassification(workDescription, item);
+  const main = inferMainClassification(workDescription);
   if (main.code === '2' || main.code === '7') {
     return {
       ...item,
@@ -171,6 +166,14 @@ interface ExtractedBillDetails {
   netBillAmount?: number;
   workDescription?: string;
   classificationGroupCode?: string;
+  scheduleSummary?: Array<{
+    schedule: string;
+    amountIncludingSpecialCondition: number;
+  }>;
+  scheduleSummaryTotal?: number;
+  itemAmountTotal?: number;
+  amountDifference?: number;
+  amountsReconciled?: boolean;
   items: ExtractedBillItem[];
 }
 
@@ -322,6 +325,7 @@ function splitMarkdown(markdown: string, maxChunkLength = 28000, overlapLength =
 
 function mergeParsedBillParts(parts: any[]) {
   const itemByKey = new Map<string, any>();
+  const scheduleSummaryByKey = new Map<string, { schedule: string; amountIncludingSpecialCondition: number }>();
   for (const part of parts) {
     for (const item of Array.isArray(part?.items) ? part.items : []) {
       const itemNo = String(item?.itemNo || item?.dsrCode || '').replace(/\s+/g, '').toUpperCase();
@@ -339,6 +343,13 @@ function mergeParsedBillParts(parts: any[]) {
           + Math.min(currentDescription.length / 200, 1)
         : -1;
       if (!current || score > currentScore) itemByKey.set(key, item);
+    }
+    for (const summary of Array.isArray(part?.scheduleSummary) ? part.scheduleSummary : []) {
+      const schedule = String(summary?.schedule || '').trim();
+      const amount = toFiniteNumber(summary?.amountIncludingSpecialCondition);
+      if (!schedule || amount === undefined || amount < 0) continue;
+      const key = schedule.replace(/\W+/g, '').toUpperCase();
+      scheduleSummaryByKey.set(key, { schedule, amountIncludingSpecialCondition: amount });
     }
   }
 
@@ -360,6 +371,8 @@ function mergeParsedBillParts(parts: any[]) {
     grossBillAmount: lastNumber('grossBillAmount'),
     netBillAmount: lastNumber('netBillAmount'),
     classificationGroupCode: firstText('classificationGroupCode'),
+    scheduleSummary: Array.from(scheduleSummaryByKey.values()),
+    scheduleSummaryTotal: lastNumber('scheduleSummaryTotal'),
     items: Array.from(itemByKey.values()),
   };
 }
@@ -431,6 +444,13 @@ Return JSON only:
   "grossBillAmount": number,
   "netBillAmount": number,
   "classificationGroupCode": "GCC main work group code such as 6 for Bridges & Protection Work",
+  "scheduleSummary": [
+    {
+      "schedule": "exact schedule name from Schedule Summary",
+      "amountIncludingSpecialCondition": "current bill amount from the Amount including Special Condition column"
+    }
+  ],
+  "scheduleSummaryTotal": "total current bill amount from Schedule Summary Amount including Special Condition column",
   "items": [
     {
       "dsrCode": "DSR code like 4.1.6 or 5.1.2",
@@ -457,6 +477,7 @@ Return JSON only:
 
 Rules:
 - Extract every payable work item from the current bill, not only cement items.
+- Extract Schedule Summary separately. Use only the current bill "Amount including Special Condition" column, never Amount Upto Last Bill or Total Upto Date.
 - Extract the complete schedule heading, schedule group, chapter, and source book for every item.
 - Mark sourceBook USSR_2021 when the heading says USSR-2021 or the item uses the six-digit USSR format such as 025090. Mark DSR_2021 only for DSR schedule items/codes.
 - Use amountSinceLastBill/current payable amount for this bill, not cumulative amount.
@@ -471,9 +492,10 @@ Rules:
 - quantitySinceLastBill must be the current payable quantity for this bill.
 - Exclude rows where both current quantity and current payable amount are zero. Do not return cumulative-only or audit-only rows.
 - amountSinceLastBill must be the current payable amount including special condition if available.
+- The sum of every amountSinceLastBill must equal scheduleSummaryTotal within normal paise rounding. Re-read the source columns before returning JSON when it does not match.
 - If the PDF has split decimals across lines, reconstruct them.
 - suggestedClassificationCode should be filled only when the work category is clear from text; otherwise use an empty string.
-- Select classificationGroupCode from the actual Name of Work: 1 earthwork in formation; 2 ballast supply; 3 tunnelling without explosives; 4 tunnelling with explosives; 5 building works; 6 bridges/protection; 7 permanent-way linking; 8 platforms/passenger amenities; 9 other works. Never default to 6 because of the reference example.
+- Select classificationGroupCode only from the actual Name of Work: 1 earthwork in formation; 2 ballast supply; 3 tunnelling without explosives; 4 tunnelling with explosives; 5 building works; 6 bridges/protection; 7 permanent-way linking; 8 platforms/passenger amenities; 9 other works. Schedule, chapter, and item descriptions must never change the main classification. Never default to 6 because of the reference example.
 - After selecting the main group, general items use A; separate steel supply uses B; separate cement/grout supply uses C; fabrication/erection including steel uses D; fabrication/erection excluding steel uses E. Groups 2 and 7 have no suffix.
 - Reconcile the sum of amountSinceLastBill for payable rows against the bill's current Bill Amount. Re-read split OCR digits when the difference is material.
 - Keep JSON compact. Return each payable item once and do not repeat table headings, notes, or cumulative values in descriptions.
@@ -523,15 +545,30 @@ ${markdownPart}
       .map(normalizeExtractedItem)
       .map((item: ExtractedBillItem) => applyDeterministicClassification(item, workDescription))
     : [];
-  const groupCounts = items.reduce<Record<string, number>>((counts, item) => {
-    const group = String(item.suggestedClassificationCode || '').match(/^\d+/)?.[0];
-    if (group) counts[group] = (counts[group] || 0) + 1;
-    return counts;
-  }, {});
-  const dominantItemGroup = Object.entries(groupCounts).sort((left, right) => right[1] - left[1])[0]?.[0];
-  const classificationGroupCode = inferredMainClassification.code === '9' && dominantItemGroup
-    ? dominantItemGroup
-    : inferredMainClassification.code;
+  const classificationGroupCode = inferredMainClassification.code;
+  const scheduleSummary = (Array.isArray(parsed.scheduleSummary) ? parsed.scheduleSummary : [])
+    .map((summary: any) => ({
+      schedule: String(summary?.schedule || '').trim(),
+      amountIncludingSpecialCondition: Number(toFiniteNumber(summary?.amountIncludingSpecialCondition) || 0),
+    }))
+    .filter((summary: { schedule: string; amountIncludingSpecialCondition: number }) => summary.schedule && summary.amountIncludingSpecialCondition >= 0);
+  const summedScheduleTotal = scheduleSummary.reduce(
+    (sum: number, summary: { amountIncludingSpecialCondition: number }) => sum + summary.amountIncludingSpecialCondition,
+    0,
+  );
+  const scheduleSummaryTotal = Number(toFiniteNumber(parsed.scheduleSummaryTotal) || summedScheduleTotal);
+  if (!(scheduleSummaryTotal > 0)) {
+    throw new Error('AI could not extract the Schedule Summary amount including special condition.');
+  }
+
+  const itemAmountTotal = items.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
+  const amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
+  const amountsReconciled = Math.abs(amountDifference) <= 0.05;
+  if (!amountsReconciled) {
+    throw new Error(
+      `Extracted item total Rs ${itemAmountTotal.toFixed(2)} does not match Schedule Summary amount including special condition Rs ${scheduleSummaryTotal.toFixed(2)} (difference Rs ${amountDifference.toFixed(2)}).`,
+    );
+  }
 
   return {
     billNo: parsed.billNo || '',
@@ -539,9 +576,14 @@ ${markdownPart}
     contractorName: parsed.contractorName || '',
     workDescription,
     measurementDate: parsed.measurementDate || '',
-    grossBillAmount: toFiniteNumber(parsed.grossBillAmount),
+    grossBillAmount: scheduleSummaryTotal,
     netBillAmount: toFiniteNumber(parsed.netBillAmount),
     classificationGroupCode,
+    scheduleSummary,
+    scheduleSummaryTotal,
+    itemAmountTotal,
+    amountDifference,
+    amountsReconciled,
     items,
   };
 }
