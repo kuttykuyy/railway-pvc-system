@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateApiAccess } from '@/lib/payment-validation';
+import { extractPdfText } from '@/lib/pdf-text-parser';
 import {
   calculateDsrCementRequirement,
   inferCementCoefficientFromMix,
@@ -406,7 +407,10 @@ async function convertPdfToMarkdown(file: File, requestOrigin: string): Promise<
   }
 
   if (!response.ok) {
-    const details = data?.detail || responseText || response.statusText;
+    const details = String(data?.detail || responseText || response.statusText);
+    if (details.includes('no usable text') || response.status === 422) {
+      throw new Error('The uploaded PDF appears to be a scanned image or photo and does not contain selectable text. Please upload a digitally generated PDF from IREPS/IPPAS, or enter the bill details manually.');
+    }
     throw new Error(`MarkItDown conversion failed: ${details}`);
   }
 
@@ -426,6 +430,20 @@ async function extractBillDetailsWithAi(file: File, requestOrigin: string): Prom
   const apiKey = process.env.ABACUSAI_API_KEY;
   if (!apiKey) {
     throw new Error('AI extraction is not configured. Missing ABACUSAI_API_KEY.');
+  }
+
+  // Pre-validate that the PDF contains selectable text
+  try {
+    const buffer = await file.arrayBuffer();
+    const pages = await extractPdfText(buffer);
+    if (!pages) {
+      throw new Error('The uploaded PDF appears to be a scanned image or photo and does not contain selectable text. Please upload a digitally generated PDF from IREPS/IPPAS, or enter the bill details manually.');
+    }
+  } catch (err: any) {
+    if (err.message && err.message.includes('selectable text')) {
+      throw err;
+    }
+    console.warn('[cement-analysis] Local PDF text validation error:', err);
   }
 
   const billMarkdown = await convertPdfToMarkdown(file, requestOrigin);
