@@ -16,7 +16,7 @@ import { toast } from 'react-hot-toast';
 import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-dialog';
 import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
-import { BillPdfCementAnalyzer } from '@/components/bills/bill-pdf-cement-analyzer';
+import { BillPdfCementAnalyzer, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 
 interface Contract {
@@ -67,6 +67,10 @@ interface BillRow {
   billNo: string;
   dateOfMeasurement: string;
   cementAmount: number | string | '';
+  steelTmtBarsAmount: number | string | '';
+  steelAngleChannelAmount: number | string | '';
+  steelPlatesAmount: number | string | '';
+  steelOtherSectionsAmount: number | string | '';
   classificationEntries: ClassificationEntry[];
 }
 
@@ -87,6 +91,10 @@ export default function BulkBillCreationPage() {
       billNo: '',
       dateOfMeasurement: '',
       cementAmount: '',
+      steelTmtBarsAmount: '',
+      steelAngleChannelAmount: '',
+      steelPlatesAmount: '',
+      steelOtherSectionsAmount: '',
       classificationEntries: [],
     },
   ]);
@@ -175,6 +183,10 @@ export default function BulkBillCreationPage() {
         billNo: '',
         dateOfMeasurement: '',
         cementAmount: '',
+        steelTmtBarsAmount: '',
+        steelAngleChannelAmount: '',
+        steelPlatesAmount: '',
+        steelOtherSectionsAmount: '',
         classificationEntries: [],
       },
     ]);
@@ -235,13 +247,13 @@ export default function BulkBillCreationPage() {
   };
 
   const downloadTemplate = () => {
-    const headers = ['billNo', 'measurementDate', 'classificationCode', 'classificationAmount', 'cementAmount', 'description', 'itemNumber', 'quantity', 'agreementRate'];
+    const headers = ['billNo', 'measurementDate', 'classificationCode', 'classificationAmount', 'cementAmount', 'steelTmtBarsAmount', 'steelAngleChannelAmount', 'steelPlatesAmount', 'steelOtherSectionsAmount', 'description', 'itemNumber', 'quantity', 'agreementRate'];
     const rows = [
-      ['B1', '2026-04-15', 'CIVIL', '300000', '85000', 'Earthwork', '1', '10', '30000'],
-      ['B1', '2026-04-15', 'CONCRETE', '400000', '85000', 'Concrete work', '2', '20', '20000'],
-      ['B1', '2026-04-15', 'STEEL', '300000', '85000', 'Steel work', '3', '15', '20000'],
-      ['B2', '2026-04-20', 'CIVIL', '200000', '', 'Earthwork', '1', '', ''],
-      ['B2', '2026-04-20', 'TRACK', '600000', '', 'Track work', '2', '', ''],
+      ['B1', '2026-04-15', 'CIVIL', '300000', '85000', '60000', 'Earthwork', '1', '10', '30000'],
+      ['B1', '2026-04-15', 'CONCRETE', '400000', '85000', '60000', 'Concrete work', '2', '20', '20000'],
+      ['B1', '2026-04-15', 'STEEL', '300000', '85000', '60000', 'Steel work', '3', '15', '20000'],
+      ['B2', '2026-04-20', 'CIVIL', '200000', '', '', 'Earthwork', '1', '', ''],
+      ['B2', '2026-04-20', 'TRACK', '600000', '', '', 'Track work', '2', '', ''],
     ];
     const csvContent = [headers, ...rows]
       .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
@@ -297,6 +309,10 @@ export default function BulkBillCreationPage() {
           billNo,
           dateOfMeasurement: measurementDate,
           cementAmount: parseAmount(getImportValue(importRow, ['cementAmount', 'cement'])) || '',
+          steelTmtBarsAmount: parseAmount(getImportValue(importRow, ['steelTmtBarsAmount', 'steelAmount', 'steelTmt'])) || '',
+          steelAngleChannelAmount: parseAmount(getImportValue(importRow, ['steelAngleChannelAmount', 'steelAngleChannel'])) || '',
+          steelPlatesAmount: parseAmount(getImportValue(importRow, ['steelPlatesAmount', 'steelPlates'])) || '',
+          steelOtherSectionsAmount: parseAmount(getImportValue(importRow, ['steelOtherSectionsAmount', 'steelOtherSections'])) || '',
           classificationEntries: [],
         };
 
@@ -339,6 +355,79 @@ export default function BulkBillCreationPage() {
   };
 
   const getEditingBill = () => billRows.find(row => row.id === editingBillId);
+
+  const normalizeExtractedDate = (value?: string) => {
+    if (!value) return '';
+    const isoMatch = value.match(/\d{4}-\d{2}-\d{2}/);
+    if (isoMatch) return isoMatch[0];
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
+  };
+
+  const findSubClassificationForExtractedItem = (item: ExtractedBillItem) => {
+    const code = (item.suggestedClassificationCode || '').trim().toUpperCase();
+    if (!code) return null;
+    return classificationGroups
+      .flatMap(group => group.subClassifications)
+      .find(sub => sub.code.toUpperCase() === code) || null;
+  };
+
+  const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData): ClassificationEntry[] => {
+    const items = data.billDetails?.items || data.extractedItems || [];
+    return items
+      .map((item): ClassificationEntry | null => {
+        const subClassification = findSubClassificationForExtractedItem(item);
+        if (!subClassification) return null;
+        return {
+          subClassificationId: subClassification.id,
+          subClassification,
+          amount: Number(item.amountSinceLastBill || 0),
+          description: item.description || '',
+          steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
+          scheduleItem: item.schedule || '',
+          itemNumber: item.itemNo || item.dsrCode || '',
+          quantity: item.quantitySinceLastBill || '',
+          agreementRate: item.agreementRate || '',
+        };
+      })
+      .filter((entry): entry is ClassificationEntry => Boolean(entry));
+  };
+
+  const applyExtractedBillDetailsToBulkRow = (data: CementAnalysisData) => {
+    const billDetails = data.billDetails;
+    const mappedEntries = buildClassificationEntriesFromExtractedBill(data);
+    const steelAmountByType = (data.steelItems || []).reduce<Record<string, number>>((amounts, item) => {
+      if (item.steelType) amounts[item.steelType] = (amounts[item.steelType] || 0) + Number(item.amountSinceLastBill || 0);
+      return amounts;
+    }, {});
+
+    setBillRows((prev) => {
+      const emptyIndex = prev.findIndex(row => !row.billNo.trim() && row.classificationEntries.length === 0);
+      const targetIndex = emptyIndex >= 0 ? emptyIndex : 0;
+      return prev.map((row, index) => index === targetIndex
+        ? {
+            ...row,
+            billNo: billDetails?.billNo || row.billNo,
+            dateOfMeasurement: normalizeExtractedDate(billDetails?.measurementDate) || row.dateOfMeasurement,
+            cementAmount: typeof data.summary?.cementAmount === 'number' && data.summary.cementAmount > 0
+              ? data.summary.cementAmount.toFixed(2)
+              : row.cementAmount,
+            steelTmtBarsAmount: steelAmountByType.TMT > 0 ? steelAmountByType.TMT.toFixed(2) : row.steelTmtBarsAmount,
+            steelAngleChannelAmount: steelAmountByType.ANGLE_CHANNEL > 0 ? steelAmountByType.ANGLE_CHANNEL.toFixed(2) : row.steelAngleChannelAmount,
+            steelPlatesAmount: steelAmountByType.PLATES > 0 ? steelAmountByType.PLATES.toFixed(2) : row.steelPlatesAmount,
+            steelOtherSectionsAmount: steelAmountByType.OTHER_SECTIONS > 0 ? steelAmountByType.OTHER_SECTIONS.toFixed(2) : row.steelOtherSectionsAmount,
+            classificationEntries: mappedEntries.length > 0 ? mappedEntries : row.classificationEntries,
+          }
+        : row
+      );
+    });
+
+    if (mappedEntries.length > 0) {
+      toast.success(`Applied bill details and ${mappedEntries.length} classification item(s)`);
+    } else {
+      toast('Bill details extracted. Classification mapping needs review.');
+    }
+  };
 
   const validateBills = (): string | null => {
     if (!selectedContract) return 'Please select a contract';
@@ -387,10 +476,10 @@ export default function BulkBillCreationPage() {
             fuelPriceType: globalFuelPriceType || 'four_city_avg',
             grossBillAmount: classificationTotal,
             billAmount: classificationTotal,
-            steelTmtBarsAmount: 0,
-            steelAngleChannelAmount: 0,
-            steelPlatesAmount: 0,
-            steelOtherSectionsAmount: 0,
+            steelTmtBarsAmount: parseAmount(row.steelTmtBarsAmount),
+            steelAngleChannelAmount: parseAmount(row.steelAngleChannelAmount),
+            steelPlatesAmount: parseAmount(row.steelPlatesAmount),
+            steelOtherSectionsAmount: parseAmount(row.steelOtherSectionsAmount),
             cementAmount: parseAmount(row.cementAmount),
             classificationEntries: row.classificationEntries.map(entry => ({
               subClassificationId: entry.subClassificationId,
@@ -583,18 +672,8 @@ export default function BulkBillCreationPage() {
               <BillPdfCementAnalyzer
                 compact
                 disabled={isSaving}
-                title="AI PDF Cement Analysis"
-                onApplyCementAmount={(amount) => {
-                  setBillRows((prev) => {
-                    const emptyIndex = prev.findIndex(row => parseAmount(row.cementAmount) <= 0);
-                    const targetIndex = emptyIndex >= 0 ? emptyIndex : 0;
-                    return prev.map((row, index) => index === targetIndex
-                      ? { ...row, cementAmount: amount.toFixed(2) }
-                      : row
-                    );
-                  });
-                  toast.success('Cement amount applied to a bulk bill row');
-                }}
+                title="AI PDF Bill Extraction"
+                onApplyBillDetails={applyExtractedBillDetailsToBulkRow}
               />
 
               <div className="border rounded-lg overflow-hidden">
@@ -607,6 +686,7 @@ export default function BulkBillCreationPage() {
                         <th className="px-2 py-2 text-left text-xs font-medium">Date of Measurement *</th>
                         <th className="px-2 py-2 text-left text-xs font-medium">Classifications *</th>
                         <th className="px-2 py-2 text-left text-xs font-medium">Cement Amount</th>
+                        <th className="px-2 py-2 text-left text-xs font-medium">Steel TMT Amount</th>
                         <th className="px-2 py-2 text-left text-xs font-medium">Class Total</th>
                         <th className="px-2 py-2 text-center text-xs font-medium">Action</th>
                       </tr>
@@ -666,6 +746,18 @@ export default function BulkBillCreationPage() {
                               step="0.01"
                               value={row.cementAmount}
                               onChange={(e) => updateBillRow(row.id, 'cementAmount', e.target.value)}
+                              placeholder="0.00"
+                              disabled={isSaving}
+                              className="w-28 h-8 text-xs"
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.steelTmtBarsAmount}
+                              onChange={(e) => updateBillRow(row.id, 'steelTmtBarsAmount', e.target.value)}
                               placeholder="0.00"
                               disabled={isSaving}
                               className="w-28 h-8 text-xs"

@@ -32,7 +32,38 @@ interface CementAnalysisResultItem {
   matched?: boolean;
 }
 
+export interface ExtractedBillItem {
+  dsrCode: string;
+  itemNo?: string;
+  description: string;
+  unit: string;
+  quantitySinceLastBill: number;
+  agreementRate?: number;
+  amountSinceLastBill?: number;
+  schedule?: string;
+  isCementAffected?: boolean;
+  isSteelItem?: boolean;
+  steelType?: 'TMT' | 'ANGLE_CHANNEL' | 'PLATES' | 'OTHER_SECTIONS' | '';
+  suggestedClassificationCode?: string;
+  suggestedClassificationReason?: string;
+  confidence?: 'high' | 'medium' | 'low';
+}
+
+export interface ExtractedBillDetails {
+  billNo?: string;
+  agreementNo?: string;
+  contractorName?: string;
+  measurementDate?: string;
+  grossBillAmount?: number;
+  netBillAmount?: number;
+  items: ExtractedBillItem[];
+}
+
 export interface CementAnalysisData {
+  billDetails?: ExtractedBillDetails;
+  extractedItems?: ExtractedBillItem[];
+  cementItems?: ExtractedBillItem[];
+  steelItems?: ExtractedBillItem[];
   cementRatePerUnit?: number | null;
   results: CementAnalysisResultItem[];
   summary: CementAnalysisSummary;
@@ -44,6 +75,7 @@ interface BillPdfCementAnalyzerProps {
   compact?: boolean;
   disabled?: boolean;
   onApplyCementAmount?: (amount: number, data: CementAnalysisData) => void;
+  onApplyBillDetails?: (data: CementAnalysisData) => void;
 }
 
 function formatNumber(value: number | null | undefined, fractionDigits = 3) {
@@ -66,6 +98,7 @@ export function BillPdfCementAnalyzer({
   compact = false,
   disabled = false,
   onApplyCementAmount,
+  onApplyBillDetails,
 }: BillPdfCementAnalyzerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [cementRatePerUnit, setCementRatePerUnit] = useState('');
@@ -111,7 +144,11 @@ export function BillPdfCementAnalyzer({
         onApplyCementAmount(cementAmount, data);
       }
 
-      toast.success(`Found ${data.summary.matchedItemCount} cement item(s)`);
+      if (onApplyBillDetails) {
+        onApplyBillDetails(data);
+      }
+
+      toast.success(`Extracted ${data.billDetails?.items?.length || data.extractedItems?.length || 0} bill item(s)`);
     } catch (error: any) {
       console.error('Bill PDF cement analysis failed:', error);
       toast.error(error.message || 'Failed to analyze bill PDF');
@@ -176,14 +213,12 @@ export function BillPdfCementAnalyzer({
           <div className="space-y-3 rounded-lg border bg-white p-3">
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               <div>
-                <div className="text-[11px] text-muted-foreground">Matched items</div>
-                <Badge variant="secondary">{result.summary.matchedItemCount}</Badge>
+                <div className="text-[11px] text-muted-foreground">Bill items</div>
+                <Badge variant="secondary">{result.billDetails?.items?.length || result.extractedItems?.length || 0}</Badge>
               </div>
               <div>
-                <div className="text-[11px] text-muted-foreground">Needs coefficient</div>
-                <Badge variant={result.summary.unmatchedItemCount > 0 ? 'destructive' : 'secondary'}>
-                  {result.summary.unmatchedItemCount}
-                </Badge>
+                <div className="text-[11px] text-muted-foreground">Cement items</div>
+                <Badge variant="secondary">{result.cementItems?.length || result.summary.matchedItemCount}</Badge>
               </div>
               <div>
                 <div className="text-[11px] text-muted-foreground">Cement quantity</div>
@@ -194,6 +229,27 @@ export function BillPdfCementAnalyzer({
                 <div className="text-sm font-semibold">{formatAmount(result.summary.cementAmount)}</div>
               </div>
             </div>
+
+            {result.billDetails && (
+              <div className="grid grid-cols-1 gap-2 rounded-md border bg-slate-50 p-3 text-xs md:grid-cols-4">
+                <div>
+                  <div className="text-muted-foreground">Bill No</div>
+                  <div className="font-semibold">{result.billDetails.billNo || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Measurement Date</div>
+                  <div className="font-semibold">{result.billDetails.measurementDate || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Gross Amount</div>
+                  <div className="font-semibold">{formatAmount(result.billDetails.grossBillAmount)}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Steel Items</div>
+                  <div className="font-semibold">{result.steelItems?.length || 0}</div>
+                </div>
+              </div>
+            )}
 
             {result.summary.cementAmount === null || result.summary.cementAmount === undefined ? (
               <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
@@ -213,6 +269,47 @@ export function BillPdfCementAnalyzer({
                 {warning}
               </div>
             ))}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="border-b bg-muted/60">
+                  <tr>
+                    <th className="px-2 py-2 text-left font-medium">Item</th>
+                    <th className="px-2 py-2 text-left font-medium">Description</th>
+                    <th className="px-2 py-2 text-right font-medium">Qty</th>
+                    <th className="px-2 py-2 text-right font-medium">Rate</th>
+                    <th className="px-2 py-2 text-right font-medium">Amount</th>
+                    <th className="px-2 py-2 text-left font-medium">Class</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {(result.billDetails?.items || result.extractedItems || []).slice(0, compact ? 5 : 12).map((item, index) => (
+                    <tr key={`${item.itemNo || item.dsrCode}-${index}`}>
+                      <td className="whitespace-nowrap px-2 py-2 font-medium">{item.itemNo || item.dsrCode || '-'}</td>
+                      <td className="max-w-[420px] px-2 py-2">
+                        <div className="line-clamp-2">{item.description}</div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {item.isCementAffected && <Badge variant="outline">Cement</Badge>}
+                            {item.isSteelItem && <Badge variant="outline">Steel: {item.steelType || 'Review type'}</Badge>}
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right">
+                        {formatNumber(item.quantitySinceLastBill, 2)} {item.unit}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right">{formatAmount(item.agreementRate)}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right font-medium">{formatAmount(item.amountSinceLastBill)}</td>
+                      <td className="whitespace-nowrap px-2 py-2">{item.suggestedClassificationCode || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {(result.billDetails?.items?.length || result.extractedItems?.length || 0) > (compact ? 5 : 12) && (
+              <div className="text-xs text-muted-foreground">
+                Showing first {compact ? 5 : 12} of {result.billDetails?.items?.length || result.extractedItems?.length || 0} extracted bill items.
+              </div>
+            )}
 
             <div className="overflow-x-auto">
               <table className="w-full text-xs">

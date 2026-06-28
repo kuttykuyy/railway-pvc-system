@@ -10,15 +10,60 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-interface ExtractedCementItem {
+interface ExtractedBillItem {
   dsrCode: string;
   itemNo?: string;
   description: string;
   unit: string;
   quantitySinceLastBill: number;
   amountSinceLastBill?: number;
+  agreementRate?: number;
+  schedule?: string;
+  isCementAffected?: boolean;
+  isSteelItem?: boolean;
+  steelType?: 'TMT' | 'ANGLE_CHANNEL' | 'PLATES' | 'OTHER_SECTIONS' | '';
+  suggestedClassificationCode?: string;
+  suggestedClassificationReason?: string;
   confidence?: 'high' | 'medium' | 'low';
   reason?: string;
+}
+
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === 'string') value = value.replace(/,/g, '').trim();
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function normalizeExtractedItem(item: any): ExtractedBillItem {
+  const steelTypes = new Set(['TMT', 'ANGLE_CHANNEL', 'PLATES', 'OTHER_SECTIONS']);
+  const steelType = String(item?.steelType || '').trim().toUpperCase();
+  return {
+    dsrCode: String(item?.dsrCode || item?.itemNo || '').trim(),
+    itemNo: String(item?.itemNo || item?.dsrCode || '').trim(),
+    description: String(item?.description || '').trim(),
+    unit: String(item?.unit || '').trim(),
+    quantitySinceLastBill: toFiniteNumber(item?.quantitySinceLastBill) || 0,
+    agreementRate: toFiniteNumber(item?.agreementRate),
+    amountSinceLastBill: toFiniteNumber(item?.amountSinceLastBill),
+    schedule: String(item?.schedule || '').trim(),
+    isCementAffected: item?.isCementAffected === true,
+    isSteelItem: item?.isSteelItem === true,
+    steelType: steelTypes.has(steelType) ? steelType as ExtractedBillItem['steelType'] : '',
+    suggestedClassificationCode: String(item?.suggestedClassificationCode || '').trim().toUpperCase(),
+    suggestedClassificationReason: String(item?.suggestedClassificationReason || '').trim(),
+    confidence: ['high', 'medium', 'low'].includes(item?.confidence) ? item.confidence : 'low',
+    reason: String(item?.reason || '').trim(),
+  };
+}
+
+interface ExtractedBillDetails {
+  billNo?: string;
+  agreementNo?: string;
+  contractorName?: string;
+  measurementDate?: string;
+  grossBillAmount?: number;
+  netBillAmount?: number;
+  items: ExtractedBillItem[];
 }
 
 function parseNumber(value: FormDataEntryValue | null): number | null {
@@ -36,7 +81,7 @@ function parseAiJson(content: string) {
   return JSON.parse(cleaned);
 }
 
-async function extractCementItemsWithAi(file: File): Promise<ExtractedCementItem[]> {
+async function extractBillDetailsWithAi(file: File): Promise<ExtractedBillDetails> {
   const apiKey = process.env.ABACUSAI_API_KEY;
   if (!apiKey) {
     throw new Error('AI extraction is not configured. Missing ABACUSAI_API_KEY.');
@@ -45,10 +90,16 @@ async function extractCementItemsWithAi(file: File): Promise<ExtractedCementItem
   const buffer = Buffer.from(await file.arrayBuffer());
   const fileData = `data:${file.type};base64,${buffer.toString('base64')}`;
 
-  const prompt = `You are extracting cement-affected CPWD DSR 2021 bill items from an Indian Railway IREPS running account bill PDF.
+  const prompt = `You are extracting structured data from an Indian Railway IREPS running account bill PDF for PVC bill creation.
 
 Return JSON only:
 {
+  "billNo": "visible RA bill number / CC bill number / bill identifier",
+  "agreementNo": "agreement or contract number if visible",
+  "contractorName": "contractor name if visible",
+  "measurementDate": "YYYY-MM-DD date of measurement, passed bill date, or bill date if visible",
+  "grossBillAmount": number,
+  "netBillAmount": number,
   "items": [
     {
       "dsrCode": "DSR code like 4.1.6 or 5.1.2",
@@ -56,23 +107,48 @@ Return JSON only:
       "description": "full item description",
       "unit": "Cum/Sqm/Kg/MT/etc",
       "quantitySinceLastBill": number,
+      "agreementRate": number,
       "amountSinceLastBill": number,
+      "schedule": "schedule name/part if visible",
+      "isCementAffected": boolean,
+      "isSteelItem": boolean,
+      "steelType": "TMT|ANGLE_CHANNEL|PLATES|OTHER_SECTIONS|blank",
+      "suggestedClassificationCode": "app PVC classification code if obvious, otherwise blank",
+      "suggestedClassificationReason": "short reason for classification suggestion",
       "confidence": "high|medium|low",
-      "reason": "short reason why this is cement affected"
+      "reason": "short extraction reason or uncertainty"
     }
   ]
 }
 
 Rules:
-- Extract only work items where cement is consumed inside the work, such as concrete, RCC, mortar, plaster, pointing, flooring, masonry, precast CC blocks.
-- Do not include pure cement supply items such as "Ordinary Portland Cement 43 grade" as cement-affected work.
-- Do not include steel reinforcement items.
+- Extract every payable work item from the current bill, not only cement items.
+- Use amountSinceLastBill/current payable amount for this bill, not cumulative amount.
+- grossBillAmount should be the sum/total of current payable work item amounts when visible.
+- For date, return ISO YYYY-MM-DD. If multiple dates exist, prefer measurement/bill passed/current bill date.
+- Mark isCementAffected true only where cement is consumed inside the work, such as concrete, RCC, mortar, plaster, pointing, flooring, masonry, precast CC blocks.
+- Do not mark pure cement supply items such as "Ordinary Portland Cement 43 grade" as cement-affected work.
+- Mark reinforcement, structural steel, TMT, bars, plates, channels, angles as steel items.
+- For steelType use TMT only for reinforcement/TMT bars; ANGLE_CHANNEL for angles/channels/joists; PLATES for plates; and OTHER_SECTIONS for wire rope, mesh, rounds, coils, or other steel products.
 - Use the DSR code printed in the bill, not the schedule serial number.
 - For non-schedule cement/concrete items without a DSR code, return dsrCode as MIX-1:2:4, MIX-1:3:6, MIX-1:1.5:3, etc. based on the visible mix ratio.
 - quantitySinceLastBill must be the current payable quantity for this bill. If current quantity is zero, include it only if the item is needed for audit and set quantitySinceLastBill to 0.
 - amountSinceLastBill must be the current payable amount including special condition if available.
 - If the PDF has split decimals across lines, reconstruct them.
-- If uncertain, include the item with confidence "low".`;
+- suggestedClassificationCode should be filled only when the work category is clear from text; otherwise use an empty string.
+- GCC-2022 ACS-2 classification: direct steel supply items are 6B, direct cement supply items are 6C, and ordinary work items not separately covered by 6B/6C/6D/6E are 6A. A work description mentioning cement does not make it 6C; 6C is only the separately paid cement supply item.
+- Reconcile the sum of amountSinceLastBill for payable rows against the bill's current Bill Amount. Re-read split OCR digits when the difference is material.
+- If uncertain, include the item with confidence "low".
+
+Paired reference learned from a verified signed bill and its final PVC report:
+- Bill SCR/GNT/Civil/2025/0032/B2, measurement date 2025-12-17, current bill amount 18785783.06.
+- 025082, TMT Fe-500D, Schedule D: qty 37629.44 Kg, agreement rate 98.27, current agreement-rate amount 3697845.07, but amountSinceLastBill MUST be 3556829.85 from the "including special condition" column; classification 6B; steelType TMT.
+- 025072, OPC 53 grade supply, Schedule C: qty 0.86 MT, rate 7258.31, amountSinceLastBill 6242.15; classification 6C; isCementAffected false because this is separately paid cement supply.
+- 025051, drilling holes, Schedule B: qty 4578 Metre, rate 129.98304, amountSinceLastBill 595062.36; classification 6A.
+- 041071, cement grout work, Schedule B: qty 43124 Kg, rate 121.53459, amountSinceLastBill 5241057.66; classification 6A; isCementAffected true.
+- 052090, shotcrete, Schedule A: qty 2910.3 Sqm, rate 707.3584, amountSinceLastBill 2058625.15; classification 6A; isCementAffected true.
+- 052270, galvanized steel wire rope net, Schedule A: qty 5781.89 Sqm, rate 1293.376, current agreement-rate amount 7478157.76, but amountSinceLastBill MUST be 7327965.90 from the "including special condition" column; classification 6B; steelType OTHER_SECTIONS.
+- The six expected current payable amounts total 18785783.07; a one-paise difference from the printed floating-point bill total is acceptable.`;
 
   const response = await fetch('https://routellm.abacus.ai/v1/chat/completions', {
     method: 'POST',
@@ -113,7 +189,15 @@ Rules:
   if (!content) throw new Error('AI extraction returned no content.');
 
   const parsed = parseAiJson(content);
-  return Array.isArray(parsed.items) ? parsed.items : [];
+  return {
+    billNo: parsed.billNo || '',
+    agreementNo: parsed.agreementNo || '',
+    contractorName: parsed.contractorName || '',
+    measurementDate: parsed.measurementDate || '',
+    grossBillAmount: toFiniteNumber(parsed.grossBillAmount),
+    netBillAmount: toFiniteNumber(parsed.netBillAmount),
+    items: Array.isArray(parsed.items) ? parsed.items.map(normalizeExtractedItem) : [],
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -139,8 +223,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File size too large. Maximum size is 25MB.' }, { status: 400 });
     }
 
-    const extractedItems = await extractCementItemsWithAi(file);
-    const dsrCodes = Array.from(new Set(extractedItems.map(item => normalizeDsrCode(item.dsrCode)).filter(Boolean)));
+    const billDetails = await extractBillDetailsWithAi(file);
+    const extractedItems = billDetails.items;
+    const cementItems = extractedItems.filter(item => item.isCementAffected);
+    const steelItems = extractedItems.filter(item => item.isSteelItem);
+    const dsrCodes = Array.from(new Set(cementItems.map(item => normalizeDsrCode(item.dsrCode)).filter(Boolean)));
 
     const coefficients = await prisma.dsrCementCoefficient.findMany({
       where: {
@@ -150,7 +237,7 @@ export async function POST(request: NextRequest) {
     });
     const coefficientByCode = new Map(coefficients.map(item => [item.dsrCode, item]));
 
-    const calculationItems = extractedItems.map(item => {
+    const calculationItems = cementItems.map(item => {
       const dsrCode = normalizeDsrCode(item.dsrCode);
       return {
         dsrCode,
@@ -168,7 +255,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
+        billDetails,
         extractedItems,
+        cementItems,
+        steelItems,
         cementRatePerUnit,
         results,
         summary,

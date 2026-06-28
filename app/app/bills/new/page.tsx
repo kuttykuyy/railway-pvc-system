@@ -38,7 +38,7 @@ import { ProvisionalDateNotification } from '@/components/ui/provisional-date-no
 import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
 import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-dialog';
-import { BillPdfCementAnalyzer } from '@/components/bills/bill-pdf-cement-analyzer';
+import { BillPdfCementAnalyzer, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
 import { useLanguage } from '@/components/i18n-provider';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { ContextualHelp } from '@/components/contextual-help';
@@ -152,8 +152,11 @@ function NewBillPageContent() {
     grossBillAmount: '', // Gross bill amount (before non-scheduled items deduction)
     cementAmount: '', // Amount allocated for cement work (85% calculation)
     
-    // Steel components - only TMT Bars
-    steelTmtBarsAmount: '',       // Amount for TMT Bars (85% calculation)
+    // Dedicated steel components used by the JPC index calculation.
+    steelTmtBarsAmount: '',
+    steelAngleChannelAmount: '',
+    steelPlatesAmount: '',
+    steelOtherSectionsAmount: '',
     
     dateOfMeasurement: '',
     workClassification: '', // Will be set to default classification when loaded
@@ -458,6 +461,81 @@ function NewBillPageContent() {
       ...prev,
       dateOfMeasurement: newDate
     }));
+  };
+
+  const normalizeExtractedDate = (value?: string) => {
+    if (!value) return '';
+    const isoMatch = value.match(/\d{4}-\d{2}-\d{2}/);
+    if (isoMatch) return isoMatch[0];
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
+  };
+
+  const findSubClassificationForExtractedItem = (item: ExtractedBillItem) => {
+    const code = (item.suggestedClassificationCode || '').trim().toUpperCase();
+    if (!code) return null;
+    return classificationGroups
+      .flatMap(group => group.subClassifications)
+      .find(sub => sub.code.toUpperCase() === code) || null;
+  };
+
+  const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData): ClassificationEntry[] => {
+    const items = data.billDetails?.items || data.extractedItems || [];
+    return items
+      .map((item): ClassificationEntry | null => {
+        const subClassification = findSubClassificationForExtractedItem(item);
+        if (!subClassification) return null;
+        const amount = Number(item.amountSinceLastBill || 0);
+        return {
+          subClassificationId: subClassification.id,
+          subClassification,
+          amount,
+          description: item.description || '',
+          steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
+          scheduleItem: item.schedule || '',
+          itemNumber: item.itemNo || item.dsrCode || '',
+          quantity: item.quantitySinceLastBill || '',
+          agreementRate: item.agreementRate || '',
+          itemRows: [{
+            itemNumber: item.itemNo || item.dsrCode || '',
+            quantity: item.quantitySinceLastBill || '',
+            agreementRate: item.agreementRate || '',
+          }],
+        };
+      })
+      .filter((entry): entry is ClassificationEntry => Boolean(entry));
+  };
+
+  const applyExtractedBillDetails = (data: CementAnalysisData) => {
+    const billDetails = data.billDetails;
+    const mappedEntries = buildClassificationEntriesFromExtractedBill(data);
+    const steelAmountByType = (data.steelItems || []).reduce<Record<string, number>>((amounts, item) => {
+      if (item.steelType) amounts[item.steelType] = (amounts[item.steelType] || 0) + Number(item.amountSinceLastBill || 0);
+      return amounts;
+    }, {});
+
+    setFormData(prev => ({
+      ...prev,
+      billNo: billDetails?.billNo || prev.billNo,
+      dateOfMeasurement: normalizeExtractedDate(billDetails?.measurementDate) || prev.dateOfMeasurement,
+      grossBillAmount: billDetails?.grossBillAmount ? billDetails.grossBillAmount.toFixed(2) : prev.grossBillAmount,
+      cementAmount: typeof data.summary?.cementAmount === 'number' && data.summary.cementAmount > 0
+        ? data.summary.cementAmount.toFixed(2)
+        : prev.cementAmount,
+      steelTmtBarsAmount: steelAmountByType.TMT > 0 ? steelAmountByType.TMT.toFixed(2) : prev.steelTmtBarsAmount,
+      steelAngleChannelAmount: steelAmountByType.ANGLE_CHANNEL > 0 ? steelAmountByType.ANGLE_CHANNEL.toFixed(2) : prev.steelAngleChannelAmount,
+      steelPlatesAmount: steelAmountByType.PLATES > 0 ? steelAmountByType.PLATES.toFixed(2) : prev.steelPlatesAmount,
+      steelOtherSectionsAmount: steelAmountByType.OTHER_SECTIONS > 0 ? steelAmountByType.OTHER_SECTIONS.toFixed(2) : prev.steelOtherSectionsAmount,
+    }));
+
+    if (mappedEntries.length > 0) {
+      setClassificationEntries(mappedEntries);
+      setOpenAccordion(prev => Array.from(new Set([...prev, 'basic', 'classification', 'optional'])));
+      toast.success(`Applied ${mappedEntries.length} mapped bill item(s)`);
+    } else {
+      setOpenAccordion(prev => Array.from(new Set([...prev, 'basic'])));
+      toast('Bill details extracted. Classification mapping needs review.');
+    }
   };
 
   const handleContractChange = async (value: string) => {
@@ -1026,11 +1104,8 @@ function NewBillPageContent() {
                 )}
 
                 <BillPdfCementAnalyzer
-                  onApplyCementAmount={(amount) => {
-                    setFormData(prev => ({ ...prev, cementAmount: amount.toFixed(2) }));
-                    setOpenAccordion(prev => Array.from(new Set([...prev, 'optional'])));
-                    toast.success('Cement amount applied to this bill');
-                  }}
+                  title="AI PDF Bill Extraction"
+                  onApplyBillDetails={applyExtractedBillDetails}
                 />
 
                 {/* Accordion for organized sections */}
