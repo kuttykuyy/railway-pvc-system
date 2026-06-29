@@ -22,6 +22,13 @@ export const maxDuration = 300;
 const AI_PART_CONCURRENCY = 16;
 const MAX_WHOLE_BILL_RECONCILIATION_CHARS = 50000;
 
+class AiProviderCreditsExhaustedError extends Error {
+  constructor() {
+    super('AI provider credits are exhausted. The administrator must recharge the Abacus AI account before extraction can continue.');
+    this.name = 'AiProviderCreditsExhaustedError';
+  }
+}
+
 interface ExtractedBillItem {
   dsrCode: string;
   itemNo?: string;
@@ -263,6 +270,9 @@ async function requestAiExtraction(
 
   if (!response.ok) {
     const details = await response.text().catch(() => '');
+    if (/no remaining credits|insufficient credits|credit balance/i.test(details)) {
+      throw new AiProviderCreditsExhaustedError();
+    }
     throw new Error(`AI extraction failed: ${details || response.statusText}`);
   }
 
@@ -306,6 +316,7 @@ async function extractJsonWithRetry(apiKey: string, prompt: string, label: strin
       }
       return parseAiJson(result.content);
     } catch (error) {
+      if (error instanceof AiProviderCreditsExhaustedError) throw error;
       firstFailure ||= error;
       console.warn('[bill-extraction] AI part failed', {
         label,
@@ -1334,9 +1345,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Cement analysis failed:', error);
+    const status = error instanceof AiProviderCreditsExhaustedError ? 402 : 500;
     return NextResponse.json(
       { error: error.message || 'Failed to analyse cement from bill PDF' },
-      { status: 500 }
+      { status }
     );
   }
 }

@@ -107,6 +107,12 @@ interface SavedCementRateSettings {
   savedAt: string;
 }
 
+interface SavedExtractionProgress {
+  signature: string;
+  parsedParts: Array<any | null>;
+  savedAt: number;
+}
+
 const DEFAULT_DSR_BASE_RATE = 688.45;
 
 function formatFileSize(bytes: number) {
@@ -519,16 +525,37 @@ export function BillPdfCementAnalyzer({
         : [];
       if (!markdownParts.length) throw new Error('No readable bill pages were found.');
 
+      const progressStorageKey = `irpvc:bill-extraction:v2:${contractId || 'none'}:${file.name}:${file.size}:${file.lastModified}`;
+      const partsSignature = markdownParts.map((part: string) => part.length).join('-');
+      let restoredProgress: SavedExtractionProgress | null = null;
+      try {
+        const savedProgress = window.localStorage.getItem(progressStorageKey);
+        if (savedProgress) {
+          const parsed = JSON.parse(savedProgress) as SavedExtractionProgress;
+          if (parsed.signature === partsSignature && Array.isArray(parsed.parsedParts) && parsed.parsedParts.length === markdownParts.length) {
+            restoredProgress = parsed;
+          }
+        }
+      } catch {
+        restoredProgress = null;
+      }
+
       setExtractionPartCount(markdownParts.length);
       setLoadingStep(2);
-      const parsedParts = new Array<any>(markdownParts.length);
-      let nextPartIndex = 0;
-      let completedParts = 0;
+      const parsedParts = restoredProgress?.parsedParts.slice() || new Array<any | null>(markdownParts.length).fill(null);
+      const pendingPartIndexes = parsedParts
+        .map((part, index) => part ? -1 : index)
+        .filter(index => index >= 0);
+      let nextPendingIndex = 0;
+      let completedParts = markdownParts.length - pendingPartIndexes.length;
+      setExtractionPartsCompleted(completedParts);
+      const extractionController = new AbortController();
+      let fatalPartError: Error | null = null;
 
       const extractNextPart = async () => {
-        while (nextPartIndex < markdownParts.length) {
-          const index = nextPartIndex;
-          nextPartIndex += 1;
+        while (nextPendingIndex < pendingPartIndexes.length && !fatalPartError) {
+          const index = pendingPartIndexes[nextPendingIndex];
+          nextPendingIndex += 1;
           let response: Response | null = null;
           let json: any = null;
           for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -540,23 +567,39 @@ export function BillPdfCementAnalyzer({
                 partNumber: index + 1,
                 partCount: markdownParts.length,
               }),
+              signal: extractionController.signal,
             });
             json = await response.json().catch(() => ({ error: 'The page extraction server returned an invalid response.' }));
             if (response.ok || response.status < 500 || attempt === 2) break;
           }
           if (!response?.ok) {
-            throw new Error(json?.error || `Failed to extract bill page ${index + 1}.`);
+            fatalPartError = new Error(json?.error || `Failed to extract bill page ${index + 1}.`);
+            extractionController.abort();
+            throw fatalPartError;
           }
           parsedParts[index] = json.data;
           completedParts += 1;
           setExtractionPartsCompleted(completedParts);
           setLoadingStep(completedParts === markdownParts.length ? 6 : Math.min(5, 2 + Math.floor((completedParts / markdownParts.length) * 4)));
+          try {
+            window.localStorage.setItem(progressStorageKey, JSON.stringify({
+              signature: partsSignature,
+              parsedParts,
+              savedAt: Date.now(),
+            } satisfies SavedExtractionProgress));
+          } catch {
+            // Extraction can continue when browser storage is unavailable or full.
+          }
         }
       };
 
-      await Promise.all(
-        Array.from({ length: Math.min(6, markdownParts.length) }, () => extractNextPart()),
-      );
+      try {
+        await Promise.all(
+          Array.from({ length: Math.min(6, pendingPartIndexes.length) }, () => extractNextPart()),
+        );
+      } catch (error) {
+        throw fatalPartError || error;
+      }
 
       const finalResponse = await fetch(endpoint('finalize'), {
         method: 'POST',
@@ -570,6 +613,7 @@ export function BillPdfCementAnalyzer({
       if (status < 200 || status >= 300) {
         throw new Error(json.error || 'Failed to analyze bill PDF');
       }
+      window.localStorage.removeItem(progressStorageKey);
 
       const data = json.data as CementAnalysisData;
       setResult(data);
