@@ -1021,10 +1021,21 @@ export async function POST(request: NextRequest) {
     });
     const coefficientByCode = new Map(coefficients.map(item => [normalizeDsrCode(item.dsrCode), item]));
 
+    const getCoefficient = (dsrCode: string) => {
+      const fullMatch = coefficientByCode.get(dsrCode);
+      if (fullMatch) return fullMatch;
+      // Fallback: strip suffix and check base code (digits and dots)
+      const baseMatch = dsrCode.match(/^\d+(?:\.\d+)+/);
+      if (baseMatch) {
+        return coefficientByCode.get(baseMatch[0]) || null;
+      }
+      return null;
+    };
+
     // Refine items classification and cement flags using database coefficients
     for (const item of extractedItems) {
       const dsrCode = normalizeDsrCode(item.dsrCode);
-      const coefficient = item.sourceBook === 'DSR_2021' ? coefficientByCode.get(dsrCode) : undefined;
+      const coefficient = item.sourceBook !== 'USSR_2021' ? getCoefficient(dsrCode) : undefined;
 
       if (coefficient) {
         item.isCementAffected = true;
@@ -1047,8 +1058,8 @@ export async function POST(request: NextRequest) {
 
     console.info('[cement-analysis] DSR coefficient matching', {
       requestedCodes: rawDsrCodes,
-      matchedCodes: rawDsrCodes.filter(code => coefficientByCode.has(code)),
-      unmatchedCodes: rawDsrCodes.filter(code => !coefficientByCode.has(code)),
+      matchedCodes: rawDsrCodes.filter(code => getCoefficient(code) !== null),
+      unmatchedCodes: rawDsrCodes.filter(code => getCoefficient(code) === null),
     });
 
     const directCementSupplyItems = extractedItems.filter(isDirectCementSupplyItem);
@@ -1069,7 +1080,7 @@ export async function POST(request: NextRequest) {
         unit: item.unit,
         quantity: Number(item.quantitySinceLastBill || 0),
         amount: Number(item.amountSinceLastBill || 0),
-        coefficient: coefficientByCode.get(dsrCode) || inferCementCoefficientFromMix(item.description, item.unit),
+        coefficient: getCoefficient(dsrCode) || inferCementCoefficientFromMix(item.description, item.unit),
       };
     });
 
