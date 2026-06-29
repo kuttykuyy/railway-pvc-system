@@ -424,6 +424,12 @@ function correctionItemKey(item: any): string {
   return `${schedule}|${itemNo}`;
 }
 
+function scheduleCode(item: any): string {
+  const text = `${item?.scheduleGroup || ''} ${item?.schedule || ''}`.toUpperCase();
+  const match = text.match(/(?:SCHEDULE\s*)?\b([A-Z]\d+)\b/);
+  return match?.[1] || '';
+}
+
 function extractPrintedBillAmount(markdown: string): number | undefined {
   const label = markdown.search(/Bill Amount\s*\(Rs\.?\)/i);
   if (label < 0) return undefined;
@@ -551,6 +557,8 @@ Return JSON only:
 
 Rules:
 - Return the authoritative complete set of detailed rows having a nonzero value in the current "Qty executed since last Bill" or current "Amount including Special Condition" column.
+- First read the Schedule Summary at the end of the bill. For each schedule, use the middle "Amt including Special Condition" value as that schedule's current target. Ignore the first "Amt Upto last Bill" and third "Total upto date" values.
+- Extract current item rows only from schedules whose Schedule Summary current target is nonzero, and verify each schedule's detailed current amounts against its own target.
 - Exclude rows that have values only under Original Agreement, Upto Last Bill, or Total Upto Date columns.
 - Exclude schedule summaries, subtotals, rebates, deductions, and grand totals.
 - Preserve every printed decimal digit in quantitySinceLastBillRaw and agreementRateRaw.
@@ -566,20 +574,31 @@ ${billMarkdown}
 </bill_markdown>`;
   const parsed = await extractJsonWithRetry(apiKey, prompt, 'whole-bill current-row reconciliation');
   const corrections = Array.isArray(parsed?.items) ? parsed.items : [];
+  const originalByKey = new Map<string, ExtractedBillItem[]>();
   const originalByItemNo = new Map<string, ExtractedBillItem[]>();
   for (const item of items) {
     const itemNo = String(item.itemNo || item.dsrCode || '').replace(/\s+/g, '').toUpperCase();
     if (!itemNo) continue;
-    const existing = originalByItemNo.get(itemNo) || [];
-    existing.push(item);
-    originalByItemNo.set(itemNo, existing);
+    const key = `${scheduleCode(item)}|${itemNo}`;
+    const keyed = originalByKey.get(key) || [];
+    keyed.push(item);
+    originalByKey.set(key, keyed);
+    const numbered = originalByItemNo.get(itemNo) || [];
+    numbered.push(item);
+    originalByItemNo.set(itemNo, numbered);
   }
 
   const reconciled: ExtractedBillItem[] = [];
+  const reconciledKeys = new Set<string>();
   for (const correction of corrections) {
     const itemNo = String(correction?.itemNo || '').replace(/\s+/g, '').toUpperCase();
-    const originals = originalByItemNo.get(itemNo) || [];
+    const exactKey = `${scheduleCode(correction)}|${itemNo}`;
+    const exactOriginals = originalByKey.get(exactKey) || [];
+    const itemNoOriginals = originalByItemNo.get(itemNo) || [];
+    const originals = exactOriginals.length === 1 ? exactOriginals : itemNoOriginals;
     if (originals.length !== 1) continue;
+    const reconciledKey = `${scheduleCode(correction) || scheduleCode(originals[0])}|${itemNo}`;
+    if (reconciledKeys.has(reconciledKey)) continue;
     const amount = toFiniteNumber(correction?.amountIncludingSpecialConditionSinceLastBill);
     if (!(amount && amount > 0)) continue;
     const quantityRaw = toPrintedDecimal(correction?.quantitySinceLastBillRaw);
@@ -596,6 +615,7 @@ ${billMarkdown}
       amountIncludingSpecialConditionSinceLastBill: amount,
       amountSinceLastBill: amount,
     });
+    reconciledKeys.add(reconciledKey);
   }
   return reconciled;
 }
@@ -857,6 +877,7 @@ ${markdownPart}
     return Math.abs((quantity * rate) - agreementAmount) > Math.max(0.1, agreementAmount * 0.000001);
   });
   if (Math.abs(amountDifference) > 0.05 || hasColumnMismatch) {
+    const reconciliationCandidates = filteredItems;
     console.warn('[bill-extraction] Re-reading special-condition item amounts', {
       itemAmountTotal,
       scheduleSummaryTotal,
@@ -870,7 +891,7 @@ ${markdownPart}
       const reconciledItems = await reconcileWholeBillItems(
         apiKey,
         billMarkdown,
-        filteredItems,
+        reconciliationCandidates,
         scheduleSummaryTotal,
       );
       const reconciledTotal = reconciledItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
