@@ -79,6 +79,12 @@ const DEFAULT_SETTINGS = [
     value: '5',
     description: 'Maximum number of contracts a Railway Official free account can create in total. Set to 0 for unlimited.',
     dataType: 'number'
+  },
+  {
+    key: 'AI_BILL_EXTRACTION_COST',
+    value: '50',
+    description: 'Cost in credits/INR to unlock and apply AI PDF bill extraction results',
+    dataType: 'number'
   }
 ];
 

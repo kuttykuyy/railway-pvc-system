@@ -1,7 +1,7 @@
 'use client';
 
 import { ChangeEvent, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, FileText, Loader2, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, FileText, Loader2, Upload, Lock, Unlock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { Badge } from '@/components/ui/badge';
@@ -123,6 +123,49 @@ export function BillPdfCementAnalyzer({
   const [result, setResult] = useState<CementAnalysisData | null>(null);
   const [fileName, setFileName] = useState('');
 
+  const [extractionId, setExtractionId] = useState<string | null>(null);
+  const [isUnlocked, setIsUnlocked] = useState(true);
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockCost, setUnlockCost] = useState(50);
+
+  const handleUnlock = async () => {
+    if (!extractionId) return;
+
+    try {
+      setUnlocking(true);
+      const response = await fetch('/api/bills/unlock-ai-extraction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extractionId })
+      });
+
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json.error || 'Failed to unlock AI extraction details');
+      }
+
+      const unlockedData = json.data as CementAnalysisData;
+      setResult(unlockedData);
+      setIsUnlocked(true);
+
+      const cementAmount = unlockedData.summary?.cementAmount;
+      if (typeof cementAmount === 'number' && cementAmount > 0 && onApplyCementAmount) {
+        onApplyCementAmount(cementAmount, unlockedData);
+      }
+
+      if (onApplyBillDetails) {
+        onApplyBillDetails(unlockedData);
+      }
+
+      toast.success(json.message || 'AI Bill details unlocked and applied successfully!');
+    } catch (error: any) {
+      console.error('Failed to unlock AI extraction:', error);
+      toast.error(error.message || 'Failed to unlock AI extraction');
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
   const [dsrBaseRate, setDsrBaseRate] = useState<number>(688.45);
   const [escalation, setEscalation] = useState<string>('');
   const [bidRate, setBidRate] = useState<string>('');
@@ -233,17 +276,27 @@ export function BillPdfCementAnalyzer({
 
       const data = json.data as CementAnalysisData;
       setResult(data);
+      setExtractionId(json.extractionId || null);
 
-      const cementAmount = data.summary?.cementAmount;
-      if (typeof cementAmount === 'number' && cementAmount > 0 && onApplyCementAmount) {
-        onApplyCementAmount(cementAmount, data);
+      const unlocked = !!json.isUnlocked;
+      setIsUnlocked(unlocked);
+      if (typeof json.cost === 'number') {
+        setUnlockCost(json.cost);
       }
 
-      if (onApplyBillDetails) {
-        onApplyBillDetails(data);
-      }
+      if (unlocked) {
+        const cementAmount = data.summary?.cementAmount;
+        if (typeof cementAmount === 'number' && cementAmount > 0 && onApplyCementAmount) {
+          onApplyCementAmount(cementAmount, data);
+        }
 
-      toast.success(`Extracted ${data.billDetails?.items?.length || data.extractedItems?.length || 0} bill item(s)`);
+        if (onApplyBillDetails) {
+          onApplyBillDetails(data);
+        }
+        toast.success(`Extracted ${data.billDetails?.items?.length || data.extractedItems?.length || 0} bill item(s)`);
+      } else {
+        toast.success(`AI PDF analysis completed. Click "Unlock & Import" below to apply the details.`);
+      }
     } catch (error: any) {
       console.error('Bill PDF cement analysis failed:', error);
       toast.error(error.message || 'Failed to analyze bill PDF');
@@ -347,7 +400,7 @@ export function BillPdfCementAnalyzer({
               </div>
             )}
 
-            {result.summary.cementAmount === null || result.summary.cementAmount === undefined ? (
+            {isUnlocked && (result.summary.cementAmount === null || result.summary.cementAmount === undefined) ? (
               <div className="space-y-3">
                 <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
                   <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -439,17 +492,17 @@ export function BillPdfCementAnalyzer({
                   </div>
                 )}
               </div>
-            ) : result.cementAmountSource === 'USSR_SEPARATE_SUPPLY' ? (
+            ) : isUnlocked && result.cementAmountSource === 'USSR_SEPARATE_SUPPLY' ? (
               <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
                 <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 Cement amount was taken directly from the separate USSR cement supply item; no DSR coefficient was used.
               </div>
-            ) : (
+            ) : isUnlocked ? (
               <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
                 <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 Cement amount was calculated from DSR coefficients and applied to the bill form.
               </div>
-            )}
+            ) : null}
 
             {(result.warnings || []).map((warning) => (
               <div key={warning} className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
@@ -458,103 +511,137 @@ export function BillPdfCementAnalyzer({
               </div>
             ))}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="border-b bg-muted/60">
-                  <tr>
-                    <th className="px-2 py-2 text-left font-medium">Item</th>
-                    <th className="px-2 py-2 text-left font-medium">Description</th>
-                    <th className="px-2 py-2 text-right font-medium">Qty Since Last Bill</th>
-                    <th className="px-2 py-2 text-right font-medium">Rate</th>
-                    <th className="px-2 py-2 text-right font-medium">Amount</th>
-                    <th className="px-2 py-2 text-left font-medium">Class</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {(result.billDetails?.items || result.extractedItems || []).slice(0, compact ? 5 : 12).map((item, index) => (
-                    <tr key={`${item.itemNo || item.dsrCode}-${index}`}>
-                      <td className="whitespace-nowrap px-2 py-2 font-medium">{item.itemNo || item.dsrCode || '-'}</td>
-                      <td className="max-w-[420px] px-2 py-2">
-                        <div className="line-clamp-2">{item.description}</div>
-                        <div className="mt-1 text-[11px] text-muted-foreground">
-                          {[item.schedule, item.scheduleGroup, item.chapter, item.sourceBook].filter(Boolean).join(' / ') || 'Schedule not identified'}
-                        </div>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {item.isCementAffected && <Badge variant="outline">Cement</Badge>}
-                          {item.isCementAffected && item.sourceBook === 'USSR_2021' && <Badge variant="outline">Separate cement supply</Badge>}
-                          {item.isSteelItem && <Badge variant="outline">Steel: {item.steelType || 'Review type'}</Badge>}
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-right">
-                        {item.quantitySinceLastBillRaw || formatNumber(item.quantitySinceLastBill, 2)} {item.unit}
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-right">{item.agreementRateRaw || formatAmount(item.agreementRate)}</td>
-                      <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
-                        {getItemCementDeduction(item) > 0 ? (
-                          <div className="space-y-0.5">
-                            <div className="text-[10px] text-slate-400 line-through">
-                              {formatAmount((item as any).originalAmount || item.amountSinceLastBill)}
+            {isUnlocked ? (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="border-b bg-muted/60">
+                      <tr>
+                        <th className="px-2 py-2 text-left font-medium">Item</th>
+                        <th className="px-2 py-2 text-left font-medium">Description</th>
+                        <th className="px-2 py-2 text-right font-medium">Qty Since Last Bill</th>
+                        <th className="px-2 py-2 text-right font-medium">Rate</th>
+                        <th className="px-2 py-2 text-right font-medium">Amount</th>
+                        <th className="px-2 py-2 text-left font-medium">Class</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {(result.billDetails?.items || result.extractedItems || []).slice(0, compact ? 5 : 12).map((item, index) => (
+                        <tr key={`${item.itemNo || item.dsrCode}-${index}`}>
+                          <td className="whitespace-nowrap px-2 py-2 font-medium">{item.itemNo || item.dsrCode || '-'}</td>
+                          <td className="max-w-[420px] px-2 py-2">
+                            <div className="line-clamp-2">{item.description}</div>
+                            <div className="mt-1 text-[11px] text-muted-foreground">
+                              {[item.schedule, item.scheduleGroup, item.chapter, item.sourceBook].filter(Boolean).join(' / ') || 'Schedule not identified'}
                             </div>
-                            <div className="text-[10px] text-red-500 font-medium">
-                              -{formatAmount(getItemCementDeduction(item))}
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {item.isCementAffected && <Badge variant="outline">Cement</Badge>}
+                              {item.isCementAffected && item.sourceBook === 'USSR_2021' && <Badge variant="outline">Separate cement supply</Badge>}
+                              {item.isSteelItem && <Badge variant="outline">Steel: {item.steelType || 'Review type'}</Badge>}
                             </div>
-                            <div className="text-slate-800 font-bold">
-                              {formatAmount(item.amountSinceLastBill)}
-                            </div>
-                          </div>
-                        ) : (
-                          formatAmount(item.amountSinceLastBill)
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2">{item.suggestedClassificationCode || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-2 text-right">
+                            {item.quantitySinceLastBillRaw || formatNumber(item.quantitySinceLastBill, 2)} {item.unit}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-2 text-right">{item.agreementRateRaw || formatAmount(item.agreementRate)}</td>
+                          <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
+                            {getItemCementDeduction(item) > 0 ? (
+                              <div className="space-y-0.5">
+                                <div className="text-[10px] text-slate-400 line-through">
+                                  {formatAmount((item as any).originalAmount || item.amountSinceLastBill)}
+                                </div>
+                                <div className="text-[10px] text-red-500 font-medium">
+                                  -{formatAmount(getItemCementDeduction(item))}
+                                </div>
+                                <div className="text-slate-800 font-bold">
+                                  {formatAmount(item.amountSinceLastBill)}
+                                </div>
+                              </div>
+                            ) : (
+                              formatAmount(item.amountSinceLastBill)
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-2">{item.suggestedClassificationCode || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-            {(result.billDetails?.items?.length || result.extractedItems?.length || 0) > (compact ? 5 : 12) && (
-              <div className="text-xs text-muted-foreground">
-                Showing first {compact ? 5 : 12} of {result.billDetails?.items?.length || result.extractedItems?.length || 0} extracted bill items.
-              </div>
-            )}
+                {(result.billDetails?.items?.length || result.extractedItems?.length || 0) > (compact ? 5 : 12) && (
+                  <div className="text-xs text-muted-foreground">
+                    Showing first {compact ? 5 : 12} of {result.billDetails?.items?.length || result.extractedItems?.length || 0} extracted bill items.
+                  </div>
+                )}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="border-b bg-muted/60">
-                  <tr>
-                    <th className="px-2 py-2 text-left font-medium">DSR</th>
-                    <th className="px-2 py-2 text-left font-medium">Description</th>
-                    <th className="px-2 py-2 text-right font-medium">Qty</th>
-                    <th className="px-2 py-2 text-right font-medium">Coeff.</th>
-                    <th className="px-2 py-2 text-right font-medium">Cement</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {result.results.slice(0, compact ? 5 : 10).map((item, index) => (
-                    <tr key={`${item.dsrCode}-${index}`}>
-                      <td className="whitespace-nowrap px-2 py-2 font-medium">{item.dsrCode || '-'}</td>
-                      <td className="max-w-[360px] px-2 py-2">
-                        <div className="line-clamp-2">{item.description}</div>
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-right">
-                        {formatNumber(item.quantity, 2)} {item.unit}
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-right">
-                        {item.coefficient ? formatNumber(item.coefficient, 5) : '-'}
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
-                        {formatNumber(item.cementQuantity)} MT
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="border-b bg-muted/60">
+                      <tr>
+                        <th className="px-2 py-2 text-left font-medium">DSR</th>
+                        <th className="px-2 py-2 text-left font-medium">Description</th>
+                        <th className="px-2 py-2 text-right font-medium">Qty</th>
+                        <th className="px-2 py-2 text-right font-medium">Coeff.</th>
+                        <th className="px-2 py-2 text-right font-medium">Cement</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {result.results.slice(0, compact ? 5 : 10).map((item, index) => (
+                        <tr key={`${item.dsrCode}-${index}`}>
+                          <td className="whitespace-nowrap px-2 py-2 font-medium">{item.dsrCode || '-'}</td>
+                          <td className="max-w-[360px] px-2 py-2">
+                            <div className="line-clamp-2">{item.description}</div>
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-2 text-right">
+                            {formatNumber(item.quantity, 2)} {item.unit}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-2 text-right">
+                            {item.coefficient ? formatNumber(item.coefficient, 5) : '-'}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
+                            {formatNumber(item.cementQuantity)} MT
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-            {result.results.length > (compact ? 5 : 10) && (
-              <div className="text-xs text-muted-foreground">
-                Showing first {compact ? 5 : 10} of {result.results.length} extracted cement items.
+                {result.results.length > (compact ? 5 : 10) && (
+                  <div className="text-xs text-muted-foreground">
+                    Showing first {compact ? 5 : 10} of {result.results.length} extracted cement items.
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="relative overflow-hidden rounded-xl border border-blue-100 bg-slate-50/50 p-6 text-center shadow-sm">
+                <div className="absolute inset-0 bg-white/40 backdrop-blur-[1px]" />
+                <div className="relative z-10 space-y-3">
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                    <Lock className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-semibold text-slate-800">AI Extraction Details Locked</h4>
+                    <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                      Review the summary statistics above. Unlock to import all schedule items, steel types, and cement details directly into the bill form.
+                    </p>
+                  </div>
+                  <div className="flex justify-center pt-1">
+                    <Button
+                      type="button"
+                      onClick={handleUnlock}
+                      disabled={unlocking}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-all"
+                    >
+                      {unlocking ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Unlock className="mr-2 h-4 w-4" />
+                      )}
+                      {unlocking ? 'Unlocking...' : unlockCost === 0 ? 'Import Details (Free)' : `Unlock & Import Details (₹${unlockCost})`}
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

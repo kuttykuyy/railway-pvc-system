@@ -7,6 +7,7 @@ if (typeof globalThis !== 'undefined' && !('DOMMatrix' in globalThis)) {
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateApiAccess } from '@/lib/payment-validation';
+import { advancedCache } from '@/lib/advanced-cache';
 import {
   calculateDsrCementRequirement,
   inferCementCoefficientFromMix,
@@ -974,7 +975,7 @@ ${markdownPart}
 
 export async function POST(request: NextRequest) {
   try {
-    const { authorized, message } = await validateApiAccess(request);
+    const { authorized, user, message } = await validateApiAccess(request);
     if (!authorized) {
       return NextResponse.json({ error: message || 'Unauthorized' }, { status: 401 });
     }
@@ -1101,20 +1102,72 @@ export async function POST(request: NextRequest) {
       warnings.push('No MT cement supply rate was found in the uploaded bill.');
     }
 
+    // Generate a unique extraction ID
+    const extractionId = 'ext_' + Math.random().toString(36).substring(2, 11);
+
+    const fullData = {
+      billDetails,
+      extractedItems,
+      cementItems,
+      coefficientItems,
+      steelItems,
+      cementRatePerUnit,
+      cementAmountSource,
+      results,
+      summary,
+      warnings,
+    };
+
+    // Cache the full data for 1 hour (3600000 ms)
+    advancedCache.set(`ai-extraction:${extractionId}`, fullData, 3600000);
+
+    // Check if the user is exempt from AI extraction charge
+    const isFreeOrExempt = 
+      !user || 
+      user.role === 'admin' || 
+      user.role === 'superadmin' || 
+      user.role === 'railway_official' || 
+      user.role === 'RAILWAY_OFFICIAL' || 
+      user.isFreeAccount ||
+      user.customProcessingFee === 0;
+
+    if (isFreeOrExempt) {
+      return NextResponse.json({
+        success: true,
+        extractionId,
+        isUnlocked: true,
+        data: fullData,
+      });
+    }
+
+    // Strip detailed items for standard paid users to show a preview first
+    const previewData = {
+      billDetails: billDetails ? {
+        billNo: billDetails.billNo,
+        measurementDate: billDetails.measurementDate,
+        grossBillAmount: billDetails.grossBillAmount,
+        itemAmountTotal: billDetails.itemAmountTotal,
+        scheduleSummaryTotal: billDetails.scheduleSummaryTotal,
+        amountDifference: billDetails.amountDifference,
+        amountsReconciled: billDetails.amountsReconciled,
+      } : null,
+      cementRatePerUnit,
+      cementAmountSource,
+      summary,
+      warnings,
+      // Omit detailed lists so they can't be accessed via inspect element
+      extractedItems: [],
+      cementItems: [],
+      coefficientItems: [],
+      steelItems: [],
+      results: [],
+    };
+
     return NextResponse.json({
       success: true,
-      data: {
-        billDetails,
-        extractedItems,
-        cementItems,
-        coefficientItems,
-        steelItems,
-        cementRatePerUnit,
-        cementAmountSource,
-        results,
-        summary,
-        warnings,
-      },
+      extractionId,
+      isUnlocked: false,
+      data: previewData,
     });
   } catch (error: any) {
     console.error('Cement analysis failed:', error);
