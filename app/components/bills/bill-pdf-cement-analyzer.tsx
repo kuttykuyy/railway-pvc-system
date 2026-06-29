@@ -1,7 +1,7 @@
 'use client';
 
-import { ChangeEvent, useRef, useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Cpu, FileText, HardDrive, Lightbulb, Loader2, Lock, RotateCcw, Save, Unlock, Upload } from 'lucide-react';
+import { ChangeEvent, DragEvent, useRef, useState, useEffect } from 'react';
+import { AlertCircle, CheckCircle2, Clock3, Cpu, FileCheck2, FileText, HardDrive, Lightbulb, ListChecks, Loader2, Lock, RotateCcw, Save, ScanText, Unlock, Upload } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { Badge } from '@/components/ui/badge';
@@ -149,6 +149,7 @@ export function BillPdfCementAnalyzer({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<CementAnalysisData | null>(null);
   const [fileName, setFileName] = useState('');
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
 
   const [extractionId, setExtractionId] = useState<string | null>(null);
   const [isUnlocked, setIsUnlocked] = useState(true);
@@ -445,11 +446,7 @@ export function BillPdfCementAnalyzer({
     toast.success(`Applied derived cement cost: ${formatAmount(amount)} and deducted from cement-affected DSR items.`);
   };
 
-  const handlePdfUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-
+  const analyzePdfFile = async (file: File) => {
     if (file.type !== 'application/pdf') {
       toast.error('Please upload a PDF bill file.');
       return;
@@ -532,15 +529,33 @@ export function BillPdfCementAnalyzer({
     }
   };
 
+  const handlePdfUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) void analyzePdfFile(file);
+  };
+
+  const handlePdfDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDraggingFile(false);
+    if (disabled || isAnalyzing) return;
+    const file = event.dataTransfer.files?.[0];
+    if (file) void analyzePdfFile(file);
+  };
+
+  const showGrandUploader = !isAnalyzing && !result;
+
   return (
-    <Card className="border-blue-200 bg-blue-50/40">
-      <CardHeader className={compact ? 'p-4 pb-2' : 'p-5 pb-3'}>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <FileText className="h-4 w-4 text-blue-700" />
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className={compact ? 'p-4 pt-0 space-y-3' : 'p-5 pt-0 space-y-4'}>
+    <Card className={`overflow-hidden ${showGrandUploader ? 'border-slate-200 bg-white shadow-sm' : 'border-blue-200 bg-blue-50/40'}`}>
+      {!showGrandUploader && (
+        <CardHeader className={compact ? 'p-4 pb-2' : 'p-5 pb-3'}>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <FileText className="h-4 w-4 text-blue-700" />
+            {title}
+          </CardTitle>
+        </CardHeader>
+      )}
+      <CardContent className={showGrandUploader ? 'p-0' : compact ? 'p-4 pt-0 space-y-3' : 'p-5 pt-0 space-y-4'}>
         {isAnalyzing ? (
           <div className="rounded-md border border-slate-200 bg-white p-5 space-y-5 shadow-sm">
             {/* Top title and scanning bar animation */}
@@ -614,6 +629,77 @@ export function BillPdfCementAnalyzer({
                   {pvcTips[currentTipIndex]}
                 </p>
               </div>
+            </div>
+          </div>
+        ) : showGrandUploader ? (
+          <div
+            className={`grid min-h-[330px] grid-cols-1 transition-colors lg:grid-cols-[1.15fr_0.85fr] ${isDraggingFile ? 'bg-blue-50' : 'bg-white'}`}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              if (!disabled) setIsDraggingFile(true);
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsDraggingFile(false);
+            }}
+            onDrop={handlePdfDrop}
+          >
+            <div className="flex flex-col justify-center border-b border-slate-200 bg-slate-950 px-6 py-9 text-white sm:px-10 lg:border-b-0 lg:border-r lg:px-12">
+              <div className="mb-5 flex items-center gap-3 text-sm font-semibold text-blue-300">
+                <span className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm">
+                  <ScanText className="h-5 w-5" />
+                </span>
+                {title}
+              </div>
+              <h2 className="max-w-2xl text-3xl font-bold leading-tight sm:text-4xl">
+                Signed bill in. PVC-ready entries out.
+              </h2>
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
+                Convert a railway bill PDF into schedules, current quantities, agreement rates, classifications, and material calculations in one reviewable extraction.
+              </p>
+              <div className="mt-7 grid grid-cols-1 gap-4 border-t border-slate-700 pt-5 text-sm sm:grid-cols-3">
+                <div className="flex items-start gap-2.5">
+                  <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                  <span className="text-slate-200">Schedules and bill items</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <FileCheck2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <span className="text-slate-200">Work classifications</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
+                  <span className="text-slate-200">Cement and steel analysis</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-stretch p-5 sm:p-7">
+              <input
+                ref={inputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={handlePdfUpload}
+              />
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                disabled={disabled}
+                className={`flex min-h-[240px] w-full flex-col items-center justify-center border-2 border-dashed px-6 py-8 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  isDraggingFile
+                    ? 'border-blue-600 bg-blue-50'
+                    : 'border-slate-300 bg-slate-50 hover:border-blue-500 hover:bg-blue-50/60'
+                }`}
+              >
+                <span className="flex h-16 w-16 items-center justify-center rounded-md bg-blue-600 text-white shadow-md">
+                  <Upload className="h-7 w-7" />
+                </span>
+                <span className="mt-5 text-lg font-bold text-slate-900">
+                  {isDraggingFile ? 'Release to start extraction' : 'Drop signed bill PDF here'}
+                </span>
+                <span className="mt-2 text-sm text-slate-500">or click to choose a document</span>
+                <span className="mt-5 text-xs font-medium text-slate-400">PDF only, up to 25 MB</span>
+              </button>
             </div>
           </div>
         ) : (
