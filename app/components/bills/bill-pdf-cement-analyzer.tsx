@@ -551,7 +551,7 @@ export function BillPdfCementAnalyzer({
               </div>
               <div>
                 <div className="text-[11px] text-muted-foreground">Cement quantity</div>
-                <div className="text-sm font-semibold">{formatNumber(result.summary.cementQuantity)} MT</div>
+                <div className="text-sm font-semibold">{formatNumber(result.summary.cementQuantity * 10)} Qtl</div>
               </div>
               <div>
                 <div className="text-[11px] text-muted-foreground">Cement amount</div>
@@ -720,7 +720,7 @@ export function BillPdfCementAnalyzer({
                         onClick={() => applyCalculatedAmount(
                           getUniqueCementSchedules(result).reduce((sum, sched) => sum + getScheduleCementAmount(sched), 0)
                         )}
-                        className="h-8 text-xs bg-violet-650 hover:bg-violet-750 text-white font-medium"
+                        className="h-8 text-xs bg-violet-600 hover:bg-violet-700 text-white font-medium"
                       >
                         Apply Derived Costs
                       </Button>
@@ -835,7 +835,7 @@ export function BillPdfCementAnalyzer({
                             {item.coefficient ? formatNumber(item.coefficient, 5) : '-'}
                           </td>
                           <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
-                            {formatNumber(item.cementQuantity)} MT
+                            {formatNumber(item.cementQuantity * 10)} Qtl
                           </td>
                         </tr>
                       ))}

@@ -96,46 +96,11 @@ export function BillClassificationEntries({
     () => workDescription ? inferMainClassification(workDescription).code : '',
     [workDescription],
   );
-  const allowedClassificationGroups = useMemo(
-    () => requiredMainCode
-      ? classificationGroups.filter(group => group.code === requiredMainCode)
-      : classificationGroups,
-    [classificationGroups, requiredMainCode],
-  );
+  const allowedClassificationGroups = classificationGroups;
 
   useEffect(() => {
     setEntries(value);
   }, [value]);
-
-  useEffect(() => {
-    if (!requiredMainCode || allowedClassificationGroups.length !== 1 || value.length === 0) return;
-    const requiredGroup = allowedClassificationGroups[0];
-    let changed = false;
-    const enforcedEntries = value.map(entry => {
-      const selected = classificationGroups
-        .flatMap(group => group.subClassifications)
-        .find(sub => sub.id === entry.subClassificationId);
-      if (!selected || selected.groupId === requiredGroup.id) return entry;
-
-      const suffix = selected.code.match(/[A-E]$/)?.[0];
-      const replacement = (suffix
-        ? requiredGroup.subClassifications.find(sub => sub.code.toUpperCase().endsWith(suffix))
-        : undefined)
-        || requiredGroup.subClassifications.find(sub => sub.isDefault)
-        || requiredGroup.subClassifications[0];
-      if (!replacement) return entry;
-      changed = true;
-      return {
-        ...entry,
-        subClassificationId: replacement.id,
-        subClassification: replacement,
-      };
-    });
-    if (changed) {
-      setEntries(enforcedEntries);
-      onChange(enforcedEntries);
-    }
-  }, [allowedClassificationGroups, classificationGroups, onChange, requiredMainCode, value]);
 
   // Helper: ensure entry has itemRows (migrate from legacy single fields)
   const ensureItemRows = (entry: ClassificationEntry): ItemRow[] => {
@@ -312,293 +277,257 @@ export function BillClassificationEntries({
       </Card>
 
       {/* Classification Entries */}
-      <div className="space-y-4">
-        {entries.map((entry, index) => {
-          const selectedSubClass = classificationGroups
-            .flatMap(g => g.subClassifications)
-            .find(s => s.id === entry.subClassificationId);
-          
-          const selectedGroup = selectedSubClass 
-            ? classificationGroups.find(g => g.id === selectedSubClass.groupId)
-            : null;
+      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left font-semibold text-slate-700 px-4 py-3 w-1/4">Classification</th>
+                <th className="text-left font-semibold text-slate-700 px-4 py-3 w-1/4">Schedule & Ref</th>
+                <th className="text-left font-semibold text-slate-700 px-4 py-3 w-1/3">Items (Qty × Rate)</th>
+                <th className="text-left font-semibold text-slate-700 px-4 py-3 w-1/5">Amount (₹)</th>
+                <th className="text-center font-semibold text-slate-700 px-4 py-3 w-10"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {entries.map((entry, index) => {
+                const selectedSubClass = classificationGroups
+                  .flatMap(g => g.subClassifications)
+                  .find(s => s.id === entry.subClassificationId);
+                
+                const selectedGroup = selectedSubClass 
+                  ? classificationGroups.find(g => g.id === selectedSubClass.groupId)
+                  : null;
 
-          return (
-            <Card key={index} className="border-gray-200">
-              <CardContent className="pt-6">
-                <div className="space-y-4">
-                  {/* Header with remove button */}
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="font-semibold text-gray-900">Entry #{index + 1}</h4>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeEntry(index)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                const rows = ensureItemRows(entry);
 
-                  {/* Schedule Dropdown (shown first so AI can use it for classification suggestion) */}
-                  {contractSchedules.length > 0 && (
-                    <div className="space-y-2">
-                      <Label htmlFor={`schedule-${index}`}>Schedule</Label>
-                      <Select
-                        value={entry.scheduleItem || '_none_'}
-                        onValueChange={(val) => updateEntry(index, 'scheduleItem', val === '_none_' ? '' : val)}
-                      >
-                        <SelectTrigger id={`schedule-${index}`}>
-                          <SelectValue placeholder="Select schedule" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="_none_">— None —</SelectItem>
-                          {contractSchedules.map((s, i) => (
-                            <SelectItem key={i} value={s}>{s}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  {/* Main Classification Group Dropdown */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor={`group-${index}`}>Main Classification</Label>
-                    </div>
-                    <Select
-                      value={selectedGroup?.id || ''}
-                      onValueChange={(groupId) => {
-                        if (!groupId) return;
-                        const group = classificationGroups.find(g => g.id === groupId);
-                        if (!group) return;
-                        // Clear old sub-classification then set new one
-                        const newEntries = [...entries];
-                        const firstSub = group.subClassifications.find(s => s.isDefault) || group.subClassifications[0];
-                        newEntries[index] = {
-                          ...newEntries[index],
-                          subClassificationId: firstSub?.id || '',
-                          subClassification: firstSub,
-                        };
-                        setEntries(newEntries);
-                        onChange(newEntries);
-                      }}
-                    >
-                      <SelectTrigger id={`group-${index}`}>
-                        <SelectValue placeholder="Select main classification" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {allowedClassificationGroups.map((group) => (
-                          <SelectItem key={group.id} value={group.id}>
-                            {group.code} - {group.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Sub-Classification Dropdown */}
-                  {selectedGroup && (
-                    <div className="space-y-2">
-                      <Label htmlFor={`sub-${index}`}>Sub-Classification</Label>
-                      <Select
-                        value={entry.subClassificationId || ''}
-                        onValueChange={(value) => { if (value) updateEntry(index, 'subClassificationId', value); }}
-                      >
-                        <SelectTrigger id={`sub-${index}`}>
-                          <SelectValue placeholder="Select sub-classification" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {selectedGroup.subClassifications.map((sub) => (
-                            <SelectItem key={sub.id} value={sub.id}>
-                              {sub.code} - {sub.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  {/* Steel Types Multi-Select (only show when steel component > 0) */}
-                  {selectedSubClass && selectedSubClass.steel > 0 && (
-                    <div className="space-y-2">
-                      <Label>
-                        Steel Types
-                        <Badge variant="secondary" className="ml-2">
-                          {selectedSubClass.steel}% Steel
-                        </Badge>
-                      </Label>
-                      <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                        <p className="text-xs text-muted-foreground mb-2">
-                          Select one or more steel types. If multiple are selected, average index will be used.
-                        </p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {[
-                            { value: 'TMT', label: 'TMT (Index M)', description: 'Thermo-Mechanically Treated Bars' },
-                            { value: 'ANGLE_CHANNEL', label: 'Angle/Channel (Index N)', description: 'Structural Steel Sections' },
-                            { value: 'PLATES', label: 'Plates (Index O)', description: 'Steel Plates' },
-                            { value: 'OTHER_SECTIONS', label: 'Other Sections (Index P)', description: 'Other Steel Sections' }
-                          ].map((steelType) => (
-                            <div key={steelType.value} className="flex items-start space-x-3 bg-white p-3 rounded-md border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-colors">
-                              <Checkbox
-                                id={`steel-${index}-${steelType.value}`}
-                                checked={(entry.steelTypes || []).includes(steelType.value)}
-                                onCheckedChange={(checked) => {
-                                  const currentSteelTypes = entry.steelTypes || [];
-                                  let newSteelTypes: string[];
-                                  
-                                  if (checked) {
-                                    newSteelTypes = [...currentSteelTypes, steelType.value];
-                                  } else {
-                                    newSteelTypes = currentSteelTypes.filter(t => t !== steelType.value);
-                                  }
-                                  
-                                  updateEntry(index, 'steelTypes', newSteelTypes);
-                                }}
-                                className="mt-0.5"
-                              />
-                              <div className="flex-1">
-                                <Label
-                                  htmlFor={`steel-${index}-${steelType.value}`}
-                                  className="text-sm font-medium cursor-pointer"
-                                >
-                                  {steelType.label}
-                                </Label>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {steelType.description}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        {(entry.steelTypes || []).length === 0 && (
-                          <div className="flex items-center gap-2 text-xs text-orange-600 bg-orange-50 p-2 rounded">
-                            <AlertCircle className="h-3 w-3" />
-                            <span>Please select at least one steel type</span>
-                          </div>
-                        )}
-                        {(entry.steelTypes || []).length > 1 && (
-                          <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 p-2 rounded">
-                            <Info className="h-3 w-3" />
-                            <span>Multiple steel types selected. Average index will be used in calculations.</span>
-                          </div>
-                        )}
+                return (
+                  <tr key={index} className="hover:bg-slate-50/50 transition-colors">
+                    {/* Col 1: Classification */}
+                    <td className="px-4 py-3 space-y-2 align-top">
+                      <div className="space-y-1">
+                        <Select
+                          value={selectedGroup?.id || ''}
+                          onValueChange={(groupId) => {
+                            if (!groupId) return;
+                            const group = classificationGroups.find(g => g.id === groupId);
+                            if (!group) return;
+                            const newEntries = [...entries];
+                            const firstSub = group.subClassifications.find(s => s.isDefault) || group.subClassifications[0];
+                            newEntries[index] = {
+                              ...newEntries[index],
+                              subClassificationId: firstSub?.id || '',
+                              subClassification: firstSub,
+                            };
+                            setEntries(newEntries);
+                            onChange(newEntries);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs bg-white">
+                            <SelectValue placeholder="Main classification" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {classificationGroups.map((group) => (
+                              <SelectItem key={group.id} value={group.id} className="text-xs">
+                                {group.code} - {group.name} {group.code === requiredMainCode ? '★ Recommended' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                    </div>
-                  )}
 
-                  {/* Multi-row Item Number, Qty, Rate */}
-                  <div className="space-y-3">
-                    {(() => {
-                      const rows = ensureItemRows(entry);
-                      return rows.map((row, ri) => {
-                        const rowQty = parseFloat(String(row.quantity)) || 0;
-                        const rowRate = parseFloat(String(row.agreementRate)) || 0;
-                        const rowAmt = rowQty > 0 && rowRate > 0 ? Math.round(rowQty * rowRate * 100) / 100 : 0;
-                        return (
-                          <div key={ri} className="relative">
-                            {ri > 0 && <div className="border-t border-dashed border-gray-200 mt-1 mb-2" />}
-                            <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
-                              <div className="space-y-1">
-                                {ri === 0 && <Label className="text-xs">Item No.</Label>}
-                                <Input
-                                  type="text"
-                                  placeholder="e.g. 1130 10 (G)"
-                                  value={row.itemNumber || ''}
-                                  onChange={(e) => updateItemRow(index, ri, 'itemNumber', e.target.value)}
-                                  className="h-9"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                {ri === 0 && <Label className="text-xs">Qty (since last bill)</Label>}
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  placeholder="0.00"
-                                  value={row.quantity === 0 ? '0' : (row.quantity || '')}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    updateItemRow(index, ri, 'quantity', val === '' ? '' : (isNaN(parseFloat(val)) ? '' : parseFloat(val)));
+                      {selectedGroup && (
+                        <div className="space-y-1">
+                          <Select
+                            value={entry.subClassificationId || ''}
+                            onValueChange={(value) => { if (value) updateEntry(index, 'subClassificationId', value); }}
+                          >
+                            <SelectTrigger className="h-8 text-xs bg-white">
+                              <SelectValue placeholder="Sub-classification" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {selectedGroup.subClassifications.map((sub) => (
+                                <SelectItem key={sub.id} value={sub.id} className="text-xs">
+                                  {sub.code} - {sub.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      {/* Component Breakdown Badge */}
+                      {selectedSubClass && (
+                        <div className="text-[10px] text-slate-500 bg-slate-100/80 px-2 py-1 rounded flex flex-wrap gap-x-2 gap-y-0.5">
+                          {selectedSubClass.fixed > 0 && <span>F: {selectedSubClass.fixed}%</span>}
+                          {selectedSubClass.labour > 0 && <span>L: {selectedSubClass.labour}%</span>}
+                          {selectedSubClass.plantMachinery > 0 && <span>P&M: {selectedSubClass.plantMachinery}%</span>}
+                          {selectedSubClass.fuel > 0 && <span>Fuel: {selectedSubClass.fuel}%</span>}
+                          {selectedSubClass.steel > 0 && <span className="font-semibold text-blue-750">Steel: {selectedSubClass.steel}%</span>}
+                          {selectedSubClass.cement > 0 && <span className="font-semibold text-violet-750">Cement: {selectedSubClass.cement}%</span>}
+                        </div>
+                      )}
+
+                      {/* Steel Types Checklist inline (if steel component > 0) */}
+                      {selectedSubClass && selectedSubClass.steel > 0 && (
+                        <div className="p-2 border border-blue-100 rounded-md bg-blue-50/30 space-y-1">
+                          <span className="text-[9px] font-bold uppercase text-blue-700 block">Select Steel Types</span>
+                          <div className="grid grid-cols-2 gap-1 text-[10px]">
+                            {[
+                              { value: 'TMT', label: 'TMT' },
+                              { value: 'ANGLE_CHANNEL', label: 'Struct' },
+                              { value: 'PLATES', label: 'Plates' },
+                              { value: 'OTHER_SECTIONS', label: 'Other' }
+                            ].map((steelType) => (
+                              <label key={steelType.value} className="flex items-center gap-1 cursor-pointer">
+                                <Checkbox
+                                  checked={(entry.steelTypes || []).includes(steelType.value)}
+                                  onCheckedChange={(checked) => {
+                                    const currentSteelTypes = entry.steelTypes || [];
+                                    const newSteelTypes = checked
+                                      ? [...currentSteelTypes, steelType.value]
+                                      : currentSteelTypes.filter(t => t !== steelType.value);
+                                    updateEntry(index, 'steelTypes', newSteelTypes);
                                   }}
-                                  className="h-9"
+                                  className="h-3 w-3"
                                 />
-                              </div>
-                              <div className="space-y-1">
-                                {ri === 0 && <Label className="text-xs">Agreement Rate (₹)</Label>}
-                                <Input
-                                  type="number"
-                                  step="0.00001"
-                                  min="0"
-                                  placeholder="0.00"
-                                  value={row.agreementRate === 0 ? '0' : (row.agreementRate || '')}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    updateItemRow(index, ri, 'agreementRate', val === '' ? '' : (isNaN(parseFloat(val)) ? '' : parseFloat(val)));
-                                  }}
-                                  className="h-9"
-                                />
-                              </div>
-                              <div className="flex items-center gap-1">
-                                {rows.length > 1 && (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-9 w-9 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                    onClick={() => removeItemRow(index, ri)}
-                                    title="Remove this item row"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                            {rowAmt > 0 && (
-                              <div className="text-xs text-gray-500 mt-0.5 text-right mr-10">
-                                = ₹{rowAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </div>
-                            )}
+                                <span className="truncate">{steelType.label}</span>
+                              </label>
+                            ))}
                           </div>
-                        );
-                      });
-                    })()}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 h-7 px-2"
-                      onClick={() => addItemRow(index)}
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add Item Row
-                    </Button>
-                  </div>
+                        </div>
+                      )}
+                    </td>
 
-                  {/* Amount Input */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor={`amount-${index}`}>
-                        Amount (₹)
-                        {(() => {
-                          const rows = ensureItemRows(entry);
-                          const total = computeItemRowsTotal(rows);
-                          if (total > 0) {
-                            return (
-                              <Badge variant="secondary" className="ml-2 text-xs">
-                                {rows.length > 1 ? `= Sum of ${rows.length} items` : '= Qty × Rate'}
-                              </Badge>
-                            );
-                          }
-                          return null;
-                        })()}
-                        {selectedSubClass && (
-                          <Badge variant="outline" className="ml-2">
-                            Components: {(100 - selectedSubClass.fixed).toFixed(0)}% variable
-                          </Badge>
-                        )}
-                      </Label>
+                    {/* Col 2: Schedule & Ref */}
+                    <td className="px-4 py-3 space-y-2 align-top">
+                      {contractSchedules.length > 0 && (
+                        <div className="space-y-1">
+                          <Select
+                            value={entry.scheduleItem || '_none_'}
+                            onValueChange={(val) => updateEntry(index, 'scheduleItem', val === '_none_' ? '' : val)}
+                          >
+                            <SelectTrigger className="h-8 text-xs bg-white">
+                              <SelectValue placeholder="Schedule" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="_none_">— None —</SelectItem>
+                              {contractSchedules.map((s, i) => (
+                                <SelectItem key={i} value={s} className="text-xs">{s}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        <Input
+                          type="text"
+                          placeholder="Description / notes..."
+                          value={entry.description || ''}
+                          onChange={(e) => updateEntry(index, 'description', e.target.value)}
+                          className="h-8 text-xs bg-white"
+                        />
+                      </div>
+                    </td>
+
+                    {/* Col 3: Items (Qty * Rate) */}
+                    <td className="px-4 py-3 space-y-2 align-top">
+                      <div className="space-y-2">
+                        {rows.map((row, ri) => {
+                          const rowQty = parseFloat(String(row.quantity)) || 0;
+                          const rowRate = parseFloat(String(row.agreementRate)) || 0;
+                          const rowAmt = rowQty > 0 && rowRate > 0 ? Math.round(rowQty * rowRate * 105) / 105 : 0;
+                          
+                          return (
+                            <div key={ri} className="flex items-center gap-1.5">
+                              <Input
+                                type="text"
+                                placeholder="Item No"
+                                value={row.itemNumber || ''}
+                                onChange={(e) => updateItemRow(index, ri, 'itemNumber', e.target.value)}
+                                className="h-8 text-xs bg-white w-20 flex-shrink-0"
+                              />
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="Qty"
+                                value={row.quantity === 0 ? '0' : (row.quantity || '')}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  updateItemRow(index, ri, 'quantity', val === '' ? '' : (isNaN(parseFloat(val)) ? '' : parseFloat(val)));
+                                }}
+                                className="h-8 text-xs bg-white w-16"
+                              />
+                              <span className="text-[10px] text-slate-400">×</span>
+                              <Input
+                                type="number"
+                                step="0.00001"
+                                placeholder="Rate"
+                                value={row.agreementRate === 0 ? '0' : (row.agreementRate || '')}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  updateItemRow(index, ri, 'agreementRate', val === '' ? '' : (isNaN(parseFloat(val)) ? '' : parseFloat(val)));
+                                }}
+                                className="h-8 text-xs bg-white w-20"
+                              />
+                              
+                              {rowAmt > 0 && (
+                                <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap bg-slate-100 px-1.5 py-0.5 rounded">
+                                  ₹{rowAmt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                </span>
+                              )}
+
+                              {rows.length > 1 && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+                                  onClick={() => removeItemRow(index, ri)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-[10px] text-blue-600 hover:text-blue-800 hover:bg-blue-50 h-6 px-1.5"
+                        onClick={() => addItemRow(index)}
+                      >
+                        <Plus className="h-3 w-3 mr-0.5" />
+                        Add item row
+                      </Button>
+                    </td>
+
+                    {/* Col 4: Amount */}
+                    <td className="px-4 py-3 space-y-2 align-top">
                       <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={entry.amount === 0 ? '0' : (entry.amount || '')}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '' || value === null || value === undefined) {
+                              updateEntry(index, 'amount', '');
+                            } else {
+                              const numValue = parseFloat(value);
+                              updateEntry(index, 'amount', isNaN(numValue) ? '' : numValue);
+                            }
+                          }}
+                          className="h-8 text-xs bg-white font-semibold text-slate-800"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-end gap-1">
                         {(() => {
                           const amt = parseFloat(String(entry.amount));
                           if (!isNaN(amt) && amt > 0 && amt !== Math.round(amt)) {
@@ -607,10 +536,10 @@ export function BillClassificationEntries({
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="h-7 text-xs px-2 text-orange-600 border-orange-300 hover:bg-orange-50"
+                                className="h-6 text-[10px] px-1.5 text-orange-600 border-orange-300 hover:bg-orange-50"
                                 onClick={() => updateEntry(index, 'amount', Math.round(amt))}
                               >
-                                Round Off
+                                Round
                               </Button>
                             );
                           }
@@ -626,114 +555,35 @@ export function BillClassificationEntries({
                           />
                         )}
                         <BillAmountCalculator
-                          label="Calculator"
+                          label=""
                           onInsertTotal={(total) => updateEntry(index, 'amount', total)}
                         />
                       </div>
-                    </div>
-                    <Input
-                      id={`amount-${index}`}
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
-                      value={entry.amount === 0 ? '0' : (entry.amount || '')}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (value === '' || value === null || value === undefined) {
-                          updateEntry(index, 'amount', '');
-                        } else {
-                          const numValue = parseFloat(value);
-                          updateEntry(index, 'amount', isNaN(numValue) ? '' : numValue);
-                        }
-                      }}
-                    />
-                  </div>
+                    </td>
 
-                  {/* Description Input */}
-                  <div className="space-y-2">
-                    <Label htmlFor={`desc-${index}`}>Description (Optional)</Label>
-                    <Input
-                      id={`desc-${index}`}
-                      type="text"
-                      placeholder="Add notes or description..."
-                      value={entry.description || ''}
-                      onChange={(e) => updateEntry(index, 'description', e.target.value)}
-                    />
-                  </div>
-
-                  {/* Component Breakdown */}
-                  {selectedSubClass && (
-                    <div className="bg-blue-50 rounded-lg p-4 mt-4">
-                      <h5 className="text-sm font-semibold text-blue-900 mb-2">
-                        Component Breakdown: {selectedSubClass.code} - {selectedSubClass.name}
-                      </h5>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        {selectedSubClass.fixed > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-blue-700">Fixed:</span>
-                            <span className="font-medium text-blue-900">{selectedSubClass.fixed}%</span>
-                          </div>
-                        )}
-                        {selectedSubClass.labour > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-blue-700">Labour:</span>
-                            <span className="font-medium text-blue-900">{selectedSubClass.labour}%</span>
-                          </div>
-                        )}
-                        {selectedSubClass.plantMachinery > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-blue-700">Plant & Machinery:</span>
-                            <span className="font-medium text-blue-900">{selectedSubClass.plantMachinery}%</span>
-                          </div>
-                        )}
-                        {selectedSubClass.fuel > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-blue-700">Fuel & Lubricants:</span>
-                            <span className="font-medium text-blue-900">{selectedSubClass.fuel}%</span>
-                          </div>
-                        )}
-                        {selectedSubClass.otherMaterials > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-blue-700">Other Materials:</span>
-                            <span className="font-medium text-blue-900">{selectedSubClass.otherMaterials}%</span>
-                          </div>
-                        )}
-                        {selectedSubClass.steel > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-blue-700">Steel:</span>
-                            <span className="font-medium text-blue-900">{selectedSubClass.steel}%</span>
-                          </div>
-                        )}
-                        {selectedSubClass.cement > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-blue-700">Cement:</span>
-                            <span className="font-medium text-blue-900">{selectedSubClass.cement}%</span>
-                          </div>
-                        )}
-                        {selectedSubClass.explosives > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-blue-700">Explosives:</span>
-                            <span className="font-medium text-blue-900">{selectedSubClass.explosives}%</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-
+                    {/* Col 5: Delete */}
+                    <td className="px-4 py-3 align-top text-center">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeEntry(index)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        
         {entries.length === 0 && (
-          <Card className="border-dashed border-2 border-gray-300 bg-gray-50">
-            <CardContent className="pt-6 pb-6">
-              <p className="text-center text-gray-500">
-                No classification entries added yet. Click "Add Classification Entry" below to start.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="p-8 text-center text-slate-500 text-xs bg-slate-50/50">
+            No classification entries added yet. Click "Add Classification Entry" below to start.
+          </div>
         )}
       </div>
 
