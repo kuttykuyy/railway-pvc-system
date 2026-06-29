@@ -420,23 +420,23 @@ export function BillClassificationEntries({
                         </div>
                       ) : (
                         <div className="space-y-1">
-                          <Input
-                            type="text"
+                          <textarea
                             placeholder="Schedule (e.g. Sch A)..."
                             value={entry.scheduleItem || ''}
                             onChange={(e) => updateEntry(index, 'scheduleItem', e.target.value)}
-                            className="h-8 text-xs bg-white"
+                            rows={2}
+                            className="w-full text-xs p-1.5 border border-slate-200 rounded-md bg-white resize-y focus:outline-none focus:ring-1 focus:ring-slate-400 min-h-[40px]"
                           />
                         </div>
                       )}
 
                       <div className="space-y-1">
-                        <Input
-                          type="text"
+                        <textarea
                           placeholder="Description / notes..."
                           value={entry.description || ''}
                           onChange={(e) => updateEntry(index, 'description', e.target.value)}
-                          className="h-8 text-xs bg-white"
+                          rows={2}
+                          className="w-full text-xs p-1.5 border border-slate-200 rounded-md bg-white resize-y focus:outline-none focus:ring-1 focus:ring-slate-400 min-h-[50px]"
                         />
                       </div>
                     </td>
@@ -467,7 +467,7 @@ export function BillClassificationEntries({
                                   const val = e.target.value;
                                   updateItemRow(index, ri, 'quantity', val === '' ? '' : (isNaN(parseFloat(val)) ? '' : parseFloat(val)));
                                 }}
-                                className="h-8 text-xs bg-white w-16"
+                                className="h-8 text-xs bg-white w-24 flex-grow flex-shrink"
                               />
                               <span className="text-[10px] text-slate-400">×</span>
                               <Input
@@ -479,7 +479,7 @@ export function BillClassificationEntries({
                                   const val = e.target.value;
                                   updateItemRow(index, ri, 'agreementRate', val === '' ? '' : (isNaN(parseFloat(val)) ? '' : parseFloat(val)));
                                 }}
-                                className="h-8 text-xs bg-white w-20"
+                                className="h-8 text-xs bg-white w-28 flex-grow flex-shrink"
                               />
                               
                               {rowAmt > 0 && (
