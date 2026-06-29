@@ -415,8 +415,24 @@ export async function POST(request: NextRequest) {
     logger.log(`📊 Calculated Quarter: ${quarter}`);
     
     // ===== STEP 7: Generate PVC Number =====
-    const billCountForContract = await prisma.bill.count({ where: { contractId } });
-    const sequenceNumber = String(billCountForContract + 1).padStart(3, '0');
+    // To prevent duplicate pvcNumbers when intermediate bills are deleted,
+    // find the maximum sequence number among all existing bills for this contract.
+    const contractBills = await prisma.bill.findMany({
+      where: { contractId },
+      select: { pvcNumber: true }
+    });
+    let maxSequence = 0;
+    for (const b of contractBills) {
+      if (b.pvcNumber) {
+        const parts = b.pvcNumber.split('/');
+        const lastPart = parts[parts.length - 1];
+        const seq = parseInt(lastPart, 10);
+        if (!isNaN(seq) && seq > maxSequence) {
+          maxSequence = seq;
+        }
+      }
+    }
+    const sequenceNumber = String(maxSequence + 1).padStart(3, '0');
     const autoPvcNumber = `PVC/${contract.agreementNo}/${sequenceNumber}`;
     
     // ===== STEP 8: CRITICAL - Extract Steel Types from Classification Entries =====

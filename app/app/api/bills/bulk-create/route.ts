@@ -205,9 +205,22 @@ export async function POST(request: NextRequest) {
     const createdBills = [];
 
     // Get current bill count for contract to generate sequential PVC numbers
-    const billCountForContract = await prisma.bill.count({
+    // Get all existing bills for contract to calculate next sequential PVC numbers safely
+    const contractBills = await prisma.bill.findMany({
       where: { contractId },
+      select: { pvcNumber: true }
     });
+    let maxSequence = 0;
+    for (const b of contractBills) {
+      if (b.pvcNumber) {
+        const parts = b.pvcNumber.split('/');
+        const lastPart = parts[parts.length - 1];
+        const seq = parseInt(lastPart, 10);
+        if (!isNaN(seq) && seq > maxSequence) {
+          maxSequence = seq;
+        }
+      }
+    }
 
     for (let i = 0; i < bills.length; i++) {
       const billInput = bills[i];
@@ -222,7 +235,7 @@ export async function POST(request: NextRequest) {
       const grossBillAmount = Number(billInput.grossBillAmount || billInput.billAmount || classificationTotal);
 
       // Generate PVC auto-number
-      const sequenceNumber = String(billCountForContract + i + 1).padStart(3, '0');
+      const sequenceNumber = String(maxSequence + i + 1).padStart(3, '0');
       const autoPvcNumber = `PVC/${contract.agreementNo}/${sequenceNumber}`;
 
       // Create bill with classification entries
