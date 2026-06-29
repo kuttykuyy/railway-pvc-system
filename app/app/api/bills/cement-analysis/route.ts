@@ -280,14 +280,14 @@ async function extractJsonWithRetry(apiKey: string, prompt: string, label: strin
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const retryInstruction = attempt === 2
-      ? `\n\nRETRY: Return one compact, complete JSON object only. Include only nonzero current-payable rows, shorten descriptions, and close every array and object.`
+      ? `\n\nRETRY AFTER OUTPUT LIMIT: Return one compact, complete JSON object only. Include only nonzero current-payable rows. Limit each description to 240 characters while preserving the identifying work, material, grade, and mix details. Omit repeated specification prose and close every array and object.`
       : '';
 
     try {
       const result = await requestAiExtraction(
         apiKey,
         prompt + retryInstruction,
-        attempt === 1 ? 7000 : 9000,
+        attempt === 1 ? 7000 : 10000,
       );
       if (!result.content) {
         console.warn('[bill-extraction] AI returned empty content', {
@@ -321,7 +321,7 @@ Base Rate | Agreement Rate | Original Agreement Qty | Current Agreement Qty | Qt
 
 For quantitySinceLastBillRaw, select the fourth quantity column (the sixth numeric column after Unit when Base Rate and Agreement Rate are present). Confirm it by checking: Qty executed since last Bill x Agreement Rate = Amount since last Bill, before special condition. Never use Current Agreement Qty, Qty up to last Bill, or Qty up to Date. MarkItDown may move or split a decimal onto the line immediately before or after the rest of its row; reconstruct that decimal in its original column position.`;
 
-function splitMarkdown(markdown: string, maxChunkLength = 22000): string[] {
+function splitMarkdown(markdown: string, maxChunkLength = 14000): string[] {
   if (markdown.length <= maxChunkLength) return [markdown];
 
   // MarkItDown emits "Page N of M" at each page boundary. Keep complete pages
@@ -1014,22 +1014,32 @@ ${markdownPart}
     itemAmountTotal = filteredItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
     amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
     if (Math.abs(amountDifference) > 0.05) {
-      const aiReconciledItems = await reconcileWholeBillItems(
-        apiKey,
-        billMarkdown,
-        reconciliationCandidates,
-        scheduleSummaryTotal,
-      );
-      const reconciledItems = completeReconciledItems(
-        aiReconciledItems,
-        reconciliationCandidates,
-        scheduleSummaryTotal,
-      );
-      const reconciledTotal = reconciledItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
-      if (reconciledItems.length > 0 && Math.abs(reconciledTotal - scheduleSummaryTotal) < Math.abs(amountDifference)) {
-        filteredItems = reconciledItems;
-        itemAmountTotal = reconciledTotal;
-        amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
+      try {
+        const aiReconciledItems = await reconcileWholeBillItems(
+          apiKey,
+          billMarkdown,
+          reconciliationCandidates,
+          scheduleSummaryTotal,
+        );
+        const reconciledItems = completeReconciledItems(
+          aiReconciledItems,
+          reconciliationCandidates,
+          scheduleSummaryTotal,
+        );
+        const reconciledTotal = reconciledItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
+        if (reconciledItems.length > 0 && Math.abs(reconciledTotal - scheduleSummaryTotal) < Math.abs(amountDifference)) {
+          filteredItems = reconciledItems;
+          itemAmountTotal = reconciledTotal;
+          amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
+        }
+      } catch (error) {
+        // The focused page passes already produced usable rows. A large optional
+        // whole-bill retry must not discard them if its model response is capped.
+        console.warn('[bill-extraction] Whole-bill reconciliation skipped after AI failure', {
+          error: error instanceof Error ? error.message : String(error),
+          markdownCharacters: billMarkdown.length,
+          candidateCount: reconciliationCandidates.length,
+        });
       }
     }
   }
