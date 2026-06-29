@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { BillAmountCalculator } from './bill-amount-calculator';
 import { ClassificationComparisonDialog } from './classification-comparison-dialog';
+import { inferMainClassification } from '@/lib/work-classification';
 
 interface SubClassification {
   id: string;
@@ -91,10 +92,50 @@ export function BillClassificationEntries({
   measurementDate
 }: BillClassificationEntriesProps) {
   const [entries, setEntries] = useState<ClassificationEntry[]>(value);
+  const requiredMainCode = useMemo(
+    () => workDescription ? inferMainClassification(workDescription).code : '',
+    [workDescription],
+  );
+  const allowedClassificationGroups = useMemo(
+    () => requiredMainCode
+      ? classificationGroups.filter(group => group.code === requiredMainCode)
+      : classificationGroups,
+    [classificationGroups, requiredMainCode],
+  );
 
   useEffect(() => {
     setEntries(value);
   }, [value]);
+
+  useEffect(() => {
+    if (!requiredMainCode || allowedClassificationGroups.length !== 1 || value.length === 0) return;
+    const requiredGroup = allowedClassificationGroups[0];
+    let changed = false;
+    const enforcedEntries = value.map(entry => {
+      const selected = classificationGroups
+        .flatMap(group => group.subClassifications)
+        .find(sub => sub.id === entry.subClassificationId);
+      if (!selected || selected.groupId === requiredGroup.id) return entry;
+
+      const suffix = selected.code.match(/[A-E]$/)?.[0];
+      const replacement = (suffix
+        ? requiredGroup.subClassifications.find(sub => sub.code.toUpperCase().endsWith(suffix))
+        : undefined)
+        || requiredGroup.subClassifications.find(sub => sub.isDefault)
+        || requiredGroup.subClassifications[0];
+      if (!replacement) return entry;
+      changed = true;
+      return {
+        ...entry,
+        subClassificationId: replacement.id,
+        subClassification: replacement,
+      };
+    });
+    if (changed) {
+      setEntries(enforcedEntries);
+      onChange(enforcedEntries);
+    }
+  }, [allowedClassificationGroups, classificationGroups, onChange, requiredMainCode, value]);
 
   // Helper: ensure entry has itemRows (migrate from legacy single fields)
   const ensureItemRows = (entry: ClassificationEntry): ItemRow[] => {
@@ -118,8 +159,12 @@ export function BillClassificationEntries({
   };
 
   const addEntry = () => {
+    const requiredGroup = allowedClassificationGroups[0];
+    const firstSub = requiredGroup?.subClassifications.find(sub => sub.isDefault)
+      || requiredGroup?.subClassifications[0];
     const newEntry: ClassificationEntry = {
-      subClassificationId: '',
+      subClassificationId: firstSub?.id || '',
+      subClassification: firstSub,
       amount: 0,
       description: '',
       itemRows: [{ itemNumber: '', quantity: '', agreementRate: '' }],
@@ -343,7 +388,7 @@ export function BillClassificationEntries({
                         <SelectValue placeholder="Select main classification" />
                       </SelectTrigger>
                       <SelectContent>
-                        {classificationGroups.map((group) => (
+                        {allowedClassificationGroups.map((group) => (
                           <SelectItem key={group.id} value={group.id}>
                             {group.code} - {group.name}
                           </SelectItem>

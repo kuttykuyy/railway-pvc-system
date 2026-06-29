@@ -9,6 +9,7 @@ import { handleApiError, AppError } from '@/lib/error-handler';
 import { recalculateCumulativePvcForContract } from '@/lib/recalculateCumulativePvc';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
 import { getBillingSettings } from '@/lib/admin-settings';
+import { resolveBillClassificationPolicy } from '@/lib/bill-classification-policy';
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +137,22 @@ export async function POST(request: NextRequest) {
         validationErrors.push(`Bill ${billInput.billNo || 'Unknown'}: Missing required data (billNo, dateOfMeasurement, or classificationEntries)`);
         continue;
       }
+
+      const classificationPolicy = await resolveBillClassificationPolicy(
+        contract.workDescription,
+        billInput.classificationEntries,
+        billInput,
+      );
+      if (classificationPolicy.invalidCodes.length > 0) {
+        validationErrors.push(
+          `Bill ${billInput.billNo}: Name of Work requires main classification ${classificationPolicy.requiredMain.code} - ${classificationPolicy.requiredMain.label}. Invalid classification(s): ${classificationPolicy.invalidCodes.join(', ')}`,
+        );
+      }
+      billInput.cementAmount = classificationPolicy.cementAmount;
+      billInput.steelTmtBarsAmount = classificationPolicy.steelTmtBarsAmount;
+      billInput.steelAngleChannelAmount = classificationPolicy.steelAngleChannelAmount;
+      billInput.steelPlatesAmount = classificationPolicy.steelPlatesAmount;
+      billInput.steelOtherSectionsAmount = classificationPolicy.steelOtherSectionsAmount;
 
       // Check for duplicate bill number in database
       const existingBill = await prisma.bill.findFirst({

@@ -13,6 +13,7 @@ import {
   normalizeDsrCode,
   summarizeCementCalculation,
 } from '@/lib/dsr-cement-calculation';
+import { inferMainClassification } from '@/lib/work-classification';
 
 export const dynamic = 'force-dynamic';
 
@@ -106,38 +107,6 @@ function normalizeExtractedItem(item: any): ExtractedBillItem {
     confidence: ['high', 'medium', 'low'].includes(item?.confidence) ? item.confidence : 'low',
     reason: String(item?.reason || '').trim(),
   };
-}
-
-const MAIN_CLASSIFICATION_RULES: Array<{ code: string; label: string; patterns: RegExp[] }> = [
-  { code: '1', label: 'Earthwork in Formation', patterns: [/\bearth\s*work\b/i, /\bformation\b/i, /\bembankment\b/i, /\bcutting\b/i, /\bcompaction\b/i] },
-  { code: '2', label: 'Ballast Supply Works', patterns: [/\bballast\b/i, /\bstone chips\b/i, /\bcrushed stone\b/i] },
-  { code: '5', label: 'Building Works', patterns: [/\bbuilding\b/i, /\bquarters?\b/i, /\bmasonry\b/i, /\bplaster(?:ing)?\b/i] },
-  { code: '6', label: 'Bridges & Protection Work', patterns: [/\bbridge\b/i, /\bculvert\b/i, /\bR[OU]B\b/i, /\bprotection work\b/i, /\brockfall\b/i] },
-  { code: '7', label: 'Permanent Way Linking', patterns: [/\bpermanent way\b/i, /\btrack (?:laying|linking)\b/i, /\brailway track\b/i, /\bsleepers?\b/i] },
-  { code: '8', label: 'Platform & Passenger Amenities', patterns: [/\bplatform\b/i, /\bpassenger amenit/i, /\bwaiting room\b/i, /\bshelter\b/i] },
-];
-
-function inferMainClassification(workDescription: string) {
-  const contractText = String(workDescription || '');
-  if (/\btunnel(?:ling|ing)?\b|\bTBM\b|\bunderground\b/i.test(contractText)) {
-    const usesExplosives = /\bexplosive|\bblasting\b|drill and blast/i.test(contractText);
-    return {
-      code: usesExplosives ? '4' : '3',
-      label: usesExplosives ? 'Tunnelling Works (With Explosives)' : 'Tunnelling Works (Without Explosives)',
-      reason: usesExplosives ? 'Tunnel scope with blasting/explosives.' : 'Tunnel scope without blasting/explosives evidence.',
-    };
-  }
-
-  const scored = MAIN_CLASSIFICATION_RULES.map(rule => {
-    const contractMatches = rule.patterns.filter(pattern => pattern.test(contractText)).length;
-    return { ...rule, score: contractMatches };
-  }).sort((left, right) => right.score - left.score);
-
-  const best = scored[0];
-  if (!best || best.score === 0 || best.score === (scored[1]?.score || 0)) {
-    return { code: '9', label: 'Any Other Works', reason: 'No unique match to GCC main groups 1-8.' };
-  }
-  return { code: best.code, label: best.label, reason: `Matched ${best.label} from Name of Work.` };
 }
 
 function looksLikeDirectCementSupply(item: ExtractedBillItem): boolean {

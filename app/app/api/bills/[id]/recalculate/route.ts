@@ -7,6 +7,7 @@ import { calculateExtensionCompliantPvc, savePvcExtensionCompliance } from '@/li
 import { recalculateCumulativePvcForContract } from '@/lib/recalculateCumulativePvc';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
 import { advancedCache } from '@/lib/advanced-cache';
+import { resolveBillClassificationPolicy } from '@/lib/bill-classification-policy';
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,27 @@ export async function POST(
         { status: 404 }
       );
     }
+
+    const classificationPolicy = await resolveBillClassificationPolicy(
+      bill.contract.workDescription,
+      bill.classificationEntries,
+      bill,
+    );
+    bill.cementAmount = classificationPolicy.cementAmount;
+    bill.steelTmtBarsAmount = classificationPolicy.steelTmtBarsAmount;
+    bill.steelAngleChannelAmount = classificationPolicy.steelAngleChannelAmount;
+    bill.steelPlatesAmount = classificationPolicy.steelPlatesAmount;
+    bill.steelOtherSectionsAmount = classificationPolicy.steelOtherSectionsAmount;
+    await prisma.bill.update({
+      where: { id: billId },
+      data: {
+        cementAmount: bill.cementAmount,
+        steelTmtBarsAmount: bill.steelTmtBarsAmount,
+        steelAngleChannelAmount: bill.steelAngleChannelAmount,
+        steelPlatesAmount: bill.steelPlatesAmount,
+        steelOtherSectionsAmount: bill.steelOtherSectionsAmount,
+      },
+    });
     
     console.log('Recalculating PVC for Bill:', {
       id: bill.id,

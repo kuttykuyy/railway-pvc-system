@@ -12,6 +12,7 @@ import { extractSteelTypesFromEntries } from '@/lib/steel-type-handler';
 import { areFinalIndicesAvailableForBill } from '@/lib/index-status';
 import { recalculateCumulativePvcForContract } from '@/lib/recalculateCumulativePvc';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
+import { resolveBillClassificationPolicy } from '@/lib/bill-classification-policy';
 
 export const dynamic = "force-dynamic";
 
@@ -255,12 +256,24 @@ export async function PUT(
         baseMonth: true,
         isExtended: true,
         extensionType: true,
-        originalCompletionDate: true
+        originalCompletionDate: true,
+        workDescription: true,
       }
     });
     
     if (!contract) {
       return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
+    }
+
+    const classificationPolicy = await resolveBillClassificationPolicy(
+      contract.workDescription,
+      classificationEntries,
+      { cementAmount, steelTmtBarsAmount, steelAngleChannelAmount, steelPlatesAmount, steelOtherSectionsAmount },
+    );
+    if (classificationPolicy.invalidCodes.length > 0) {
+      return NextResponse.json({
+        error: `Name of Work requires main classification ${classificationPolicy.requiredMain.code} - ${classificationPolicy.requiredMain.label}. Invalid classification(s): ${classificationPolicy.invalidCodes.join(', ')}.`,
+      }, { status: 400 });
     }
     
     // ===== STEP 5: Calculate Quarter =====
@@ -311,11 +324,11 @@ export async function PUT(
         editCount: { increment: 1 }, // track edit count for permission control
         grossBillAmount: parseFloat(grossBillAmount),
         billAmount: parseFloat(billAmount),
-        cementAmount: parseFloat(cementAmount) || 0,
-        steelTmtBarsAmount: parseFloat(steelTmtBarsAmount) || 0,
-        steelAngleChannelAmount: parseFloat(steelAngleChannelAmount) || 0,
-        steelPlatesAmount: parseFloat(steelPlatesAmount) || 0,
-        steelOtherSectionsAmount: parseFloat(steelOtherSectionsAmount) || 0,
+        cementAmount: classificationPolicy.cementAmount,
+        steelTmtBarsAmount: classificationPolicy.steelTmtBarsAmount,
+        steelAngleChannelAmount: classificationPolicy.steelAngleChannelAmount,
+        steelPlatesAmount: classificationPolicy.steelPlatesAmount,
+        steelOtherSectionsAmount: classificationPolicy.steelOtherSectionsAmount,
         steelTypes: extractedSteelTypes, // CRITICAL: Update steel types
         dateOfMeasurement: measurementDate,
         dateOfCompletion: dateOfCompletion ? new Date(dateOfCompletion) : null,
@@ -385,12 +398,12 @@ export async function PUT(
             ? entry.steelTypes 
             : (hasSteelComponent && extractedSteelTypes.length > 0 ? extractedSteelTypes : []);
           
-          const hasDedicatedCement = cementAmount && parseFloat(cementAmount) > 0;
+          const hasDedicatedCement = classificationPolicy.cementAmount > 0;
           const hasDedicatedSteel = 
-            (steelTmtBarsAmount && parseFloat(steelTmtBarsAmount) > 0) ||
-            (steelAngleChannelAmount && parseFloat(steelAngleChannelAmount) > 0) ||
-            (steelPlatesAmount && parseFloat(steelPlatesAmount) > 0) ||
-            (steelOtherSectionsAmount && parseFloat(steelOtherSectionsAmount) > 0);
+            classificationPolicy.steelTmtBarsAmount > 0 ||
+            classificationPolicy.steelAngleChannelAmount > 0 ||
+            classificationPolicy.steelPlatesAmount > 0 ||
+            classificationPolicy.steelOtherSectionsAmount > 0;
 
           // Calculate PVC for this specific entry
           const entryPvc = await calculateClassificationEntryPvc(
@@ -486,12 +499,12 @@ export async function PUT(
     console.log('💰 ===== PER-ENTRY PVC CALCULATIONS COMPLETE (UPDATE) =====\n');
     
     // ===== STEP 13: Calculate Dedicated Cement and Steel PVC =====
-    const dedicatedCementPvc = calculateDedicatedCementPvc(parseFloat(cementAmount) || 0, quarterlyAverages);
+    const dedicatedCementPvc = calculateDedicatedCementPvc(classificationPolicy.cementAmount, quarterlyAverages);
     
-    const dedicatedSteelTmtBarsPvc = calculateDedicatedSteelPvc(parseFloat(steelTmtBarsAmount) || 0, quarterlyAverages, 'Steel TMT Bars');
-    const dedicatedSteelAngleChannelPvc = calculateDedicatedSteelPvc(parseFloat(steelAngleChannelAmount) || 0, quarterlyAverages, 'Steel Angle/Channel');
-    const dedicatedSteelPlatesPvc = calculateDedicatedSteelPvc(parseFloat(steelPlatesAmount) || 0, quarterlyAverages, 'Steel Plates');
-    const dedicatedSteelOtherSectionsPvc = calculateDedicatedSteelPvc(parseFloat(steelOtherSectionsAmount) || 0, quarterlyAverages, 'Steel Other Sections');
+    const dedicatedSteelTmtBarsPvc = calculateDedicatedSteelPvc(classificationPolicy.steelTmtBarsAmount, quarterlyAverages, 'Steel TMT Bars');
+    const dedicatedSteelAngleChannelPvc = calculateDedicatedSteelPvc(classificationPolicy.steelAngleChannelAmount, quarterlyAverages, 'Steel Angle/Channel');
+    const dedicatedSteelPlatesPvc = calculateDedicatedSteelPvc(classificationPolicy.steelPlatesAmount, quarterlyAverages, 'Steel Plates');
+    const dedicatedSteelOtherSectionsPvc = calculateDedicatedSteelPvc(classificationPolicy.steelOtherSectionsAmount, quarterlyAverages, 'Steel Other Sections');
     const totalDedicatedSteelPvc = dedicatedSteelTmtBarsPvc + dedicatedSteelAngleChannelPvc + dedicatedSteelPlatesPvc + dedicatedSteelOtherSectionsPvc;
     
     // ===== STEP 14: Calculate Total PVC =====
