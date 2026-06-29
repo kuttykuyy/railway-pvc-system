@@ -316,22 +316,101 @@ async function extractJsonWithRetry(apiKey: string, prompt: string, label: strin
   );
 }
 
-function splitMarkdown(markdown: string, maxChunkLength = 28000, overlapLength = 2000): string[] {
+const BILL_ITEM_COLUMN_GUIDE = `SOURCE TABLE COLUMN MAP (left to right after Item/Description/Unit):
+Base Rate | Agreement Rate | Original Agreement Qty | Current Agreement Qty | Qty executed up to last Bill | Qty executed since last Bill | Qty executed up to Date | Amount up to last Bill | Amount since last Bill | Amount since last Bill including special condition | Total up to date.
+
+For quantitySinceLastBillRaw, select the fourth quantity column (the sixth numeric column after Unit when Base Rate and Agreement Rate are present). Confirm it by checking: Qty executed since last Bill x Agreement Rate = Amount since last Bill, before special condition. Never use Current Agreement Qty, Qty up to last Bill, or Qty up to Date. MarkItDown may move or split a decimal onto the line immediately before or after the rest of its row; reconstruct that decimal in its original column position.`;
+
+function splitMarkdown(markdown: string, maxChunkLength = 22000): string[] {
   if (markdown.length <= maxChunkLength) return [markdown];
 
-  const chunks: string[] = [];
-  let start = 0;
-  while (start < markdown.length) {
-    let end = Math.min(start + maxChunkLength, markdown.length);
-    if (end < markdown.length) {
-      const newline = markdown.lastIndexOf('\n', end);
-      if (newline > start + maxChunkLength - 4000) end = newline;
-    }
-    chunks.push(markdown.slice(start, end));
-    if (end >= markdown.length) break;
-    start = Math.max(end - overlapLength, start + 1);
+  // MarkItDown emits "Page N of M" at each page boundary. Keep complete pages
+  // together so flattened table rows are never cut at an arbitrary character.
+  const pages: string[] = [];
+  const pageEndPattern = /^Page\s+\d+\s+of\s+\d+\s*$/gim;
+  let pageStart = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pageEndPattern.exec(markdown)) !== null) {
+    const pageEnd = match.index + match[0].length;
+    pages.push(markdown.slice(pageStart, pageEnd));
+    pageStart = pageEnd;
   }
+  if (pageStart < markdown.length) {
+    const remainder = markdown.slice(pageStart);
+    if (pages.length > 0) pages[pages.length - 1] += remainder;
+    else pages.push(remainder);
+  }
+  if (pages.length <= 1) {
+    const chunks: string[] = [];
+    for (let start = 0; start < markdown.length; start += maxChunkLength) {
+      chunks.push(markdown.slice(start, start + maxChunkLength));
+    }
+    return chunks;
+  }
+
+  const chunks: string[] = [];
+  let chunkPages: string[] = [];
+  let chunkLength = 0;
+  for (const page of pages) {
+    if (chunkPages.length > 0 && chunkLength + page.length > maxChunkLength) {
+      chunks.push(chunkPages.join('\n'));
+      const overlapPage = chunkPages[chunkPages.length - 1];
+      chunkPages = [overlapPage];
+      chunkLength = overlapPage.length;
+    }
+    chunkPages.push(page);
+    chunkLength += page.length;
+  }
+  if (chunkPages.length > 0) chunks.push(chunkPages.join('\n'));
   return chunks;
+}
+
+function quantityAgreementConsistencyScore(item: any): number {
+  const quantity = toFiniteNumber(item?.quantitySinceLastBillRaw ?? item?.quantitySinceLastBill);
+  const agreementRate = toFiniteNumber(item?.agreementRateRaw ?? item?.agreementRate);
+  const agreementAmount = toFiniteNumber(item?.amountAtAgreementRateSinceLastBill);
+  if (quantity === undefined || agreementRate === undefined || agreementAmount === undefined) return 0;
+  if (quantity === 0 && agreementAmount === 0) return 3;
+  if (!(quantity > 0 && agreementRate > 0 && agreementAmount > 0)) return -6;
+  const difference = Math.abs((quantity * agreementRate) - agreementAmount);
+  return difference <= Math.max(0.1, agreementAmount * 0.00001) ? 10 : -10;
+}
+
+function extractedItemQualityScore(item: any): number {
+  const description = String(item?.description || '').replace(/\s+/g, ' ').trim();
+  return (Number(item?.amountSinceLastBill || 0) > 0 ? 4 : 0)
+    + (Number(item?.quantitySinceLastBill || 0) > 0 ? 2 : 0)
+    + (toPrintedDecimal(item?.quantitySinceLastBillRaw) ? 1 : 0)
+    + quantityAgreementConsistencyScore(item)
+    + Math.min(description.length / 200, 1);
+}
+
+function selectCurrentQuantityColumns(original: ExtractedBillItem, candidate: any) {
+  const quantityRaw = toPrintedDecimal(candidate?.quantitySinceLastBillRaw);
+  const agreementRateRaw = toPrintedDecimal(candidate?.agreementRateRaw);
+  const agreementAmount = toFiniteNumber(candidate?.amountAtAgreementRateSinceLastBill);
+  const candidateColumns = {
+    quantitySinceLastBillRaw: quantityRaw,
+    agreementRateRaw,
+    amountAtAgreementRateSinceLastBill: agreementAmount,
+  };
+  const candidateScore = quantityAgreementConsistencyScore(candidateColumns);
+  const originalScore = quantityAgreementConsistencyScore(original);
+  const useCandidate = candidateScore >= 0 && candidateScore >= originalScore;
+
+  return useCandidate ? {
+    quantitySinceLastBill: toFiniteNumber(quantityRaw) ?? original.quantitySinceLastBill,
+    quantitySinceLastBillRaw: quantityRaw ?? original.quantitySinceLastBillRaw,
+    agreementRate: toFiniteNumber(agreementRateRaw) ?? original.agreementRate,
+    agreementRateRaw: agreementRateRaw ?? original.agreementRateRaw,
+    amountAtAgreementRateSinceLastBill: agreementAmount ?? original.amountAtAgreementRateSinceLastBill,
+  } : {
+    quantitySinceLastBill: original.quantitySinceLastBill,
+    quantitySinceLastBillRaw: original.quantitySinceLastBillRaw,
+    agreementRate: original.agreementRate,
+    agreementRateRaw: original.agreementRateRaw,
+    amountAtAgreementRateSinceLastBill: original.amountAtAgreementRateSinceLastBill,
+  };
 }
 
 function mergeParsedBillParts(parts: any[]) {
@@ -344,15 +423,8 @@ function mergeParsedBillParts(parts: any[]) {
       const description = String(item?.description || '').replace(/\s+/g, ' ').trim();
       const key = `${schedule}|${itemNo || description.slice(0, 80).toUpperCase()}`;
       const current = itemByKey.get(key);
-      const score = (Number(item?.amountSinceLastBill || 0) > 0 ? 4 : 0)
-        + (Number(item?.quantitySinceLastBill || 0) > 0 ? 2 : 0)
-        + Math.min(description.length / 200, 1);
-      const currentDescription = String(current?.description || '');
-      const currentScore = current
-        ? (Number(current.amountSinceLastBill || 0) > 0 ? 4 : 0)
-          + (Number(current.quantitySinceLastBill || 0) > 0 ? 2 : 0)
-          + Math.min(currentDescription.length / 200, 1)
-        : -1;
+      const score = extractedItemQualityScore(item);
+      const currentScore = current ? extractedItemQualityScore(current) : -Infinity;
       if (!current || score > currentScore) itemByKey.set(key, item);
     }
     for (const summary of Array.isArray(part?.scheduleSummary) ? part.scheduleSummary : []) {
@@ -424,6 +496,7 @@ Return JSON only:
 {"items":[{"itemNo":"visible item number","schedule":"schedule heading","scheduleGroup":"schedule group","quantitySinceLastBillRaw":"exact printed decimal","agreementRateRaw":"exact printed decimal","amountAtAgreementRateSinceLastBill":number,"amountIncludingSpecialConditionSinceLastBill":number}]}
 
 Rules:
+- ${BILL_ITEM_COLUMN_GUIDE}
 - Include only rows with a nonzero current payable amount.
 - The whole bill's printed current Bill Amount is Rs ${expectedTotal.toFixed(2)}. Use it only to detect a wrong column; do not force or adjust any item amount.
 - quantitySinceLastBillRaw MUST come only from the column headed "Qty executed since last Bill". Do not use Original Agreement Qty, Qty up to last bill, or Total Qty up to date.
@@ -447,6 +520,11 @@ ${markdownPart}
     agreementRateRaw?: string;
     agreementAmount?: number;
   };
+  const correctionScore = (correction: ItemCorrection) => quantityAgreementConsistencyScore({
+    quantitySinceLastBillRaw: correction.quantityRaw,
+    agreementRateRaw: correction.agreementRateRaw,
+    amountAtAgreementRateSinceLastBill: correction.agreementAmount,
+  });
   const exactCorrections = new Map<string, ItemCorrection>();
   const correctionsByItemNo = new Map<string, ItemCorrection[]>();
   for (const part of parsedCorrections) {
@@ -458,9 +536,17 @@ ${markdownPart}
       const itemNo = String(correction?.itemNo || '').replace(/\s+/g, '').toUpperCase();
       if (!itemNo || amount === undefined || amount <= 0) continue;
       const itemCorrection = { amount, quantityRaw, agreementRateRaw, agreementAmount };
-      exactCorrections.set(correctionItemKey(correction), itemCorrection);
+      const exactKey = correctionItemKey(correction);
+      const existingExact = exactCorrections.get(exactKey);
+      if (!existingExact || correctionScore(itemCorrection) > correctionScore(existingExact)) {
+        exactCorrections.set(exactKey, itemCorrection);
+      }
       const existing = correctionsByItemNo.get(itemNo) || [];
-      if (!existing.some(value => value.amount === amount)) existing.push(itemCorrection);
+      const sameAmountIndex = existing.findIndex(value => value.amount === amount);
+      if (sameAmountIndex < 0) existing.push(itemCorrection);
+      else if (correctionScore(itemCorrection) > correctionScore(existing[sameAmountIndex])) {
+        existing[sameAmountIndex] = itemCorrection;
+      }
       correctionsByItemNo.set(itemNo, existing);
     }
   }
@@ -472,13 +558,14 @@ ${markdownPart}
     const itemNoCorrections = correctionsByItemNo.get(itemNo) || [];
     const correction = exactCorrection ?? (itemNoCorrections.length === 1 ? itemNoCorrections[0] : undefined);
     if (!correction) return item;
+    const currentColumns = selectCurrentQuantityColumns(item, {
+      quantitySinceLastBillRaw: correction.quantityRaw,
+      agreementRateRaw: correction.agreementRateRaw,
+      amountAtAgreementRateSinceLastBill: correction.agreementAmount,
+    });
     const correctedItem = {
       ...item,
-      quantitySinceLastBill: toFiniteNumber(correction.quantityRaw) ?? item.quantitySinceLastBill,
-      quantitySinceLastBillRaw: correction.quantityRaw ?? item.quantitySinceLastBillRaw,
-      agreementRate: toFiniteNumber(correction.agreementRateRaw) ?? item.agreementRate,
-      agreementRateRaw: correction.agreementRateRaw ?? item.agreementRateRaw,
-      amountAtAgreementRateSinceLastBill: correction.agreementAmount ?? item.amountAtAgreementRateSinceLastBill,
+      ...currentColumns,
       amountIncludingSpecialConditionSinceLastBill: correction.amount,
       amountSinceLastBill: correction.amount,
     };
@@ -526,6 +613,7 @@ Return JSON only:
 {"items":[{"itemNo":"visible item number","schedule":"schedule heading","scheduleGroup":"schedule group","quantitySinceLastBillRaw":"exact printed decimal","agreementRateRaw":"exact printed decimal","amountAtAgreementRateSinceLastBill":number,"amountIncludingSpecialConditionSinceLastBill":number}]}
 
 Rules:
+- ${BILL_ITEM_COLUMN_GUIDE}
 - Return the authoritative complete set of detailed rows having a nonzero value in the current "Qty executed since last Bill" or current "Amount including Special Condition" column.
 - First read the Schedule Summary at the end of the bill. For each schedule, use the middle "Amt including Special Condition" value as that schedule's current target. Ignore the first "Amt Upto last Bill" and third "Total upto date" values.
 - Extract current item rows only from schedules whose Schedule Summary current target is nonzero, and verify each schedule's detailed current amounts against its own target.
@@ -578,17 +666,12 @@ ${billMarkdown}
     if (originals.length !== 1) continue;
     const reconciledKey = `${scheduleCode(correction) || scheduleCode(originals[0])}|${itemNo}`;
     if (reconciledKeys.has(reconciledKey)) continue;
-    const quantityRaw = toPrintedDecimal(correction?.quantitySinceLastBillRaw);
-    const agreementRateRaw = toPrintedDecimal(correction?.agreementRateRaw);
+    const currentColumns = selectCurrentQuantityColumns(originals[0], correction);
     reconciled.push({
       ...originals[0],
       schedule: String(correction?.schedule || originals[0].schedule || '').trim(),
       scheduleGroup: String(correction?.scheduleGroup || originals[0].scheduleGroup || '').trim(),
-      quantitySinceLastBill: toFiniteNumber(quantityRaw) ?? originals[0].quantitySinceLastBill,
-      quantitySinceLastBillRaw: quantityRaw ?? originals[0].quantitySinceLastBillRaw,
-      agreementRate: toFiniteNumber(agreementRateRaw) ?? originals[0].agreementRate,
-      agreementRateRaw: agreementRateRaw ?? originals[0].agreementRateRaw,
-      amountAtAgreementRateSinceLastBill: toFiniteNumber(correction?.amountAtAgreementRateSinceLastBill),
+      ...currentColumns,
       amountIncludingSpecialConditionSinceLastBill: amount,
       amountSinceLastBill: amount,
     });
@@ -766,6 +849,7 @@ Return JSON only:
 }
 
 Rules:
+- ${BILL_ITEM_COLUMN_GUIDE}
 - Extract every payable work item from the current bill, not only cement items.
 - Extract Schedule Summary separately. Use only the current bill "Amount including Special Condition" column, never Amount Upto Last Bill or Total Upto Date. Do not extract Schedule Summary rows (such as Schedule A, Schedule B, or total rows) as items in the "items" array.
 - Extract the complete schedule heading, schedule group, chapter, and source book for every item.
@@ -818,7 +902,7 @@ Paired reference learned from a verified signed bill and its final PVC report:
       const partNumber = start + batchIndex + 1;
       const partPrompt = `${basePrompt}
 
-This is Markdown part ${partNumber} of ${markdownParts.length}. Extract metadata only when visible in this part. Extract only payable item rows whose item number and current values are readable; overlapping rows will be deduplicated by the server. Do not invent a row cut off at a part boundary.
+This is a page-aligned Markdown part ${partNumber} of ${markdownParts.length}. It may repeat the final page of the previous part so rows crossing a page boundary remain readable. Extract metadata only when visible in this part. Extract only payable item rows whose item number and current values are readable; overlapping rows will be deduplicated by the server. Do not invent a row cut off at a part boundary.
 
 SOURCE BILL MARKDOWN PART ${partNumber}:
 <bill_markdown>
@@ -916,13 +1000,15 @@ ${markdownPart}
     if (!(quantity > 0 && rate > 0 && agreementAmount > 0)) return false;
     return Math.abs((quantity * rate) - agreementAmount) > Math.max(0.1, agreementAmount * 0.000001);
   });
-  if (Math.abs(amountDifference) > 0.05 || hasColumnMismatch) {
+  const requiresMultiPageQuantityPass = markdownParts.length > 1;
+  if (Math.abs(amountDifference) > 0.05 || hasColumnMismatch || requiresMultiPageQuantityPass) {
     const reconciliationCandidates = filteredItems;
     console.warn('[bill-extraction] Re-reading special-condition item amounts', {
       itemAmountTotal,
       scheduleSummaryTotal,
       amountDifference,
       hasColumnMismatch,
+      requiresMultiPageQuantityPass,
     });
     filteredItems = await correctSpecialConditionAmounts(apiKey, markdownParts, filteredItems, scheduleSummaryTotal);
     itemAmountTotal = filteredItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
