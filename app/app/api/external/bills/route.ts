@@ -347,7 +347,18 @@ export async function POST(request: NextRequest) {
     
     // Get weighted components from classification entries or use defaults
     const { calculateWeightedComponents } = await import('@/lib/pvc-calculations');
-    const weightedComponents = await calculateWeightedComponents(classificationEntries);
+    
+    const hasDedicatedCement = cementAmount && parseFloat(String(cementAmount)) > 0;
+    const hasDedicatedSteel = 
+      (steelTmtBarsAmount && parseFloat(String(steelTmtBarsAmount)) > 0) ||
+      (steelAngleChannelAmount && parseFloat(String(steelAngleChannelAmount)) > 0) ||
+      (steelPlatesAmount && parseFloat(String(steelPlatesAmount)) > 0) ||
+      (steelOtherSectionsAmount && parseFloat(String(steelOtherSectionsAmount)) > 0);
+
+    const weightedComponents = await calculateWeightedComponents(classificationEntries, {
+      hasDedicatedSteel,
+      hasDedicatedCement
+    });
     
     // Calculate PVC
     const pvcResult = calculateClassificationBasedPvcWithComponents(

@@ -670,7 +670,11 @@ export async function calculateClassificationEntryPvc(
     amount: number;
     steelTypes?: string[];
   },
-  quarterlyAverages: QuarterlyAverage[]
+  quarterlyAverages: QuarterlyAverage[],
+  options?: {
+    hasDedicatedSteel?: boolean;
+    hasDedicatedCement?: boolean;
+  }
 ): Promise<{
   labourPvc: number;
   plantMachineryPvc: number;
@@ -723,6 +727,20 @@ export async function calculateClassificationEntryPvc(
     indexMap.set(qa.indexName, qa);
   });
   
+  // Get classification/subclassification code for dedicated check
+  const subClassCode = components.code ? String(components.code).toUpperCase() : '';
+  let steelPct = components.steel;
+  let cementPct = components.cement;
+
+  // Exclude pure steel supply (ends with B) if dedicated steel is handled separately
+  if (options?.hasDedicatedSteel && subClassCode.endsWith('B')) {
+    steelPct = 0;
+  }
+  // Exclude pure cement supply (ends with C) if dedicated cement is handled separately
+  if (options?.hasDedicatedCement && subClassCode.endsWith('C')) {
+    cementPct = 0;
+  }
+
   // Calculate each component PVC for this entry
   const labourAvg = indexMap.get('Labour');
   const labourPvc = (labourAvg && components.labour > 0) 
@@ -746,12 +764,12 @@ export async function calculateClassificationEntryPvc(
 
   // Cement PVC from classification percentages (e.g., 1C, 5C, 6C with 85% cement)
   const cementAvg = indexMap.get('RBI Cement');
-  const cementPvc = (cementAvg && components.cement > 0)
-    ? calculatePvcComponent(entry.amount, cementAvg.average, cementAvg.baseValue, components.cement)
+  const cementPvc = (cementAvg && cementPct > 0)
+    ? calculatePvcComponent(entry.amount, cementAvg.average, cementAvg.baseValue, cementPct)
     : 0;
   
   // For steel, use entry-specific steel types
-  const steelPvc = calculateSteelPvc(entry.amount, indexMap, components.steel, entry.steelTypes);
+  const steelPvc = calculateSteelPvc(entry.amount, indexMap, steelPct, entry.steelTypes);
   
   const explosivesAvg = indexMap.get('RBI Explosives');
   const explosivesPvc = (explosivesAvg && components.explosives > 0)
@@ -789,12 +807,18 @@ export async function calculateClassificationEntryPvc(
  * Calculate weighted average components from multiple classification entries
  * Returns the weighted component percentages based on the amount allocated to each classification
  */
-export async function calculateWeightedComponents(classificationEntries: Array<{
-  subClassificationId?: string;
-  classificationId?: string;
-  amount: number;
-  steelTypes?: string[];
-}>): Promise<{
+export async function calculateWeightedComponents(
+  classificationEntries: Array<{
+    subClassificationId?: string;
+    classificationId?: string;
+    amount: number;
+    steelTypes?: string[];
+  }>,
+  options?: {
+    hasDedicatedSteel?: boolean;
+    hasDedicatedCement?: boolean;
+  }
+): Promise<{
   fixed: number;
   labour: number;
   steel: number;
@@ -825,6 +849,7 @@ export async function calculateWeightedComponents(classificationEntries: Array<{
     if (entry.amount <= 0) continue;
 
     let components = null;
+    let subClassCode = '';
 
     // Try to find as SubClassification first
     if (entry.subClassificationId) {
@@ -833,6 +858,7 @@ export async function calculateWeightedComponents(classificationEntries: Array<{
       });
       if (subClass) {
         components = subClass;
+        subClassCode = subClass.code.toUpperCase();
       }
     }
 
@@ -843,15 +869,28 @@ export async function calculateWeightedComponents(classificationEntries: Array<{
       });
       if (classification) {
         components = classification;
+        subClassCode = classification.code.toUpperCase();
       }
     }
 
     if (components) {
+      let steelPct = components.steel;
+      let cementPct = components.cement;
+
+      // Exclude pure steel supply (ends with B) if dedicated steel is handled separately
+      if (options?.hasDedicatedSteel && subClassCode.endsWith('B')) {
+        steelPct = 0;
+      }
+      // Exclude pure cement supply (ends with C) if dedicated cement is handled separately
+      if (options?.hasDedicatedCement && subClassCode.endsWith('C')) {
+        cementPct = 0;
+      }
+
       // Weight each component by the entry amount
       totalFixed += (components.fixed / 100) * entry.amount;
       totalLabour += (components.labour / 100) * entry.amount;
-      totalSteel += (components.steel / 100) * entry.amount;
-      totalCement += (components.cement / 100) * entry.amount;
+      totalSteel += (steelPct / 100) * entry.amount;
+      totalCement += (cementPct / 100) * entry.amount;
       totalPlantMachinery += (components.plantMachinery / 100) * entry.amount;
       totalFuel += (components.fuel / 100) * entry.amount;
       totalOtherMaterials += (components.otherMaterials / 100) * entry.amount;
@@ -859,7 +898,7 @@ export async function calculateWeightedComponents(classificationEntries: Array<{
       totalAmount += entry.amount;
       
       // Collect steel types from this entry if steel component exists
-      if (components.steel > 0 && entry.steelTypes && Array.isArray(entry.steelTypes)) {
+      if (steelPct > 0 && entry.steelTypes && Array.isArray(entry.steelTypes)) {
         entry.steelTypes.forEach((type: string) => collectedSteelTypes.add(type));
       }
     }

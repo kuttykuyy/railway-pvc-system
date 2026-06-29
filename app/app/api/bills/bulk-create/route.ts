@@ -31,6 +31,7 @@ interface BillInput {
     itemNumber?: string;
     quantity?: number;
     agreementRate?: number;
+    steelTypes?: string[];
   }>;
   processingFee: number;
 }
@@ -229,7 +230,7 @@ export async function POST(request: NextRequest) {
 
       // Validate declared amount above, then preserve it for the bill total.
       const classificationTotal = billInput.classificationEntries.reduce(
-        (sum, entry) => sum + entry.amount,
+        (sum, entry) => sum + Number(entry.amount),
         0
       );
       const grossBillAmount = Number(billInput.grossBillAmount || billInput.billAmount || classificationTotal);
@@ -237,48 +238,6 @@ export async function POST(request: NextRequest) {
       // Generate PVC auto-number
       const sequenceNumber = String(maxSequence + i + 1).padStart(3, '0');
       const autoPvcNumber = `PVC/${contract.agreementNo}/${sequenceNumber}`;
-
-      // Create bill with classification entries
-      const bill = await prisma.bill.create({
-        data: {
-          contractId,
-          billNo: billInput.billNo.trim(),
-          grossBillAmount,
-          billAmount: grossBillAmount, // No non-schedule items for now
-          dateOfMeasurement: measurementDate,
-          quarter,
-          pvcNumber: autoPvcNumber, // Add PVC auto-number
-          zone: billInput.zone || null,
-          fuelPriceType: billInput.fuelPriceType || 'four_city_avg',
-          processingFee: processingFeePerBill,
-          isChargeable: true,
-          batchId, // Assign batch ID for grouping
-          batchName, // Assign batch name for display
-          // Include cement and steel amounts
-          cementAmount: billInput.cementAmount || 0,
-          steelTmtBarsAmount: billInput.steelTmtBarsAmount || 0,
-          steelAngleChannelAmount: billInput.steelAngleChannelAmount || 0,
-          steelPlatesAmount: billInput.steelPlatesAmount || 0,
-          steelOtherSectionsAmount: billInput.steelOtherSectionsAmount || 0,
-          classificationEntries: {
-            create: billInput.classificationEntries.map((entry) => ({
-              subClassificationId: entry.subClassificationId,
-              amount: entry.amount,
-              description: entry.description,
-              itemNumber: entry.itemNumber || null,
-              quantity: entry.quantity || null,
-              agreementRate: entry.agreementRate || null,
-            })),
-          },
-        },
-        include: {
-          classificationEntries: {
-            include: {
-              subClassification: true,
-            },
-          },
-        },
-      });
 
       // Get quarterly averages for PVC calculation
       // Use zone-based steel city prices instead of default Chennai rates
@@ -300,7 +259,13 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Calculate weighted components from all classification entries
+      // Calculate per-entry PVC calculations to match single-bill logic exactly
+      const { calculateClassificationEntryPvc } = await import('@/lib/pvc-calculations');
+      const { extractSteelTypesFromEntries } = await import('@/lib/steel-type-handler');
+      
+      const extractedSteelTypes = await extractSteelTypesFromEntries(billInput.classificationEntries);
+
+      const classificationEntriesData = [];
       let totalLabourPvc = 0;
       let totalPlantMachineryPvc = 0;
       let totalFuelPowerPvc = 0;
@@ -309,24 +274,102 @@ export async function POST(request: NextRequest) {
       let totalExplosivesPvc = 0;
       let totalSteelPvc = 0;
 
-      for (const entry of bill.classificationEntries) {
-        if (!entry.subClassification) continue;
+      for (const entry of billInput.classificationEntries) {
+        let hasSteelComponent = false;
+        if (entry.subClassificationId) {
+          const subClass = await prisma.subClassification.findUnique({
+            where: { id: entry.subClassificationId },
+            select: { steel: true }
+          });
+          hasSteelComponent = (subClass?.steel ?? 0) > 0;
+        }
 
-        // Use the subClassification's component percentages
-        const pvcResult = calculateClassificationBasedPvcWithComponents(
-          entry.amount,
+        const entrySteelTypes = entry.steelTypes && entry.steelTypes.length > 0 
+          ? entry.steelTypes 
+          : (hasSteelComponent && extractedSteelTypes.length > 0 ? extractedSteelTypes : []);
+
+        const hasDedicatedCement = billInput.cementAmount && Number(billInput.cementAmount) > 0;
+        const hasDedicatedSteel = 
+          (billInput.steelTmtBarsAmount && Number(billInput.steelTmtBarsAmount) > 0) ||
+          (billInput.steelAngleChannelAmount && Number(billInput.steelAngleChannelAmount) > 0) ||
+          (billInput.steelPlatesAmount && Number(billInput.steelPlatesAmount) > 0) ||
+          (billInput.steelOtherSectionsAmount && Number(billInput.steelOtherSectionsAmount) > 0);
+
+        const entryPvc = await calculateClassificationEntryPvc(
+          {
+            subClassificationId: entry.subClassificationId,
+            amount: Number(entry.amount),
+            steelTypes: entrySteelTypes
+          },
           quarterlyAverages,
-          entry.subClassification
+          {
+            hasDedicatedSteel,
+            hasDedicatedCement
+          }
         );
 
-        totalLabourPvc += pvcResult.labourPvc;
-        totalPlantMachineryPvc += pvcResult.plantMachineryPvc;
-        totalFuelPowerPvc += pvcResult.fuelPowerPvc;
-        totalOtherMaterialsPvc += pvcResult.otherMaterialsPvc;
-        totalCementPvc += pvcResult.cementPvc;
-        totalExplosivesPvc += pvcResult.explosivesPvc;
-        totalSteelPvc += pvcResult.steelPvc;
+        totalLabourPvc += entryPvc.labourPvc;
+        totalPlantMachineryPvc += entryPvc.plantMachineryPvc;
+        totalFuelPowerPvc += entryPvc.fuelPowerPvc;
+        totalOtherMaterialsPvc += entryPvc.otherMaterialsPvc;
+        totalCementPvc += entryPvc.cementPvc;
+        totalSteelPvc += entryPvc.steelPvc;
+        totalExplosivesPvc += entryPvc.explosivesPvc;
+
+        classificationEntriesData.push({
+          subClassificationId: entry.subClassificationId,
+          amount: Number(entry.amount),
+          description: entry.description || '',
+          itemNumber: entry.itemNumber || null,
+          quantity: entry.quantity || null,
+          agreementRate: entry.agreementRate || null,
+          steelTypes: entrySteelTypes,
+          labourPvc: entryPvc.labourPvc,
+          plantMachineryPvc: entryPvc.plantMachineryPvc,
+          fuelPowerPvc: entryPvc.fuelPowerPvc,
+          otherMaterialsPvc: entryPvc.otherMaterialsPvc,
+          cementPvc: entryPvc.cementPvc,
+          steelPvc: entryPvc.steelPvc,
+          explosivesPvc: entryPvc.explosivesPvc,
+          totalPvc: entryPvc.totalPvc
+        });
       }
+
+      // Create bill with classification entries including their calculated PVC values
+      const bill = await prisma.bill.create({
+        data: {
+          contractId,
+          billNo: billInput.billNo.trim(),
+          grossBillAmount,
+          billAmount: grossBillAmount, // No non-schedule items for now
+          dateOfMeasurement: measurementDate,
+          quarter,
+          pvcNumber: autoPvcNumber, // Add PVC auto-number
+          zone: billInput.zone || null,
+          fuelPriceType: billInput.fuelPriceType || 'four_city_avg',
+          processingFee: processingFeePerBill,
+          isChargeable: true,
+          batchId, // Assign batch ID for grouping
+          batchName, // Assign batch name for display
+          // Include cement and steel amounts
+          cementAmount: billInput.cementAmount || 0,
+          steelTmtBarsAmount: billInput.steelTmtBarsAmount || 0,
+          steelAngleChannelAmount: billInput.steelAngleChannelAmount || 0,
+          steelPlatesAmount: billInput.steelPlatesAmount || 0,
+          steelOtherSectionsAmount: billInput.steelOtherSectionsAmount || 0,
+          steelTypes: extractedSteelTypes,
+          classificationEntries: {
+            create: classificationEntriesData
+          },
+        },
+        include: {
+          classificationEntries: {
+            include: {
+              subClassification: true,
+            },
+          },
+        },
+      });
 
       // Calculate dedicated cement and steel PVC (if provided)
       let dedicatedCementPvc = 0;

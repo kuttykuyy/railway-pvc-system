@@ -166,8 +166,18 @@ export async function POST(
         amount: entry.amount
       }));
       
+      const hasDedicatedCement = bill.cementAmount && Number(bill.cementAmount) > 0;
+      const hasDedicatedSteel = 
+        (bill.steelTmtBarsAmount && Number(bill.steelTmtBarsAmount) > 0) ||
+        (bill.steelAngleChannelAmount && Number(bill.steelAngleChannelAmount) > 0) ||
+        (bill.steelPlatesAmount && Number(bill.steelPlatesAmount) > 0) ||
+        (bill.steelOtherSectionsAmount && Number(bill.steelOtherSectionsAmount) > 0);
+
       // Calculate weighted components based on all classification entries
-      const weightedComponents = await calculateWeightedComponents(entriesForCalculation);
+      const weightedComponents = await calculateWeightedComponents(entriesForCalculation, {
+        hasDedicatedSteel,
+        hasDedicatedCement
+      });
       
       console.log('📊 Weighted Components:');
       console.log(`   Total Amount: ₹${weightedComponents.totalAmount.toLocaleString()}`);

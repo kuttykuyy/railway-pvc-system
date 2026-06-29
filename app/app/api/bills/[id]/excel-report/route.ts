@@ -318,13 +318,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       currentMonth.setMonth(currentMonth.getMonth() + 3);
     }
 
+    const hasDedicatedCement = bill.cementAmount && Number(bill.cementAmount) > 0;
+    const hasDedicatedSteel = 
+      (bill.steelTmtBarsAmount && Number(bill.steelTmtBarsAmount) > 0) ||
+      (bill.steelAngleChannelAmount && Number(bill.steelAngleChannelAmount) > 0) ||
+      (bill.steelPlatesAmount && Number(bill.steelPlatesAmount) > 0) ||
+      (bill.steelOtherSectionsAmount && Number(bill.steelOtherSectionsAmount) > 0);
+
     // Get weighted components
     const weightedComponents = await calculateWeightedComponents(
       (bill.classificationEntries || []).map(entry => ({
         subClassificationId: entry.subClassificationId || undefined,
         classificationId: entry.classificationId || undefined,
         amount: entry.amount
-      }))
+      })),
+      {
+        hasDedicatedSteel,
+        hasDedicatedCement
+      }
     );
 
     // Create workbook

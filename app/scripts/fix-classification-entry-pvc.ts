@@ -81,6 +81,13 @@ async function fixClassificationEntryPvc() {
           console.log(`      Amount: ₹${entry.amount.toLocaleString()}`);
           console.log(`      Entry Steel Types: ${JSON.stringify(entry.steelTypes)}`);
 
+          const hasDedicatedCement = bill.cementAmount && Number(bill.cementAmount) > 0;
+          const hasDedicatedSteel = 
+            (bill.steelTmtBarsAmount && Number(bill.steelTmtBarsAmount) > 0) ||
+            (bill.steelAngleChannelAmount && Number(bill.steelAngleChannelAmount) > 0) ||
+            (bill.steelPlatesAmount && Number(bill.steelPlatesAmount) > 0) ||
+            (bill.steelOtherSectionsAmount && Number(bill.steelOtherSectionsAmount) > 0);
+
           // Calculate PVC
           const entryPvc = await calculateClassificationEntryPvc(
             {
@@ -89,7 +96,11 @@ async function fixClassificationEntryPvc() {
               amount: entry.amount,
               steelTypes: (entry.steelTypes as string[]) || []
             },
-            quarterlyAverages
+            quarterlyAverages,
+            {
+              hasDedicatedSteel,
+              hasDedicatedCement
+            }
           );
 
           console.log(`      New Labour PVC: ₹${entryPvc.labourPvc.toFixed(2)}`);

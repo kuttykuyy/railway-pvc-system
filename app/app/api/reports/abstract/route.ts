@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
@@ -115,6 +115,13 @@ export async function GET(request: NextRequest) {
           'auto' // Use auto as default calculation method
         );
 
+        const hasDedicatedCement = bill.cementAmount && Number(bill.cementAmount) > 0;
+        const hasDedicatedSteel = 
+          (bill.steelTmtBarsAmount && Number(bill.steelTmtBarsAmount) > 0) ||
+          (bill.steelAngleChannelAmount && Number(bill.steelAngleChannelAmount) > 0) ||
+          (bill.steelPlatesAmount && Number(bill.steelPlatesAmount) > 0) ||
+          (bill.steelOtherSectionsAmount && Number(bill.steelOtherSectionsAmount) > 0);
+
         // Recalculate and update each entry
         for (const entry of entriesNeedingFix) {
           const entryPvc = await calculateClassificationEntryPvc(
@@ -124,7 +131,11 @@ export async function GET(request: NextRequest) {
               amount: entry.amount,
               steelTypes: (entry.steelTypes as string[]) || []
             },
-            quarterlyAverages
+            quarterlyAverages,
+            {
+              hasDedicatedSteel,
+              hasDedicatedCement
+            }
           );
 
           // Update the entry in the database

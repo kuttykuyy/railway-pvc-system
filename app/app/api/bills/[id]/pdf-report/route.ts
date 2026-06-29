@@ -1043,13 +1043,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     let displayClassificationText = '';
     
     if (bill.classificationEntries && bill.classificationEntries.length > 0) {
+      const hasDedicatedCement = bill.cementAmount && Number(bill.cementAmount) > 0;
+      const hasDedicatedSteel = 
+        (bill.steelTmtBarsAmount && Number(bill.steelTmtBarsAmount) > 0) ||
+        (bill.steelAngleChannelAmount && Number(bill.steelAngleChannelAmount) > 0) ||
+        (bill.steelPlatesAmount && Number(bill.steelPlatesAmount) > 0) ||
+        (bill.steelOtherSectionsAmount && Number(bill.steelOtherSectionsAmount) > 0);
+
       // New approach: use classification entries
       const weightedComponents = await calculateWeightedComponents(
         bill.classificationEntries.map((entry: any) => ({
           subClassificationId: entry.subClassificationId,
           classificationId: entry.classificationId,
           amount: entry.amount
-        }))
+        })),
+        {
+          hasDedicatedSteel,
+          hasDedicatedCement
+        }
       );
       
       displayComponents = weightedComponents;

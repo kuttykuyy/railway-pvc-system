@@ -525,6 +525,13 @@ export async function POST(request: NextRequest) {
             ? entry.steelTypes 
             : (hasSteelComponent && extractedSteelTypes.length > 0 ? extractedSteelTypes : []);
           
+          const hasDedicatedCement = cementAmount && parseFloat(cementAmount) > 0;
+          const hasDedicatedSteel = 
+            (steelTmtBarsAmount && parseFloat(steelTmtBarsAmount) > 0) ||
+            (steelAngleChannelAmount && parseFloat(steelAngleChannelAmount) > 0) ||
+            (steelPlatesAmount && parseFloat(steelPlatesAmount) > 0) ||
+            (steelOtherSectionsAmount && parseFloat(steelOtherSectionsAmount) > 0);
+
           // Calculate PVC for this specific entry
           const entryPvc = await calculateClassificationEntryPvc(
             {
@@ -533,7 +540,11 @@ export async function POST(request: NextRequest) {
               amount: parseFloat(entry.amount),
               steelTypes: entrySteelTypes
             },
-            quarterlyAverages
+            quarterlyAverages,
+            {
+              hasDedicatedSteel,
+              hasDedicatedCement
+            }
           );
           
           // Create entry with PVC breakdown
