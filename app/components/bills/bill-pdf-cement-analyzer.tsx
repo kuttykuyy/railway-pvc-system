@@ -1,7 +1,7 @@
 'use client';
 
 import { ChangeEvent, useRef, useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, FileText, Loader2, Upload, Lock, Unlock, Cpu, Lightbulb } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Cpu, FileText, HardDrive, Lightbulb, Loader2, Lock, RotateCcw, Save, Unlock, Upload } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { Badge } from '@/components/ui/badge';
@@ -95,6 +95,32 @@ interface BillPdfCementAnalyzerProps {
   onApplyBillDetails?: (data: CementAnalysisData) => void;
 }
 
+interface CementRateSettings {
+  escalation: string;
+  bidRate: string;
+  rebate: string;
+}
+
+interface SavedCementRateSettings {
+  baseRate: number;
+  schedules: Record<string, CementRateSettings>;
+  savedAt: string;
+}
+
+const DEFAULT_DSR_BASE_RATE = 688.45;
+
+function formatFileSize(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function formatElapsed(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
 function formatNumber(value: number | null | undefined, fractionDigits = 3) {
   if (value === null || value === undefined || !Number.isFinite(value)) return '-';
   return value.toLocaleString('en-IN', {
@@ -119,6 +145,7 @@ export function BillPdfCementAnalyzer({
   onApplyBillDetails,
 }: BillPdfCementAnalyzerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const analysisStartedAtRef = useRef<number | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<CementAnalysisData | null>(null);
   const [fileName, setFileName] = useState('');
@@ -129,7 +156,11 @@ export function BillPdfCementAnalyzer({
   const [unlockCost, setUnlockCost] = useState(50);
 
   const [loadingStep, setLoadingStep] = useState(0);
-  const [progressPercent, setProgressPercent] = useState(0);
+  const [uploadPercent, setUploadPercent] = useState(0);
+  const [uploadedBytes, setUploadedBytes] = useState(0);
+  const [fileSize, setFileSize] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [processingStartedAt, setProcessingStartedAt] = useState<number | null>(null);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
 
   // Milestones list for interactive loading
@@ -153,42 +184,42 @@ export function BillPdfCementAnalyzer({
     'Did you know? The platform automatically highlights discrepancies between extracted item totals and schedule summaries.'
   ];
 
-  // Interval to advance progress percent smoothly
+  // The upload percentage is measured by XHR. Later stages are time-based indicators
+  // because the analysis endpoint returns one response after all server work completes.
   useEffect(() => {
     if (!isAnalyzing) {
       setLoadingStep(0);
-      setProgressPercent(0);
+      setUploadPercent(0);
+      setElapsedSeconds(0);
+      setProcessingStartedAt(null);
+      analysisStartedAtRef.current = null;
       return;
     }
 
-    setLoadingStep(0);
-    setProgressPercent(5);
-
-    const progressInterval = setInterval(() => {
-      setProgressPercent((prev) => {
-        if (prev >= 95) return 95;
-        const increment = prev < 50 ? 5 : prev < 80 ? 2 : 1;
-        return prev + increment;
-      });
-    }, 400);
-
-    const stepInterval = setInterval(() => {
-      setLoadingStep((prev) => {
-        if (prev >= loadingSteps.length - 1) return loadingSteps.length - 1;
-        return prev + 1;
-      });
-    }, 3500);
+    const startedAt = analysisStartedAtRef.current || Date.now();
+    const activityInterval = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+      if (processingStartedAt) {
+        const processingSeconds = Math.floor((Date.now() - processingStartedAt) / 1000);
+        const estimatedStep = processingSeconds < 4 ? 1
+          : processingSeconds < 9 ? 2
+            : processingSeconds < 15 ? 3
+              : processingSeconds < 22 ? 4
+                : processingSeconds < 30 ? 5
+                  : 6;
+        setLoadingStep(estimatedStep);
+      }
+    }, 500);
 
     const tipInterval = setInterval(() => {
       setCurrentTipIndex((prev) => (prev + 1) % pvcTips.length);
     }, 5000);
 
     return () => {
-      clearInterval(progressInterval);
-      clearInterval(stepInterval);
+      clearInterval(activityInterval);
       clearInterval(tipInterval);
     };
-  }, [isAnalyzing]);
+  }, [isAnalyzing, processingStartedAt]);
 
   const handleUnlock = async () => {
     if (!extractionId) return;
@@ -228,12 +259,61 @@ export function BillPdfCementAnalyzer({
     }
   };
 
-  const [dsrBaseRate, setDsrBaseRate] = useState<number>(688.45);
-  const [scheduleSettings, setScheduleSettings] = useState<Record<string, {
-    escalation: string;
-    bidRate: string;
-    rebate: string;
-  }>>({});
+  const [dsrBaseRate, setDsrBaseRate] = useState<number>(DEFAULT_DSR_BASE_RATE);
+  const [scheduleSettings, setScheduleSettings] = useState<Record<string, CementRateSettings>>({});
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settingsSavedAt, setSettingsSavedAt] = useState<string | null>(null);
+  const settingsStorageKey = `irpvc:cement-rate-settings:${contractId || 'default'}`;
+
+  useEffect(() => {
+    setSettingsLoaded(false);
+    try {
+      const savedValue = window.localStorage.getItem(settingsStorageKey);
+      if (savedValue) {
+        const saved = JSON.parse(savedValue) as SavedCementRateSettings;
+        setDsrBaseRate(Number.isFinite(saved.baseRate) ? saved.baseRate : DEFAULT_DSR_BASE_RATE);
+        setScheduleSettings(saved.schedules && typeof saved.schedules === 'object' ? saved.schedules : {});
+        setSettingsSavedAt(saved.savedAt || null);
+      } else {
+        setDsrBaseRate(DEFAULT_DSR_BASE_RATE);
+        setScheduleSettings({});
+        setSettingsSavedAt(null);
+      }
+    } catch {
+      setDsrBaseRate(DEFAULT_DSR_BASE_RATE);
+      setScheduleSettings({});
+      setSettingsSavedAt(null);
+    } finally {
+      setSettingsLoaded(true);
+    }
+  }, [settingsStorageKey]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    const timeout = window.setTimeout(() => {
+      const savedAt = new Date().toISOString();
+      const value: SavedCementRateSettings = {
+        baseRate: dsrBaseRate,
+        schedules: scheduleSettings,
+        savedAt,
+      };
+      try {
+        window.localStorage.setItem(settingsStorageKey, JSON.stringify(value));
+        setSettingsSavedAt(savedAt);
+      } catch {
+        setSettingsSavedAt(null);
+      }
+    }, 500);
+    return () => window.clearTimeout(timeout);
+  }, [dsrBaseRate, scheduleSettings, settingsLoaded, settingsStorageKey]);
+
+  const resetSavedRateSettings = () => {
+    window.localStorage.removeItem(settingsStorageKey);
+    setDsrBaseRate(DEFAULT_DSR_BASE_RATE);
+    setScheduleSettings({});
+    setSettingsSavedAt(null);
+    toast.success('Saved cement rate settings reset.');
+  };
 
   // Helper to extract unique schedules that are cement affected
   const getUniqueCementSchedules = (res: CementAnalysisData | null) => {
@@ -376,8 +456,14 @@ export function BillPdfCementAnalyzer({
     }
 
     try {
+      analysisStartedAtRef.current = Date.now();
       setIsAnalyzing(true);
       setFileName(file.name);
+      setFileSize(file.size);
+      setUploadedBytes(0);
+      setUploadPercent(0);
+      setLoadingStep(0);
+      setProcessingStartedAt(null);
 
       const formData = new FormData();
       formData.append('file', file);
@@ -386,13 +472,32 @@ export function BillPdfCementAnalyzer({
         ? `/api/bills/cement-analysis?contractId=${encodeURIComponent(contractId)}`
         : '/api/bills/cement-analysis';
 
-      const response = await fetch(url, {
-        method: 'POST',
-        body: formData,
+      const { status, json } = await new Promise<{ status: number; json: any }>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open('POST', url);
+        request.upload.onprogress = (progressEvent) => {
+          if (!progressEvent.lengthComputable) return;
+          setUploadedBytes(progressEvent.loaded);
+          setUploadPercent(Math.round((progressEvent.loaded / progressEvent.total) * 100));
+        };
+        request.upload.onload = () => {
+          setUploadedBytes(file.size);
+          setUploadPercent(100);
+          setLoadingStep(1);
+          setProcessingStartedAt(Date.now());
+        };
+        request.onerror = () => reject(new Error('Network error while uploading the bill PDF.'));
+        request.onload = () => {
+          try {
+            resolve({ status: request.status, json: JSON.parse(request.responseText) });
+          } catch {
+            reject(new Error('The analysis server returned an invalid response.'));
+          }
+        };
+        request.send(formData);
       });
 
-      const json = await response.json();
-      if (!response.ok) {
+      if (status < 200 || status >= 300) {
         throw new Error(json.error || 'Failed to analyze bill PDF');
       }
 
@@ -437,30 +542,37 @@ export function BillPdfCementAnalyzer({
       </CardHeader>
       <CardContent className={compact ? 'p-4 pt-0 space-y-3' : 'p-5 pt-0 space-y-4'}>
         {isAnalyzing ? (
-          <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-5 shadow-sm">
+          <div className="rounded-md border border-slate-200 bg-white p-5 space-y-5 shadow-sm">
             {/* Top title and scanning bar animation */}
             <div className="flex items-center justify-between border-b pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="rounded-lg bg-blue-50 p-2 text-blue-600 animate-pulse">
+                <div className="rounded-md bg-blue-50 p-2 text-blue-600 animate-pulse">
                   <Cpu className="h-5 w-5 animate-spin" style={{ animationDuration: '4s' }} />
                 </div>
                 <div>
                   <h4 className="text-sm font-semibold text-slate-800">Processing Document</h4>
-                  <p className="text-[11px] text-slate-500">This usually takes 15-25 seconds depending on file length</p>
+                  <p className="text-[11px] text-slate-500">
+                    {uploadPercent < 100 ? `Uploading ${formatFileSize(uploadedBytes)} of ${formatFileSize(fileSize)}` : 'AI analysis is running on the uploaded document'}
+                  </p>
                 </div>
               </div>
-              <Badge className="bg-blue-100 text-blue-700 font-bold hover:bg-blue-100 border-none px-2.5 py-1">
-                {progressPercent}%
+              <Badge className="gap-1 bg-blue-100 text-blue-700 font-bold hover:bg-blue-100 border-none px-2.5 py-1">
+                <Clock3 className="h-3 w-3" />
+                {formatElapsed(elapsedSeconds)}
               </Badge>
             </div>
 
-            {/* Premium Progress Bar */}
-            <div className="space-y-1">
+            <div className="space-y-2">
               <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-600 transition-all duration-300 ease-out"
-                  style={{ width: `${progressPercent}%` }}
+                  className={`h-full rounded-full bg-blue-600 transition-all duration-300 ${uploadPercent === 100 ? 'animate-pulse' : ''}`}
+                  style={{ width: uploadPercent < 100 ? `${uploadPercent}%` : '35%' }}
                 />
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                <span className="inline-flex items-center gap-1"><FileText className="h-3 w-3" />{fileName}</span>
+                <span className="inline-flex items-center gap-1"><HardDrive className="h-3 w-3" />{formatFileSize(fileSize)}</span>
+                <span>{uploadPercent < 100 ? `${uploadPercent}% uploaded` : 'Upload complete; processing stage is a live estimate'}</span>
               </div>
             </div>
 
@@ -492,8 +604,8 @@ export function BillPdfCementAnalyzer({
             </div>
 
             {/* Interactive Rotating Tips Box */}
-            <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-3.5 flex items-start gap-3 transition-all duration-500">
-              <div className="rounded-lg bg-amber-100 p-2 text-amber-700 shrink-0">
+            <div className="rounded-md border border-amber-100 bg-amber-50/40 p-3.5 flex items-start gap-3 transition-all duration-500">
+              <div className="rounded-md bg-amber-100 p-2 text-amber-700 shrink-0">
                 <Lightbulb className="h-4 w-4 animate-bounce" style={{ animationDuration: '3s' }} />
               </div>
               <div className="space-y-0.5">
@@ -605,9 +717,28 @@ export function BillPdfCementAnalyzer({
 
                 {result.summary.cementQuantity > 0 && (
                   <div className="rounded-md border border-slate-200 bg-slate-50/50 p-3 text-xs space-y-3">
-                    <div className="font-semibold text-slate-800 flex items-center gap-1.5">
-                      <FileText className="h-4 w-4 text-violet-600" />
-                      DSR 5.35 Cement Rate Calculator (No direct supply rate fallback)
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                        <FileText className="h-4 w-4 text-violet-600" />
+                        DSR 5.35 Cement Rate Calculator (No direct supply rate fallback)
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-emerald-700">
+                        <span className="inline-flex items-center gap-1">
+                          <Save className="h-3 w-3" />
+                          {settingsSavedAt ? 'Saved for next bill' : 'Auto-save enabled'}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={resetSavedRateSettings}
+                          className="h-7 px-2 text-[10px] text-slate-500"
+                          title="Reset saved cement rate settings"
+                        >
+                          <RotateCcw className="mr-1 h-3 w-3" />
+                          Reset
+                        </Button>
+                      </div>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
                       If there is no direct cement supply item in this contract, the cement rate is derived from DSR 2021 item 5.35 (base Rs. 688.45/quintal) adjusted for contract escalation, bid rate, and rebate.
