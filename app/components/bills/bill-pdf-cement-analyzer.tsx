@@ -162,6 +162,8 @@ export function BillPdfCementAnalyzer({
   const [fileSize, setFileSize] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [processingStartedAt, setProcessingStartedAt] = useState<number | null>(null);
+  const [extractionPartsCompleted, setExtractionPartsCompleted] = useState(0);
+  const [extractionPartCount, setExtractionPartCount] = useState(0);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
 
   // Milestones list for interactive loading
@@ -193,6 +195,8 @@ export function BillPdfCementAnalyzer({
       setUploadPercent(0);
       setElapsedSeconds(0);
       setProcessingStartedAt(null);
+      setExtractionPartsCompleted(0);
+      setExtractionPartCount(0);
       analysisStartedAtRef.current = null;
       return;
     }
@@ -200,7 +204,7 @@ export function BillPdfCementAnalyzer({
     const startedAt = analysisStartedAtRef.current || Date.now();
     const activityInterval = setInterval(() => {
       setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
-      if (processingStartedAt) {
+      if (processingStartedAt && extractionPartCount === 0) {
         const processingSeconds = Math.floor((Date.now() - processingStartedAt) / 1000);
         const estimatedStep = processingSeconds < 4 ? 1
           : processingSeconds < 9 ? 2
@@ -220,7 +224,7 @@ export function BillPdfCementAnalyzer({
       clearInterval(activityInterval);
       clearInterval(tipInterval);
     };
-  }, [isAnalyzing, processingStartedAt]);
+  }, [extractionPartCount, isAnalyzing, processingStartedAt]);
 
   const handleUnlock = async () => {
     if (!extractionId) return;
@@ -461,17 +465,21 @@ export function BillPdfCementAnalyzer({
       setUploadPercent(0);
       setLoadingStep(0);
       setProcessingStartedAt(null);
+      setExtractionPartsCompleted(0);
+      setExtractionPartCount(0);
 
       const formData = new FormData();
       formData.append('file', file);
 
-      const url = contractId 
-        ? `/api/bills/cement-analysis?contractId=${encodeURIComponent(contractId)}`
-        : '/api/bills/cement-analysis';
+      const endpoint = (stage: 'convert' | 'part' | 'finalize') => {
+        const params = new URLSearchParams({ stage });
+        if (contractId) params.set('contractId', contractId);
+        return `/api/bills/cement-analysis?${params.toString()}`;
+      };
 
-      const { status, json } = await new Promise<{ status: number; json: any }>((resolve, reject) => {
+      const conversion = await new Promise<{ status: number; json: any }>((resolve, reject) => {
         const request = new XMLHttpRequest();
-        request.open('POST', url);
+        request.open('POST', endpoint('convert'));
         request.upload.onprogress = (progressEvent) => {
           if (!progressEvent.lengthComputable) return;
           setUploadedBytes(progressEvent.loaded);
@@ -501,6 +509,63 @@ export function BillPdfCementAnalyzer({
         };
         request.send(formData);
       });
+
+      if (conversion.status < 200 || conversion.status >= 300) {
+        throw new Error(conversion.json.error || 'Failed to convert bill PDF');
+      }
+
+      const markdownParts = Array.isArray(conversion.json.markdownParts)
+        ? conversion.json.markdownParts.filter((part: unknown): part is string => typeof part === 'string')
+        : [];
+      if (!markdownParts.length) throw new Error('No readable bill pages were found.');
+
+      setExtractionPartCount(markdownParts.length);
+      setLoadingStep(2);
+      const parsedParts = new Array<any>(markdownParts.length);
+      let nextPartIndex = 0;
+      let completedParts = 0;
+
+      const extractNextPart = async () => {
+        while (nextPartIndex < markdownParts.length) {
+          const index = nextPartIndex;
+          nextPartIndex += 1;
+          let response: Response | null = null;
+          let json: any = null;
+          for (let attempt = 1; attempt <= 2; attempt += 1) {
+            response = await fetch(endpoint('part'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                markdownPart: markdownParts[index],
+                partNumber: index + 1,
+                partCount: markdownParts.length,
+              }),
+            });
+            json = await response.json().catch(() => ({ error: 'The page extraction server returned an invalid response.' }));
+            if (response.ok || response.status < 500 || attempt === 2) break;
+          }
+          if (!response?.ok) {
+            throw new Error(json?.error || `Failed to extract bill page ${index + 1}.`);
+          }
+          parsedParts[index] = json.data;
+          completedParts += 1;
+          setExtractionPartsCompleted(completedParts);
+          setLoadingStep(completedParts === markdownParts.length ? 6 : Math.min(5, 2 + Math.floor((completedParts / markdownParts.length) * 4)));
+        }
+      };
+
+      await Promise.all(
+        Array.from({ length: Math.min(6, markdownParts.length) }, () => extractNextPart()),
+      );
+
+      const finalResponse = await fetch(endpoint('finalize'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parsedParts, markdownParts }),
+      });
+      const finalJson = await finalResponse.json().catch(() => ({ error: 'The final extraction response was invalid.' }));
+      const status = finalResponse.status;
+      const json = finalJson;
 
       if (status < 200 || status >= 300) {
         throw new Error(json.error || 'Failed to analyze bill PDF');
@@ -575,7 +640,11 @@ export function BillPdfCementAnalyzer({
                 <div>
                   <h4 className="text-sm font-semibold text-slate-800">Processing Document</h4>
                   <p className="text-[11px] text-slate-500">
-                    {uploadPercent < 100 ? `Uploading ${formatFileSize(uploadedBytes)} of ${formatFileSize(fileSize)}` : 'AI analysis is running on the uploaded document'}
+                    {uploadPercent < 100
+                      ? `Uploading ${formatFileSize(uploadedBytes)} of ${formatFileSize(fileSize)}`
+                      : extractionPartCount > 0
+                        ? `Extracted ${extractionPartsCompleted} of ${extractionPartCount} bill pages`
+                        : 'Converting the uploaded PDF into structured pages'}
                   </p>
                 </div>
               </div>
@@ -589,13 +658,25 @@ export function BillPdfCementAnalyzer({
               <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
                 <div
                   className={`h-full rounded-full bg-blue-600 transition-all duration-300 ${uploadPercent === 100 ? 'animate-pulse' : ''}`}
-                  style={{ width: uploadPercent < 100 ? `${uploadPercent}%` : '35%' }}
+                  style={{
+                    width: uploadPercent < 100
+                      ? `${uploadPercent}%`
+                      : extractionPartCount > 0
+                        ? `${Math.max(5, (extractionPartsCompleted / extractionPartCount) * 100)}%`
+                        : '12%',
+                  }}
                 />
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
                 <span className="inline-flex items-center gap-1"><FileText className="h-3 w-3" />{fileName}</span>
                 <span className="inline-flex items-center gap-1"><HardDrive className="h-3 w-3" />{formatFileSize(fileSize)}</span>
-                <span>{uploadPercent < 100 ? `${uploadPercent}% uploaded` : 'Upload complete; processing stage is a live estimate'}</span>
+                <span>
+                  {uploadPercent < 100
+                    ? `${uploadPercent}% uploaded`
+                    : extractionPartCount > 0
+                      ? `${Math.round((extractionPartsCompleted / extractionPartCount) * 100)}% of pages extracted`
+                      : 'Upload complete; preparing pages'}
+                </span>
               </div>
             </div>
 
