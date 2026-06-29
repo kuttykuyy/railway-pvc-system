@@ -15,6 +15,7 @@ import {
   summarizeCementCalculation,
 } from '@/lib/dsr-cement-calculation';
 import { inferMainClassification } from '@/lib/work-classification';
+import { parseIrepsBillMarkdown } from '@/lib/ireps-bill-parser';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -196,6 +197,7 @@ interface ExtractedBillDetails {
   itemAmountTotal?: number;
   amountDifference?: number;
   amountsReconciled?: boolean;
+  warnings?: string[];
   items: ExtractedBillItem[];
 }
 
@@ -1209,7 +1211,31 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      billDetails = await extractBillDetailsWithAi(file, request.nextUrl.origin, contractId);
+      if (stage === 'deterministic') {
+        const billMarkdown = await convertPdfToMarkdown(file, request.nextUrl.origin);
+        const parsed = parseIrepsBillMarkdown(billMarkdown);
+        let contractDescription = '';
+        if (contractId) {
+          const contract = await prisma.contract.findUnique({
+            where: { id: contractId },
+            select: { workDescription: true },
+          });
+          contractDescription = contract?.workDescription || '';
+        }
+        const workDescription = contractDescription || parsed.workDescription;
+        billDetails = {
+          ...parsed,
+          workDescription,
+          classificationGroupCode: inferMainClassification(workDescription).code,
+          items: parsed.items
+            .map(normalizeExtractedItem)
+            .map(item => item.itemNo?.startsWith('REVIEW-')
+              ? { ...item, suggestedClassificationCode: '', suggestedClassificationReason: item.reason }
+              : applyDeterministicClassification(item, workDescription)),
+        };
+      } else {
+        billDetails = await extractBillDetailsWithAi(file, request.nextUrl.origin, contractId);
+      }
     }
 
     const extractedItems = billDetails.items;
@@ -1306,7 +1332,7 @@ export async function POST(request: NextRequest) {
       hasCementAmount: directCementSupplyAmount > 0 || coefficientSummary.hasCementAmount,
     };
 
-    const warnings: string[] = [];
+    const warnings: string[] = [...(billDetails.warnings || [])];
     if (billDetails && !billDetails.amountsReconciled) {
       warnings.push(`Extracted item total Rs ${billDetails.itemAmountTotal?.toFixed(2)} does not match Schedule Summary amount Rs ${billDetails.scheduleSummaryTotal?.toFixed(2)} (difference: Rs ${billDetails.amountDifference?.toFixed(2)}). Please review the extracted items below.`);
     }

@@ -601,7 +601,7 @@ function NewBillPageContent() {
       billNo: billDetails?.billNo || prev.billNo,
       dateOfMeasurement: normalizeExtractedDate(billDetails?.measurementDate) || prev.dateOfMeasurement,
       grossBillAmount: billDetails?.grossBillAmount ? billDetails.grossBillAmount.toFixed(2) : prev.grossBillAmount,
-      // AI items are already represented in classification entries. Dedicated
+      // Extracted items are already represented in classification entries. Dedicated
       // inputs are reserved for additional components entered manually.
       cementAmount: '',
       steelTmtBarsAmount: '',
@@ -1188,7 +1188,7 @@ function NewBillPageContent() {
                 )}
 
                 <BillPdfCementAnalyzer
-                  title="AI PDF Bill Extraction"
+                  title="Automatic PDF Bill Extraction"
                   contractId={formData.contractId}
                   onApplyBillDetails={applyExtractedBillDetails}
                 />
