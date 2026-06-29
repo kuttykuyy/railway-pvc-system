@@ -1,4 +1,4 @@
-﻿import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,13 +25,24 @@ const NON_STEEL_COMPONENT_TYPES = Object.values(ComponentType).filter(t => !STEE
 function anyBillHasSteel(bills: any[]): boolean {
   return bills.some(b => {
     const pvc = b.pvcCalculation;
-    if (!pvc) return false;
-    return (pvc.steelPvc ?? 0) > 0
-      || (pvc.dedicatedSteelPvc ?? 0) > 0
-      || (pvc.dedicatedSteelTmtBarsPvc ?? 0) > 0
-      || (pvc.dedicatedSteelAngleChannelPvc ?? 0) > 0
-      || (pvc.dedicatedSteelPlatesPvc ?? 0) > 0
-      || (pvc.dedicatedSteelOtherSectionsPvc ?? 0) > 0;
+    if (pvc && (
+      (pvc.steelPvc ?? 0) !== 0
+      || (pvc.dedicatedSteelPvc ?? 0) !== 0
+      || (pvc.dedicatedSteelTmtBarsPvc ?? 0) !== 0
+      || (pvc.dedicatedSteelAngleChannelPvc ?? 0) !== 0
+      || (pvc.dedicatedSteelPlatesPvc ?? 0) !== 0
+      || (pvc.dedicatedSteelOtherSectionsPvc ?? 0) !== 0
+    )) {
+      return true;
+    }
+
+    const entries = b.classificationEntries || [];
+    return entries.some((entry: any) => {
+      const steelTypes = entry.steelTypes || [];
+      if (steelTypes.length > 0) return true;
+      const code = String(entry.subClassification?.code || '').trim().toUpperCase();
+      return code.endsWith('B') || code === 'STEEL';
+    });
   });
 }
 

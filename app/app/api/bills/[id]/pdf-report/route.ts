@@ -24,14 +24,27 @@ import { getNextAuthSecret } from '@/lib/auth';
 const STEEL_COMPONENT_TYPES = [ComponentType.TMT_BARS, ComponentType.ANGLE_CHANNEL, ComponentType.PLATES, ComponentType.OTHER_SECTIONS];
 const NON_STEEL_COMPONENT_TYPES = Object.values(ComponentType).filter(t => !STEEL_COMPONENT_TYPES.includes(t as any)) as ComponentType[];
 
-function billHasSteel(pvc: any): boolean {
-  if (!pvc) return false;
-  return (pvc.steelPvc ?? 0) !== 0
+function billHasSteel(bill: any): boolean {
+  if (!bill) return false;
+  const pvc = bill.pvcCalculation;
+  if (pvc && (
+    (pvc.steelPvc ?? 0) !== 0
     || (pvc.dedicatedSteelPvc ?? 0) !== 0
     || (pvc.dedicatedSteelTmtBarsPvc ?? 0) !== 0
     || (pvc.dedicatedSteelAngleChannelPvc ?? 0) !== 0
     || (pvc.dedicatedSteelPlatesPvc ?? 0) !== 0
-    || (pvc.dedicatedSteelOtherSectionsPvc ?? 0) !== 0;
+    || (pvc.dedicatedSteelOtherSectionsPvc ?? 0) !== 0
+  )) {
+    return true;
+  }
+
+  const entries = bill.classificationEntries || [];
+  return entries.some((entry: any) => {
+    const steelTypes = entry.steelTypes || [];
+    if (steelTypes.length > 0) return true;
+    const code = String(entry.subClassification?.code || '').trim().toUpperCase();
+    return code.endsWith('B') || code === 'STEEL';
+  });
 }
 
 export const dynamic = "force-dynamic";
@@ -651,7 +664,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // Append index documents (same as detailed format)
       let irFinalBytes: Uint8Array = irPdfBytes;
       try {
-        const irComponentTypes = billHasSteel(bill.pvcCalculation) ? undefined : NON_STEEL_COMPONENT_TYPES;
+        const irComponentTypes = billHasSteel(bill) ? undefined : NON_STEEL_COMPONENT_TYPES;
         irFinalBytes = await embedComponentIndicesRange(new Uint8Array(irPdfBytes), {
           startDate: new Date(bill.contract.baseMonth),
           endDate: new Date(bill.dateOfMeasurement),
@@ -4219,7 +4232,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Count documents before embedding
         const initialPageCount = PDFDocument.load(pdfWithFuelAverage).then(doc => doc.getPageCount());
         
-        const detailedComponentTypes = billHasSteel(bill.pvcCalculation) ? undefined : NON_STEEL_COMPONENT_TYPES;
+        const detailedComponentTypes = billHasSteel(bill) ? undefined : NON_STEEL_COMPONENT_TYPES;
         finalPdfBytes = await embedComponentIndicesRange(pdfWithFuelAverage, {
           startDate: componentIndexStartDate,
           endDate: componentIndexEndDate,
