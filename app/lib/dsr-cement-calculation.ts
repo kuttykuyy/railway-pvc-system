@@ -52,6 +52,21 @@ export function inferCementCoefficientFromMix(
   if (!/\bcum\b/i.test(unit)) return null;
 
   const text = String(description || '').replace(/\s+/g, ' ');
+  const minimumContent = text.match(/minimum\s+cement\s+content\s+(?:of\s+)?([\d.]+)\s*kg\s*(?:\/|per)\s*(?:cu\.?\s*m|cum|m3)\b/i);
+  if (minimumContent) {
+    const kilogramsPerCum = Number(minimumContent[1]);
+    if (Number.isFinite(kilogramsPerCum) && kilogramsPerCum > 0) {
+      return {
+        dsrCode: 'MIN-CEMENT-CONTENT',
+        description: `minimum cement content ${kilogramsPerCum} kg/cum`,
+        workUnit: 'Cum',
+        cementQuantityPerUnit: kilogramsPerCum / 1000,
+        cementUnit: 'MT',
+        source: 'DSR item description minimum cement content',
+      };
+    }
+  }
+
   const mixes: Array<{ pattern: RegExp; code: string; coefficient: number; label: string }> = [
     { pattern: /1\s*:\s*1\s*:\s*2/i, code: 'MIX-1:1:2', coefficient: 0.61, label: 'cement concrete 1:1:2' },
     { pattern: /1\s*:\s*1\.5\s*:\s*3/i, code: 'MIX-1:1.5:3', coefficient: 0.4, label: 'cement concrete 1:1.5:3' },

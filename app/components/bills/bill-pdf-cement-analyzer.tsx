@@ -23,10 +23,7 @@ interface CementAnalysisResultItem {
   quantity: number;
   cementQuantity: number;
   cementAmount?: number | null;
-  coefficient?: {
-    cementCoefficient: number;
-    coefficientUnit: string;
-  } | null;
+  coefficient?: number | null;
   matched?: boolean;
 }
 
@@ -296,7 +293,7 @@ export function BillPdfCementAnalyzer({
                   <tr>
                     <th className="px-2 py-2 text-left font-medium">Item</th>
                     <th className="px-2 py-2 text-left font-medium">Description</th>
-                    <th className="px-2 py-2 text-right font-medium">Qty</th>
+                    <th className="px-2 py-2 text-right font-medium">Qty Since Last Bill</th>
                     <th className="px-2 py-2 text-right font-medium">Rate</th>
                     <th className="px-2 py-2 text-right font-medium">Amount</th>
                     <th className="px-2 py-2 text-left font-medium">Class</th>
@@ -357,7 +354,7 @@ export function BillPdfCementAnalyzer({
                         {formatNumber(item.quantity, 2)} {item.unit}
                       </td>
                       <td className="whitespace-nowrap px-2 py-2 text-right">
-                        {item.coefficient ? formatNumber(item.coefficient.cementCoefficient, 5) : '-'}
+                        {item.coefficient ? formatNumber(item.coefficient, 5) : '-'}
                       </td>
                       <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
                         {formatNumber(item.cementQuantity)} MT
