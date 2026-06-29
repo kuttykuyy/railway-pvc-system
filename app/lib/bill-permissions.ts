@@ -71,30 +71,12 @@ export async function canUserDeleteBill(
       return { allowed: false, reason: 'Bill not found' };
     }
 
-    // If the user is not an admin/superadmin, they can only delete their own bills
-    if (userRole !== 'admin' && userRole !== 'superadmin') {
-      const isOwner = bill.contract.userId === userId;
-      return {
-        allowed: isOwner,
-        reason: isOwner ? undefined : 'You can only delete your own bills'
-      };
-    }
-
-    // Superadmin always allowed
-    if (userRole === 'superadmin') return { allowed: true };
-
-    // Admin: allowed by default; only blocked if setting explicitly set to 'false'
-    const setting = await prisma.adminSettings.findUnique({
-      where: { key: 'ADMIN_CAN_DELETE_OTHER_USERS_BILLS' }
-    });
-    const adminBlocked = setting?.value === 'false';
+    if (userRole === 'admin' || userRole === 'superadmin') return { allowed: true };
 
     const isOwner = bill.contract.userId === userId;
-    if (isOwner || !adminBlocked) return { allowed: true };
-
     return {
-      allowed: false,
-      reason: "Admin permission to delete other users' bills is disabled.",
+      allowed: isOwner,
+      reason: isOwner ? undefined : 'You can only delete your own bills'
     };
   } catch (error) {
     console.error('Error checking bill deletion permission:', error);
@@ -124,43 +106,17 @@ export async function canUserDeleteBills(
       return { allowed: false, reason: 'No bills found' };
     }
 
-    // If the user is not an admin/superadmin, they can only delete their own bills
-    if (userRole !== 'admin' && userRole !== 'superadmin') {
-      const disallowedBills = bills
-        .filter(bill => bill.contract.userId !== userId)
-        .map(bill => bill.billNo);
+    if (userRole === 'admin' || userRole === 'superadmin') return { allowed: true };
 
-      return {
-        allowed: disallowedBills.length === 0,
-        reason:
-          disallowedBills.length > 0
-            ? `You can only delete your own bills. Cannot delete: ${disallowedBills.join(', ')}`
-            : undefined,
-        disallowedBills
-      };
-    }
-
-    // For admins/superadmins, check the setting
-    const setting = await prisma.adminSettings.findUnique({
-      where: { key: 'ADMIN_CAN_DELETE_OTHER_USERS_BILLS' }
-    });
-
-    // Superadmin always allowed
-    if (userRole === 'superadmin') return { allowed: true };
-
-    // Admin: allowed by default; only blocked if setting explicitly set to 'false'
-    const adminBlocked = setting?.value === 'false';
-    if (!adminBlocked) return { allowed: true };
-
-    // Admin is blocked from deleting others' bills — filter which ones
-    const othersBills = bills.filter((bill: any) => bill.contract.userId !== userId);
-    if (othersBills.length === 0) return { allowed: true };
-
-    const disallowedBills = othersBills.map(bill => bill.billNo);
+    const disallowedBills = bills
+      .filter(bill => bill.contract.userId !== userId)
+      .map(bill => bill.billNo);
     return {
-      allowed: false,
-      reason: `Admin permission to delete other users' bills is disabled. Cannot delete: ${disallowedBills.join(', ')}`,
-      disallowedBills,
+      allowed: disallowedBills.length === 0,
+      reason: disallowedBills.length > 0
+        ? `You can only delete your own bills. Cannot delete: ${disallowedBills.join(', ')}`
+        : undefined,
+      disallowedBills
     };
   } catch (error) {
     console.error('Error checking bulk bill deletion permission:', error);

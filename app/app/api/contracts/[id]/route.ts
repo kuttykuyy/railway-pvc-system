@@ -23,7 +23,7 @@ export async function GET(
     }
 
     // Check if user is admin
-    const isAdmin = user.role === 'admin' || user.email === '30prasath93@gmail.com';
+    const isAdmin = user.role === 'admin' || user.role === 'superadmin';
     
     // Fetch the contract first
     const contract = await prisma.contract.findUnique({
@@ -120,7 +120,7 @@ export async function PUT(
     }
 
     // Check if user is admin
-    const isAdmin = user.role === 'admin' || user.email === '30prasath93@gmail.com';
+    const isAdmin = user.role === 'admin' || user.role === 'superadmin';
     
     // Build where clause based on user role
     let whereClause: any = { id: id };
@@ -252,7 +252,7 @@ export async function DELETE(
     }
 
     // Check if user is admin
-    const isAdmin = user.role === 'admin' || user.email === '30prasath93@gmail.com';
+    const isAdmin = user.role === 'admin' || user.role === 'superadmin';
     
     // Build where clause based on user role
     let whereClause: any = { id: id };
@@ -274,8 +274,32 @@ export async function DELETE(
       );
     }
 
-    await prisma.contract.delete({
-      where: { id: id }
+    const contractBills = await prisma.bill.findMany({
+      where: { contractId: id },
+      select: { id: true },
+    });
+    const billTransactions = contractBills.length > 0
+      ? await prisma.billTransaction.findMany({
+          where: { billId: { in: contractBills.map(bill => bill.id) } },
+          select: { id: true },
+        })
+      : [];
+
+    await prisma.$transaction(async tx => {
+      if (billTransactions.length > 0) {
+        await tx.invoiceItem.deleteMany({
+          where: { billTransactionId: { in: billTransactions.map(transaction => transaction.id) } },
+        });
+      }
+      await tx.contract.delete({ where: { id } });
+    });
+
+    console.info('[contracts] Contract deleted', {
+      contractId: id,
+      ownerUserId: existingContract.userId,
+      deletedByUserId: user.id,
+      deletedByRole: user.role,
+      billCount: contractBills.length,
     });
     
     return NextResponse.json({ message: 'Contract deleted successfully' });

@@ -24,7 +24,7 @@ export async function checkUserContractAccess(
       select: { role: true, railwayZone: true }
     });
 
-    if (user?.role === 'admin') {
+    if (user?.role === 'admin' || user?.role === 'superadmin') {
       // Admin has full access to everything
       return {
         canView: true,
@@ -118,7 +118,7 @@ export async function checkUserBillAccess(
       select: { role: true, railwayZone: true }
     });
 
-    if (user?.role === 'admin') {
+    if (user?.role === 'admin' || user?.role === 'superadmin') {
       // Admin has full access to everything
       return {
         canView: true,
@@ -232,7 +232,7 @@ export async function getUserAccessibleContracts(userId: string): Promise<string
       select: { role: true, railwayZone: true }
     });
 
-    if (user?.role === 'admin') {
+    if (user?.role === 'admin' || user?.role === 'superadmin') {
       // null = unrestricted access — do NOT fetch all IDs (memory cliff at scale)
       return null;
     }
@@ -303,7 +303,7 @@ export async function getUserAccessibleBills(userId: string): Promise<string[] |
       select: { role: true, railwayZone: true }
     });
 
-    if (user?.role === 'admin') {
+    if (user?.role === 'admin' || user?.role === 'superadmin') {
       return null; // unrestricted
     }
 
