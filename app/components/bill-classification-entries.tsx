@@ -124,7 +124,10 @@ export function BillClassificationEntries({
   };
 
   const addEntry = () => {
-    const requiredGroup = allowedClassificationGroups[0];
+    const recommendedGroup = requiredMainCode
+      ? allowedClassificationGroups.find(g => g.code.toUpperCase() === requiredMainCode.toUpperCase())
+      : null;
+    const requiredGroup = recommendedGroup || allowedClassificationGroups[0];
     const firstSub = requiredGroup?.subClassifications.find(sub => sub.isDefault)
       || requiredGroup?.subClassifications[0];
     const newEntry: ClassificationEntry = {
