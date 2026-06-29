@@ -146,9 +146,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const billId = id;
         const { searchParams } = new URL(request.url);
         const templateId = searchParams.get('templateId');
+        const pdfFormat = searchParams.get('format') || 'detailed';
+        const session = await getServerSession(authOptions);
+        const requesterRole = String((session?.user as any)?.role || '').toLowerCase();
+        const isAdminRequester = requesterRole === 'admin' || requesterRole === 'superadmin';
         
         // Check cache before running heavy PDF compiling
-        const cacheKey = `pdf-report:${billId}:${templateId || 'default'}`;
+        const cacheKey = `pdf-report:${billId}:${templateId || 'default'}:${pdfFormat}:${isAdminRequester ? 'admin' : 'standard'}`;
         const cachedPdf = advancedCache.get(cacheKey);
         if (cachedPdf) {
           console.log(`[PDF Cache] Hit for: ${cacheKey}`);
@@ -179,7 +183,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     
     // Get session to fetch user branding settings and template (optional for public access)
-    const session = await getServerSession(authOptions);
     let brandingSettings = {
       logoPath: null as string | null,
       logoUrl: null as string | null,
@@ -605,7 +608,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     };
 
     // ── IR STANDARD FORMAT BRANCH ─────────────────────────────────────────────
-    const pdfFormat = searchParams.get('format');
     if (pdfFormat === 'ir_standard') {
       const { generateIRStandardReport } = await import('@/lib/pdf/generators/ir-standard-report');
       const indicesStatusForIR = await getBillIndicesStatus(bill.quarter, baseMonth);
@@ -660,7 +662,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
 
       // Apply trial watermark for free-trial bills only
-      if (bill.billTransaction?.discountType === 'trial') {
+      if (!isAdminRequester && bill.billTransaction?.discountType === 'trial') {
         const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
         irFinalBytes = await applyTrialWatermark(irFinalBytes);
       }
@@ -4246,7 +4248,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Apply trial watermark for free-trial bills
-    if (bill.isChargeable === false) {
+    if (!isAdminRequester && bill.billTransaction?.discountType === 'trial') {
       const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
       finalPdfBytes = await applyTrialWatermark(finalPdfBytes);
     }
