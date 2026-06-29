@@ -592,15 +592,22 @@ ${billMarkdown}
   const reconciledKeys = new Set<string>();
   for (const correction of corrections) {
     const itemNo = String(correction?.itemNo || '').replace(/\s+/g, '').toUpperCase();
+    const amount = toFiniteNumber(correction?.amountIncludingSpecialConditionSinceLastBill);
+    if (!(amount && amount > 0)) continue;
     const exactKey = `${scheduleCode(correction)}|${itemNo}`;
     const exactOriginals = originalByKey.get(exactKey) || [];
     const itemNoOriginals = originalByItemNo.get(itemNo) || [];
-    const originals = exactOriginals.length === 1 ? exactOriginals : itemNoOriginals;
+    const amountMatchedOriginals = itemNoOriginals.filter(original => (
+      Math.abs(Number(original.amountSinceLastBill || 0) - amount) <= 0.05
+    ));
+    const originals = exactOriginals.length === 1
+      ? exactOriginals
+      : amountMatchedOriginals.length === 1
+        ? amountMatchedOriginals
+        : itemNoOriginals;
     if (originals.length !== 1) continue;
     const reconciledKey = `${scheduleCode(correction) || scheduleCode(originals[0])}|${itemNo}`;
     if (reconciledKeys.has(reconciledKey)) continue;
-    const amount = toFiniteNumber(correction?.amountIncludingSpecialConditionSinceLastBill);
-    if (!(amount && amount > 0)) continue;
     const quantityRaw = toPrintedDecimal(correction?.quantitySinceLastBillRaw);
     const agreementRateRaw = toPrintedDecimal(correction?.agreementRateRaw);
     reconciled.push({
@@ -618,6 +625,54 @@ ${billMarkdown}
     reconciledKeys.add(reconciledKey);
   }
   return reconciled;
+}
+
+function completeReconciledItems(
+  reconciled: ExtractedBillItem[],
+  candidates: ExtractedBillItem[],
+  expectedTotal: number,
+): ExtractedBillItem[] {
+  const currentTotalPaise = Math.round(reconciled.reduce(
+    (sum, item) => sum + Number(item.amountSinceLastBill || 0),
+    0,
+  ) * 100);
+  const deficitPaise = Math.round(expectedTotal * 100) - currentTotalPaise;
+  if (deficitPaise <= 0) return reconciled;
+
+  const itemKey = (item: ExtractedBillItem) => {
+    const itemNo = String(item.itemNo || item.dsrCode || '').replace(/\s+/g, '').toUpperCase();
+    return `${scheduleCode(item)}|${itemNo}`;
+  };
+  const usedKeys = new Set(reconciled.map(itemKey));
+  const pool = candidates
+    .filter(item => !usedKeys.has(itemKey(item)))
+    .map(item => ({ item, amountPaise: Math.round(Number(item.amountSinceLastBill || 0) * 100) }))
+    .filter(candidate => candidate.amountPaise > 0 && candidate.amountPaise <= deficitPaise);
+
+  const combinations = new Map<number, number[]>([[0, []]]);
+  for (let index = 0; index < pool.length; index += 1) {
+    const existing = Array.from(combinations.entries());
+    for (const [sum, indices] of existing) {
+      const nextSum = sum + pool[index].amountPaise;
+      if (nextSum > deficitPaise) continue;
+      const nextIndices = [...indices, index];
+      const previous = combinations.get(nextSum);
+      if (!previous || nextIndices.length < previous.length) combinations.set(nextSum, nextIndices);
+    }
+  }
+
+  const matchedIndices = combinations.get(deficitPaise);
+  if (!matchedIndices) return reconciled;
+  const recovered = matchedIndices.map(index => pool[index].item);
+  console.info('[bill-extraction] Recovered omitted current rows by exact amount', {
+    deficit: deficitPaise / 100,
+    recovered: recovered.map(item => ({
+      schedule: scheduleCode(item),
+      itemNo: item.itemNo || item.dsrCode,
+      amount: item.amountSinceLastBill,
+    })),
+  });
+  return [...reconciled, ...recovered];
 }
 
 async function convertPdfToMarkdown(file: File, requestOrigin: string): Promise<string> {
@@ -888,9 +943,14 @@ ${markdownPart}
     itemAmountTotal = filteredItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
     amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
     if (Math.abs(amountDifference) > 0.05) {
-      const reconciledItems = await reconcileWholeBillItems(
+      const aiReconciledItems = await reconcileWholeBillItems(
         apiKey,
         billMarkdown,
+        reconciliationCandidates,
+        scheduleSummaryTotal,
+      );
+      const reconciledItems = completeReconciledItems(
+        aiReconciledItems,
         reconciliationCandidates,
         scheduleSummaryTotal,
       );
