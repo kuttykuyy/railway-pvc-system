@@ -482,32 +482,84 @@ function NewBillPageContent() {
 
   const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData): ClassificationEntry[] => {
     const items = data.billDetails?.items || data.extractedItems || [];
-    return items
-      .map((item): ClassificationEntry | null => {
-        const subClassification = findSubClassificationForExtractedItem(item);
-        if (!subClassification) return null;
-        const amount = Number(item.amountSinceLastBill || 0);
-        return {
-          subClassificationId: subClassification.id,
-          subClassification,
-          amount,
-          description: item.description || '',
-          steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
-          scheduleItem: matchExtractedSchedule(
+    const allSubClassifications = classificationGroups.flatMap(group => group.subClassifications);
+    return items.flatMap((item): ClassificationEntry[] => {
+      const subClassification = findSubClassificationForExtractedItem(item);
+      if (!subClassification) return [];
+
+      const originalAmount = (item as any).originalAmount;
+      const netAmount = Number(item.amountSinceLastBill || 0);
+      const hasDeduction = typeof originalAmount === 'number' && originalAmount > netAmount;
+
+      if (hasDeduction) {
+        const cementCost = originalAmount - netAmount;
+        const mainCode = subClassification.code.charAt(0);
+        const cementSub = allSubClassifications.find(sub => sub.code.toUpperCase() === `${mainCode}C`);
+
+        if (cementSub) {
+          const scheduleItem = matchExtractedSchedule(
             selectedContract?.schedules || [],
             [item.schedule, item.scheduleGroup, item.chapter],
-          ),
+          );
+
+          return [
+            {
+              subClassificationId: subClassification.id,
+              subClassification,
+              amount: netAmount,
+              description: `${item.description || ''} (Excluding Cement)`,
+              steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
+              scheduleItem,
+              itemNumber: item.itemNo || item.dsrCode || '',
+              quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
+              agreementRate: item.agreementRateRaw || item.agreementRate || '',
+              itemRows: [{
+                itemNumber: item.itemNo || item.dsrCode || '',
+                quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
+                agreementRate: item.agreementRateRaw || item.agreementRate || '',
+              }],
+            },
+            {
+              subClassificationId: cementSub.id,
+              subClassification: cementSub,
+              amount: cementCost,
+              description: `${item.description || ''} (Cement Portion)`,
+              steelTypes: [],
+              scheduleItem,
+              itemNumber: `${item.itemNo || item.dsrCode || ''}-CEM`,
+              quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
+              agreementRate: '',
+              itemRows: [{
+                itemNumber: `${item.itemNo || item.dsrCode || ''}-CEM`,
+                quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
+                agreementRate: '',
+              }],
+            }
+          ];
+        }
+      }
+
+      // Default: single entry
+      return [{
+        subClassificationId: subClassification.id,
+        subClassification,
+        amount: Number(item.amountSinceLastBill || 0),
+        description: item.description || '',
+        steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
+        scheduleItem: matchExtractedSchedule(
+          selectedContract?.schedules || [],
+          [item.schedule, item.scheduleGroup, item.chapter],
+        ),
+        itemNumber: item.itemNo || item.dsrCode || '',
+        quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
+        agreementRate: item.agreementRateRaw || item.agreementRate || '',
+        itemRows: [{
           itemNumber: item.itemNo || item.dsrCode || '',
           quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
           agreementRate: item.agreementRateRaw || item.agreementRate || '',
-          itemRows: [{
-            itemNumber: item.itemNo || item.dsrCode || '',
-            quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
-            agreementRate: item.agreementRateRaw || item.agreementRate || '',
-          }],
-        };
-      })
-      .filter((entry): entry is ClassificationEntry => Boolean(entry));
+        }],
+      }];
+    });
   };
 
   const applyExtractedBillDetails = (data: CementAnalysisData) => {
