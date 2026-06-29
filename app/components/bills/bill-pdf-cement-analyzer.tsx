@@ -488,7 +488,15 @@ export function BillPdfCementAnalyzer({
           try {
             resolve({ status: request.status, json: JSON.parse(request.responseText) });
           } catch {
-            reject(new Error('The analysis server returned an invalid response.'));
+            const isGatewayFailure = [502, 503, 504].includes(request.status);
+            resolve({
+              status: request.status,
+              json: {
+                error: isGatewayFailure
+                  ? 'AI extraction timed out while processing this bill. Please retry; no bill data was saved.'
+                  : 'The analysis server returned an invalid response.',
+              },
+            });
           }
         };
         request.send(formData);

@@ -17,6 +17,10 @@ import {
 import { inferMainClassification } from '@/lib/work-classification';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
+
+const AI_PART_CONCURRENCY = 16;
+const MAX_WHOLE_BILL_RECONCILIATION_CHARS = 50000;
 
 interface ExtractedBillItem {
   dsrCode: string;
@@ -486,8 +490,8 @@ async function correctSpecialConditionAmounts(
   expectedTotal: number,
 ): Promise<ExtractedBillItem[]> {
   const parsedCorrections: any[] = [];
-  for (let start = 0; start < markdownParts.length; start += 2) {
-    const batch = markdownParts.slice(start, start + 2);
+  for (let start = 0; start < markdownParts.length; start += AI_PART_CONCURRENCY) {
+    const batch = markdownParts.slice(start, start + AI_PART_CONCURRENCY);
     const results = await Promise.all(batch.map((markdownPart, batchIndex) => {
       const partNumber = start + batchIndex + 1;
       const prompt = `Re-read current payable item amounts from part ${partNumber} of an Indian Railway bill converted to Markdown.
@@ -824,7 +828,7 @@ Return JSON only:
     {
       "dsrCode": "DSR code like 4.1.6 or 5.1.2",
       "itemNo": "visible item number if different",
-      "description": "full item description",
+      "description": "identifying item description, maximum 500 characters",
       "unit": "Cum/Sqm/Kg/MT/etc",
       "quantitySinceLastBill": number,
       "quantitySinceLastBillRaw": "exact decimal text printed under Qty executed since last Bill",
@@ -851,6 +855,7 @@ Return JSON only:
 Rules:
 - ${BILL_ITEM_COLUMN_GUIDE}
 - Extract every payable work item from the current bill, not only cement items.
+- Keep each description within 500 characters. Preserve the work type, material, grade, dimensions, mix, and identifying specification; omit repeated execution procedure, testing prose, warranty text, and boilerplate contractor obligations.
 - Extract Schedule Summary separately. Use only the current bill "Amount including Special Condition" column, never Amount Upto Last Bill or Total Upto Date. Do not extract Schedule Summary rows (such as Schedule A, Schedule B, or total rows) as items in the "items" array.
 - Extract the complete schedule heading, schedule group, chapter, and source book for every item.
 - Mark sourceBook USSR_2021 when the heading says USSR-2021 or the item uses the six-digit USSR format such as 025090. Mark DSR_2021 only for DSR schedule items/codes.
@@ -896,8 +901,8 @@ Paired reference learned from a verified signed bill and its final PVC report:
   });
 
   const parsedParts: any[] = [];
-  for (let start = 0; start < markdownParts.length; start += 2) {
-    const batch = markdownParts.slice(start, start + 2);
+  for (let start = 0; start < markdownParts.length; start += AI_PART_CONCURRENCY) {
+    const batch = markdownParts.slice(start, start + AI_PART_CONCURRENCY);
     const batchResults = await Promise.all(batch.map((markdownPart, batchIndex) => {
       const partNumber = start + batchIndex + 1;
       const partPrompt = `${basePrompt}
@@ -1000,20 +1005,18 @@ ${markdownPart}
     if (!(quantity > 0 && rate > 0 && agreementAmount > 0)) return false;
     return Math.abs((quantity * rate) - agreementAmount) > Math.max(0.1, agreementAmount * 0.000001);
   });
-  const requiresMultiPageQuantityPass = markdownParts.length > 1;
-  if (Math.abs(amountDifference) > 0.05 || hasColumnMismatch || requiresMultiPageQuantityPass) {
+  if (Math.abs(amountDifference) > 0.05 || hasColumnMismatch) {
     const reconciliationCandidates = filteredItems;
     console.warn('[bill-extraction] Re-reading special-condition item amounts', {
       itemAmountTotal,
       scheduleSummaryTotal,
       amountDifference,
       hasColumnMismatch,
-      requiresMultiPageQuantityPass,
     });
     filteredItems = await correctSpecialConditionAmounts(apiKey, markdownParts, filteredItems, scheduleSummaryTotal);
     itemAmountTotal = filteredItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
     amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
-    if (Math.abs(amountDifference) > 0.05) {
+    if (Math.abs(amountDifference) > 0.05 && billMarkdown.length <= MAX_WHOLE_BILL_RECONCILIATION_CHARS) {
       try {
         const aiReconciledItems = await reconcileWholeBillItems(
           apiKey,
@@ -1041,6 +1044,12 @@ ${markdownPart}
           candidateCount: reconciliationCandidates.length,
         });
       }
+    } else if (Math.abs(amountDifference) > 0.05) {
+      console.warn('[bill-extraction] Whole-bill reconciliation skipped for large document', {
+        markdownCharacters: billMarkdown.length,
+        maximumCharacters: MAX_WHOLE_BILL_RECONCILIATION_CHARS,
+        amountDifference,
+      });
     }
   }
 
