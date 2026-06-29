@@ -7,7 +7,6 @@ if (typeof globalThis !== 'undefined' && !('DOMMatrix' in globalThis)) {
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateApiAccess } from '@/lib/payment-validation';
-import { extractPdfText } from '@/lib/pdf-text-parser';
 import {
   calculateDsrCementRequirement,
   inferCementCoefficientFromMix,
@@ -436,6 +435,7 @@ async function correctSpecialConditionAmounts(
   apiKey: string,
   markdownParts: string[],
   items: ExtractedBillItem[],
+  expectedTotal: number,
 ): Promise<ExtractedBillItem[]> {
   const parsedCorrections: any[] = [];
   for (let start = 0; start < markdownParts.length; start += 2) {
@@ -449,6 +449,7 @@ Return JSON only:
 
 Rules:
 - Include only rows with a nonzero current payable amount.
+- The whole bill's printed current Bill Amount is Rs ${expectedTotal.toFixed(2)}. Use it only to detect a wrong column; do not force or adjust any item amount.
 - quantitySinceLastBillRaw MUST come only from the column headed "Qty executed since last Bill". Do not use Original Agreement Qty, Qty up to last bill, or Total Qty up to date.
 - agreementRateRaw MUST preserve the exact decimal text printed in the Agreement Rate column, including trailing zeros.
 - amountAtAgreementRateSinceLastBill is the current Qty x Agreement Rate column and must be kept separate from the special-condition amount.
@@ -488,13 +489,14 @@ ${markdownPart}
     }
   }
 
-  return items.map(item => {
+  const correctedItems: ExtractedBillItem[] = [];
+  const correctedAllItems = items.map(item => {
     const itemNo = String(item.itemNo || item.dsrCode || '').replace(/\s+/g, '').toUpperCase();
     const exactCorrection = exactCorrections.get(correctionItemKey(item));
     const itemNoCorrections = correctionsByItemNo.get(itemNo) || [];
     const correction = exactCorrection ?? (itemNoCorrections.length === 1 ? itemNoCorrections[0] : undefined);
     if (!correction) return item;
-    return {
+    const correctedItem = {
       ...item,
       quantitySinceLastBill: toFiniteNumber(correction.quantityRaw) ?? item.quantitySinceLastBill,
       quantitySinceLastBillRaw: correction.quantityRaw ?? item.quantitySinceLastBillRaw,
@@ -504,7 +506,98 @@ ${markdownPart}
       amountIncludingSpecialConditionSinceLastBill: correction.amount,
       amountSinceLastBill: correction.amount,
     };
+    correctedItems.push(correctedItem);
+    return correctedItem;
   });
+
+  const total = (values: ExtractedBillItem[]) => values.reduce(
+    (sum, item) => sum + Number(item.amountSinceLastBill || 0),
+    0,
+  );
+  const allTotal = total(correctedAllItems);
+  const authoritativeTotal = total(correctedItems);
+  const useAuthoritativeSet = correctedItems.length > 0
+    && Math.abs(authoritativeTotal - expectedTotal) < Math.abs(allTotal - expectedTotal);
+
+  console.info('[bill-extraction] Special-condition correction candidates', {
+    originalItemCount: items.length,
+    correctedItemCount: correctedItems.length,
+    allTotal,
+    authoritativeTotal,
+    expectedTotal,
+    selected: useAuthoritativeSet ? 'authoritative-current-rows' : 'all-rows',
+  });
+
+  return useAuthoritativeSet ? correctedItems : correctedAllItems;
+}
+
+async function reconcileWholeBillItems(
+  apiKey: string,
+  billMarkdown: string,
+  items: ExtractedBillItem[],
+  expectedTotal: number,
+): Promise<ExtractedBillItem[]> {
+  const itemReferences = items.map(item => ({
+    itemNo: item.itemNo || item.dsrCode,
+    schedule: item.scheduleGroup || item.schedule,
+    description: item.description.slice(0, 120),
+  }));
+  const prompt = `Reconcile the detailed current-payable rows of an Indian Railway running account bill converted to Markdown.
+
+The printed current Bill Amount is Rs ${expectedTotal.toFixed(2)}. Re-read the source table; never invent, proportion, balance, or alter an amount merely to reach this total.
+
+Return JSON only:
+{"items":[{"itemNo":"visible item number","schedule":"schedule heading","scheduleGroup":"schedule group","quantitySinceLastBillRaw":"exact printed decimal","agreementRateRaw":"exact printed decimal","amountAtAgreementRateSinceLastBill":number,"amountIncludingSpecialConditionSinceLastBill":number}]}
+
+Rules:
+- Return the authoritative complete set of detailed rows having a nonzero value in the current "Qty executed since last Bill" or current "Amount including Special Condition" column.
+- Exclude rows that have values only under Original Agreement, Upto Last Bill, or Total Upto Date columns.
+- Exclude schedule summaries, subtotals, rebates, deductions, and grand totals.
+- Preserve every printed decimal digit in quantitySinceLastBillRaw and agreementRateRaw.
+- Read amountIncludingSpecialConditionSinceLastBill only from the current special-condition column.
+- The returned detailed amounts should naturally reconcile to the printed Bill Amount; if they do not, return the source values unchanged.
+- Reconstruct digits split across Markdown lines.
+
+Candidate item references (identification only, not values):
+${JSON.stringify(itemReferences)}
+
+<bill_markdown>
+${billMarkdown}
+</bill_markdown>`;
+  const parsed = await extractJsonWithRetry(apiKey, prompt, 'whole-bill current-row reconciliation');
+  const corrections = Array.isArray(parsed?.items) ? parsed.items : [];
+  const originalByItemNo = new Map<string, ExtractedBillItem[]>();
+  for (const item of items) {
+    const itemNo = String(item.itemNo || item.dsrCode || '').replace(/\s+/g, '').toUpperCase();
+    if (!itemNo) continue;
+    const existing = originalByItemNo.get(itemNo) || [];
+    existing.push(item);
+    originalByItemNo.set(itemNo, existing);
+  }
+
+  const reconciled: ExtractedBillItem[] = [];
+  for (const correction of corrections) {
+    const itemNo = String(correction?.itemNo || '').replace(/\s+/g, '').toUpperCase();
+    const originals = originalByItemNo.get(itemNo) || [];
+    if (originals.length !== 1) continue;
+    const amount = toFiniteNumber(correction?.amountIncludingSpecialConditionSinceLastBill);
+    if (!(amount && amount > 0)) continue;
+    const quantityRaw = toPrintedDecimal(correction?.quantitySinceLastBillRaw);
+    const agreementRateRaw = toPrintedDecimal(correction?.agreementRateRaw);
+    reconciled.push({
+      ...originals[0],
+      schedule: String(correction?.schedule || originals[0].schedule || '').trim(),
+      scheduleGroup: String(correction?.scheduleGroup || originals[0].scheduleGroup || '').trim(),
+      quantitySinceLastBill: toFiniteNumber(quantityRaw) ?? originals[0].quantitySinceLastBill,
+      quantitySinceLastBillRaw: quantityRaw ?? originals[0].quantitySinceLastBillRaw,
+      agreementRate: toFiniteNumber(agreementRateRaw) ?? originals[0].agreementRate,
+      agreementRateRaw: agreementRateRaw ?? originals[0].agreementRateRaw,
+      amountAtAgreementRateSinceLastBill: toFiniteNumber(correction?.amountAtAgreementRateSinceLastBill),
+      amountIncludingSpecialConditionSinceLastBill: amount,
+      amountSinceLastBill: amount,
+    });
+  }
+  return reconciled;
 }
 
 async function convertPdfToMarkdown(file: File, requestOrigin: string): Promise<string> {
@@ -559,20 +652,6 @@ async function extractBillDetailsWithAi(file: File, requestOrigin: string): Prom
   const apiKey = process.env.ABACUSAI_API_KEY;
   if (!apiKey) {
     throw new Error('AI extraction is not configured. Missing ABACUSAI_API_KEY.');
-  }
-
-  // Pre-validate that the PDF contains selectable text
-  try {
-    const buffer = await file.arrayBuffer();
-    const pages = await extractPdfText(buffer);
-    if (!pages) {
-      throw new Error('The uploaded PDF appears to be a scanned image or photo and does not contain selectable text. Please upload a digitally generated PDF from IREPS/IPPAS, or enter the bill details manually.');
-    }
-  } catch (err: any) {
-    if (err.message && err.message.includes('selectable text')) {
-      throw err;
-    }
-    console.warn('[cement-analysis] Local PDF text validation error:', err);
   }
 
   const billMarkdown = await convertPdfToMarkdown(file, requestOrigin);
@@ -784,9 +863,23 @@ ${markdownPart}
       amountDifference,
       hasColumnMismatch,
     });
-    filteredItems = await correctSpecialConditionAmounts(apiKey, markdownParts, filteredItems);
+    filteredItems = await correctSpecialConditionAmounts(apiKey, markdownParts, filteredItems, scheduleSummaryTotal);
     itemAmountTotal = filteredItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
     amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
+    if (Math.abs(amountDifference) > 0.05) {
+      const reconciledItems = await reconcileWholeBillItems(
+        apiKey,
+        billMarkdown,
+        filteredItems,
+        scheduleSummaryTotal,
+      );
+      const reconciledTotal = reconciledItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
+      if (reconciledItems.length > 0 && Math.abs(reconciledTotal - scheduleSummaryTotal) < Math.abs(amountDifference)) {
+        filteredItems = reconciledItems;
+        itemAmountTotal = reconciledTotal;
+        amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
+      }
+    }
   }
 
   const amountsReconciled = Math.abs(amountDifference) <= 0.05;
