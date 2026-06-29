@@ -571,23 +571,19 @@ function NewBillPageContent() {
   const applyExtractedBillDetails = (data: CementAnalysisData) => {
     const billDetails = data.billDetails;
     const mappedEntries = buildClassificationEntriesFromExtractedBill(data);
-    const steelAmountByType = (data.steelItems || []).reduce<Record<string, number>>((amounts, item) => {
-      if (item.steelType) amounts[item.steelType] = (amounts[item.steelType] || 0) + Number(item.amountSinceLastBill || 0);
-      return amounts;
-    }, {});
 
     setFormData(prev => ({
       ...prev,
       billNo: billDetails?.billNo || prev.billNo,
       dateOfMeasurement: normalizeExtractedDate(billDetails?.measurementDate) || prev.dateOfMeasurement,
       grossBillAmount: billDetails?.grossBillAmount ? billDetails.grossBillAmount.toFixed(2) : prev.grossBillAmount,
-      cementAmount: typeof data.summary?.cementAmount === 'number' && data.summary.cementAmount > 0
-        ? data.summary.cementAmount.toFixed(2)
-        : prev.cementAmount,
-      steelTmtBarsAmount: steelAmountByType.TMT > 0 ? steelAmountByType.TMT.toFixed(2) : prev.steelTmtBarsAmount,
-      steelAngleChannelAmount: steelAmountByType.ANGLE_CHANNEL > 0 ? steelAmountByType.ANGLE_CHANNEL.toFixed(2) : prev.steelAngleChannelAmount,
-      steelPlatesAmount: steelAmountByType.PLATES > 0 ? steelAmountByType.PLATES.toFixed(2) : prev.steelPlatesAmount,
-      steelOtherSectionsAmount: steelAmountByType.OTHER_SECTIONS > 0 ? steelAmountByType.OTHER_SECTIONS.toFixed(2) : prev.steelOtherSectionsAmount,
+      // AI items are already represented in classification entries. Dedicated
+      // inputs are reserved for additional components entered manually.
+      cementAmount: '',
+      steelTmtBarsAmount: '',
+      steelAngleChannelAmount: '',
+      steelPlatesAmount: '',
+      steelOtherSectionsAmount: '',
     }));
 
     if (mappedEntries.length > 0) {

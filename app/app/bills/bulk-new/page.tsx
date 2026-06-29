@@ -401,10 +401,6 @@ export default function BulkBillCreationPage() {
   const applyExtractedBillDetailsToBulkRow = (data: CementAnalysisData) => {
     const billDetails = data.billDetails;
     const mappedEntries = buildClassificationEntriesFromExtractedBill(data);
-    const steelAmountByType = (data.steelItems || []).reduce<Record<string, number>>((amounts, item) => {
-      if (item.steelType) amounts[item.steelType] = (amounts[item.steelType] || 0) + Number(item.amountSinceLastBill || 0);
-      return amounts;
-    }, {});
 
     setBillRows((prev) => {
       const emptyIndex = prev.findIndex(row => !row.billNo.trim() && row.classificationEntries.length === 0);
@@ -414,13 +410,13 @@ export default function BulkBillCreationPage() {
             ...row,
             billNo: billDetails?.billNo || row.billNo,
             dateOfMeasurement: normalizeExtractedDate(billDetails?.measurementDate) || row.dateOfMeasurement,
-            cementAmount: typeof data.summary?.cementAmount === 'number' && data.summary.cementAmount > 0
-              ? data.summary.cementAmount.toFixed(2)
-              : row.cementAmount,
-            steelTmtBarsAmount: steelAmountByType.TMT > 0 ? steelAmountByType.TMT.toFixed(2) : row.steelTmtBarsAmount,
-            steelAngleChannelAmount: steelAmountByType.ANGLE_CHANNEL > 0 ? steelAmountByType.ANGLE_CHANNEL.toFixed(2) : row.steelAngleChannelAmount,
-            steelPlatesAmount: steelAmountByType.PLATES > 0 ? steelAmountByType.PLATES.toFixed(2) : row.steelPlatesAmount,
-            steelOtherSectionsAmount: steelAmountByType.OTHER_SECTIONS > 0 ? steelAmountByType.OTHER_SECTIONS.toFixed(2) : row.steelOtherSectionsAmount,
+            // AI items stay in classification entries; dedicated component
+            // inputs are only for additional manually entered amounts.
+            cementAmount: '',
+            steelTmtBarsAmount: '',
+            steelAngleChannelAmount: '',
+            steelPlatesAmount: '',
+            steelOtherSectionsAmount: '',
             classificationEntries: mappedEntries.length > 0 ? mappedEntries : row.classificationEntries,
           }
         : row
