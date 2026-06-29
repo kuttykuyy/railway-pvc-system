@@ -723,10 +723,25 @@ async function convertPdfToMarkdown(file: File, requestOrigin: string): Promise<
   return markdown;
 }
 
-async function extractBillDetailsWithAi(file: File, requestOrigin: string): Promise<ExtractedBillDetails> {
+async function extractBillDetailsWithAi(file: File, requestOrigin: string, contractId?: string): Promise<ExtractedBillDetails> {
   const apiKey = process.env.ABACUSAI_API_KEY;
   if (!apiKey) {
     throw new Error('AI extraction is not configured. Missing ABACUSAI_API_KEY.');
+  }
+
+  let contractDescription = '';
+  if (contractId) {
+    try {
+      const contract = await prisma.contract.findUnique({
+        where: { id: contractId },
+        select: { workDescription: true }
+      });
+      if (contract) {
+        contractDescription = contract.workDescription;
+      }
+    } catch (e) {
+      console.error('[cement-analysis] Error loading contract description:', e);
+    }
   }
 
   const billMarkdown = await convertPdfToMarkdown(file, requestOrigin);
@@ -846,7 +861,7 @@ ${markdownPart}
 
   const parsed = mergeParsedBillParts(parsedParts);
 
-  const workDescription = String(parsed.workDescription || '').trim();
+  const workDescription = contractDescription || String(parsed.workDescription || '').trim();
   const inferredMainClassification = inferMainClassification(workDescription);
   const items = Array.isArray(parsed.items)
     ? parsed.items
@@ -1010,7 +1025,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File size too large. Maximum size is 25MB.' }, { status: 400 });
     }
 
-    const billDetails = await extractBillDetailsWithAi(file, request.nextUrl.origin);
+    const contractId = request.nextUrl.searchParams.get('contractId') || undefined;
+    const billDetails = await extractBillDetailsWithAi(file, request.nextUrl.origin, contractId);
     const extractedItems = billDetails.items;
     const rawDsrCodes = Array.from(new Set(extractedItems
       .filter(item => item.sourceBook === 'DSR_2021')

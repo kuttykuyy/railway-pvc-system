@@ -90,6 +90,7 @@ interface BillPdfCementAnalyzerProps {
   title?: string;
   compact?: boolean;
   disabled?: boolean;
+  contractId?: string;
   onApplyCementAmount?: (amount: number, data: CementAnalysisData) => void;
   onApplyBillDetails?: (data: CementAnalysisData) => void;
 }
@@ -113,6 +114,7 @@ export function BillPdfCementAnalyzer({
   title = 'AI Bill PDF Cement Analysis',
   compact = false,
   disabled = false,
+  contractId,
   onApplyCementAmount,
   onApplyBillDetails,
 }: BillPdfCementAnalyzerProps) {
@@ -215,7 +217,11 @@ export function BillPdfCementAnalyzer({
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/bills/cement-analysis', {
+      const url = contractId 
+        ? `/api/bills/cement-analysis?contractId=${encodeURIComponent(contractId)}`
+        : '/api/bills/cement-analysis';
+
+      const response = await fetch(url, {
         method: 'POST',
         body: formData,
       });

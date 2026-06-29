@@ -1167,6 +1167,7 @@ function NewBillPageContent() {
 
                 <BillPdfCementAnalyzer
                   title="AI PDF Bill Extraction"
+                  contractId={formData.contractId}
                   onApplyBillDetails={applyExtractedBillDetails}
                 />
 
