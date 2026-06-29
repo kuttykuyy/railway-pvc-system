@@ -445,7 +445,7 @@ export function BillPdfCementAnalyzer({
                   <Cpu className="h-5 w-5 animate-spin" style={{ animationDuration: '4s' }} />
                 </div>
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-800">Processing Document with Gemini AI</h4>
+                  <h4 className="text-sm font-semibold text-slate-800">Processing Document</h4>
                   <p className="text-[11px] text-slate-500">This usually takes 15-25 seconds depending on file length</p>
                 </div>
               </div>
