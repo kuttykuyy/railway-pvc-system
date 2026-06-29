@@ -1,7 +1,7 @@
 'use client';
 
-import { ChangeEvent, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, FileText, Loader2, Upload, Lock, Unlock } from 'lucide-react';
+import { ChangeEvent, useRef, useState, useEffect } from 'react';
+import { AlertCircle, CheckCircle2, FileText, Loader2, Upload, Lock, Unlock, Cpu, Lightbulb } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { Badge } from '@/components/ui/badge';
@@ -128,6 +128,68 @@ export function BillPdfCementAnalyzer({
   const [unlocking, setUnlocking] = useState(false);
   const [unlockCost, setUnlockCost] = useState(50);
 
+  const [loadingStep, setLoadingStep] = useState(0);
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [currentTipIndex, setCurrentTipIndex] = useState(0);
+
+  // Milestones list for interactive loading
+  const loadingSteps = [
+    'Uploading document to secure server...',
+    'Analyzing PDF pages layout & structure...',
+    'Extracting bill metadata (Bill No, Gross Amount)...',
+    'Scanning schedule items & USSR codes...',
+    'Calculating cement consumption coefficients...',
+    'Resolving steel supply types & sections...',
+    'Finalizing summary statistics & previews...'
+  ];
+
+  // Rotating tips list
+  const pvcTips = [
+    'Tip: Keep your PDF scans straight and clean for 99% extraction accuracy.',
+    'Did you know? USSR 2021 cement coefficients are automatically derived based on mix codes.',
+    'Tip: Dedicated supply items (cement/steel) automatically bypass double calculation when active.',
+    'Did you know? JPC steel price indices are updated monthly directly in the admin panel.',
+    'Tip: You can customize the base cement DSR rate manually if your contract uses a custom base rate.',
+    'Did you know? The platform automatically highlights discrepancies between extracted item totals and schedule summaries.'
+  ];
+
+  // Interval to advance progress percent smoothly
+  useEffect(() => {
+    if (!isAnalyzing) {
+      setLoadingStep(0);
+      setProgressPercent(0);
+      return;
+    }
+
+    setLoadingStep(0);
+    setProgressPercent(5);
+
+    const progressInterval = setInterval(() => {
+      setProgressPercent((prev) => {
+        if (prev >= 95) return 95;
+        const increment = prev < 50 ? 5 : prev < 80 ? 2 : 1;
+        return prev + increment;
+      });
+    }, 400);
+
+    const stepInterval = setInterval(() => {
+      setLoadingStep((prev) => {
+        if (prev >= loadingSteps.length - 1) return loadingSteps.length - 1;
+        return prev + 1;
+      });
+    }, 3500);
+
+    const tipInterval = setInterval(() => {
+      setCurrentTipIndex((prev) => (prev + 1) % pvcTips.length);
+    }, 5000);
+
+    return () => {
+      clearInterval(progressInterval);
+      clearInterval(stepInterval);
+      clearInterval(tipInterval);
+    };
+  }, [isAnalyzing]);
+
   const handleUnlock = async () => {
     if (!extractionId) return;
 
@@ -167,27 +229,84 @@ export function BillPdfCementAnalyzer({
   };
 
   const [dsrBaseRate, setDsrBaseRate] = useState<number>(688.45);
-  const [escalation, setEscalation] = useState<string>('');
-  const [bidRate, setBidRate] = useState<string>('');
-  const [rebate, setRebate] = useState<string>('');
+  const [scheduleSettings, setScheduleSettings] = useState<Record<string, {
+    escalation: string;
+    bidRate: string;
+    rebate: string;
+  }>>({});
 
-  const escVal = parseFloat(escalation) || 0;
-  const bidVal = parseFloat(bidRate) || 0;
-  const rebVal = parseFloat(rebate) || 0;
+  // Helper to extract unique schedules that are cement affected
+  const getUniqueCementSchedules = (res: CementAnalysisData | null) => {
+    if (!res) return [];
+    const items = res.billDetails?.items || res.extractedItems || [];
+    const affected = items.filter(item => item.isCementAffected && item.sourceBook !== 'USSR_2021');
+    const schedules = affected.map(item => item.schedule || item.scheduleGroup || 'Default');
+    return Array.from(new Set(schedules)).sort();
+  };
 
-  const afterEsc = dsrBaseRate * (1 + escVal / 100);
-  const afterBid = afterEsc * (1 + bidVal / 100);
-  const afterRebate = afterBid * (1 - rebVal / 100);
+  // Initialize schedule settings when result changes
+  useEffect(() => {
+    if (!result) return;
+    const schedules = getUniqueCementSchedules(result);
+    setScheduleSettings(prev => {
+      const updated = { ...prev };
+      schedules.forEach(sched => {
+        if (!updated[sched]) {
+          updated[sched] = { escalation: '', bidRate: '', rebate: '' };
+        }
+      });
+      return updated;
+    });
+  }, [result]);
 
-  const derivedRatePerQuintal = afterRebate;
-  const derivedRatePerMt = derivedRatePerQuintal * 10;
-  const derivedCementAmount = result ? result.summary.cementQuantity * derivedRatePerMt : 0;
+  const getDerivedRates = (sched: string) => {
+    const settings = scheduleSettings[sched] || { escalation: '', bidRate: '', rebate: '' };
+    const escVal = parseFloat(settings.escalation) || 0;
+    const bidVal = parseFloat(settings.bidRate) || 0;
+    const rebVal = parseFloat(settings.rebate) || 0;
 
-  const getItemCementDeduction = (item: ExtractedBillItem) => {
-    if (!result || !item.isCementAffected || item.sourceBook === 'USSR_2021') return 0;
-    const coeffIndex = result.coefficientItems?.findIndex(ci => ci.dsrCode === item.dsrCode && ci.description === item.description);
+    const afterEsc = dsrBaseRate * (1 + escVal / 100);
+    const afterBid = afterEsc * (1 + bidVal / 100);
+    const afterRebate = afterBid * (1 - rebVal / 100);
+
+    const derivedRatePerQuintal = afterRebate;
+    const derivedRatePerMt = derivedRatePerQuintal * 10;
+
+    return {
+      derivedRatePerQuintal,
+      derivedRatePerMt
+    };
+  };
+
+  const getScheduleCementAmount = (sched: string) => {
+    if (!result) return 0;
+    const { derivedRatePerMt } = getDerivedRates(sched);
+    
+    // Find all items belonging to this schedule
+    const items = result.billDetails?.items || result.extractedItems || [];
+    let scheduleCementQtyMT = 0;
+    
+    items.forEach(item => {
+      const itemSched = item.schedule || item.scheduleGroup || 'Default';
+      if (itemSched === sched && item.isCementAffected && item.sourceBook !== 'USSR_2021') {
+        const coeffIndex = result.coefficientItems?.findIndex(ci => ci.dsrCode === item.dsrCode && ci.description === item.description);
+        if (coeffIndex !== undefined && coeffIndex !== -1) {
+          scheduleCementQtyMT += result.results[coeffIndex]?.cementQuantity || 0;
+        }
+      }
+    });
+
+    return scheduleCementQtyMT * derivedRatePerMt;
+  };
+
+  const getItemCementDeduction = (item: ExtractedBillItem, resData = result) => {
+    if (!resData || !item.isCementAffected || item.sourceBook === 'USSR_2021') return 0;
+    const sched = item.schedule || item.scheduleGroup || 'Default';
+    const { derivedRatePerMt } = getDerivedRates(sched);
+    
+    const coeffIndex = resData.coefficientItems?.findIndex(ci => ci.dsrCode === item.dsrCode && ci.description === item.description);
     if (coeffIndex === undefined || coeffIndex === -1) return 0;
-    const cementQtyMT = result.results[coeffIndex]?.cementQuantity || 0;
+    const cementQtyMT = resData.results[coeffIndex]?.cementQuantity || 0;
     return cementQtyMT * derivedRatePerMt;
   };
 
@@ -205,6 +324,9 @@ export function BillPdfCementAnalyzer({
         const coeffIndex = result.coefficientItems?.findIndex(ci => ci.dsrCode === item.dsrCode && ci.description === item.description);
         const cementQtyMT = coeffIndex !== undefined && coeffIndex !== -1 ? result.results[coeffIndex]?.cementQuantity || 0 : 0;
         const cementQuantityQuintals = cementQtyMT * 10;
+
+        const sched = item.schedule || item.scheduleGroup || 'Default';
+        const { derivedRatePerQuintal } = getDerivedRates(sched);
 
         return {
           ...item,
@@ -314,34 +436,106 @@ export function BillPdfCementAnalyzer({
         </CardTitle>
       </CardHeader>
       <CardContent className={compact ? 'p-4 pt-0 space-y-3' : 'p-5 pt-0 space-y-4'}>
-        <div className="flex justify-start">
-          <div>
-            <input
-              ref={inputRef}
-              type="file"
-              accept="application/pdf,.pdf"
-              className="hidden"
-              onChange={handlePdfUpload}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => inputRef.current?.click()}
-              disabled={disabled || isAnalyzing}
-              className="w-full md:w-auto"
-            >
-              {isAnalyzing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="mr-2 h-4 w-4" />
-              )}
-              {isAnalyzing ? 'Analyzing...' : 'Upload Bill PDF'}
-            </Button>
-          </div>
-        </div>
+        {isAnalyzing ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-5 shadow-sm">
+            {/* Top title and scanning bar animation */}
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded-lg bg-blue-50 p-2 text-blue-600 animate-pulse">
+                  <Cpu className="h-5 w-5 animate-spin" style={{ animationDuration: '4s' }} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-800">Processing Document with Gemini AI</h4>
+                  <p className="text-[11px] text-slate-500">This usually takes 15-25 seconds depending on file length</p>
+                </div>
+              </div>
+              <Badge className="bg-blue-100 text-blue-700 font-bold hover:bg-blue-100 border-none px-2.5 py-1">
+                {progressPercent}%
+              </Badge>
+            </div>
 
-        {fileName && (
-          <div className="text-xs text-muted-foreground">Last file: {fileName}</div>
+            {/* Premium Progress Bar */}
+            <div className="space-y-1">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-600 transition-all duration-300 ease-out"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Step Milestones Checklist */}
+            <div className="space-y-2.5 pt-1">
+              {loadingSteps.map((step, index) => {
+                const isCompleted = index < loadingStep;
+                const isActive = index === loadingStep;
+                return (
+                  <div
+                    key={step}
+                    className={`flex items-start gap-3 text-xs transition-all duration-300 ${
+                      isCompleted ? 'text-green-600 font-medium' : isActive ? 'text-slate-800 font-semibold' : 'text-slate-400'
+                    }`}
+                  >
+                    {isCompleted ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+                    ) : isActive ? (
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-600" />
+                    ) : (
+                      <div className="h-4 w-4 shrink-0 flex items-center justify-center">
+                        <div className="h-1.5 w-1.5 rounded-full bg-slate-200" />
+                      </div>
+                    )}
+                    <span>{step}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Interactive Rotating Tips Box */}
+            <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-3.5 flex items-start gap-3 transition-all duration-500">
+              <div className="rounded-lg bg-amber-100 p-2 text-amber-700 shrink-0">
+                <Lightbulb className="h-4 w-4 animate-bounce" style={{ animationDuration: '3s' }} />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-850">PVC Insight</span>
+                <p className="text-xs text-slate-700 leading-relaxed transition-opacity duration-300">
+                  {pvcTips[currentTipIndex]}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-start">
+              <div>
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={handlePdfUpload}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => inputRef.current?.click()}
+                  disabled={disabled || isAnalyzing}
+                  className="w-full md:w-auto"
+                >
+                  {isAnalyzing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="mr-2 h-4 w-4" />
+                  )}
+                  {isAnalyzing ? 'Analyzing...' : 'Upload Bill PDF'}
+                </Button>
+              </div>
+            </div>
+
+            {fileName && (
+              <div className="text-xs text-muted-foreground">Last file: {fileName}</div>
+            )}
+          </>
         )}
 
         {result && (
@@ -419,75 +613,117 @@ export function BillPdfCementAnalyzer({
                       If there is no direct cement supply item in this contract, the cement rate is derived from DSR 2021 item 5.35 (base Rs. 688.45/quintal) adjusted for contract escalation, bid rate, and rebate.
                     </p>
 
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-medium text-slate-500">Base Rate (Rs./Qtl)</label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={dsrBaseRate}
-                          onChange={(e) => setDsrBaseRate(parseFloat(e.target.value) || 0)}
-                          className="h-8 text-xs bg-white"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-medium text-slate-500">Escalation %</label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          placeholder="e.g. -25.00"
-                          value={escalation}
-                          onChange={(e) => setEscalation(e.target.value)}
-                          className="h-8 text-xs bg-white"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-medium text-slate-500">Bid Rate % (+/-)</label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          placeholder="e.g. 3.80"
-                          value={bidRate}
-                          onChange={(e) => setBidRate(e.target.value)}
-                          className="h-8 text-xs bg-white"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-medium text-slate-500">Rebate % (discount)</label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          placeholder="e.g. 0.50"
-                          value={rebate}
-                          onChange={(e) => setRebate(e.target.value)}
-                          className="h-8 text-xs bg-white"
-                        />
-                      </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-slate-500">Base Rate (Rs./Qtl)</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={dsrBaseRate}
+                        onChange={(e) => setDsrBaseRate(parseFloat(e.target.value) || 0)}
+                        className="h-8 text-xs bg-white w-40"
+                      />
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t border-slate-200">
+                    <div className="space-y-4 pt-2">
+                      {getUniqueCementSchedules(result).map(sched => {
+                        const settings = scheduleSettings[sched] || { escalation: '', bidRate: '', rebate: '' };
+                        const { derivedRatePerQuintal, derivedRatePerMt } = getDerivedRates(sched);
+                        const schedAmount = getScheduleCementAmount(sched);
+                        const schedItemsCount = (result.billDetails?.items || result.extractedItems || [])
+                          .filter(item => (item.schedule || item.scheduleGroup || 'Default') === sched && item.isCementAffected && item.sourceBook !== 'USSR_2021').length;
+
+                        return (
+                          <div key={sched} className="border-t pt-3 first:border-t-0 first:pt-0 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-violet-100 text-violet-750 font-bold border-none">
+                                {sched}
+                              </Badge>
+                              <span className="text-[10px] text-slate-500">({schedItemsCount} cement-affected items)</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-medium text-slate-500">Escalation %</label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="e.g. -25.00"
+                                  value={settings.escalation}
+                                  onChange={(e) => setScheduleSettings(prev => ({
+                                    ...prev,
+                                    [sched]: { ...prev[sched], escalation: e.target.value }
+                                  }))}
+                                  className="h-8 text-xs bg-white"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-medium text-slate-500">Bid Rate % (+/-)</label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="e.g. 3.80"
+                                  value={settings.bidRate}
+                                  onChange={(e) => setScheduleSettings(prev => ({
+                                    ...prev,
+                                    [sched]: { ...prev[sched], bidRate: e.target.value }
+                                  }))}
+                                  className="h-8 text-xs bg-white"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-medium text-slate-500">Rebate % (discount)</label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="e.g. 0.50"
+                                  value={settings.rebate}
+                                  onChange={(e) => setScheduleSettings(prev => ({
+                                    ...prev,
+                                    [sched]: { ...prev[sched], rebate: e.target.value }
+                                  }))}
+                                  className="h-8 text-xs bg-white"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 pt-1.5 text-[11px] bg-slate-50 p-2 rounded">
+                              <div>
+                                <span className="text-slate-400">Rate/Qtl: </span>
+                                <span className="font-semibold text-slate-800">Rs. {derivedRatePerQuintal.toFixed(4)}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400">Rate/MT: </span>
+                                <span className="font-semibold text-slate-800">Rs. {derivedRatePerMt.toFixed(2)}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-slate-400">Amount: </span>
+                                <span className="font-bold text-violet-700">{formatAmount(schedAmount)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-200">
                       <div>
-                        <div className="text-[10px] text-slate-400">Rate per Quintal</div>
-                        <div className="font-semibold text-slate-800">Rs. {derivedRatePerQuintal.toFixed(6)}</div>
+                        <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Total Derived Cement Cost</div>
+                        <div className="text-base font-extrabold text-violet-850">
+                          {formatAmount(
+                            getUniqueCementSchedules(result).reduce((sum, sched) => sum + getScheduleCementAmount(sched), 0)
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-[10px] text-slate-400">Rate per MT</div>
-                        <div className="font-semibold text-slate-800">Rs. {derivedRatePerMt.toFixed(5)}</div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-slate-400">Calculated Amount</div>
-                        <div className="font-bold text-violet-750">{formatAmount(derivedCementAmount)}</div>
-                      </div>
-                      <div className="flex items-end justify-end">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => applyCalculatedAmount(derivedCementAmount)}
-                          className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white font-medium"
-                        >
-                          Apply Derived Cost
-                        </Button>
-                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => applyCalculatedAmount(
+                          getUniqueCementSchedules(result).reduce((sum, sched) => sum + getScheduleCementAmount(sched), 0)
+                        )}
+                        className="h-8 text-xs bg-violet-650 hover:bg-violet-750 text-white font-medium"
+                      >
+                        Apply Derived Costs
+                      </Button>
                     </div>
                   </div>
                 )}
