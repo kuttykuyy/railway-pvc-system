@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 
 interface CementAnalysisSummary {
   matchedItemCount: number;
@@ -119,6 +120,41 @@ export function BillPdfCementAnalyzer({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<CementAnalysisData | null>(null);
   const [fileName, setFileName] = useState('');
+
+  const [dsrBaseRate, setDsrBaseRate] = useState<number>(688.45);
+  const [escalation, setEscalation] = useState<string>('');
+  const [bidRate, setBidRate] = useState<string>('');
+  const [rebate, setRebate] = useState<string>('');
+
+  const escVal = parseFloat(escalation) || 0;
+  const bidVal = parseFloat(bidRate) || 0;
+  const rebVal = parseFloat(rebate) || 0;
+
+  const afterEsc = dsrBaseRate * (1 + escVal / 100);
+  const afterBid = afterEsc * (1 + bidVal / 100);
+  const afterRebate = afterBid * (1 - rebVal / 100);
+
+  const derivedRatePerQuintal = afterRebate;
+  const derivedRatePerMt = derivedRatePerQuintal * 10;
+  const derivedCementAmount = result ? result.summary.cementQuantity * derivedRatePerMt : 0;
+
+  const applyCalculatedAmount = (amount: number) => {
+    if (!result) return;
+    const updated = {
+      ...result,
+      summary: {
+        ...result.summary,
+        cementAmount: amount,
+      },
+      cementRatePerUnit: amount / result.summary.cementQuantity,
+      cementAmountSource: 'DSR_COEFFICIENT' as const,
+    };
+    setResult(updated);
+    if (onApplyCementAmount) {
+      onApplyCementAmount(amount, updated);
+    }
+    toast.success(`Applied derived cement cost: ${formatAmount(amount)}`);
+  };
 
   const handlePdfUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -264,9 +300,96 @@ export function BillPdfCementAnalyzer({
             )}
 
             {result.summary.cementAmount === null || result.summary.cementAmount === undefined ? (
-              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
-                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                No cement supply rate was found in the bill, so the cement amount could not be calculated automatically.
+              <div className="space-y-3">
+                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <div>
+                    No cement supply rate was found in the bill, so the cement amount could not be calculated automatically.
+                  </div>
+                </div>
+
+                {result.summary.cementQuantity > 0 && (
+                  <div className="rounded-md border border-slate-200 bg-slate-50/50 p-3 text-xs space-y-3">
+                    <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                      <FileText className="h-4 w-4 text-violet-600" />
+                      DSR 5.35 Cement Rate Calculator (No direct supply rate fallback)
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      If there is no direct cement supply item in this contract, the cement rate is derived from DSR 2021 item 5.35 (base Rs. 688.45/quintal) adjusted for contract escalation, bid rate, and rebate.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-medium text-slate-500">Base Rate (Rs./Qtl)</label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={dsrBaseRate}
+                          onChange={(e) => setDsrBaseRate(parseFloat(e.target.value) || 0)}
+                          className="h-8 text-xs bg-white"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-medium text-slate-500">Escalation %</label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="e.g. -25.00"
+                          value={escalation}
+                          onChange={(e) => setEscalation(e.target.value)}
+                          className="h-8 text-xs bg-white"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-medium text-slate-500">Bid Rate % (+/-)</label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="e.g. 3.80"
+                          value={bidRate}
+                          onChange={(e) => setBidRate(e.target.value)}
+                          className="h-8 text-xs bg-white"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-medium text-slate-500">Rebate % (discount)</label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="e.g. 0.50"
+                          value={rebate}
+                          onChange={(e) => setRebate(e.target.value)}
+                          className="h-8 text-xs bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t border-slate-200">
+                      <div>
+                        <div className="text-[10px] text-slate-400">Rate per Quintal</div>
+                        <div className="font-semibold text-slate-800">Rs. {derivedRatePerQuintal.toFixed(6)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-400">Rate per MT</div>
+                        <div className="font-semibold text-slate-800">Rs. {derivedRatePerMt.toFixed(5)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-400">Calculated Amount</div>
+                        <div className="font-bold text-violet-750">{formatAmount(derivedCementAmount)}</div>
+                      </div>
+                      <div className="flex items-end justify-end">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => applyCalculatedAmount(derivedCementAmount)}
+                          className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white font-medium"
+                        >
+                          Apply Derived Cost
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : result.cementAmountSource === 'USSR_SEPARATE_SUPPLY' ? (
               <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
