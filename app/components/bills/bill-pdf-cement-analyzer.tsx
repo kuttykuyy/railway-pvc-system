@@ -138,10 +138,39 @@ export function BillPdfCementAnalyzer({
   const derivedRatePerMt = derivedRatePerQuintal * 10;
   const derivedCementAmount = result ? result.summary.cementQuantity * derivedRatePerMt : 0;
 
+  const getItemCementDeduction = (item: ExtractedBillItem) => {
+    if (!result || !item.isCementAffected || item.sourceBook === 'USSR_2021') return 0;
+    const coeffIndex = result.coefficientItems?.findIndex(ci => ci.dsrCode === item.dsrCode && ci.description === item.description);
+    if (coeffIndex === undefined || coeffIndex === -1) return 0;
+    const cementQtyMT = result.results[coeffIndex]?.cementQuantity || 0;
+    return cementQtyMT * derivedRatePerMt;
+  };
+
   const applyCalculatedAmount = (amount: number) => {
     if (!result) return;
+    
+    // Update the amountSinceLastBill of each cement-affected item in the result items list
+    const updatedItems = (result.billDetails?.items || result.extractedItems || []).map((item) => {
+      const deduction = getItemCementDeduction(item);
+      if (deduction > 0) {
+        // Store the original amount in a new property if not already present
+        const originalAmount = (item as any).originalAmount ?? Number(item.amountSinceLastBill || 0);
+        return {
+          ...item,
+          originalAmount,
+          amountSinceLastBill: originalAmount - deduction,
+        };
+      }
+      return item;
+    });
+
     const updated = {
       ...result,
+      billDetails: result.billDetails ? {
+        ...result.billDetails,
+        items: updatedItems,
+      } : undefined,
+      extractedItems: result.extractedItems ? updatedItems : undefined,
       summary: {
         ...result.summary,
         cementAmount: amount,
@@ -149,11 +178,15 @@ export function BillPdfCementAnalyzer({
       cementRatePerUnit: amount / result.summary.cementQuantity,
       cementAmountSource: 'DSR_COEFFICIENT' as const,
     };
+
     setResult(updated);
     if (onApplyCementAmount) {
       onApplyCementAmount(amount, updated);
     }
-    toast.success(`Applied derived cement cost: ${formatAmount(amount)}`);
+    if (onApplyBillDetails) {
+      onApplyBillDetails(updated);
+    }
+    toast.success(`Applied derived cement cost: ${formatAmount(amount)} and deducted from cement-affected DSR items.`);
   };
 
   const handlePdfUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -441,7 +474,23 @@ export function BillPdfCementAnalyzer({
                         {item.quantitySinceLastBillRaw || formatNumber(item.quantitySinceLastBill, 2)} {item.unit}
                       </td>
                       <td className="whitespace-nowrap px-2 py-2 text-right">{item.agreementRateRaw || formatAmount(item.agreementRate)}</td>
-                      <td className="whitespace-nowrap px-2 py-2 text-right font-medium">{formatAmount(item.amountSinceLastBill)}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
+                        {getItemCementDeduction(item) > 0 ? (
+                          <div className="space-y-0.5">
+                            <div className="text-[10px] text-slate-400 line-through">
+                              {formatAmount((item as any).originalAmount || item.amountSinceLastBill)}
+                            </div>
+                            <div className="text-[10px] text-red-500 font-medium">
+                              -{formatAmount(getItemCementDeduction(item))}
+                            </div>
+                            <div className="text-slate-800 font-bold">
+                              {formatAmount(item.amountSinceLastBill)}
+                            </div>
+                          </div>
+                        ) : (
+                          formatAmount(item.amountSinceLastBill)
+                        )}
+                      </td>
                       <td className="whitespace-nowrap px-2 py-2">{item.suggestedClassificationCode || '-'}</td>
                     </tr>
                   ))}
