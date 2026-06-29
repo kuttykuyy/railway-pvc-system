@@ -23,10 +23,12 @@ interface ExtractedBillItem {
   description: string;
   unit: string;
   quantitySinceLastBill: number;
+  quantitySinceLastBillRaw?: string;
   amountAtAgreementRateSinceLastBill?: number;
   amountIncludingSpecialConditionSinceLastBill?: number;
   amountSinceLastBill?: number;
   agreementRate?: number;
+  agreementRateRaw?: string;
   schedule?: string;
   scheduleGroup?: string;
   chapter?: string;
@@ -49,19 +51,34 @@ function toFiniteNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function toPrintedDecimal(value: unknown): string | undefined {
+  const printed = String(value ?? '').replace(/,/g, '').trim();
+  return /^-?\d+(?:\.\d+)?$/.test(printed) ? printed : undefined;
+}
+
 function normalizeExtractedItem(item: any): ExtractedBillItem {
   const steelTypes = new Set(['TMT', 'ANGLE_CHANNEL', 'PLATES', 'OTHER_SECTIONS']);
   const steelType = String(item?.steelType || '').trim().toUpperCase();
   const itemNo = String(item?.itemNo || item?.dsrCode || '').trim();
   const schedule = String(item?.schedule || '').trim();
-  const sourceText = `${item?.sourceBook || ''} ${schedule} ${itemNo}`.toUpperCase();
+  const declaredSource = String(item?.sourceBook || '').trim().toUpperCase();
+  const scheduleText = `${schedule} ${item?.scheduleGroup || ''} ${item?.chapter || ''}`.toUpperCase();
+  const sourceText = `${declaredSource} ${scheduleText} ${itemNo}`;
   let sourceBook: SourceBook = 'UNKNOWN';
-  if (/USSR[\s-]*2021|USSR_2021/.test(sourceText) || /^\d{6}(?:\D|$)/.test(itemNo)) {
-    sourceBook = 'USSR_2021';
-  } else if (/DSR[\s-]*2021|DSR_2021/.test(sourceText) || /\d+(?:\.\d+)+/.test(itemNo)) {
-    sourceBook = 'DSR_2021';
-  } else if (/NON[\s-]*SCHEDULE|NON_SCHEDULE|\bNS\b/.test(sourceText)) {
+  if (/NON[\s-]*SCHEDULE|NON_SCHEDULE|NOT\s+COVERED|\bNS\b/.test(sourceText)) {
     sourceBook = 'NON_SCHEDULE';
+  } else if (/(?:CPWD[\s-]*)?DSR[\s-]*2021/.test(scheduleText)) {
+    sourceBook = 'DSR_2021';
+  } else if (/USSR[\s-]*2021/.test(scheduleText)) {
+    sourceBook = 'USSR_2021';
+  } else if (declaredSource === 'DSR_2021') {
+    sourceBook = 'DSR_2021';
+  } else if (declaredSource === 'USSR_2021') {
+    sourceBook = 'USSR_2021';
+  } else if (/^\d{6}(?:\D|$)/.test(itemNo)) {
+    sourceBook = 'USSR_2021';
+  } else if (/\d+(?:\.\d+)+/.test(itemNo)) {
+    sourceBook = 'DSR_2021';
   }
 
   const isCementAffected = item?.isCementAffected === true;
@@ -70,8 +87,10 @@ function normalizeExtractedItem(item: any): ExtractedBillItem {
     itemNo,
     description: String(item?.description || '').trim(),
     unit: String(item?.unit || '').trim(),
-    quantitySinceLastBill: toFiniteNumber(item?.quantitySinceLastBill) || 0,
-    agreementRate: toFiniteNumber(item?.agreementRate),
+    quantitySinceLastBill: toFiniteNumber(item?.quantitySinceLastBillRaw ?? item?.quantitySinceLastBill) || 0,
+    quantitySinceLastBillRaw: toPrintedDecimal(item?.quantitySinceLastBillRaw ?? item?.quantitySinceLastBill),
+    agreementRate: toFiniteNumber(item?.agreementRateRaw ?? item?.agreementRate),
+    agreementRateRaw: toPrintedDecimal(item?.agreementRateRaw ?? item?.agreementRate),
     amountAtAgreementRateSinceLastBill: toFiniteNumber(item?.amountAtAgreementRateSinceLastBill),
     amountIncludingSpecialConditionSinceLastBill: toFiniteNumber(item?.amountIncludingSpecialConditionSinceLastBill ?? item?.amountSinceLastBill),
     amountSinceLastBill: toFiniteNumber(item?.amountIncludingSpecialConditionSinceLastBill ?? item?.amountSinceLastBill),
@@ -426,10 +445,13 @@ async function correctSpecialConditionAmounts(
       const prompt = `Re-read current payable item amounts from part ${partNumber} of an Indian Railway bill converted to Markdown.
 
 Return JSON only:
-{"items":[{"itemNo":"visible item number","schedule":"schedule heading","scheduleGroup":"schedule group","amountIncludingSpecialConditionSinceLastBill":number}]}
+{"items":[{"itemNo":"visible item number","schedule":"schedule heading","scheduleGroup":"schedule group","quantitySinceLastBillRaw":"exact printed decimal","agreementRateRaw":"exact printed decimal","amountAtAgreementRateSinceLastBill":number,"amountIncludingSpecialConditionSinceLastBill":number}]}
 
 Rules:
 - Include only rows with a nonzero current payable amount.
+- quantitySinceLastBillRaw MUST come only from the column headed "Qty executed since last Bill". Do not use Original Agreement Qty, Qty up to last bill, or Total Qty up to date.
+- agreementRateRaw MUST preserve the exact decimal text printed in the Agreement Rate column, including trailing zeros.
+- amountAtAgreementRateSinceLastBill is the current Qty x Agreement Rate column and must be kept separate from the special-condition amount.
 - Select only the column headed "Since last Bill including special condition", "Amount including Special Condition", or equivalent current-payable special-condition column.
 - Do not return Qty x Agreement Rate, Amount Upto Last Bill, Total Upto Date, cumulative amount, or schedule total.
 - Reconstruct digits split across Markdown lines.
@@ -442,30 +464,45 @@ ${markdownPart}
     parsedCorrections.push(...results);
   }
 
-  const exactCorrections = new Map<string, number>();
-  const correctionsByItemNo = new Map<string, number[]>();
+  type ItemCorrection = {
+    amount: number;
+    quantityRaw?: string;
+    agreementRateRaw?: string;
+    agreementAmount?: number;
+  };
+  const exactCorrections = new Map<string, ItemCorrection>();
+  const correctionsByItemNo = new Map<string, ItemCorrection[]>();
   for (const part of parsedCorrections) {
     for (const correction of Array.isArray(part?.items) ? part.items : []) {
       const amount = toFiniteNumber(correction?.amountIncludingSpecialConditionSinceLastBill);
+      const quantityRaw = toPrintedDecimal(correction?.quantitySinceLastBillRaw);
+      const agreementRateRaw = toPrintedDecimal(correction?.agreementRateRaw);
+      const agreementAmount = toFiniteNumber(correction?.amountAtAgreementRateSinceLastBill);
       const itemNo = String(correction?.itemNo || '').replace(/\s+/g, '').toUpperCase();
       if (!itemNo || amount === undefined || amount <= 0) continue;
-      exactCorrections.set(correctionItemKey(correction), amount);
+      const itemCorrection = { amount, quantityRaw, agreementRateRaw, agreementAmount };
+      exactCorrections.set(correctionItemKey(correction), itemCorrection);
       const existing = correctionsByItemNo.get(itemNo) || [];
-      if (!existing.includes(amount)) existing.push(amount);
+      if (!existing.some(value => value.amount === amount)) existing.push(itemCorrection);
       correctionsByItemNo.set(itemNo, existing);
     }
   }
 
   return items.map(item => {
     const itemNo = String(item.itemNo || item.dsrCode || '').replace(/\s+/g, '').toUpperCase();
-    const exactAmount = exactCorrections.get(correctionItemKey(item));
-    const itemNoAmounts = correctionsByItemNo.get(itemNo) || [];
-    const correctedAmount = exactAmount ?? (itemNoAmounts.length === 1 ? itemNoAmounts[0] : undefined);
-    if (correctedAmount === undefined) return item;
+    const exactCorrection = exactCorrections.get(correctionItemKey(item));
+    const itemNoCorrections = correctionsByItemNo.get(itemNo) || [];
+    const correction = exactCorrection ?? (itemNoCorrections.length === 1 ? itemNoCorrections[0] : undefined);
+    if (!correction) return item;
     return {
       ...item,
-      amountIncludingSpecialConditionSinceLastBill: correctedAmount,
-      amountSinceLastBill: correctedAmount,
+      quantitySinceLastBill: toFiniteNumber(correction.quantityRaw) ?? item.quantitySinceLastBill,
+      quantitySinceLastBillRaw: correction.quantityRaw ?? item.quantitySinceLastBillRaw,
+      agreementRate: toFiniteNumber(correction.agreementRateRaw) ?? item.agreementRate,
+      agreementRateRaw: correction.agreementRateRaw ?? item.agreementRateRaw,
+      amountAtAgreementRateSinceLastBill: correction.agreementAmount ?? item.amountAtAgreementRateSinceLastBill,
+      amountIncludingSpecialConditionSinceLastBill: correction.amount,
+      amountSinceLastBill: correction.amount,
     };
   });
 }
@@ -568,7 +605,9 @@ Return JSON only:
       "description": "full item description",
       "unit": "Cum/Sqm/Kg/MT/etc",
       "quantitySinceLastBill": number,
+      "quantitySinceLastBillRaw": "exact decimal text printed under Qty executed since last Bill",
       "agreementRate": number,
+      "agreementRateRaw": "exact decimal text printed under Agreement Rate, including trailing zeros",
       "amountAtAgreementRateSinceLastBill": "current Qty x Agreement Rate amount before special condition",
       "amountIncludingSpecialConditionSinceLastBill": "current payable amount after special condition",
       "amountSinceLastBill": "same value as amountIncludingSpecialConditionSinceLastBill",
@@ -601,7 +640,9 @@ Rules:
 - For steelType use TMT only for reinforcement/TMT bars; ANGLE_CHANNEL for angles/channels/joists; PLATES for plates; and OTHER_SECTIONS for wire rope, mesh, rounds, coils, or other steel products.
 - Use the DSR code printed in the bill, not the schedule serial number.
 - For non-schedule cement/concrete items without a DSR code, return dsrCode as MIX-1:2:4, MIX-1:3:6, MIX-1:1.5:3, etc. based on the visible mix ratio.
-- quantitySinceLastBill must be the current payable quantity for this bill.
+- quantitySinceLastBill and quantitySinceLastBillRaw must come only from the column headed "Qty executed since last Bill". Never use Original Agreement Qty, Qty executed up to last bill, or Total Qty up to date.
+- agreementRateRaw must preserve every decimal digit exactly as printed in the Agreement Rate column. agreementRate is its numeric equivalent.
+- Verify quantitySinceLastBill x agreementRate against amountAtAgreementRateSinceLastBill before returning each row.
 - Exclude rows where both current quantity and current payable amount are zero. Do not return cumulative-only or audit-only rows.
 - Keep amountAtAgreementRateSinceLastBill and amountIncludingSpecialConditionSinceLastBill separate. amountSinceLastBill must exactly equal amountIncludingSpecialConditionSinceLastBill, never Qty x Agreement Rate.
 - The "items" array must only contain detailed payable work items. Do not include schedule summary totals, rebate rows, or grand total rows in the "items" array.
@@ -729,11 +770,19 @@ ${markdownPart}
 
   let itemAmountTotal = filteredItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
   let amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
-  if (Math.abs(amountDifference) > 0.05) {
+  const hasColumnMismatch = filteredItems.some(item => {
+    const quantity = Number(item.quantitySinceLastBill || 0);
+    const rate = Number(item.agreementRate || 0);
+    const agreementAmount = Number(item.amountAtAgreementRateSinceLastBill || 0);
+    if (!(quantity > 0 && rate > 0 && agreementAmount > 0)) return false;
+    return Math.abs((quantity * rate) - agreementAmount) > Math.max(0.1, agreementAmount * 0.000001);
+  });
+  if (Math.abs(amountDifference) > 0.05 || hasColumnMismatch) {
     console.warn('[bill-extraction] Re-reading special-condition item amounts', {
       itemAmountTotal,
       scheduleSummaryTotal,
       amountDifference,
+      hasColumnMismatch,
     });
     filteredItems = await correctSpecialConditionAmounts(apiKey, markdownParts, filteredItems);
     itemAmountTotal = filteredItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
@@ -789,25 +838,23 @@ export async function POST(request: NextRequest) {
 
     const billDetails = await extractBillDetailsWithAi(file, request.nextUrl.origin);
     const extractedItems = billDetails.items;
-    const rawDsrCodes = Array.from(new Set(extractedItems.map(item => normalizeDsrCode(item.dsrCode)).filter(Boolean)));
+    const rawDsrCodes = Array.from(new Set(extractedItems
+      .filter(item => item.sourceBook === 'DSR_2021')
+      .map(item => normalizeDsrCode(item.dsrCode))
+      .filter(Boolean)));
     const coefficients = await prisma.dsrCementCoefficient.findMany({
-      where: {
-        dsrCode: { in: rawDsrCodes },
-        isActive: true,
-      },
+      where: { isActive: true },
     });
-    const coefficientByCode = new Map(coefficients.map(item => [item.dsrCode, item]));
+    const coefficientByCode = new Map(coefficients.map(item => [normalizeDsrCode(item.dsrCode), item]));
 
     // Refine items classification and cement flags using database coefficients
     for (const item of extractedItems) {
       const dsrCode = normalizeDsrCode(item.dsrCode);
-      const coefficient = coefficientByCode.get(dsrCode);
+      const coefficient = item.sourceBook === 'DSR_2021' ? coefficientByCode.get(dsrCode) : undefined;
 
       if (coefficient) {
         item.isCementAffected = true;
-        if (item.sourceBook !== 'USSR_2021') {
-          item.requiresDsrCementCoefficient = true;
-        }
+        item.requiresDsrCementCoefficient = true;
 
         const currentCode = String(item.suggestedClassificationCode || '');
         const mainCode = currentCode.charAt(0);
@@ -823,6 +870,12 @@ export async function POST(request: NextRequest) {
         }
       }
     }
+
+    console.info('[cement-analysis] DSR coefficient matching', {
+      requestedCodes: rawDsrCodes,
+      matchedCodes: rawDsrCodes.filter(code => coefficientByCode.has(code)),
+      unmatchedCodes: rawDsrCodes.filter(code => !coefficientByCode.has(code)),
+    });
 
     const directCementSupplyItems = extractedItems.filter(isDirectCementSupplyItem);
     const cementItems = extractedItems.filter(item => item.isCementAffected || isDirectCementSupplyItem(item));

@@ -36,9 +36,11 @@ export interface ExtractedBillItem {
   description: string;
   unit: string;
   quantitySinceLastBill: number;
+  quantitySinceLastBillRaw?: string;
   amountAtAgreementRateSinceLastBill?: number;
   amountIncludingSpecialConditionSinceLastBill?: number;
   agreementRate?: number;
+  agreementRateRaw?: string;
   amountSinceLastBill?: number;
   schedule?: string;
   scheduleGroup?: string;
@@ -316,9 +318,9 @@ export function BillPdfCementAnalyzer({
                         </div>
                       </td>
                       <td className="whitespace-nowrap px-2 py-2 text-right">
-                        {formatNumber(item.quantitySinceLastBill, 2)} {item.unit}
+                        {item.quantitySinceLastBillRaw || formatNumber(item.quantitySinceLastBill, 2)} {item.unit}
                       </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-right">{formatAmount(item.agreementRate)}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right">{item.agreementRateRaw || formatAmount(item.agreementRate)}</td>
                       <td className="whitespace-nowrap px-2 py-2 text-right font-medium">{formatAmount(item.amountSinceLastBill)}</td>
                       <td className="whitespace-nowrap px-2 py-2">{item.suggestedClassificationCode || '-'}</td>
                     </tr>

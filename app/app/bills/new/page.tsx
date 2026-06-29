@@ -498,12 +498,12 @@ function NewBillPageContent() {
             [item.schedule, item.scheduleGroup, item.chapter],
           ),
           itemNumber: item.itemNo || item.dsrCode || '',
-          quantity: item.quantitySinceLastBill || '',
-          agreementRate: item.agreementRate || '',
+          quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
+          agreementRate: item.agreementRateRaw || item.agreementRate || '',
           itemRows: [{
             itemNumber: item.itemNo || item.dsrCode || '',
-            quantity: item.quantitySinceLastBill || '',
-            agreementRate: item.agreementRate || '',
+            quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
+            agreementRate: item.agreementRateRaw || item.agreementRate || '',
           }],
         };
       })
