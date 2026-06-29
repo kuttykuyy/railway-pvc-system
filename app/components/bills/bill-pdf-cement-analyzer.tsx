@@ -155,9 +155,18 @@ export function BillPdfCementAnalyzer({
       if (deduction > 0) {
         // Store the original amount in a new property if not already present
         const originalAmount = (item as any).originalAmount ?? Number(item.amountSinceLastBill || 0);
+        
+        // Find cement quantity in MT from result
+        const coeffIndex = result.coefficientItems?.findIndex(ci => ci.dsrCode === item.dsrCode && ci.description === item.description);
+        const cementQtyMT = coeffIndex !== undefined && coeffIndex !== -1 ? result.results[coeffIndex]?.cementQuantity || 0 : 0;
+        const cementQuantityQuintals = cementQtyMT * 10;
+
         return {
           ...item,
           originalAmount,
+          cementDeduction: deduction,
+          cementQuantityQuintals,
+          cementRatePerQuintal: derivedRatePerQuintal,
           amountSinceLastBill: originalAmount - deduction,
         };
       }

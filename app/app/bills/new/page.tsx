@@ -492,7 +492,10 @@ function NewBillPageContent() {
       const hasDeduction = typeof originalAmount === 'number' && originalAmount > netAmount;
 
       if (hasDeduction) {
-        const cementCost = originalAmount - netAmount;
+        const cementCost = (item as any).cementDeduction || (originalAmount - netAmount);
+        const cementQty = (item as any).cementQuantityQuintals || 0;
+        const cementRate = (item as any).cementRatePerQuintal || '';
+        
         const mainCode = subClassification.code.charAt(0);
         const cementSub = allSubClassifications.find(sub => sub.code.toUpperCase() === `${mainCode}C`);
 
@@ -501,6 +504,9 @@ function NewBillPageContent() {
             selectedContract?.schedules || [],
             [item.schedule, item.scheduleGroup, item.chapter],
           );
+
+          const qty = Number(item.quantitySinceLastBill || 0);
+          const netRate = qty > 0 ? Number((netAmount / qty).toFixed(6)) : '';
 
           return [
             {
@@ -511,12 +517,12 @@ function NewBillPageContent() {
               steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
               scheduleItem,
               itemNumber: item.itemNo || item.dsrCode || '',
-              quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
-              agreementRate: item.agreementRateRaw || item.agreementRate || '',
+              quantity: qty || '',
+              agreementRate: netRate,
               itemRows: [{
                 itemNumber: item.itemNo || item.dsrCode || '',
-                quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
-                agreementRate: item.agreementRateRaw || item.agreementRate || '',
+                quantity: qty || '',
+                agreementRate: netRate,
               }],
             },
             {
@@ -527,12 +533,12 @@ function NewBillPageContent() {
               steelTypes: [],
               scheduleItem,
               itemNumber: `${item.itemNo || item.dsrCode || ''}-CEM`,
-              quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
-              agreementRate: '',
+              quantity: cementQty || '',
+              agreementRate: cementRate,
               itemRows: [{
                 itemNumber: `${item.itemNo || item.dsrCode || ''}-CEM`,
-                quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
-                agreementRate: '',
+                quantity: cementQty || '',
+                agreementRate: cementRate,
               }],
             }
           ];
