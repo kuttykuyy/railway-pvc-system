@@ -18,7 +18,8 @@ export interface PaymentValidationResult {
  * Validates if a user can process a bill (payment confirmation required)
  */
 export async function validateBillProcessing(
-  request: Request
+  request: Request,
+  isAiUploaded?: boolean
 ): Promise<PaymentValidationResult> {
   try {
     const session = await getServerSession(authOptions);
@@ -91,7 +92,9 @@ export async function validateBillProcessing(
     // For paid contractor bills, use a fixed per-bill charge with no discounts.
     const { getBillingSettings } = await import('./admin-settings');
     const billingSettings = await getBillingSettings();
-    const fullCost = billingSettings.billCost || 199;
+    const fullCost = isAiUploaded 
+      ? (billingSettings.aiBillCost || 499) 
+      : (billingSettings.billCost || 199);
     const billCost = fullCost;
 
     // Check if user has sufficient balance in their customer account
@@ -138,7 +141,8 @@ export async function processPaymentForBill(
   },
   paidAmount?: number,
   totalPvc?: number,
-  agreementNo?: string
+  agreementNo?: string,
+  isAiUploaded?: boolean
 ): Promise<{ success: boolean; message: string; transaction?: any }> {
   try {
 
@@ -155,7 +159,9 @@ export async function processPaymentForBill(
     // Calculate pricing — fetch settings ONCE up front
     const { getBillingSettings } = await import('./admin-settings');
     const billingSettings = await getBillingSettings();
-    const baseAmount = billingSettings.billCost || 199;
+    const baseAmount = isAiUploaded 
+      ? (billingSettings.aiBillCost || 499) 
+      : (billingSettings.billCost || 199);
     const freeTrialLimit = billingSettings.freeTrialBills || 1;
 
     const finalAmount = baseAmount;

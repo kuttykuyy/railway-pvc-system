@@ -183,8 +183,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: message || 'Unauthorized' }, { status: 401 });
     }
     
+    // ===== STEP 3: Parse and Validate Request Body =====
+    const body = await request.json();
+    const {
+      contractId,
+      billNo,
+      grossBillAmount,
+      billAmount,
+      cementAmount = 0,
+      steelTmtBarsAmount = 0,
+      steelAngleChannelAmount = 0,
+      steelPlatesAmount = 0,
+      steelOtherSectionsAmount = 0,
+      dateOfMeasurement,
+      dateOfCompletion,
+      calculationMethod = 'auto',
+      workClassification,
+      zone,
+      fuelPriceType = 'four_city_avg',
+      isFinalPvc = false,
+      nonScheduleItems = [],
+      classificationEntries = [],
+      isAiUploaded,
+    } = body;
+
     // ===== STEP 2: Payment Validation =====
-    const paymentValidation = await validateBillProcessing(request);
+    const paymentValidation = await validateBillProcessing(request, isAiUploaded);
     if (!paymentValidation.canProcess) {
       return NextResponse.json({
         error: 'Payment required',
@@ -219,29 +243,6 @@ export async function POST(request: NextRequest) {
       }
 
     }
-
-    // ===== STEP 3: Parse and Validate Request Body =====
-    const body = await request.json();
-    const {
-      contractId,
-      billNo,
-      grossBillAmount,
-      billAmount,
-      cementAmount = 0,
-      steelTmtBarsAmount = 0,
-      steelAngleChannelAmount = 0,
-      steelPlatesAmount = 0,
-      steelOtherSectionsAmount = 0,
-      dateOfMeasurement,
-      dateOfCompletion,
-      calculationMethod = 'auto',
-      workClassification,
-      zone,
-      fuelPriceType = 'four_city_avg',
-      isFinalPvc = false,
-      nonScheduleItems = [],
-      classificationEntries = [],
-    } = body;
     
     // ===== STEP 3A: Lock zone for Railway Officials =====
     // Always use the zone stored on their profile — ignore whatever was submitted
@@ -730,7 +731,8 @@ export async function POST(request: NextRequest) {
       undefined, // No Razorpay data
       finalBillAmount,
       totalPvc,
-      contract.agreementNo
+      contract.agreementNo,
+      isAiUploaded
     );
     
     if (!paymentResult.success) {

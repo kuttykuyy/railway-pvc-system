@@ -279,13 +279,13 @@ export function BillClassificationEntries({
       {/* Classification Entries */}
       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
+          <table className="min-w-[950px] w-full text-xs border-collapse">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="text-left font-semibold text-slate-700 px-4 py-3 w-1/4">Classification</th>
-                <th className="text-left font-semibold text-slate-700 px-4 py-3 w-1/4">Schedule & Ref</th>
-                <th className="text-left font-semibold text-slate-700 px-4 py-3 w-1/3">Items (Qty × Rate)</th>
-                <th className="text-left font-semibold text-slate-700 px-4 py-3 w-1/5">Amount (₹)</th>
+                <th className="text-left font-semibold text-slate-700 px-4 py-3 w-[20%]">Classification</th>
+                <th className="text-left font-semibold text-slate-700 px-4 py-3 w-[32%]">Schedule & Ref</th>
+                <th className="text-left font-semibold text-slate-700 px-4 py-3 w-[32%]">Items (Qty × Rate)</th>
+                <th className="text-left font-semibold text-slate-700 px-4 py-3 w-[16%]">Amount (₹)</th>
                 <th className="text-center font-semibold text-slate-700 px-4 py-3 w-10"></th>
               </tr>
             </thead>
@@ -401,7 +401,7 @@ export function BillClassificationEntries({
 
                     {/* Col 2: Schedule & Ref */}
                     <td className="px-4 py-3 space-y-2 align-top">
-                      {contractSchedules.length > 0 && (
+                      {contractSchedules.length > 0 ? (
                         <div className="space-y-1">
                           <Select
                             value={entry.scheduleItem || '_none_'}
@@ -417,6 +417,16 @@ export function BillClassificationEntries({
                               ))}
                             </SelectContent>
                           </Select>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <Input
+                            type="text"
+                            placeholder="Schedule (e.g. Sch A)..."
+                            value={entry.scheduleItem || ''}
+                            onChange={(e) => updateEntry(index, 'scheduleItem', e.target.value)}
+                            className="h-8 text-xs bg-white"
+                          />
                         </div>
                       )}
 

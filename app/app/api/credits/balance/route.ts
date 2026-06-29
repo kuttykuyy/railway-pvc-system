@@ -35,12 +35,14 @@ export async function GET(request: NextRequest) {
 
     // Get billing settings
     const billingSettings = await getBillingSettings();
+    const isAiUploaded = request.nextUrl.searchParams.get('isAiUploaded') === 'true';
+    const baseCost = isAiUploaded ? (billingSettings.aiBillCost || 499) : (billingSettings.billCost || 199);
     const isSuperadmin = user.role === 'superadmin';
     const isAdmin = user.role === 'admin';
     const isRailwayOfficial = user.role === 'railway_official';
     const isFree = user.isFreeAccount || isSuperadmin || isAdmin || isRailwayOfficial || user.customProcessingFee === 0;
     
-    const billCost = isFree ? 0 : (billingSettings.billCost || 199); // ₹0 cost if user is free/admin/superadmin/official
+    const billCost = isFree ? 0 : baseCost; // ₹0 cost if user is free/admin/superadmin/official
     const freeTrialLimit = 0;
     
     // Calculate free trial info

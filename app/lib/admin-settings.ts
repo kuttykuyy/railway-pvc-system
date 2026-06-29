@@ -111,6 +111,7 @@ export async function getBillingSettings() {
     lowCreditThreshold:             Number(parse('LOW_CREDIT_THRESHOLD', 50)),
     provisionalIndicesCheckEnabled: Boolean(parse('PROVISIONAL_INDICES_CHECK_ENABLED', true)),
     aiExtractionCost:               Number(parse('AI_BILL_EXTRACTION_COST', 50)),
+    aiBillCost:                     Number(parse('AI_BILL_PROCESSING_COST', 499)),
   };
 }
 

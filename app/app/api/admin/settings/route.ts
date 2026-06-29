@@ -15,6 +15,12 @@ const DEFAULT_SETTINGS = [
     dataType: 'number'
   },
   {
+    key: 'AI_BILL_PROCESSING_COST',
+    value: '499',
+    description: 'Cost in credits per AI-assisted bill processing',
+    dataType: 'number'
+  },
+  {
     key: 'PAYMENT_PROCESSING_ENABLED',
     value: 'true',
     description: 'Enable/disable payment processing for bills',

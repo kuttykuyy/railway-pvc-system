@@ -60,7 +60,7 @@ function toPrintedDecimal(value: unknown): string | undefined {
 function normalizeExtractedItem(item: any): ExtractedBillItem {
   const steelTypes = new Set(['TMT', 'ANGLE_CHANNEL', 'PLATES', 'OTHER_SECTIONS']);
   const steelType = String(item?.steelType || '').trim().toUpperCase();
-  const itemNo = String(item?.itemNo || item?.dsrCode || '').trim();
+  const itemNo = String(item?.itemNo || '').trim();
   const schedule = String(item?.schedule || '').trim();
   const declaredSource = String(item?.sourceBook || '').trim().toUpperCase();
   const scheduleText = `${schedule} ${item?.scheduleGroup || ''} ${item?.chapter || ''}`.toUpperCase();
@@ -950,8 +950,8 @@ ${markdownPart}
 
   const amountsReconciled = Math.abs(amountDifference) <= 0.05;
   if (!amountsReconciled) {
-    throw new Error(
-      `Corrected item total Rs ${itemAmountTotal.toFixed(2)} does not match Schedule Summary amount including special condition Rs ${scheduleSummaryTotal.toFixed(2)} (difference Rs ${amountDifference.toFixed(2)}).`,
+    console.warn(
+      `Warning: Corrected item total Rs ${itemAmountTotal.toFixed(2)} does not match Schedule Summary amount including special condition Rs ${scheduleSummaryTotal.toFixed(2)} (difference Rs ${amountDifference.toFixed(2)}).`
     );
   }
 
@@ -1121,53 +1121,12 @@ export async function POST(request: NextRequest) {
     // Cache the full data for 1 hour (3600000 ms)
     advancedCache.set(`ai-extraction:${extractionId}`, fullData, 3600000);
 
-    // Check if the user is exempt from AI extraction charge
-    const isFreeOrExempt = 
-      !user || 
-      user.role === 'admin' || 
-      user.role === 'superadmin' || 
-      user.role === 'railway_official' || 
-      user.role === 'RAILWAY_OFFICIAL' || 
-      user.isFreeAccount ||
-      user.customProcessingFee === 0;
-
-    if (isFreeOrExempt) {
-      return NextResponse.json({
-        success: true,
-        extractionId,
-        isUnlocked: true,
-        data: fullData,
-      });
-    }
-
-    // Strip detailed items for standard paid users to show a preview first
-    const previewData = {
-      billDetails: billDetails ? {
-        billNo: billDetails.billNo,
-        measurementDate: billDetails.measurementDate,
-        grossBillAmount: billDetails.grossBillAmount,
-        itemAmountTotal: billDetails.itemAmountTotal,
-        scheduleSummaryTotal: billDetails.scheduleSummaryTotal,
-        amountDifference: billDetails.amountDifference,
-        amountsReconciled: billDetails.amountsReconciled,
-      } : null,
-      cementRatePerUnit,
-      cementAmountSource,
-      summary,
-      warnings,
-      // Omit detailed lists so they can't be accessed via inspect element
-      extractedItems: [],
-      cementItems: [],
-      coefficientItems: [],
-      steelItems: [],
-      results: [],
-    };
-
+    // All users get the full data unlocked for preview/import (extraction is free, they are only charged upon processing the bill).
     return NextResponse.json({
       success: true,
       extractionId,
-      isUnlocked: false,
-      data: previewData,
+      isUnlocked: true,
+      data: fullData,
     });
   } catch (error: any) {
     console.error('Cement analysis failed:', error);

@@ -44,6 +44,7 @@ import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { ContextualHelp } from '@/components/contextual-help';
 import { validateDate, validateDateForApi } from '@/lib/date-validation';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
+import { inferMainClassification } from '@/lib/work-classification';
 
 
 interface Contract {
@@ -192,6 +193,7 @@ function NewBillPageContent() {
   const [creditBalance, setCreditBalance] = useState<number>(0);
   const [subscribing, setSubscribing] = useState<boolean>(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState<boolean>(false);
+  const [isAiUploaded, setIsAiUploaded] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState<any>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -203,6 +205,8 @@ function NewBillPageContent() {
     missingPostingFields?: string[];
     bills?: { used: number; limit: number; remaining: number; allowed: boolean };
   } | null>(null);
+
+  const selectedContract = contracts.find(c => c.id === formData.contractId);
 
   useEffect(() => {
     fetch('/api/user/profile')
@@ -230,12 +234,15 @@ function NewBillPageContent() {
     fetchContracts();
     fetchClassificationGroups();
     fetchAvailableDateRange();
-    checkSubscriptionStatus();
   }, []);
+
+  useEffect(() => {
+    checkSubscriptionStatus();
+  }, [isAiUploaded]);
 
   const checkSubscriptionStatus = async () => {
     try {
-      const response = await fetch('/api/credits/balance');
+      const response = await fetch(`/api/credits/balance?isAiUploaded=${isAiUploaded}`);
       if (response.ok) {
         const data = await response.json();
         // Check if user is exempt (has a free/official/admin role) or has an active subscription
@@ -306,9 +313,25 @@ function NewBillPageContent() {
     }
   };
   
-  // Set default sub-classification after groups are loaded
+  // Set default sub-classification after groups and contract are loaded
   useEffect(() => {
-    if (classificationGroups.length > 0 && !formData.workClassification) {
+    if (classificationGroups.length > 0 && selectedContract) {
+      const inferred = inferMainClassification(selectedContract.workDescription);
+      const matchedGroup = classificationGroups.find(g => g.code.toUpperCase() === inferred.code.toUpperCase());
+      
+      if (matchedGroup && matchedGroup.subClassifications.length > 0) {
+        const defaultSub = matchedGroup.subClassifications.find(s => s.isDefault) || matchedGroup.subClassifications[0];
+        setFormData(prev => ({ ...prev, workClassification: defaultSub.id }));
+        setSelectedGroup(matchedGroup);
+      } else {
+        const firstGroup = classificationGroups.find(g => g.subClassifications.length > 0);
+        if (firstGroup && firstGroup.subClassifications.length > 0) {
+          const defaultSub = firstGroup.subClassifications.find(s => s.isDefault) || firstGroup.subClassifications[0];
+          setFormData(prev => ({ ...prev, workClassification: defaultSub.id }));
+          setSelectedGroup(firstGroup);
+        }
+      }
+    } else if (classificationGroups.length > 0 && !formData.workClassification) {
       // Set default sub-classification (first sub of first group)
       const firstGroup = classificationGroups.find(g => g.subClassifications.length > 0);
       if (firstGroup && firstGroup.subClassifications.length > 0) {
@@ -317,7 +340,7 @@ function NewBillPageContent() {
         setSelectedGroup(firstGroup);
       }
     }
-  }, [classificationGroups]);
+  }, [classificationGroups, selectedContract]);
 
   // Update selected group when work classification changes
   useEffect(() => {
@@ -516,11 +539,11 @@ function NewBillPageContent() {
               description: `${item.description || ''} (Excluding Cement)`,
               steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
               scheduleItem,
-              itemNumber: item.itemNo || item.dsrCode || '',
+              itemNumber: item.itemNo || '',
               quantity: qty || '',
               agreementRate: netRate,
               itemRows: [{
-                itemNumber: item.itemNo || item.dsrCode || '',
+                itemNumber: item.itemNo || '',
                 quantity: qty || '',
                 agreementRate: netRate,
               }],
@@ -532,11 +555,11 @@ function NewBillPageContent() {
               description: `${item.description || ''} (Cement Portion)`,
               steelTypes: [],
               scheduleItem,
-              itemNumber: `${item.itemNo || item.dsrCode || ''}-CEM`,
+              itemNumber: item.itemNo ? `${item.itemNo}-CEM` : 'CEM',
               quantity: cementQty || '',
               agreementRate: cementRate,
               itemRows: [{
-                itemNumber: `${item.itemNo || item.dsrCode || ''}-CEM`,
+                itemNumber: item.itemNo ? `${item.itemNo}-CEM` : 'CEM',
                 quantity: cementQty || '',
                 agreementRate: cementRate,
               }],
@@ -556,11 +579,11 @@ function NewBillPageContent() {
           selectedContract?.schedules || [],
           [item.schedule, item.scheduleGroup, item.chapter],
         ),
-        itemNumber: item.itemNo || item.dsrCode || '',
+        itemNumber: item.itemNo || '',
         quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
         agreementRate: item.agreementRateRaw || item.agreementRate || '',
         itemRows: [{
-          itemNumber: item.itemNo || item.dsrCode || '',
+          itemNumber: item.itemNo || '',
           quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
           agreementRate: item.agreementRateRaw || item.agreementRate || '',
         }],
@@ -569,6 +592,7 @@ function NewBillPageContent() {
   };
 
   const applyExtractedBillDetails = (data: CementAnalysisData) => {
+    setIsAiUploaded(true);
     const billDetails = data.billDetails;
     const mappedEntries = buildClassificationEntriesFromExtractedBill(data);
 
@@ -597,6 +621,7 @@ function NewBillPageContent() {
   };
 
   const handleContractChange = async (value: string) => {
+    setIsAiUploaded(false);
     setFormData(prev => ({
       ...prev,
       contractId: value
@@ -769,6 +794,7 @@ function NewBillPageContent() {
           fuelPriceType: formData.fuelPriceType,
           calculationMethod: (formData as any).calculationMethod || 'auto',
           classificationEntries,
+          isAiUploaded,
         }),
       });
       const data = await res.json();
@@ -882,7 +908,8 @@ function NewBillPageContent() {
           nonScheduleItems: formattedNonScheduleItems,
           paymentConfirmed: true, // Always set as confirmed since we removed payments
           paymentMethod: 'free',
-          paymentReference: null
+          paymentReference: null,
+          isAiUploaded,
         }),
       });
 
@@ -943,7 +970,6 @@ function NewBillPageContent() {
 
   // Removed payment confirmation function
 
-  const selectedContract = contracts.find(c => c.id === formData.contractId);
   // Find the selected sub-classification across all groups
   const selectedSubClassification = classificationGroups
     .flatMap(g => g.subClassifications)

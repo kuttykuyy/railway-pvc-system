@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       fuelPriceType = 'four_city_avg',
       calculationMethod = 'auto',
       classificationEntries = [],
+      isAiUploaded,
     } = body;
 
     if (!contractId || !grossBillAmount || !billAmount || !dateOfMeasurement) {
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
 
     // Determine bill cost for this user
     const billingSettings = await getBillingSettings();
-    const fullCost = billingSettings.billCost || 199;
+    const fullCost = isAiUploaded ? (billingSettings.aiBillCost || 499) : (billingSettings.billCost || 199);
     const freeTrialLimit = billingSettings.freeTrialBills || 1;
 
     // Free roles always ₹0

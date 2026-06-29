@@ -57,12 +57,16 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const isAiUploaded = request.nextUrl.searchParams.get('isAiUploaded') === 'true';
+    const settingKey = isAiUploaded ? 'AI_BILL_PROCESSING_COST' : 'BILL_PROCESSING_COST';
+    const defaultVal = isAiUploaded ? 499 : 199;
+
     // Otherwise, get the system default processing fee
     const systemSetting = await prisma.adminSettings.findUnique({
-      where: { key: 'BILL_PROCESSING_COST' },
+      where: { key: settingKey },
     });
 
-    const defaultFee = systemSetting ? parseFloat(systemSetting.value) : 10;
+    const defaultFee = systemSetting ? parseFloat(systemSetting.value) : defaultVal;
 
     return NextResponse.json({
       processingFee: defaultFee,
