@@ -23,6 +23,8 @@ interface ExtractedBillItem {
   description: string;
   unit: string;
   quantitySinceLastBill: number;
+  amountAtAgreementRateSinceLastBill?: number;
+  amountIncludingSpecialConditionSinceLastBill?: number;
   amountSinceLastBill?: number;
   agreementRate?: number;
   schedule?: string;
@@ -70,7 +72,9 @@ function normalizeExtractedItem(item: any): ExtractedBillItem {
     unit: String(item?.unit || '').trim(),
     quantitySinceLastBill: toFiniteNumber(item?.quantitySinceLastBill) || 0,
     agreementRate: toFiniteNumber(item?.agreementRate),
-    amountSinceLastBill: toFiniteNumber(item?.amountSinceLastBill),
+    amountAtAgreementRateSinceLastBill: toFiniteNumber(item?.amountAtAgreementRateSinceLastBill),
+    amountIncludingSpecialConditionSinceLastBill: toFiniteNumber(item?.amountIncludingSpecialConditionSinceLastBill ?? item?.amountSinceLastBill),
+    amountSinceLastBill: toFiniteNumber(item?.amountIncludingSpecialConditionSinceLastBill ?? item?.amountSinceLastBill),
     schedule,
     scheduleGroup: String(item?.scheduleGroup || '').trim(),
     chapter: String(item?.chapter || '').trim(),
@@ -396,6 +400,76 @@ function mergeParsedBillParts(parts: any[]) {
   };
 }
 
+function correctionItemKey(item: any): string {
+  const itemNo = String(item?.itemNo || item?.dsrCode || '').replace(/\s+/g, '').toUpperCase();
+  const schedule = String(item?.scheduleGroup || item?.schedule || '').replace(/\W+/g, '').toUpperCase();
+  return `${schedule}|${itemNo}`;
+}
+
+function extractPrintedBillAmount(markdown: string): number | undefined {
+  const label = markdown.search(/Bill Amount\s*\(Rs\.?\)/i);
+  if (label < 0) return undefined;
+  const numbers = markdown.slice(label, label + 500).match(/\d[\d,]*(?:\.\d+)?/g) || [];
+  return numbers.map(toFiniteNumber).find((value): value is number => value !== undefined && value > 0);
+}
+
+async function correctSpecialConditionAmounts(
+  apiKey: string,
+  markdownParts: string[],
+  items: ExtractedBillItem[],
+): Promise<ExtractedBillItem[]> {
+  const parsedCorrections: any[] = [];
+  for (let start = 0; start < markdownParts.length; start += 2) {
+    const batch = markdownParts.slice(start, start + 2);
+    const results = await Promise.all(batch.map((markdownPart, batchIndex) => {
+      const partNumber = start + batchIndex + 1;
+      const prompt = `Re-read current payable item amounts from part ${partNumber} of an Indian Railway bill converted to Markdown.
+
+Return JSON only:
+{"items":[{"itemNo":"visible item number","schedule":"schedule heading","scheduleGroup":"schedule group","amountIncludingSpecialConditionSinceLastBill":number}]}
+
+Rules:
+- Include only rows with a nonzero current payable amount.
+- Select only the column headed "Since last Bill including special condition", "Amount including Special Condition", or equivalent current-payable special-condition column.
+- Do not return Qty x Agreement Rate, Amount Upto Last Bill, Total Upto Date, cumulative amount, or schedule total.
+- Reconstruct digits split across Markdown lines.
+
+<bill_markdown>
+${markdownPart}
+</bill_markdown>`;
+      return extractJsonWithRetry(apiKey, prompt, `special-condition part ${partNumber}/${markdownParts.length}`);
+    }));
+    parsedCorrections.push(...results);
+  }
+
+  const exactCorrections = new Map<string, number>();
+  const correctionsByItemNo = new Map<string, number[]>();
+  for (const part of parsedCorrections) {
+    for (const correction of Array.isArray(part?.items) ? part.items : []) {
+      const amount = toFiniteNumber(correction?.amountIncludingSpecialConditionSinceLastBill);
+      const itemNo = String(correction?.itemNo || '').replace(/\s+/g, '').toUpperCase();
+      if (!itemNo || amount === undefined || amount <= 0) continue;
+      exactCorrections.set(correctionItemKey(correction), amount);
+      const existing = correctionsByItemNo.get(itemNo) || [];
+      if (!existing.includes(amount)) existing.push(amount);
+      correctionsByItemNo.set(itemNo, existing);
+    }
+  }
+
+  return items.map(item => {
+    const itemNo = String(item.itemNo || item.dsrCode || '').replace(/\s+/g, '').toUpperCase();
+    const exactAmount = exactCorrections.get(correctionItemKey(item));
+    const itemNoAmounts = correctionsByItemNo.get(itemNo) || [];
+    const correctedAmount = exactAmount ?? (itemNoAmounts.length === 1 ? itemNoAmounts[0] : undefined);
+    if (correctedAmount === undefined) return item;
+    return {
+      ...item,
+      amountIncludingSpecialConditionSinceLastBill: correctedAmount,
+      amountSinceLastBill: correctedAmount,
+    };
+  });
+}
+
 async function convertPdfToMarkdown(file: File, requestOrigin: string): Promise<string> {
   const internalSecret = process.env.MARKITDOWN_INTERNAL_SECRET;
   if (!internalSecret) {
@@ -495,7 +569,9 @@ Return JSON only:
       "unit": "Cum/Sqm/Kg/MT/etc",
       "quantitySinceLastBill": number,
       "agreementRate": number,
-      "amountSinceLastBill": number,
+      "amountAtAgreementRateSinceLastBill": "current Qty x Agreement Rate amount before special condition",
+      "amountIncludingSpecialConditionSinceLastBill": "current payable amount after special condition",
+      "amountSinceLastBill": "same value as amountIncludingSpecialConditionSinceLastBill",
       "schedule": "schedule name/part if visible",
       "scheduleGroup": "group name such as Schedule-A if visible",
       "chapter": "chapter heading if visible",
@@ -527,7 +603,7 @@ Rules:
 - For non-schedule cement/concrete items without a DSR code, return dsrCode as MIX-1:2:4, MIX-1:3:6, MIX-1:1.5:3, etc. based on the visible mix ratio.
 - quantitySinceLastBill must be the current payable quantity for this bill.
 - Exclude rows where both current quantity and current payable amount are zero. Do not return cumulative-only or audit-only rows.
-- amountSinceLastBill must be the current payable amount including special condition if available.
+- Keep amountAtAgreementRateSinceLastBill and amountIncludingSpecialConditionSinceLastBill separate. amountSinceLastBill must exactly equal amountIncludingSpecialConditionSinceLastBill, never Qty x Agreement Rate.
 - The "items" array must only contain detailed payable work items. Do not include schedule summary totals, rebate rows, or grand total rows in the "items" array.
 - The sum of every amountSinceLastBill for detailed items must equal scheduleSummaryTotal within normal paise rounding. Re-read the source columns before returning JSON when it does not match.
 - If the PDF has split decimals across lines, reconstruct them.
@@ -590,14 +666,8 @@ ${markdownPart}
     }))
     .filter((summary: { schedule: string; amountIncludingSpecialCondition: number }) => summary.schedule && summary.amountIncludingSpecialCondition >= 0);
 
-  // DEBUG LOGGING
-  console.info('[cement-analysis-debug] Raw AI Parsed Schedule Summary:', scheduleSummary);
-  console.info('[cement-analysis-debug] Raw AI Parsed Schedule Summary Total (parsed):', parsed.scheduleSummaryTotal);
-  console.info('[cement-analysis-debug] Raw AI Items count:', items.length);
-  console.info('[cement-analysis-debug] Raw AI Items:', items.map((i: any) => ({ desc: i.description, amt: i.amountSinceLastBill, dsr: i.dsrCode, itemNo: i.itemNo })));
-
   // Filter out any extracted item that is actually a duplicate of a Schedule Summary row
-  const filteredItems = items.filter((item: ExtractedBillItem) => {
+  let filteredItems = items.filter((item: ExtractedBillItem) => {
     const itemDesc = String(item.description || '').toLowerCase();
     const itemDsr = String(item.dsrCode || '').toLowerCase();
     const itemNo = String(item.itemNo || '').toLowerCase();
@@ -640,21 +710,41 @@ ${markdownPart}
     (sum: number, summary: { amountIncludingSpecialCondition: number }) => sum + summary.amountIncludingSpecialCondition,
     0,
   );
-  const scheduleSummaryTotal = Number(toFiniteNumber(parsed.scheduleSummaryTotal) || summedScheduleTotal);
+  const printedBillAmount = extractPrintedBillAmount(billMarkdown);
+  const scheduleSummaryTotal = Number(
+    printedBillAmount
+    ?? (summedScheduleTotal > 0 ? summedScheduleTotal : toFiniteNumber(parsed.scheduleSummaryTotal)),
+  );
 
-  console.info('[cement-analysis-debug] Computed Summed Schedule Total:', summedScheduleTotal);
-  console.info('[cement-analysis-debug] Final Reconciled Schedule Summary Total:', scheduleSummaryTotal);
-  console.info('[cement-analysis-debug] Filtered Items count:', filteredItems.length);
-  console.info('[cement-analysis-debug] Filtered Items:', filteredItems.map((i: any) => ({ desc: i.description, amt: i.amountSinceLastBill })));
+  console.info('[bill-extraction] Reconciliation source totals', {
+    printedBillAmount,
+    summedScheduleTotal,
+    aiScheduleSummaryTotal: toFiniteNumber(parsed.scheduleSummaryTotal),
+    selectedTotal: scheduleSummaryTotal,
+    itemCount: filteredItems.length,
+  });
   if (!(scheduleSummaryTotal > 0)) {
     throw new Error('AI could not extract the Schedule Summary amount including special condition.');
   }
 
-  const itemAmountTotal = filteredItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
-  const amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
+  let itemAmountTotal = filteredItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
+  let amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
+  if (Math.abs(amountDifference) > 0.05) {
+    console.warn('[bill-extraction] Re-reading special-condition item amounts', {
+      itemAmountTotal,
+      scheduleSummaryTotal,
+      amountDifference,
+    });
+    filteredItems = await correctSpecialConditionAmounts(apiKey, markdownParts, filteredItems);
+    itemAmountTotal = filteredItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0);
+    amountDifference = Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100;
+  }
+
   const amountsReconciled = Math.abs(amountDifference) <= 0.05;
   if (!amountsReconciled) {
-    console.warn(`[Reconciliation Warning] Extracted item total Rs ${itemAmountTotal.toFixed(2)} does not match Schedule Summary amount Rs ${scheduleSummaryTotal.toFixed(2)} (diff: Rs ${amountDifference.toFixed(2)}). Proceeding with fallback.`);
+    throw new Error(
+      `Corrected item total Rs ${itemAmountTotal.toFixed(2)} does not match Schedule Summary amount including special condition Rs ${scheduleSummaryTotal.toFixed(2)} (difference Rs ${amountDifference.toFixed(2)}).`,
+    );
   }
 
   return {

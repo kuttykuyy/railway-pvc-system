@@ -36,6 +36,8 @@ export interface ExtractedBillItem {
   description: string;
   unit: string;
   quantitySinceLastBill: number;
+  amountAtAgreementRateSinceLastBill?: number;
+  amountIncludingSpecialConditionSinceLastBill?: number;
   agreementRate?: number;
   amountSinceLastBill?: number;
   schedule?: string;
