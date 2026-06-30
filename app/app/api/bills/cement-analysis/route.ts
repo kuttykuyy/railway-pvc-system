@@ -20,7 +20,7 @@ import { parseIrepsBillMarkdown } from '@/lib/ireps-bill-parser';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-const AI_PART_CONCURRENCY = 16;
+const AI_PART_CONCURRENCY = 4;
 const MAX_WHOLE_BILL_RECONCILIATION_CHARS = 50000;
 
 class AiProviderCreditsExhaustedError extends Error {
@@ -289,7 +289,7 @@ async function requestAiExtraction(
       temperature: 0,
       max_tokens: maxTokens,
     }),
-    signal: AbortSignal.timeout(90000),
+    signal: AbortSignal.timeout(120000),
   });
 
   if (!response.ok) {
