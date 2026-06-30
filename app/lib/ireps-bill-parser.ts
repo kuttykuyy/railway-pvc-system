@@ -46,6 +46,8 @@ interface NumericRow {
   values: string[];
   raw: string;
   specialAmountRawHint?: string;
+  previousCodeHint?: string;
+  codeSuffixHint?: string;
 }
 
 const UNIT_PATTERN = 'cum|cu\.?m\.?|sqm|sq\.?m\.?|kg|mt|m\.?t\.?|metre|meter|each|trm|numbers?|nos?\.?|day|hour|litre|liter|km|rm|qtl|quintal|set|job|ls';
@@ -128,10 +130,13 @@ function extractRows(text: string): NumericRow[] {
   const rows: NumericRow[] = [];
   const lines = text.split(/\r?\n/);
   let offset = 0;
-  const unitRegex = new RegExp(`\\b(${UNIT_PATTERN})\\b`, 'i');
+  const unitRegex = new RegExp(`\\b(${UNIT_PATTERN})\\b`, 'ig');
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const line = lines[lineIndex];
-    const unitMatch = unitRegex.exec(line);
+    const unitMatches = Array.from(line.matchAll(unitRegex));
+    const unitMatch = unitMatches.find(match => (
+      /^[\s|]*-?\d/.test(line.slice((match.index || 0) + match[0].length))
+    )) || unitMatches[0];
     if (unitMatch) {
       let prefix = line.slice(0, unitMatch.index).replace(/\|/g, ' ').trim();
       const suffix = line
@@ -145,6 +150,7 @@ function extractRows(text: string): NumericRow[] {
         ? (lines[lineIndex - 1].match(NUMBER_PATTERN) || []).map(value => value.replace(/\s+/g, ''))
         : [];
       let specialAmountRawHint: string | undefined;
+      let codeSuffixHint: string | undefined;
       if (/^[\s\d.,-]+$/.test(lines[lineIndex - 1] || '') && upper.length >= 2 && upper.length <= 4) {
         const fragments = values
           .slice(2)
@@ -156,6 +162,7 @@ function extractRows(text: string): NumericRow[] {
         }
       }
       if (line.includes('|') && upper.length >= 10 && /^\d{4,6}$/.test(upper[0].replace(/\D/g, '')) && values.length >= 6) {
+        codeSuffixHint = prefix.match(/(?:^|[ \t])(\d{1,2})[ \t]*\([IG]\)/i)?.[1];
         const baseRateValues = values.slice(0, 2);
         const decimalFragments = values
           .slice(2)
@@ -187,6 +194,8 @@ function extractRows(text: string): NumericRow[] {
         }
       }
       if (values.length >= 4) {
+        const previousCodeCandidate = lines[lineIndex - 1]?.match(/^\s*(\d{4})(?=\s|\|)/)?.[1];
+        const previousCodeHint = previousCodeCandidate === '2021' ? undefined : previousCodeCandidate;
         rows.push({
           start: offset,
           end: offset + line.length,
@@ -195,6 +204,8 @@ function extractRows(text: string): NumericRow[] {
           values,
           raw: line,
           specialAmountRawHint,
+          previousCodeHint,
+          codeSuffixHint,
         });
       }
     }
@@ -212,6 +223,14 @@ function latestContext(text: string, offset: number, pattern: RegExp): string {
 
 function cleanDescription(value: string): string {
   return value
+    .replace(/\|/g, ' ')
+    .replace(/^\s*[-\d.,\s]+\s*$/gm, ' ')
+    .replace(/^\s*-?\s*\d+(?:\.\d+)+\.?\s*$/gm, ' ')
+    .replace(/^\s*-?\s*(?:[A-Z]\.)?(?:\d+(?:\.\d+)*|\.\d+)?\s*\([IG]\)\s*/gim, ' ')
+    .replace(/^\s*-?\s*\d+(?:\.\d+)+\.?\s+(?=-|\([IG]\))/gim, ' ')
+    .replace(/^\s*-?\s*\d+(?:\.\d+)+\.?\s+(?=[A-Za-z])/gim, ' ')
+    .replace(/^\s*-\s*\d{1,3}\s+/gm, ' ')
+    .replace(/^\s*\d{4}\s+(?=[A-Za-z])/gm, ' ')
     .replace(/^\s*-\s*\d{1,3}\s*$/gm, ' ')
     .replace(/^\s*\d+\s+00\s+\([IG]\)\s*/gim, ' ')
     .replace(/^\s*\([IG]\)\s*/gim, ' ')
@@ -220,17 +239,49 @@ function cleanDescription(value: string): string {
     .replace(/Now to pay\s+\d+%/gi, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&apos;/g, "'")
-    .replace(/\|/g, ' ')
+    .replace(/&gt;/g, '>')
+    .replace(/&lt;/g, '<')
     .replace(/\s+/g, ' ')
     .trim()
+    .replace(/^[-.\s]+/, '')
     .slice(0, 500);
 }
 
 function itemCode(row: NumericRow, followingText: string): string {
-  const prefixCode = row.prefix.match(/(\d{1,6}(?:\.\d+)*)\s*$/)?.[1] || '';
-  const suffix = followingText.match(/^\s*-\s*(\d{1,3})\b/m)?.[1] || '';
-  if (prefixCode && suffix && /^\d{4}$/.test(prefixCode)) return `${prefixCode}${suffix.padStart(2, '0')}`;
-  if (prefixCode) return prefixCode;
+  const embeddedPrefixCode = row.prefix.match(/\([IG]\)[ \t]+(\d{4}|\d+(?:\.\d+)+)/i)?.[1] || '';
+  const trailingPrefixCode = row.prefix.match(/(\d{1,6}(?:\.\d+)*)\.?\s*$/)?.[1] || '';
+  const prefixCode = embeddedPrefixCode || trailingPrefixCode || row.previousCodeHint || '';
+  const nearbyText = followingText.slice(0, 160).replace(/\|/g, ' ');
+  const ussrFollowingText = followingText.slice(0, 2500).replace(/\|/g, ' ');
+  const followingCode = nearbyText.match(/^\s*-?\s*(\d+(?:\.\d+)+)\.?(?:\s*$|\s+(?=-|\([IG]\)))/m)?.[1] || '';
+  const followingUssrCandidate = ussrFollowingText.match(/^[ \t]*(\d{4})(?:[ \t]*$|[ \t]+(?=[A-Za-z]))/m)?.[1] || '';
+  const followingUssrBase = followingUssrCandidate === '2021' ? '' : followingUssrCandidate;
+  const baseCode = prefixCode || followingCode || followingUssrBase;
+  const embeddedPrefixSuffix = row.prefix.match(/(?:^|[ \t])(\.?(?:\d+|[A-Z])(?:\.\d+)*)[ \t]*\([IG]\)/i)?.[1] || '';
+  const suffix = row.codeSuffixHint
+    || embeddedPrefixSuffix
+    || nearbyText.match(/^[ \t]*-?[ \t]*(\.?(?:\d+|[A-Z])(?:\.\d+)*)[ \t]*\([IG]\)/im)?.[1]
+    || '';
+  const detachedUssrSuffix = /^\d{4}$/.test(baseCode)
+    ? ussrFollowingText.match(/^[ \t]*-[ \t]*(\d{1,2})(?:[ \t]*$|[ \t]+\S)/m)?.[1] || ''
+    : '';
+  if (/^\d{4}$/.test(baseCode) && detachedUssrSuffix) {
+    return `${baseCode}${detachedUssrSuffix.padStart(2, '0')}`;
+  }
+  if (baseCode && suffix) {
+    const normalizedSuffix = suffix.replace(/^\./, '');
+    if (/^\d{4}$/.test(baseCode) && /^\d{1,2}$/.test(normalizedSuffix)) {
+      return `${baseCode}${normalizedSuffix.padStart(2, '0')}`;
+    }
+    const baseParts = baseCode.split('.');
+    const suffixParts = normalizedSuffix.split('.');
+    if (baseParts.slice(-suffixParts.length).join('.') !== normalizedSuffix) {
+      return `${baseCode}.${normalizedSuffix}`;
+    }
+  }
+  if (baseCode) return baseCode;
+  const inlineFollowingCode = nearbyText.match(/^\s*-?\s*(\d+(?:\.\d+)+)\.?\s+\S/m)?.[1];
+  if (inlineFollowingCode) return inlineFollowingCode;
   const nonschedule = followingText.match(/\b(\d+)\s+00\s+\([IG]\)/i)?.[1];
   return nonschedule ? `${nonschedule}00` : '';
 }
