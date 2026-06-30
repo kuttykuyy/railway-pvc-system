@@ -1375,36 +1375,8 @@ export async function POST(request: NextRequest) {
       }
 
       if (stage === 'deterministic' || stage === 'hybrid') {
-        const billMarkdown = await convertPdfToMarkdown(file, request.nextUrl.origin);
-        const parsed = parseIrepsBillMarkdown(billMarkdown);
-        let contractDescription = '';
-        if (contractId) {
-          const contract = await prisma.contract.findUnique({
-            where: { id: contractId },
-            select: { workDescription: true },
-          });
-          contractDescription = contract?.workDescription || '';
-        }
-        const workDescription = contractDescription || parsed.workDescription;
-        let normalizedItems = parsed.items
-          .map(normalizeExtractedItem)
-          .map(item => item.itemNo?.startsWith('REVIEW-')
-            ? { ...item, suggestedClassificationCode: '', suggestedClassificationReason: item.reason }
-            : applyDeterministicClassification(item, workDescription));
-        const hybridWarnings: string[] = [];
-        if (stage === 'hybrid') {
-          const enhanced = await enhanceDeterministicItemsWithAi(normalizedItems, workDescription, billMarkdown);
-          normalizedItems = enhanced.items;
-          aiEnhancement = enhanced.enhancement;
-          if (enhanced.warning) hybridWarnings.push(enhanced.warning);
-        }
-        billDetails = {
-          ...parsed,
-          workDescription,
-          classificationGroupCode: inferMainClassification(workDescription).code,
-          items: normalizedItems,
-          warnings: [...parsed.warnings, ...hybridWarnings],
-        };
+        // Force full AI extraction as requested by the user
+        billDetails = await extractBillDetailsWithAi(file, request.nextUrl.origin, contractId);
       } else {
         billDetails = await extractBillDetailsWithAi(file, request.nextUrl.origin, contractId);
       }

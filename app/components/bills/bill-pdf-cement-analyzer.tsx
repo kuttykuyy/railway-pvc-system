@@ -146,7 +146,7 @@ function formatAmount(value: number | null | undefined) {
 }
 
 export function BillPdfCementAnalyzer({
-  title = 'Hybrid AI Bill PDF Extraction',
+  title = 'AI Bill PDF Extraction',
   compact = false,
   disabled = false,
   contractId,
@@ -557,7 +557,7 @@ export function BillPdfCementAnalyzer({
       formData.append('file', file);
 
       const endpoint = () => {
-        const params = new URLSearchParams({ stage: 'hybrid' });
+        const params = new URLSearchParams({ stage: 'full' });
         if (contractId) params.set('contractId', contractId);
         return `/api/bills/cement-analysis?${params.toString()}`;
       };
@@ -621,7 +621,7 @@ export function BillPdfCementAnalyzer({
         }
         toast.success(`Extracted ${data.billDetails?.items?.length || data.extractedItems?.length || 0} bill item(s)`);
       } else {
-        toast.success(`Hybrid PDF extraction completed. Click "Unlock & Import" below to apply the details.`);
+        toast.success(`AI PDF extraction completed. Click "Unlock & Import" below to apply the details.`);
       }
     } catch (error: any) {
       console.error('Bill PDF cement analysis failed:', error);
