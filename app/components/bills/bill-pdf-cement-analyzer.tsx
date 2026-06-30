@@ -87,6 +87,12 @@ export interface CementAnalysisData {
   results: CementAnalysisResultItem[];
   summary: CementAnalysisSummary;
   warnings?: string[];
+  aiEnhancement?: {
+    status: 'completed' | 'partial' | 'unavailable' | 'not_requested';
+    reviewedItemCount: number;
+    improvedDescriptionCount: number;
+    message: string;
+  };
 }
 
 interface BillPdfCementAnalyzerProps {
@@ -140,7 +146,7 @@ function formatAmount(value: number | null | undefined) {
 }
 
 export function BillPdfCementAnalyzer({
-  title = 'Automatic Bill PDF Extraction',
+  title = 'Hybrid AI Bill PDF Extraction',
   compact = false,
   disabled = false,
   contractId,
@@ -178,6 +184,7 @@ export function BillPdfCementAnalyzer({
     'Reading bill metadata and schedule summary...',
     'Mapping IREPS item columns and USSR codes...',
     'Verifying Qty x Agreement Rate values...',
+    'AI reviewing descriptions and classifications...',
     'Calculating cement consumption coefficients...',
     'Finalizing summary statistics & previews...'
   ];
@@ -214,9 +221,10 @@ export function BillPdfCementAnalyzer({
         const estimatedStep = processingSeconds < 4 ? 1
           : processingSeconds < 9 ? 2
             : processingSeconds < 15 ? 3
-              : processingSeconds < 22 ? 4
-                : processingSeconds < 30 ? 5
-                  : 6;
+                : processingSeconds < 22 ? 4
+                  : processingSeconds < 30 ? 5
+                  : processingSeconds < 40 ? 6
+                    : 7;
         setLoadingStep(estimatedStep);
       }
     }, 500);
@@ -549,7 +557,7 @@ export function BillPdfCementAnalyzer({
       formData.append('file', file);
 
       const endpoint = () => {
-        const params = new URLSearchParams({ stage: 'deterministic' });
+        const params = new URLSearchParams({ stage: 'hybrid' });
         if (contractId) params.set('contractId', contractId);
         return `/api/bills/cement-analysis?${params.toString()}`;
       };
@@ -613,7 +621,7 @@ export function BillPdfCementAnalyzer({
         }
         toast.success(`Extracted ${data.billDetails?.items?.length || data.extractedItems?.length || 0} bill item(s)`);
       } else {
-        toast.success(`PDF extraction completed. Click "Unlock & Import" below to apply the details.`);
+        toast.success(`Hybrid PDF extraction completed. Click "Unlock & Import" below to apply the details.`);
       }
     } catch (error: any) {
       console.error('Bill PDF cement analysis failed:', error);
@@ -665,7 +673,7 @@ export function BillPdfCementAnalyzer({
                       ? `Uploading ${formatFileSize(uploadedBytes)} of ${formatFileSize(fileSize)}`
                       : extractionPartCount > 0
                         ? `Extracted ${extractionPartsCompleted} of ${extractionPartCount} bill pages`
-                        : 'Converting the uploaded PDF into structured pages'}
+                        : loadingSteps[loadingStep] || 'Processing bill'}
                   </p>
                 </div>
               </div>
@@ -684,7 +692,7 @@ export function BillPdfCementAnalyzer({
                       ? `${uploadPercent}%`
                       : extractionPartCount > 0
                         ? `${Math.max(5, (extractionPartsCompleted / extractionPartCount) * 100)}%`
-                        : '12%',
+                        : `${Math.max(12, ((loadingStep + 1) / loadingSteps.length) * 100)}%`,
                   }}
                 />
               </div>
@@ -696,7 +704,7 @@ export function BillPdfCementAnalyzer({
                     ? `${uploadPercent}% uploaded`
                     : extractionPartCount > 0
                       ? `${Math.round((extractionPartsCompleted / extractionPartCount) * 100)}% of pages extracted`
-                      : 'Upload complete; preparing pages'}
+                      : loadingSteps[loadingStep] || 'Processing bill'}
                 </span>
               </div>
             </div>
@@ -899,6 +907,22 @@ export function BillPdfCementAnalyzer({
               <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 Item total {formatAmount(result.billDetails.itemAmountTotal)} does not match the Schedule Summary amount {formatAmount(result.billDetails.scheduleSummaryTotal)} (difference {formatAmount(result.billDetails.amountDifference)}). Please review the extracted items below.
+              </div>
+            )}
+
+            {result.aiEnhancement && result.aiEnhancement.status !== 'not_requested' && (
+              <div className={`flex items-start gap-2 rounded-md border p-2 text-xs ${
+                result.aiEnhancement.status === 'completed'
+                  ? 'border-blue-200 bg-blue-50 text-blue-900'
+                  : 'border-amber-200 bg-amber-50 text-amber-900'
+              }`}>
+                {result.aiEnhancement.status === 'completed'
+                  ? <Cpu className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-700" />
+                  : <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+                <div>
+                  <span className="font-semibold">AI review: </span>
+                  {result.aiEnhancement.message}
+                </div>
               </div>
             )}
 
