@@ -1148,7 +1148,14 @@ export function BillPdfCementAnalyzer({
                               formatAmount(item.amountSinceLastBill)
                             )}
                           </td>
-                          <td className="whitespace-nowrap px-2 py-2">{item.suggestedClassificationCode || '-'}</td>
+                          <td className="px-2 py-2">
+                            <div className="font-semibold">{item.suggestedClassificationCode || '-'}</div>
+                            {item.suggestedClassificationReason && (
+                              <div className="text-[10px] text-slate-500 max-w-[150px] truncate" title={item.suggestedClassificationReason}>
+                                {item.suggestedClassificationReason}
+                              </div>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
