@@ -95,12 +95,6 @@ export interface CementAnalysisData {
   };
 }
 
-interface SavedExtractionProgress {
-  signature: string;
-  parsedParts: any[];
-  savedAt: number;
-}
-
 interface BillPdfCementAnalyzerProps {
   title?: string;
   compact?: boolean;
@@ -152,7 +146,7 @@ function formatAmount(value: number | null | undefined) {
 }
 
 export function BillPdfCementAnalyzer({
-  title = 'AI Bill PDF Extraction',
+  title = 'Direct PDF Bill Extraction',
   compact = false,
   disabled = false,
   contractId,
@@ -186,11 +180,11 @@ export function BillPdfCementAnalyzer({
   // Milestones list for interactive loading
   const loadingSteps = [
     'Uploading document to secure server...',
-    'Converting PDF pages to structured text...',
+    'Reading native PDF text coordinates...',
     'Reading bill metadata and schedule summary...',
-    'Mapping IREPS item columns and USSR codes...',
+    'Mapping IREPS table columns and item codes...',
     'Verifying Qty x Agreement Rate values...',
-    'AI reviewing descriptions and classifications...',
+    'Reading special-condition adjustments...',
     'Calculating cement consumption coefficients...',
     'Finalizing summary statistics & previews...'
   ];
@@ -562,16 +556,15 @@ export function BillPdfCementAnalyzer({
       const formData = new FormData();
       formData.append('file', file);
 
-      const endpoint = (stage: 'convert' | 'part' | 'finalize') => {
-        const params = new URLSearchParams({ stage });
+      const endpoint = () => {
+        const params = new URLSearchParams({ stage: 'direct' });
         if (contractId) params.set('contractId', contractId);
         return `/api/bills/cement-analysis?${params.toString()}`;
       };
 
-      // 1. Upload & Convert PDF to Markdown
-      const conversion = await new Promise<{ status: number; json: any }>((resolve, reject) => {
+      const extraction = await new Promise<{ status: number; json: any }>((resolve, reject) => {
         const request = new XMLHttpRequest();
-        request.open('POST', endpoint('convert'));
+        request.open('POST', endpoint());
         request.upload.onprogress = (progressEvent) => {
           if (!progressEvent.lengthComputable) return;
           setUploadedBytes(progressEvent.loaded);
@@ -593,8 +586,8 @@ export function BillPdfCementAnalyzer({
               status: request.status,
               json: {
                 error: isGatewayFailure
-                  ? 'PDF conversion timed out while processing this bill. Please retry.'
-                  : 'The conversion server returned an invalid response.',
+                  ? 'Direct PDF extraction timed out. Please retry.'
+                  : 'The extraction server returned an invalid response.',
               },
             });
           }
@@ -602,108 +595,10 @@ export function BillPdfCementAnalyzer({
         request.send(formData);
       });
 
-      if (conversion.status < 200 || conversion.status >= 300) {
-        throw new Error(conversion.json.error || 'Failed to convert bill PDF');
-      }
-
-      const markdownParts = Array.isArray(conversion.json.markdownParts)
-        ? conversion.json.markdownParts.filter((part: unknown): part is string => typeof part === 'string')
-        : [];
-      if (!markdownParts.length) throw new Error('No readable bill pages were found.');
-
-      // 2. Setup Page-by-Page Progress Tracking and Resumability
-      const progressStorageKey = `irpvc:bill-extraction:v2:${contractId || 'none'}:${file.name}:${file.size}:${file.lastModified}`;
-      const partsSignature = markdownParts.map((part: string) => part.length).join('-');
-      let restoredProgress: SavedExtractionProgress | null = null;
-      try {
-        const savedProgress = window.localStorage.getItem(progressStorageKey);
-        if (savedProgress) {
-          const parsed = JSON.parse(savedProgress) as SavedExtractionProgress;
-          if (parsed.signature === partsSignature && Array.isArray(parsed.parsedParts) && parsed.parsedParts.length === markdownParts.length) {
-            restoredProgress = parsed;
-          }
-        }
-      } catch {
-        restoredProgress = null;
-      }
-
-      setExtractionPartCount(markdownParts.length);
-      setLoadingStep(2);
-      const parsedParts = restoredProgress?.parsedParts.slice() || new Array<any | null>(markdownParts.length).fill(null);
-      const pendingPartIndexes = parsedParts
-        .map((part, index) => part ? -1 : index)
-        .filter(index => index >= 0);
-      let nextPendingIndex = 0;
-      let completedParts = markdownParts.length - pendingPartIndexes.length;
-      setExtractionPartsCompleted(completedParts);
-      const extractionController = new AbortController();
-      let fatalPartError: Error | null = null;
-
-      // 3. Concurrent Page Extraction (uses a concurrency pool of 3 to prevent API congestions)
-      const extractNextPart = async () => {
-        while (nextPendingIndex < pendingPartIndexes.length && !fatalPartError) {
-          const index = pendingPartIndexes[nextPendingIndex];
-          nextPendingIndex += 1;
-          let response: Response | null = null;
-          let json: any = null;
-          for (let attempt = 1; attempt <= 2; attempt += 1) {
-            response = await fetch(endpoint('part'), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                markdownPart: markdownParts[index],
-                partNumber: index + 1,
-                partCount: markdownParts.length,
-              }),
-              signal: extractionController.signal,
-            });
-            json = await response.json().catch(() => ({ error: 'The page extraction server returned an invalid response.' }));
-            if (response.ok || response.status < 500 || attempt === 2) break;
-          }
-          if (!response?.ok) {
-            fatalPartError = new Error(json?.error || `Failed to extract bill page ${index + 1}.`);
-            extractionController.abort();
-            throw fatalPartError;
-          }
-          parsedParts[index] = json.data;
-          completedParts += 1;
-          setExtractionPartsCompleted(completedParts);
-          setLoadingStep(completedParts === markdownParts.length ? 6 : Math.min(5, 2 + Math.floor((completedParts / markdownParts.length) * 4)));
-          try {
-            window.localStorage.setItem(progressStorageKey, JSON.stringify({
-              signature: partsSignature,
-              parsedParts,
-              savedAt: Date.now(),
-            } satisfies SavedExtractionProgress));
-          } catch {
-            // Extraction can continue if browser storage is full/unavailable
-          }
-        }
-      };
-
-      try {
-        await Promise.all(
-          Array.from({ length: Math.min(3, pendingPartIndexes.length) }, () => extractNextPart()),
-        );
-      } catch (error) {
-        throw fatalPartError || error;
-      }
-
-      // 4. Finalize the parsed pages
-      setLoadingStep(6);
-      const finalResponse = await fetch(endpoint('finalize'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parsedParts, markdownParts }),
-      });
-      const finalJson = await finalResponse.json().catch(() => ({ error: 'The final extraction response was invalid.' }));
-      const status = finalResponse.status;
-      const json = finalJson;
-
+      const { status, json } = extraction;
       if (status < 200 || status >= 300) {
         throw new Error(json.error || 'Failed to analyze bill PDF');
       }
-      window.localStorage.removeItem(progressStorageKey);
 
       const data = json.data as CementAnalysisData;
       setResult(data);
@@ -726,7 +621,7 @@ export function BillPdfCementAnalyzer({
         }
         toast.success(`Extracted ${data.billDetails?.items?.length || data.extractedItems?.length || 0} bill item(s)`);
       } else {
-        toast.success(`AI PDF extraction completed. Click "Unlock & Import" below to apply the details.`);
+        toast.success(`Direct PDF extraction completed. Click "Unlock & Import" below to apply the details.`);
       }
     } catch (error: any) {
       console.error('Bill PDF cement analysis failed:', error);

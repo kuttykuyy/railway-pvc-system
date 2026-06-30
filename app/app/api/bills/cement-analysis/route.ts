@@ -16,6 +16,7 @@ import {
 } from '@/lib/dsr-cement-calculation';
 import { inferMainClassification } from '@/lib/work-classification';
 import { parseIrepsBillMarkdown } from '@/lib/ireps-bill-parser';
+import { parseIrepsBillPdfDirect } from '@/lib/ireps-direct-pdf-parser';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -1395,8 +1396,27 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      if (stage === 'deterministic' || stage === 'hybrid') {
-        // Force full AI extraction as requested by the user
+      if (stage === 'direct') {
+        const parsed = await parseIrepsBillPdfDirect(Buffer.from(await file.arrayBuffer()));
+        let contractDescription = '';
+        if (contractId) {
+          const contract = await prisma.contract.findUnique({
+            where: { id: contractId },
+            select: { workDescription: true },
+          });
+          contractDescription = contract?.workDescription || '';
+        }
+        const workDescription = contractDescription || parsed.workDescription;
+        billDetails = {
+          ...parsed,
+          workDescription,
+          classificationGroupCode: inferMainClassification(workDescription).code,
+          items: parsed.items
+            .map(normalizeExtractedItem)
+            .map(item => applyDeterministicClassification(item, workDescription)),
+        };
+      } else if (stage === 'deterministic' || stage === 'hybrid') {
+        // Legacy modes remain available for old clients.
         billDetails = await extractBillDetailsWithAi(file, request.nextUrl.origin, contractId);
       } else {
         billDetails = await extractBillDetailsWithAi(file, request.nextUrl.origin, contractId);

@@ -4,7 +4,22 @@
  * Each text item is placed at its approximate column position.
  */
 
-export async function extractLayoutText(pdfBuffer: Buffer): Promise<string> {
+export interface PositionedPdfTextItem {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PositionedPdfPage {
+  pageNumber: number;
+  width: number;
+  height: number;
+  items: PositionedPdfTextItem[];
+}
+
+export async function extractPositionedPdfPages(pdfBuffer: Buffer): Promise<PositionedPdfPage[]> {
   // CRITICAL: Pre-load the worker module onto globalThis BEFORE importing pdf.js.
   // pdfjs checks `globalThis.pdfjsWorker?.WorkerMessageHandler` first when setting
   // up its "fake worker" for Node.js. If present, it uses that directly instead of
@@ -14,20 +29,12 @@ export async function extractLayoutText(pdfBuffer: Buffer): Promise<string> {
       // @ts-ignore
       (globalThis as any).pdfjsWorker = await import('pdfjs-dist/legacy/build/pdf.worker.mjs');
     } catch {
-      try {
-        // @ts-ignore
-        (globalThis as any).pdfjsWorker = await import('pdfjs-dist/legacy/build/pdf.worker.js');
-      } catch {
-        // Ignore - pdfjs will try other fallback paths
-      }
+      // pdfjs can initialize its Node fake worker when explicit preload is unavailable.
     }
   }
 
   // @ts-ignore
-  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs').catch(async () => {
-    // @ts-ignore
-    return import('pdfjs-dist/legacy/build/pdf.js');
-  });
+  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
 
   const doc = await pdfjsLib.getDocument({
     data: new Uint8Array(pdfBuffer),
@@ -38,7 +45,7 @@ export async function extractLayoutText(pdfBuffer: Buffer): Promise<string> {
     disableStream: true,
   }).promise;
 
-  let allText = '';
+  const pages: PositionedPdfPage[] = [];
 
   for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
     const page = await doc.getPage(pageNum);
@@ -58,23 +65,69 @@ export async function extractLayoutText(pdfBuffer: Buffer): Promise<string> {
     for (const item of textContent.items) {
       const ti = item as any;
       if (!ti.str || ti.str.trim() === '') continue;
-      const tx = ti.transform;
-      if (!tx) continue;
-      // PDF coordinates: origin at bottom-left, y increases upward
-      // Convert to top-left origin
+      if (!ti.transform) continue;
+      const tx = pdfjsLib.Util.transform(viewport.transform, ti.transform);
       const x = tx[4];
-      const y = viewport.height - tx[5];
-      const fontSize = Math.abs(tx[0]) || 10;
-      items.push({ str: ti.str, x, y, width: ti.width || 0, fontSize });
+      const fontSize = Math.hypot(tx[2], tx[3]) || Math.hypot(tx[0], tx[1]) || 10;
+      const y = tx[5] - fontSize;
+      const text = String(ti.str);
+      const width = Number(ti.width || 0);
+      const words = Array.from(text.matchAll(/\S+/g));
+      if (words.length > 1 && width > 0) {
+        for (const word of words) {
+          const startRatio = (word.index || 0) / text.length;
+          const widthRatio = word[0].length / text.length;
+          items.push({
+            str: word[0],
+            x: x + width * startRatio,
+            y,
+            width: width * widthRatio,
+            fontSize,
+          });
+        }
+      } else {
+        items.push({ str: text, x, y, width, fontSize });
+      }
     }
+
+    pages.push({
+      pageNumber: pageNum,
+      width: viewport.width,
+      height: viewport.height,
+      items: items.map(item => ({
+        text: item.str,
+        x: item.x,
+        y: item.y,
+        width: item.width,
+        height: item.fontSize,
+      })),
+    });
+  }
+
+  return pages;
+}
+
+export async function extractLayoutText(pdfBuffer: Buffer): Promise<string> {
+  const pages = await extractPositionedPdfPages(pdfBuffer);
+  let allText = '';
+
+  for (const page of pages) {
+    type LayoutTextItem = { str: string; x: number; y: number; width: number; fontSize: number };
+    const items: LayoutTextItem[] = page.items.map(item => ({
+      str: item.text,
+      x: item.x,
+      y: item.y,
+      width: item.width,
+      fontSize: item.height,
+    }));
 
     if (items.length === 0) continue;
 
     // Group items into lines by y-coordinate (items within 3pt are on the same line)
     items.sort((a, b) => a.y - b.y || a.x - b.x);
 
-    const lineGroups: TextItem[][] = [];
-    let currentLine: TextItem[] = [items[0]];
+    const lineGroups: LayoutTextItem[][] = [];
+    let currentLine: LayoutTextItem[] = [items[0]];
     let currentY = items[0].y;
 
     for (let i = 1; i < items.length; i++) {
@@ -91,7 +144,7 @@ export async function extractLayoutText(pdfBuffer: Buffer): Promise<string> {
     // Convert page width in points to character columns
     // Typical PDF page width ~595pt (A4), typical char width ~5-6pt for monospace
     // We aim for ~180 char wide output to match pdftotext -layout
-    const pageWidth = viewport.width || 595;
+    const pageWidth = page.width || 595;
     const charWidth = pageWidth / 180;
 
     // Build layout text
@@ -108,7 +161,7 @@ export async function extractLayoutText(pdfBuffer: Buffer): Promise<string> {
       pageText += line + '\n';
     }
 
-    allText += pageText;
+    allText += `Page ${page.pageNumber} of ${pages.length}\n${pageText}`;
   }
 
   return allText;
