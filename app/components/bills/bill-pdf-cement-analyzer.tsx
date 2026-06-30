@@ -26,6 +26,9 @@ interface CementAnalysisResultItem {
   cementAmount?: number | null;
   coefficient?: number | null;
   matched?: boolean;
+  cementUnit?: string | null;
+  coefficientSource?: string | null;
+  reason?: string;
 }
 
 export interface ExtractedBillItem {
@@ -148,6 +151,8 @@ export function BillPdfCementAnalyzer({
   const analysisStartedAtRef = useRef<number | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<CementAnalysisData | null>(null);
+  const [coefficientDrafts, setCoefficientDrafts] = useState<Record<string, string>>({});
+  const [savingCoefficientCode, setSavingCoefficientCode] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
 
@@ -393,6 +398,78 @@ export function BillPdfCementAnalyzer({
     if (coeffIndex === undefined || coeffIndex === -1) return 0;
     const cementQtyMT = resData.results[coeffIndex]?.cementQuantity || 0;
     return cementQtyMT * derivedRatePerMt;
+  };
+
+  const saveMissingCoefficient = async (item: CementAnalysisResultItem) => {
+    if (!result || !item.dsrCode) return;
+    const coefficient = Number(coefficientDrafts[item.dsrCode]);
+    if (!Number.isFinite(coefficient) || coefficient <= 0) {
+      toast.error('Enter a valid coefficient in MT per item unit.');
+      return;
+    }
+
+    try {
+      setSavingCoefficientCode(item.dsrCode);
+      const response = await fetch('/api/admin/dsr-cement-coefficients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dsrCode: item.dsrCode,
+          description: item.description,
+          workUnit: item.unit,
+          cementQuantityPerUnit: coefficient,
+        }),
+      });
+      const json = await response.json().catch(() => ({ error: 'Invalid server response.' }));
+      if (!response.ok) throw new Error(json.error || 'Failed to save coefficient.');
+
+      const updatedResults = result.results.map(existing => {
+        if (existing.dsrCode !== item.dsrCode) return existing;
+        const cementQuantity = existing.quantity * coefficient;
+        return {
+          ...existing,
+          matched: true,
+          coefficient,
+          cementQuantity,
+          cementUnit: 'MT',
+          cementAmount: result.cementRatePerUnit && result.cementRatePerUnit > 0
+            ? cementQuantity * result.cementRatePerUnit
+            : null,
+          coefficientSource: 'DSR 2021 Analysis of Rates - admin verified',
+          reason: `Quantity ${existing.quantity} x coefficient ${coefficient} MT/${existing.unit}`,
+        };
+      });
+      const matchedResults = updatedResults.filter(existing => existing.matched);
+      const unmatchedItemCount = updatedResults.length - matchedResults.length;
+      const cementQuantity = matchedResults.reduce((sum, existing) => sum + existing.cementQuantity, 0);
+      const cementAmount = matchedResults.reduce((sum, existing) => sum + (existing.cementAmount || 0), 0);
+      const warnings = (result.warnings || []).filter(warning => !/need DSR cement coefficients/i.test(warning));
+      if (unmatchedItemCount > 0) {
+        warnings.push(`${unmatchedItemCount} item(s) need DSR cement coefficients before cement amount can be finalized.`);
+      }
+
+      const updated: CementAnalysisData = {
+        ...result,
+        results: updatedResults,
+        summary: {
+          ...result.summary,
+          matchedItemCount: matchedResults.length,
+          unmatchedItemCount,
+          cementQuantity,
+          cementAmount: matchedResults.some(existing => existing.cementAmount !== null) ? cementAmount : null,
+          hasCementAmount: matchedResults.some(existing => existing.cementAmount !== null),
+        },
+        warnings,
+      };
+      setResult(updated);
+      setCoefficientDrafts(current => ({ ...current, [item.dsrCode]: '' }));
+      onApplyBillDetails?.(updated);
+      toast.success(`${item.dsrCode} coefficient saved for current and future bills.`);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to save coefficient.');
+    } finally {
+      setSavingCoefficientCode(null);
+    }
   };
 
   const applyCalculatedAmount = (amount: number) => {
@@ -1072,7 +1149,7 @@ export function BillPdfCementAnalyzer({
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {result.results.slice(0, compact ? 5 : 10).map((item, index) => (
+                      {result.results.slice(0, compact ? 5 : undefined).map((item, index) => (
                         <tr key={`${item.dsrCode}-${index}`}>
                           <td className="whitespace-nowrap px-2 py-2 font-medium">{item.dsrCode || '-'}</td>
                           <td className="max-w-[360px] px-2 py-2">
@@ -1082,7 +1159,41 @@ export function BillPdfCementAnalyzer({
                             {formatNumber(item.quantity, 2)} {item.unit}
                           </td>
                           <td className="whitespace-nowrap px-2 py-2 text-right">
-                            {item.coefficient ? formatNumber(item.coefficient, 5) : '-'}
+                            {item.coefficient ? (
+                              formatNumber(item.coefficient, 5)
+                            ) : item.dsrCode && !item.dsrCode.startsWith('REVIEW-') ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.00001"
+                                  inputMode="decimal"
+                                  value={coefficientDrafts[item.dsrCode] || ''}
+                                  onChange={event => setCoefficientDrafts(current => ({
+                                    ...current,
+                                    [item.dsrCode]: event.target.value,
+                                  }))}
+                                  placeholder="MT/unit"
+                                  aria-label={`Cement coefficient for ${item.dsrCode} in MT per ${item.unit}`}
+                                  title={`Enter MT of cement required per ${item.unit}`}
+                                  className="h-7 w-20 px-2 text-right text-xs"
+                                />
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-7 w-7 shrink-0"
+                                  onClick={() => void saveMissingCoefficient(item)}
+                                  disabled={savingCoefficientCode === item.dsrCode}
+                                  title="Save to shared DSR coefficient library"
+                                  aria-label={`Save coefficient for ${item.dsrCode}`}
+                                >
+                                  {savingCoefficientCode === item.dsrCode
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <Save className="h-3.5 w-3.5" />}
+                                </Button>
+                              </div>
+                            ) : '-'}
                           </td>
                           <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
                             {formatNumber(item.cementQuantity * 10)} Qtl
@@ -1093,9 +1204,15 @@ export function BillPdfCementAnalyzer({
                   </table>
                 </div>
 
-                {result.results.length > (compact ? 5 : 10) && (
+                {result.results.some(item => !item.coefficient) && !compact && (
                   <div className="text-xs text-muted-foreground">
-                    Showing first {compact ? 5 : 10} of {result.results.length} extracted cement items.
+                    Missing coefficient: enter MT of cement required per displayed item unit, then save. Administrator access is required because this updates the shared library.
+                  </div>
+                )}
+
+                {compact && result.results.length > 5 && (
+                  <div className="text-xs text-muted-foreground">
+                    Showing first 5 of {result.results.length} extracted cement items.
                   </div>
                 )}
               </>
