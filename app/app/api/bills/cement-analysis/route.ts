@@ -130,22 +130,43 @@ function looksLikeDirectCementSupply(item: ExtractedBillItem): boolean {
 }
 
 function applyDeterministicClassification(item: ExtractedBillItem, workDescription: string): ExtractedBillItem {
-  const main = inferMainClassification(workDescription);
-  if (main.code === '2' || main.code === '7') {
+  // 1. Check if the AI already suggested a valid classification code
+  const aiCode = String(item.suggestedClassificationCode || '').trim().toUpperCase();
+  const isValidAiCode = /^[1-9][A-E]?$/.test(aiCode);
+
+  // 2. Infer main group code from the item description itself
+  const itemText = `${item.schedule || ''} ${item.scheduleGroup || ''} ${item.chapter || ''} ${item.description || ''}`.trim();
+  const itemMain = inferMainClassification(itemText);
+
+  // 3. Fallback to contract description main group code
+  const contractMain = inferMainClassification(workDescription);
+
+  // Determine the prefix (digit) to use:
+  let resolvedCode = contractMain.code;
+  let resolvedReason = `${contractMain.reason} (Fallback for item).`;
+
+  if (itemMain.code !== '9') {
+    resolvedCode = itemMain.code;
+    resolvedReason = `Matched Group ${itemMain.code} (${itemMain.label}) from item description.`;
+  } else if (isValidAiCode) {
+    resolvedCode = aiCode.charAt(0);
+    resolvedReason = `Using AI suggested classification group ${resolvedCode}.`;
+  }
+
+  if (resolvedCode === '2' || resolvedCode === '7') {
     return {
       ...item,
-      suggestedClassificationCode: main.code,
-      suggestedClassificationReason: `${main.reason} This group has a single classification.`,
+      suggestedClassificationCode: resolvedCode,
+      suggestedClassificationReason: `${resolvedReason} This group has a single classification.`,
     };
   }
 
   // Use the AI's classification suffix if valid, otherwise determine it deterministically
-  const aiCode = String(item.suggestedClassificationCode || '').trim().toUpperCase();
   const aiSuffixMatch = aiCode.match(/^[1-9]?([A-E])$/);
   const aiSuffix = aiSuffixMatch ? aiSuffixMatch[1] : null;
 
-  const text = `${item.schedule || ''} ${item.scheduleGroup || ''} ${item.chapter || ''} ${item.description}`.toLowerCase();
-  const supportsFabricationClasses = main.code !== '1';
+  const text = itemText.toLowerCase();
+  const supportsFabricationClasses = resolvedCode !== '1';
   const isFabrication = /fabricat|assembl|erect|launch/.test(text);
   const excludesSteel = /excluding steel|without steel|steel supplied by railway|free issue steel/.test(text);
   const includesSteel = /including steel|with steel|contractor.{0,30}suppl/.test(text);
@@ -175,8 +196,8 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
 
   return {
     ...item,
-    suggestedClassificationCode: `${main.code}${suffix}`,
-    suggestedClassificationReason: `${main.reason} ${subReason}`,
+    suggestedClassificationCode: `${resolvedCode}${suffix}`,
+    suggestedClassificationReason: `${resolvedReason} ${subReason}`,
   };
 }
 
