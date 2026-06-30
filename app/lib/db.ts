@@ -1,4 +1,4 @@
-﻿import { logger } from './logger';
+import { logger } from './logger';
 import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = globalThis as unknown as {
@@ -37,11 +37,9 @@ function buildDatabaseUrl(): string {
   try {
     const url = new URL(baseUrl)
     
-    // OPTIMIZED connection pooling to prevent idle session timeouts
-    // Smaller pool for better connection management
-    url.searchParams.set('connection_limit', '5')           // Slightly increased for better concurrency
-    url.searchParams.set('pool_timeout', '10')              // Reduced - fail fast, retry quick
-    url.searchParams.set('connect_timeout', '5')            // Faster timeout for quicker retry
+    url.searchParams.set('connection_limit', '15')           // Increased pool size for better concurrency
+    url.searchParams.set('pool_timeout', '20')              // Increased wait timeout for connection pool
+    url.searchParams.set('connect_timeout', '15')            // Faster timeout for quicker retry
     
     // CRITICAL: Connection lifecycle management
     // Set connection lifetime MUCH shorter than server's idle_session_timeout (120s)

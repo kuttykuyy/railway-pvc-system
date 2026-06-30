@@ -268,7 +268,7 @@ async function requestAiExtraction(
       temperature: 0,
       max_tokens: maxTokens,
     }),
-    signal: AbortSignal.timeout(45000),
+    signal: AbortSignal.timeout(90000),
   });
 
   if (!response.ok) {
