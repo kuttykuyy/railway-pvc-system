@@ -171,6 +171,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   }
 
   const items: DeterministicBillItem[] = [];
+  let excludedZeroQtyAmount = 0;
   let currentSchedule = 'Schedule UNASSIGNED';
   let currentScheduleHeading = '';
   let currentChapter = '';
@@ -216,9 +217,12 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       const agreementAmount = numericValue(agreementAmountRaw) || 0;
       const specialAmount = numericValue(specialAmountRaw) || 0;
       if (!(agreementRate > 0 && specialAmount > 0)) continue;
+      if (quantity === 0) {
+        excludedZeroQtyAmount += specialAmount;
+        continue;
+      }
       const arithmeticDifference = Math.abs(quantity * agreementRate - agreementAmount);
-      if (quantity > 0 && arithmeticDifference > Math.max(0.15, agreementAmount * 0.00002)) continue;
-      if (quantity === 0 && Math.abs(agreementAmount) > 0.05) continue;
+      if (arithmeticDifference > Math.max(0.15, agreementAmount * 0.00002)) continue;
 
       const nextRowY = candidates[index + 1]?.y || page.height - 5;
       const itemNo = extractItemCode(page, unitItem.y, nextRowY);
@@ -249,9 +253,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         sourceBook,
         ...materialFlags(description),
         confidence: itemNo ? 'high' : 'medium',
-        reason: quantity > 0
-          ? 'Direct PDF coordinates; Qty since last Bill x Agreement Rate verified against current amount.'
-          : 'Direct PDF coordinates; printed Qty since last Bill is zero, payable amount comes from the special-condition current amount column.',
+        reason: 'Direct PDF coordinates; Qty since last Bill x Agreement Rate verified against current amount.',
       });
     }
     for (const line of lines) updateContext(line.text);
@@ -265,16 +267,21 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     throw new Error('The printed Bill Amount could not be read from this PDF.');
   }
   const itemAmountTotal = Math.round(items.reduce((sum, item) => sum + item.amountSinceLastBill, 0) * 100) / 100;
-  const amountDifference = Math.round((itemAmountTotal - billAmount) * 100) / 100;
+  const expectedAmount = Math.round((billAmount - excludedZeroQtyAmount) * 100) / 100;
+  const amountDifference = Math.round((itemAmountTotal - expectedAmount) * 100) / 100;
   const amountsReconciled = Math.abs(amountDifference) <= 0.05;
   if (!amountsReconciled) {
     throw new Error(
-      `Direct PDF item total Rs ${itemAmountTotal.toFixed(2)} does not match Bill Amount Rs ${billAmount.toFixed(2)}.`,
+      `Direct PDF item total Rs ${itemAmountTotal.toFixed(2)} does not match Bill Amount Rs ${billAmount.toFixed(2)}` +
+      (excludedZeroQtyAmount > 0 ? ` (minus Rs ${excludedZeroQtyAmount.toFixed(2)} from zero-quantity rows excluded).` : '.'),
     );
   }
   const scheduleTotals = new Map<string, number>();
   for (const item of items) scheduleTotals.set(item.schedule, (scheduleTotals.get(item.schedule) || 0) + item.amountSinceLastBill);
   const details = metadata(pages);
+  const warnings = excludedZeroQtyAmount > 0.05
+    ? [`Excluded Rs ${excludedZeroQtyAmount.toFixed(2)} of payable amount from rows where printed Qty since last Bill is zero.`]
+    : [];
   return {
     ...details,
     measurementDate: '',
@@ -288,6 +295,6 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     amountDifference,
     amountsReconciled,
     items,
-    warnings: [],
+    warnings,
   };
 }
