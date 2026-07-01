@@ -1879,12 +1879,22 @@ export async function POST(request: NextRequest) {
       }
 
       // CLASSIFICATION INFORMATION SECTION
-      checkNewPage(80);
-      
+      checkNewPage(100);
+
+      // GCC version heading (matches single bill report)
+      pdf.setFontSize(19);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("WORK CLASSIFICATION (GCC-2022-ACS2)", marginLeft, yPosition);
+      const gccTitleWidth = pdf.getTextWidth("WORK CLASSIFICATION (GCC-2022-ACS2)");
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.5);
+      pdf.line(marginLeft, yPosition + 2, marginLeft + gccTitleWidth, yPosition + 2);
+      yPosition += 12;
+
       pdf.setFontSize(16);
       pdf.setFont("helvetica", "bold");
       pdf.text("WORK CLASSIFICATIONS & AMOUNTS", marginLeft, yPosition);
-      
+
       const classifTitle = "WORK CLASSIFICATIONS & AMOUNTS";
       const classifTitleWidth = pdf.getTextWidth(classifTitle);
       pdf.setLineWidth(0.5);
