@@ -1,7 +1,7 @@
 'use client';
 
 import { ChangeEvent, DragEvent, useRef, useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Cpu, FileCheck2, FileText, HardDrive, Lightbulb, ListChecks, Loader2, Lock, RotateCcw, Save, ScanText, Unlock, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Cpu, FileCheck2, FileText, HardDrive, Lightbulb, ListChecks, Loader2, Lock, RotateCcw, Save, ScanText, Trash2, Unlock, Upload } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { Badge } from '@/components/ui/badge';
@@ -488,9 +488,71 @@ export function BillPdfCementAnalyzer({
     }
   };
 
+  const deleteExtractedItem = (itemToRemove: ExtractedBillItem) => {
+    if (!result) return;
+    const items = result.billDetails?.items || result.extractedItems || [];
+    const updatedItems = items.filter(item => item !== itemToRemove);
+
+    const itemAmountTotal = Math.round(
+      updatedItems.reduce((sum, item) => sum + Number(item.amountSinceLastBill || 0), 0) * 100,
+    ) / 100;
+    const scheduleSummaryTotal = result.billDetails?.scheduleSummaryTotal;
+    const amountDifference = scheduleSummaryTotal !== undefined
+      ? Math.round((itemAmountTotal - scheduleSummaryTotal) * 100) / 100
+      : result.billDetails?.amountDifference;
+    const amountsReconciled = scheduleSummaryTotal !== undefined
+      ? Math.abs(amountDifference ?? 0) <= 0.05
+      : result.billDetails?.amountsReconciled;
+
+    const updated: CementAnalysisData = {
+      ...result,
+      billDetails: result.billDetails ? {
+        ...result.billDetails,
+        items: updatedItems,
+        itemAmountTotal,
+        amountDifference,
+        amountsReconciled,
+      } : undefined,
+      extractedItems: result.extractedItems ? updatedItems : undefined,
+    };
+    setResult(updated);
+    onApplyBillDetails?.(updated);
+    toast.success('Item removed from the extracted list.');
+  };
+
+  const deleteCementResultItem = (itemToRemove: CementAnalysisResultItem) => {
+    if (!result) return;
+    const updatedResults = result.results.filter(item => item !== itemToRemove);
+    const matchedResults = updatedResults.filter(item => item.matched);
+    const unmatchedItemCount = updatedResults.length - matchedResults.length;
+    const cementQuantity = matchedResults.reduce((sum, item) => sum + item.cementQuantity, 0);
+    const cementAmount = matchedResults.reduce((sum, item) => sum + (item.cementAmount || 0), 0);
+    const warnings = (result.warnings || []).filter(warning => !/need DSR cement coefficients/i.test(warning));
+    if (unmatchedItemCount > 0) {
+      warnings.push(`${unmatchedItemCount} item(s) need DSR cement coefficients before cement amount can be finalized.`);
+    }
+
+    const updated: CementAnalysisData = {
+      ...result,
+      results: updatedResults,
+      summary: {
+        ...result.summary,
+        matchedItemCount: matchedResults.length,
+        unmatchedItemCount,
+        cementQuantity,
+        cementAmount: matchedResults.some(item => item.cementAmount !== null) ? cementAmount : null,
+        hasCementAmount: matchedResults.some(item => item.cementAmount !== null),
+      },
+      warnings,
+    };
+    setResult(updated);
+    onApplyBillDetails?.(updated);
+    toast.success('Coefficient row removed.');
+  };
+
   const applyCalculatedAmount = (amount: number) => {
     if (!result) return;
-    
+
     // Update the amountSinceLastBill of each cement-affected item in the result items list
     const updatedItems = (result.billDetails?.items || result.extractedItems || []).map((item) => {
       const deduction = getItemCementDeduction(item);
@@ -1127,6 +1189,7 @@ export function BillPdfCementAnalyzer({
                         <th className="px-2 py-2 text-right font-medium">Rate</th>
                         <th className="px-2 py-2 text-right font-medium">Amount</th>
                         <th className="px-2 py-2 text-left font-medium">Class</th>
+                        {!compact && <th className="px-2 py-2 text-right font-medium">Remove</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -1183,6 +1246,21 @@ export function BillPdfCementAnalyzer({
                               </div>
                             )}
                           </td>
+                          {!compact && (
+                            <td className="whitespace-nowrap px-2 py-2 text-right">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-red-500 hover:text-red-700"
+                                onClick={() => deleteExtractedItem(item)}
+                                title={`Remove item ${item.itemNo || item.dsrCode || ''} from the extracted list`}
+                                aria-label={`Remove item ${item.itemNo || item.dsrCode || ''}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -1223,6 +1301,7 @@ export function BillPdfCementAnalyzer({
                         <th className="px-2 py-2 text-right font-medium">Qty</th>
                         <th className="px-2 py-2 text-right font-medium">Coeff.</th>
                         <th className="px-2 py-2 text-right font-medium">Cement</th>
+                        {!compact && <th className="px-2 py-2 text-right font-medium">Remove</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -1275,6 +1354,21 @@ export function BillPdfCementAnalyzer({
                           <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
                             {formatNumber(item.cementQuantity * 10)} Qtl
                           </td>
+                          {!compact && (
+                            <td className="whitespace-nowrap px-2 py-2 text-right">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-red-500 hover:text-red-700"
+                                onClick={() => deleteCementResultItem(item)}
+                                title={`Remove ${item.dsrCode || 'this row'} from the coefficient list`}
+                                aria-label={`Remove ${item.dsrCode || 'this row'} from the coefficient list`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
