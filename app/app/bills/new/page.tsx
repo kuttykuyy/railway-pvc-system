@@ -509,6 +509,10 @@ function NewBillPageContent() {
     return items.flatMap((item): ClassificationEntry[] => {
       const subClassification = findSubClassificationForExtractedItem(item);
       if (!subClassification) return [];
+      const qtySinceLast = Number(item.quantitySinceLastBill || 0);
+      const specialConditionOnly = qtySinceLast === 0
+        && Number(item.amountAtAgreementRateSinceLastBill || 0) === 0
+        && Number(item.amountIncludingSpecialConditionSinceLastBill || item.amountSinceLastBill || 0) > 0;
 
       const originalAmount = (item as any).originalAmount;
       const netAmount = Number(item.amountSinceLastBill || 0);
@@ -569,23 +573,27 @@ function NewBillPageContent() {
       }
 
       // Default: single entry
+      const itemQuantity = specialConditionOnly ? '' : (item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '');
+      const itemRate = specialConditionOnly ? '' : (item.agreementRateRaw || item.agreementRate || '');
       return [{
         subClassificationId: subClassification.id,
         subClassification,
         amount: Number(item.amountSinceLastBill || 0),
-        description: item.description || '',
+        description: specialConditionOnly
+          ? `${item.description || ''} (Special condition amount; printed Qty since last Bill is 0)`
+          : item.description || '',
         steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
         scheduleItem: matchExtractedSchedule(
           selectedContract?.schedules || [],
           [item.schedule, item.scheduleGroup, item.chapter],
         ),
         itemNumber: item.itemNo || '',
-        quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
-        agreementRate: item.agreementRateRaw || item.agreementRate || '',
-        itemRows: [{
+        quantity: itemQuantity,
+        agreementRate: itemRate,
+        itemRows: specialConditionOnly ? [] : [{
           itemNumber: item.itemNo || '',
-          quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
-          agreementRate: item.agreementRateRaw || item.agreementRate || '',
+          quantity: itemQuantity,
+          agreementRate: itemRate,
         }],
       }];
     });

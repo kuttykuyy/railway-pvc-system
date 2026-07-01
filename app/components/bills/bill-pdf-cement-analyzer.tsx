@@ -145,6 +145,12 @@ function formatAmount(value: number | null | undefined) {
   })}`;
 }
 
+function isSpecialConditionOnlyItem(item: ExtractedBillItem) {
+  return Number(item.quantitySinceLastBill || 0) === 0
+    && Number(item.amountAtAgreementRateSinceLastBill || 0) === 0
+    && Number(item.amountIncludingSpecialConditionSinceLastBill || item.amountSinceLastBill || 0) > 0;
+}
+
 export function BillPdfCementAnalyzer({
   title = 'Direct PDF Bill Extraction',
   compact = false,
@@ -1128,9 +1134,19 @@ export function BillPdfCementAnalyzer({
                             </div>
                           </td>
                           <td className="whitespace-nowrap px-2 py-2 text-right">
-                            {item.quantitySinceLastBillRaw || formatNumber(item.quantitySinceLastBill, 2)} {item.unit}
+                            {isSpecialConditionOnlyItem(item) ? (
+                              <div className="text-[11px] text-amber-700">
+                                Special condition
+                              </div>
+                            ) : (
+                              <>
+                                {item.quantitySinceLastBillRaw || formatNumber(item.quantitySinceLastBill, 2)} {item.unit}
+                              </>
+                            )}
                           </td>
-                          <td className="whitespace-nowrap px-2 py-2 text-right">{item.agreementRateRaw || formatAmount(item.agreementRate)}</td>
+                          <td className="whitespace-nowrap px-2 py-2 text-right">
+                            {isSpecialConditionOnlyItem(item) ? '-' : (item.agreementRateRaw || formatAmount(item.agreementRate))}
+                          </td>
                           <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
                             {getItemCementDeduction(item) > 0 ? (
                               <div className="space-y-0.5">

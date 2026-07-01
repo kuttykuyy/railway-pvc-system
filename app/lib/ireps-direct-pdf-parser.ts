@@ -29,11 +29,6 @@ function numericValue(raw: string) {
   return Number.isFinite(value) ? value : undefined;
 }
 
-function formatRecoveredQuantity(value: number) {
-  const rounded = Math.round(value * 1000) / 1000;
-  return rounded.toFixed(3).replace(/\.?0+$/, '');
-}
-
 function cellText(
   page: PositionedPdfPage,
   items: PositionedPdfTextItem[],
@@ -217,22 +212,13 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       const agreementAmountRaw = cellText(page, page.items, X.amountSinceLast, unitItem.y);
       const specialAmountRaw = cellText(page, page.items, X.specialAmount, unitItem.y);
       const agreementRate = numericValue(agreementRateRaw) || 0;
-      const parsedQuantity = numericValue(quantityRaw) || 0;
+      const quantity = numericValue(quantityRaw) || 0;
       const agreementAmount = numericValue(agreementAmountRaw) || 0;
       const specialAmount = numericValue(specialAmountRaw) || 0;
       if (!(agreementRate > 0 && specialAmount > 0)) continue;
-      const arithmeticDifference = Math.abs(parsedQuantity * agreementRate - agreementAmount);
-      if (parsedQuantity > 0 && arithmeticDifference > Math.max(0.15, agreementAmount * 0.00002)) continue;
-      if (parsedQuantity === 0 && Math.abs(agreementAmount) > 0.05) continue;
-
-      const recoveredQuantity = parsedQuantity === 0 && agreementAmount === 0 && specialAmount > 0
-        ? specialAmount / agreementRate
-        : undefined;
-      const hasRecoveredQuantity = recoveredQuantity !== undefined
-        && Number.isFinite(recoveredQuantity)
-        && recoveredQuantity > 0;
-      const quantity = hasRecoveredQuantity ? Number(formatRecoveredQuantity(recoveredQuantity)) : parsedQuantity;
-      const finalQuantityRaw = hasRecoveredQuantity ? formatRecoveredQuantity(recoveredQuantity) : quantityRaw;
+      const arithmeticDifference = Math.abs(quantity * agreementRate - agreementAmount);
+      if (quantity > 0 && arithmeticDifference > Math.max(0.15, agreementAmount * 0.00002)) continue;
+      if (quantity === 0 && Math.abs(agreementAmount) > 0.05) continue;
 
       const nextRowY = candidates[index + 1]?.y || page.height - 5;
       const itemNo = extractItemCode(page, unitItem.y, nextRowY);
@@ -251,7 +237,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         description,
         unit: unitItem.text.replace(/\./g, ''),
         quantitySinceLastBill: quantity,
-        quantitySinceLastBillRaw: finalQuantityRaw,
+        quantitySinceLastBillRaw: quantityRaw,
         agreementRate,
         agreementRateRaw,
         amountAtAgreementRateSinceLastBill: agreementAmount,
@@ -263,11 +249,9 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         sourceBook,
         ...materialFlags(description),
         confidence: itemNo ? 'high' : 'medium',
-        reason: hasRecoveredQuantity
-          ? 'Direct PDF coordinates; printed current quantity was zero but payable current amount was recovered as Amount / Agreement Rate.'
-          : quantity > 0
+        reason: quantity > 0
           ? 'Direct PDF coordinates; Qty since last Bill x Agreement Rate verified against current amount.'
-          : 'Direct PDF coordinates; payable special-condition adjustment with zero current quantity and ordinary amount.',
+          : 'Direct PDF coordinates; printed Qty since last Bill is zero, payable amount comes from the special-condition current amount column.',
       });
     }
     for (const line of lines) updateContext(line.text);
