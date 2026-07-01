@@ -13,6 +13,7 @@ export interface DeterministicBillItem {
   schedule: string;
   scheduleGroup: string;
   chapter: string;
+  groupName: string;
   sourceBook: 'USSR_2021' | 'DSR_2021' | 'NON_SCHEDULE' | 'UNKNOWN';
   isCementAffected: boolean;
   isSteelItem: boolean;
@@ -411,6 +412,7 @@ export function parseIrepsBillMarkdown(markdown: string): DeterministicBillDetai
     const scheduleCode = scheduleHeading.match(/^([A-Z]\d*)\b/i)?.[1]?.toUpperCase() || 'UNASSIGNED';
     const schedule = `Schedule ${scheduleCode}`;
     const chapter = latestContext(normalized, row.start, /^Chapter Name:-\s*([^\n]+)/gim);
+    const groupName = latestContext(normalized, row.start, /^Group Name:-\s*([^\n]+)/gim);
     const scheduleText = scheduleHeading.toUpperCase();
     const sourceBook = /USSR|UNIFIED STANDARD/.test(scheduleText)
       ? 'USSR_2021'
@@ -438,6 +440,7 @@ export function parseIrepsBillMarkdown(markdown: string): DeterministicBillDetai
       schedule,
       scheduleGroup: schedule,
       chapter,
+      groupName,
       sourceBook,
       ...materials,
       confidence: 'high',
@@ -475,6 +478,7 @@ export function parseIrepsBillMarkdown(markdown: string): DeterministicBillDetai
           schedule: summary.schedule,
           scheduleGroup: summary.schedule,
           chapter: 'Manual review required',
+          groupName: '',
           sourceBook: 'UNKNOWN',
           isCementAffected: false,
           isSteelItem: false,

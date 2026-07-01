@@ -175,6 +175,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   let currentSchedule = 'Schedule UNASSIGNED';
   let currentScheduleHeading = '';
   let currentChapter = '';
+  let currentGroupName = '';
 
   for (const page of pages) {
     const lines = pageLines(page);
@@ -186,6 +187,8 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       }
       const chapterMatch = lineText.match(/Chapter Name:-\s*(.+)/i);
       if (chapterMatch) currentChapter = chapterMatch[1].trim();
+      const groupNameMatch = lineText.match(/Group Name:-\s*(.+)/i);
+      if (groupNameMatch) currentGroupName = groupNameMatch[1].trim();
     };
     const units = page.items
       .filter(item => {
@@ -250,6 +253,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         schedule: currentSchedule,
         scheduleGroup: currentSchedule,
         chapter: currentChapter,
+        groupName: currentGroupName,
         sourceBook,
         ...materialFlags(description),
         confidence: itemNo ? 'high' : 'medium',

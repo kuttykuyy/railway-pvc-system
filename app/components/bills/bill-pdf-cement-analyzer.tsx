@@ -46,6 +46,7 @@ export interface ExtractedBillItem {
   schedule?: string;
   scheduleGroup?: string;
   chapter?: string;
+  groupName?: string;
   sourceBook?: 'USSR_2021' | 'DSR_2021' | 'NON_SCHEDULE' | 'UNKNOWN';
   requiresDsrCementCoefficient?: boolean;
   isCementAffected?: boolean;

@@ -52,6 +52,12 @@ interface ClassificationGroup {
   subClassifications: SubClassification[];
 }
 
+interface ItemRow {
+  itemNumber: string;
+  quantity: number | string | '';
+  agreementRate: number | string | '';
+}
+
 interface ClassificationEntry {
   subClassificationId: string;
   subClassification?: SubClassification;
@@ -62,6 +68,7 @@ interface ClassificationEntry {
   itemNumber?: string;
   quantity?: number | string | '';
   agreementRate?: number | string | '';
+  itemRows?: ItemRow[];
 }
 
 interface BillRow {
@@ -376,26 +383,63 @@ export default function BulkBillCreationPage() {
 
   const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData): ClassificationEntry[] => {
     const items = data.billDetails?.items || data.extractedItems || [];
-    return items
-      .map((item): ClassificationEntry | null => {
-        const subClassification = findSubClassificationForExtractedItem(item);
-        if (!subClassification) return null;
-        return {
+
+    // Items sharing the same printed "Group Name" and classification are combined into a
+    // single section (one entry with multiple item rows) instead of a separate section per item.
+    let ungroupedCounter = 0;
+    const rawEntries = items.flatMap((item) => {
+      const subClassification = findSubClassificationForExtractedItem(item);
+      if (!subClassification) return [];
+      const groupName = (item.groupName || '').trim();
+      const baseKey = groupName || `__standalone_${ungroupedCounter++}`;
+      const itemNumber = item.itemNo || item.dsrCode || '';
+      const quantity = item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '';
+      const agreementRate = item.agreementRateRaw || item.agreementRate || '';
+      return [{
+        groupKey: `${subClassification.id}::${baseKey}`,
+        entry: {
           subClassificationId: subClassification.id,
           subClassification,
           amount: Number(item.amountSinceLastBill || 0),
-          description: item.description || '',
+          description: groupName || item.description || '',
           steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
           scheduleItem: matchExtractedSchedule(
             selectedContract?.schedules || [],
             [item.schedule, item.scheduleGroup, item.chapter],
           ),
-          itemNumber: item.itemNo || item.dsrCode || '',
-          quantity: item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '',
-          agreementRate: item.agreementRateRaw || item.agreementRate || '',
-        };
-      })
-      .filter((entry): entry is ClassificationEntry => Boolean(entry));
+          itemNumber,
+          quantity,
+          agreementRate,
+          itemRows: [{ itemNumber, quantity, agreementRate }],
+        } as ClassificationEntry,
+      }];
+    });
+
+    const merged = new Map<string, ClassificationEntry>();
+    const order: string[] = [];
+    for (const { groupKey, entry } of rawEntries) {
+      const existing = merged.get(groupKey);
+      if (!existing) {
+        merged.set(groupKey, { ...entry, itemRows: [...(entry.itemRows || [])] });
+        order.push(groupKey);
+        continue;
+      }
+      existing.itemRows = [...(existing.itemRows || []), ...(entry.itemRows || [])];
+      existing.amount = (Number(existing.amount) || 0) + (Number(entry.amount) || 0);
+      const steelSet = new Set([...(existing.steelTypes || []), ...(entry.steelTypes || [])]);
+      existing.steelTypes = Array.from(steelSet);
+    }
+
+    return order.map(key => {
+      const entry = merged.get(key)!;
+      const firstRow = entry.itemRows?.[0];
+      if (firstRow) {
+        entry.itemNumber = firstRow.itemNumber;
+        entry.quantity = firstRow.quantity;
+        entry.agreementRate = firstRow.agreementRate;
+      }
+      return entry;
+    });
   };
 
   const applyExtractedBillDetailsToBulkRow = (data: CementAnalysisData) => {

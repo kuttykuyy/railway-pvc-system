@@ -506,13 +506,21 @@ function NewBillPageContent() {
   const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData): ClassificationEntry[] => {
     const items = data.billDetails?.items || data.extractedItems || [];
     const allSubClassifications = classificationGroups.flatMap(group => group.subClassifications);
-    return items.flatMap((item): ClassificationEntry[] => {
+
+    // Items sharing the same printed "Group Name" and classification are combined into a
+    // single section (one entry with multiple item rows) instead of a separate section per item.
+    let ungroupedCounter = 0;
+
+    const rawEntries: Array<{ groupKey: string; entry: ClassificationEntry }> = items.flatMap((item) => {
       const subClassification = findSubClassificationForExtractedItem(item);
       if (!subClassification) return [];
       const qtySinceLast = Number(item.quantitySinceLastBill || 0);
       const specialConditionOnly = qtySinceLast === 0
         && Number(item.amountAtAgreementRateSinceLastBill || 0) === 0
         && Number(item.amountIncludingSpecialConditionSinceLastBill || item.amountSinceLastBill || 0) > 0;
+
+      const groupName = (item.groupName || '').trim();
+      const baseKey = groupName || `__standalone_${ungroupedCounter++}`;
 
       const originalAmount = (item as any).originalAmount;
       const netAmount = Number(item.amountSinceLastBill || 0);
@@ -522,7 +530,7 @@ function NewBillPageContent() {
         const cementCost = (item as any).cementDeduction || (originalAmount - netAmount);
         const cementQty = (item as any).cementQuantityQuintals || 0;
         const cementRate = (item as any).cementRatePerQuintal || '';
-        
+
         const mainCode = subClassification.code.charAt(0);
         const cementSub = allSubClassifications.find(sub => sub.code.toUpperCase() === `${mainCode}C`);
 
@@ -537,37 +545,43 @@ function NewBillPageContent() {
 
           return [
             {
-              subClassificationId: subClassification.id,
-              subClassification,
-              amount: netAmount,
-              description: `${item.description || ''} (Excluding Cement)`,
-              steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
-              scheduleItem,
-              itemNumber: item.itemNo || '',
-              quantity: qty || '',
-              agreementRate: netRate,
-              itemRows: [{
+              groupKey: `${subClassification.id}::${baseKey}`,
+              entry: {
+                subClassificationId: subClassification.id,
+                subClassification,
+                amount: netAmount,
+                description: groupName ? groupName : `${item.description || ''} (Excluding Cement)`,
+                steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
+                scheduleItem,
                 itemNumber: item.itemNo || '',
                 quantity: qty || '',
                 agreementRate: netRate,
-              }],
+                itemRows: [{
+                  itemNumber: item.itemNo || '',
+                  quantity: qty || '',
+                  agreementRate: netRate,
+                }],
+              },
             },
             {
-              subClassificationId: cementSub.id,
-              subClassification: cementSub,
-              amount: cementCost,
-              description: `${item.description || ''} (Cement Portion)`,
-              steelTypes: [],
-              scheduleItem,
-              itemNumber: item.itemNo ? `${item.itemNo}-CEM` : 'CEM',
-              quantity: cementQty || '',
-              agreementRate: cementRate,
-              itemRows: [{
+              groupKey: `${cementSub.id}::${baseKey}`,
+              entry: {
+                subClassificationId: cementSub.id,
+                subClassification: cementSub,
+                amount: cementCost,
+                description: groupName ? `${groupName} (Cement Portion)` : `${item.description || ''} (Cement Portion)`,
+                steelTypes: [],
+                scheduleItem,
                 itemNumber: item.itemNo ? `${item.itemNo}-CEM` : 'CEM',
                 quantity: cementQty || '',
                 agreementRate: cementRate,
-              }],
-            }
+                itemRows: [{
+                  itemNumber: item.itemNo ? `${item.itemNo}-CEM` : 'CEM',
+                  quantity: cementQty || '',
+                  agreementRate: cementRate,
+                }],
+              },
+            },
           ];
         }
       }
@@ -576,26 +590,57 @@ function NewBillPageContent() {
       const itemQuantity = specialConditionOnly ? '' : (item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '');
       const itemRate = specialConditionOnly ? '' : (item.agreementRateRaw || item.agreementRate || '');
       return [{
-        subClassificationId: subClassification.id,
-        subClassification,
-        amount: Number(item.amountSinceLastBill || 0),
-        description: specialConditionOnly
-          ? `${item.description || ''} (Special condition amount; printed Qty since last Bill is 0)`
-          : item.description || '',
-        steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
-        scheduleItem: matchExtractedSchedule(
-          selectedContract?.schedules || [],
-          [item.schedule, item.scheduleGroup, item.chapter],
-        ),
-        itemNumber: item.itemNo || '',
-        quantity: itemQuantity,
-        agreementRate: itemRate,
-        itemRows: specialConditionOnly ? [] : [{
+        groupKey: `${subClassification.id}::${baseKey}`,
+        entry: {
+          subClassificationId: subClassification.id,
+          subClassification,
+          amount: Number(item.amountSinceLastBill || 0),
+          description: groupName
+            ? groupName
+            : (specialConditionOnly
+              ? `${item.description || ''} (Special condition amount; printed Qty since last Bill is 0)`
+              : item.description || ''),
+          steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
+          scheduleItem: matchExtractedSchedule(
+            selectedContract?.schedules || [],
+            [item.schedule, item.scheduleGroup, item.chapter],
+          ),
           itemNumber: item.itemNo || '',
           quantity: itemQuantity,
           agreementRate: itemRate,
-        }],
+          itemRows: specialConditionOnly ? [] : [{
+            itemNumber: item.itemNo || '',
+            quantity: itemQuantity,
+            agreementRate: itemRate,
+          }],
+        },
       }];
+    });
+
+    const merged = new Map<string, ClassificationEntry>();
+    const order: string[] = [];
+    for (const { groupKey, entry } of rawEntries) {
+      const existing = merged.get(groupKey);
+      if (!existing) {
+        merged.set(groupKey, { ...entry, itemRows: [...(entry.itemRows || [])] });
+        order.push(groupKey);
+        continue;
+      }
+      existing.itemRows = [...(existing.itemRows || []), ...(entry.itemRows || [])];
+      existing.amount = (Number(existing.amount) || 0) + (Number(entry.amount) || 0);
+      const steelSet = new Set([...(existing.steelTypes || []), ...(entry.steelTypes || [])]);
+      existing.steelTypes = Array.from(steelSet);
+    }
+
+    return order.map(key => {
+      const entry = merged.get(key)!;
+      const firstRow = entry.itemRows?.[0];
+      if (firstRow) {
+        entry.itemNumber = firstRow.itemNumber;
+        entry.quantity = firstRow.quantity;
+        entry.agreementRate = firstRow.agreementRate;
+      }
+      return entry;
     });
   };
 
