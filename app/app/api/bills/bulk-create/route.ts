@@ -29,6 +29,7 @@ interface BillInput {
     subClassificationId: string;
     amount: number;
     description?: string;
+    classificationJustification?: string;
     itemNumber?: string;
     quantity?: number;
     agreementRate?: number;
@@ -337,6 +338,7 @@ export async function POST(request: NextRequest) {
           subClassificationId: entry.subClassificationId,
           amount: Number(entry.amount),
           description: entry.description || '',
+          classificationJustification: entry.classificationJustification || null,
           itemNumber: entry.itemNumber || null,
           quantity: entry.quantity || null,
           agreementRate: entry.agreementRate || null,

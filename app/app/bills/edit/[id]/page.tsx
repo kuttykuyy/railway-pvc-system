@@ -20,6 +20,7 @@ interface ClassificationEntry {
   subClassification?: any;
   amount: number | string | '';
   description?: string;
+  classificationJustification?: string;
   steelTypes?: string[];
   scheduleItem?: string;
   itemNumber?: string;
@@ -75,6 +76,7 @@ function EditBillPageContent() {
           subClassificationId: e.subClassificationId || '',
           amount: e.amount || 0,
           description: e.description || '',
+          classificationJustification: e.classificationJustification || '',
           scheduleItem: e.scheduleItem || '',
           steelTypes: e.steelTypes || [],
           itemRows: e.itemRows || undefined,
@@ -117,6 +119,7 @@ function EditBillPageContent() {
             subClassificationId: e.subClassificationId,
             amount: e.amount,
             description: e.description || '',
+            classificationJustification: e.classificationJustification || null,
             steelTypes: e.steelTypes || [],
             scheduleItem: e.scheduleItem || null,
             itemRows: e.itemRows?.length ? e.itemRows.map((r: any) => ({

@@ -63,6 +63,7 @@ interface ClassificationEntry {
   subClassification?: SubClassification;
   amount: number | string | '';
   description?: string;
+  classificationJustification?: string;
   steelTypes?: string[];
   scheduleItem?: string;
   itemNumber?: string;
@@ -531,6 +532,7 @@ export default function BulkBillCreationPage() {
               amount: entry.amount === '' || entry.amount === null || entry.amount === undefined
                 ? 0 : typeof entry.amount === 'string' ? parseFloat(entry.amount) || 0 : entry.amount,
               description: entry.description || '',
+              classificationJustification: entry.classificationJustification || null,
               steelTypes: entry.steelTypes || [],
               itemNumber: entry.itemNumber || null,
               quantity: entry.quantity === '' || entry.quantity === null || entry.quantity === undefined ? null : parseFloat(String(entry.quantity)) || null,

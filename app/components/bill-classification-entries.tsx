@@ -56,6 +56,7 @@ interface ClassificationEntry {
   quantity?: number | string | '';
   agreementRate?: number | string | '';
   itemRows?: ItemRow[];
+  classificationJustification?: string;
 }
 
 interface BillClassificationEntriesProps {
@@ -330,6 +331,17 @@ export function BillClassificationEntries({
                     onChange={event => updateEntry(entryIndex, { description: event.target.value })}
                     rows={2}
                     placeholder="Item description or reference notes"
+                    className="min-h-[58px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-600">Justification for classification</label>
+                  <textarea
+                    value={entry.classificationJustification || ''}
+                    onChange={event => updateEntry(entryIndex, { classificationJustification: event.target.value })}
+                    rows={2}
+                    placeholder="Why this classification was chosen for this item"
                     className="min-h-[58px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
                   />
                 </div>

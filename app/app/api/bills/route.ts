@@ -569,6 +569,7 @@ export async function POST(request: NextRequest) {
               classificationId: entry.classificationId || null,
               amount: parseFloat(entry.amount),
               description: entry.description || null,
+              classificationJustification: entry.classificationJustification || null,
               steelTypes: entrySteelTypes,
               scheduleItem: entry.scheduleItem || null,
               itemNumber: entry.itemNumber || null,

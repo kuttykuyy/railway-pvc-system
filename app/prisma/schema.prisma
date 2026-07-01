@@ -488,6 +488,7 @@ model BillClassificationEntry {
   quantity           Float?   // Qty executed since last bill
   agreementRate      Float?   // Agreement Rate in Rs.
   itemRows           Json?    // Array of {itemNumber, quantity, agreementRate} for multi-item entries
+  classificationJustification String? // Reasoning for why this classification was chosen for the item
 
   // Per-entry PVC breakdown (calculated during bill processing)
   labourPvc         Float? @default(0)

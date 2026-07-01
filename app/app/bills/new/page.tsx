@@ -97,6 +97,7 @@ interface ClassificationEntry {
   subClassification?: SubClassification;
   amount: number | string | '';  // Allow blank values
   description?: string;
+  classificationJustification?: string;
   steelTypes?: string[];  // Array of selected steel types
   scheduleItem?: string;
   itemNumber?: string;
@@ -946,6 +947,7 @@ function NewBillPageContent() {
                 ? parseFloat(entry.amount) || 0 
                 : entry.amount,
             description: entry.description || '',
+            classificationJustification: entry.classificationJustification || null,
             steelTypes: entry.steelTypes || [],
             scheduleItem: entry.scheduleItem || null,
             itemNumber: entry.itemNumber || null,

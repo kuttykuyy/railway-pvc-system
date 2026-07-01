@@ -1169,7 +1169,14 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                             {entry.description}
                           </p>
                         )}
-                        
+
+                        {entry.classificationJustification && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 p-2.5 rounded-xl">
+                            <span className="font-semibold text-slate-600 dark:text-slate-300">Justification: </span>
+                            {entry.classificationJustification}
+                          </p>
+                        )}
+
                         {entry.itemRows && Array.isArray(entry.itemRows) && entry.itemRows.length > 0 ? (
                           <div className="mt-2 space-y-1 bg-white/70 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-200/30">
                             {entry.itemRows.map((row: any, rIdx: number) => {
