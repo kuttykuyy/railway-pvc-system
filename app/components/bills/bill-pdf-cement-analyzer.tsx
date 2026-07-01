@@ -168,6 +168,7 @@ export function BillPdfCementAnalyzer({
   const [savingCoefficientCode, setSavingCoefficientCode] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [showAllItems, setShowAllItems] = useState(false);
 
   const [extractionId, setExtractionId] = useState<string | null>(null);
   const [isUnlocked, setIsUnlocked] = useState(true);
@@ -1129,7 +1130,7 @@ export function BillPdfCementAnalyzer({
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {(result.billDetails?.items || result.extractedItems || []).slice(0, compact ? 5 : 12).map((item, index) => (
+                      {(result.billDetails?.items || result.extractedItems || []).slice(0, compact ? 5 : (showAllItems ? undefined : 12)).map((item, index) => (
                         <tr key={`${item.itemNo || item.dsrCode}-${index}`}>
                           <td className="whitespace-nowrap px-2 py-2 font-medium">{item.itemNo || item.dsrCode || '-'}</td>
                           <td className="max-w-[420px] px-2 py-2">
@@ -1189,8 +1190,27 @@ export function BillPdfCementAnalyzer({
                 </div>
 
                 {(result.billDetails?.items?.length || result.extractedItems?.length || 0) > (compact ? 5 : 12) && (
-                  <div className="text-xs text-muted-foreground">
-                    Showing first {compact ? 5 : 12} of {result.billDetails?.items?.length || result.extractedItems?.length || 0} extracted bill items.
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {compact || !showAllItems ? (
+                      <span>
+                        Showing first {compact ? 5 : 12} of {result.billDetails?.items?.length || result.extractedItems?.length || 0} extracted bill items.
+                      </span>
+                    ) : (
+                      <span>
+                        Showing all {result.billDetails?.items?.length || result.extractedItems?.length || 0} extracted bill items.
+                      </span>
+                    )}
+                    {!compact && (
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-xs"
+                        onClick={() => setShowAllItems(current => !current)}
+                      >
+                        {showAllItems ? 'Show less' : 'Show all records'}
+                      </Button>
+                    )}
                   </div>
                 )}
 
