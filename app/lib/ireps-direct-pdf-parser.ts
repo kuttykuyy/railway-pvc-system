@@ -290,7 +290,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       schedule,
       amountIncludingSpecialCondition: Math.round(amountIncludingSpecialCondition * 100) / 100,
     })),
-    scheduleSummaryTotal: expectedAmount,
+    scheduleSummaryTotal: billAmount,
     itemAmountTotal,
     amountDifference,
     amountsReconciled,
