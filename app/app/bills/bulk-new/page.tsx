@@ -412,6 +412,7 @@ export default function BulkBillCreationPage() {
           quantity,
           agreementRate,
           itemRows: [{ itemNumber, quantity, agreementRate }],
+          classificationJustification: item.suggestedClassificationReason || '',
         } as ClassificationEntry,
       }];
     });
@@ -429,6 +430,9 @@ export default function BulkBillCreationPage() {
       existing.amount = (Number(existing.amount) || 0) + (Number(entry.amount) || 0);
       const steelSet = new Set([...(existing.steelTypes || []), ...(entry.steelTypes || [])]);
       existing.steelTypes = Array.from(steelSet);
+      if (!existing.classificationJustification) {
+        existing.classificationJustification = entry.classificationJustification || '';
+      }
     }
 
     return order.map(key => {

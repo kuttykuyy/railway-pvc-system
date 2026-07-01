@@ -562,6 +562,7 @@ function NewBillPageContent() {
                   quantity: qty || '',
                   agreementRate: netRate,
                 }],
+                classificationJustification: item.suggestedClassificationReason || '',
               },
             },
             {
@@ -581,6 +582,7 @@ function NewBillPageContent() {
                   quantity: cementQty || '',
                   agreementRate: cementRate,
                 }],
+                classificationJustification: item.suggestedClassificationReason || '',
               },
             },
           ];
@@ -614,6 +616,7 @@ function NewBillPageContent() {
             quantity: itemQuantity,
             agreementRate: itemRate,
           }],
+          classificationJustification: item.suggestedClassificationReason || '',
         },
       }];
     });
@@ -631,6 +634,9 @@ function NewBillPageContent() {
       existing.amount = (Number(existing.amount) || 0) + (Number(entry.amount) || 0);
       const steelSet = new Set([...(existing.steelTypes || []), ...(entry.steelTypes || [])]);
       existing.steelTypes = Array.from(steelSet);
+      if (!existing.classificationJustification) {
+        existing.classificationJustification = entry.classificationJustification || '';
+      }
     }
 
     return order.map(key => {
