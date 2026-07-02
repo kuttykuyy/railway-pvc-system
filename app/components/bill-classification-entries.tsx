@@ -234,10 +234,13 @@ export function BillClassificationEntries({
             const currentSub = classificationGroups
               .flatMap(group => group.subClassifications)
               .find(sub => sub.id === entry.subClassificationId);
-            const selectedGroup = requiredGroup || (currentSub
+            // The entry's own group wins so an AI-matched classification from another
+            // group still displays; the inferred work group is only the default.
+            const selectedGroup = (currentSub
               ? classificationGroups.find(group => group.id === currentSub.groupId)
-              : classificationGroups[0]);
+              : undefined) || requiredGroup || classificationGroups[0];
             const selectedSub = currentSub?.groupId === selectedGroup?.id ? currentSub : undefined;
+            const scheduleInList = !entry.scheduleItem || contractSchedules.includes(entry.scheduleItem);
             const rows = getRows(entry);
             const displayedAmount = typeof entry.amount === 'number'
               ? Number(entry.amount.toFixed(2))
@@ -260,9 +263,31 @@ export function BillClassificationEntries({
                   </Button>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-[minmax(220px,1.4fr)_minmax(160px,0.8fr)_minmax(160px,0.7fr)]">
+                <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_minmax(200px,1.2fr)_minmax(150px,0.8fr)_minmax(140px,0.7fr)]">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-600">Classification</label>
+                    <label className="text-xs font-medium text-slate-600">Main classification</label>
+                    <Select
+                      value={selectedGroup?.id || ''}
+                      onValueChange={groupId => {
+                        const group = classificationGroups.find(item => item.id === groupId);
+                        const defaultSub = group?.subClassifications.find(sub => sub.isDefault)
+                          || group?.subClassifications[0];
+                        updateEntry(entryIndex, { subClassificationId: defaultSub?.id || '' });
+                      }}
+                    >
+                      <SelectTrigger className="h-9 bg-white text-sm">
+                        <SelectValue placeholder="Select group" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {classificationGroups.map(group => (
+                          <SelectItem key={group.id} value={group.id}>{group.code} - {group.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-600">Sub classification</label>
                     <Select
                       value={selectedGroup?.subClassifications.some(sub => sub.id === entry.subClassificationId)
                         ? entry.subClassificationId
@@ -294,6 +319,9 @@ export function BillClassificationEntries({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="_none_">No schedule</SelectItem>
+                          {!scheduleInList && entry.scheduleItem && (
+                            <SelectItem value={entry.scheduleItem}>{entry.scheduleItem}</SelectItem>
+                          )}
                           {contractSchedules.map((schedule, index) => (
                             <SelectItem key={`${schedule}-${index}`} value={schedule}>{schedule}</SelectItem>
                           ))}
