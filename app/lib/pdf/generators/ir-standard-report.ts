@@ -32,6 +32,8 @@ interface ClassificationEntry {
   amount: number;
   description?: string | null;
   scheduleItem?: string | null;
+  itemNumber?: string | null;
+  itemRows?: Array<{ itemNumber?: string | null }> | null;
   classificationJustification?: string | null;
   subClassification?: SubClassification | null;
 }
@@ -530,6 +532,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
 
     const classHead = [[
       'Sl.',
+      'Item No.',
       'Classification',
       'Schedule',
       'Amount (Rs.)',
@@ -541,8 +544,15 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       const justification = String(entry.classificationJustification || '').trim()
         || String(entry.description || '').trim()
         || '-';
+      const rowItemNumbers = (entry.itemRows || [])
+        .map(row => String(row?.itemNumber || '').trim())
+        .filter(Boolean);
+      const itemNumbers = rowItemNumbers.length > 0
+        ? Array.from(new Set(rowItemNumbers)).join(', ')
+        : String(entry.itemNumber || '').trim() || '-';
       return [
         index + 1,
+        itemNumbers,
         classification,
         entry.scheduleItem || '-',
         fmt(Number(entry.amount) || 0),
@@ -576,10 +586,11 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       tableWidth: contentW,
       columnStyles: {
         0: { cellWidth: 10, halign: 'center' },
-        1: { cellWidth: 45, halign: 'left' },
-        2: { cellWidth: 26, halign: 'left' },
-        3: { cellWidth: 32, halign: 'right' },
-        4: { cellWidth: 160, halign: 'left' },
+        1: { cellWidth: 30, halign: 'left' },
+        2: { cellWidth: 42, halign: 'left' },
+        3: { cellWidth: 24, halign: 'left' },
+        4: { cellWidth: 30, halign: 'right' },
+        5: { cellWidth: 137, halign: 'left' },
       },
     });
 

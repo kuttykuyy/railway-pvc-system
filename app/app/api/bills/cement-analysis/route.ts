@@ -421,6 +421,7 @@ Rules:
 - Suffix A: general work; B: separate steel supply; C: separate cement/grout supply; D: fabrication/erection including contractor steel; E: fabrication/erection excluding/free-issue steel.
 - Main groups 2 and 7 do not use suffixes; return suffix A for them.
 - justification must be 2-4 full sentences a railway bill reviewer can verify: quote the exact wording of the item description that determines the work group and the suffix, state what kind of work the item is, and state briefly why the other suffixes do not apply. Do not just repeat the classification code.
+- Never begin the justification with "The description" or use the same opening for multiple items. Start with the work itself, e.g. 'Thermo-Mechanically Treated bars of grade Fe-500D are a separate steel supply item, so suffix B applies...' or 'Applying shotcrete over masonry is composite building repair work...'.
 - USSR work items may consume cement but do not require DSR cement coefficients because cement is separately paid.
 - Direct cement supply is not cement-affected work.
 - Keep descriptions under 350 characters and do not add facts absent from source data.
