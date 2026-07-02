@@ -18,6 +18,7 @@ interface BillInput {
   fuelPriceType?: string;
   dateOfMeasurement: string;
   zone?: string;
+  isAiUploaded?: boolean;
   grossBillAmount?: number;
   billAmount?: number;
   steelTmtBarsAmount?: number;
@@ -108,8 +109,12 @@ export async function POST(request: NextRequest) {
     // Check if user has a free account or sufficient balance
     const isFreeAccount = userWithAccount.customProcessingFee === 0 || userWithAccount.isFreeAccount || userWithAccount.role === 'superadmin' || userWithAccount.role === 'admin' || userWithAccount.role === 'railway_official';
     const billingSettings = await getBillingSettings();
-    const processingFeePerBill = isFreeAccount ? 0 : billingSettings.billCost || 199;
-    const totalProcessingFee = processingFeePerBill * bills.length;
+    // Per-bill fee matches single-bill pricing: AI-extracted bills use the AI rate,
+    // manually entered bills use the manual rate.
+    const aiBillCost = billingSettings.aiBillCost || 499;
+    const manualBillCost = billingSettings.billCost || 199;
+    const feeForBill = (bill: BillInput) => isFreeAccount ? 0 : (bill.isAiUploaded ? aiBillCost : manualBillCost);
+    const totalProcessingFee = bills.reduce((sum, bill) => sum + feeForBill(bill), 0);
     
     if (!isFreeAccount) {
       const currentBalance = userWithAccount.customerAccount?.creditBalance || 0;
@@ -361,7 +366,7 @@ export async function POST(request: NextRequest) {
           pvcNumber: autoPvcNumber, // Add PVC auto-number
           zone: billInput.zone || null,
           fuelPriceType: billInput.fuelPriceType || 'four_city_avg',
-          processingFee: processingFeePerBill,
+          processingFee: feeForBill(billInput),
           isChargeable: true,
           batchId, // Assign batch ID for grouping
           batchName, // Assign batch name for display
@@ -520,63 +525,63 @@ export async function POST(request: NextRequest) {
             billId: bill.id,
             userId: user.id,
             amount: 0,
-            originalAmount: processingFeePerBill,
-            discount: processingFeePerBill,
+            originalAmount: bill.processingFee || 0,
+            discount: bill.processingFee || 0,
             status: 'paid',
             isFree: true
           }
         });
       }
     } else {
-      // Deduct total processing fee from user balance
-      const currentBalance = userWithAccount.customerAccount?.creditBalance || 0;
-      
-      // Update user balance and stats
-      const updatedUser = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          totalBillsProcessed: { increment: createdBills.length },
-          customerAccount: {
-            update: {
-              creditBalance: { decrement: totalProcessingFee }
-            }
+      // Deduct total processing fee and record the transaction atomically, reading the
+      // balance inside the transaction so balanceBefore/After match the actual DB value
+      // even if the balance changed concurrently (e.g. a top-up or a second submission).
+      const remainingBalance = await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: user.id },
+          data: { totalBillsProcessed: { increment: createdBills.length } }
+        });
+        const account = await tx.customerAccount.findUnique({
+          where: { userId: user.id },
+          select: { creditBalance: true }
+        });
+        const balanceBefore = account?.creditBalance ?? 0;
+        const balanceAfter = balanceBefore - totalProcessingFee;
+        await tx.customerAccount.update({
+          where: { userId: user.id },
+          data: { creditBalance: { decrement: totalProcessingFee } }
+        });
+        await tx.creditTransaction.create({
+          data: {
+            userId: user.id,
+            amount: -totalProcessingFee,
+            type: 'bill_usage',
+            reason: `Bulk bill processing: ${createdBills.length} bills`,
+            balanceBefore,
+            balanceAfter
           }
-        },
-        include: {
-          customerAccount: true
-        }
+        });
+        return balanceAfter;
       });
-      
-      // Create credit transaction record
-      await prisma.creditTransaction.create({
-        data: {
-          userId: user.id,
-          amount: -totalProcessingFee,
-          type: 'bill_usage',
-          reason: `Bulk bill processing: ${createdBills.length} bills`,
-          balanceBefore: currentBalance,
-          balanceAfter: currentBalance - totalProcessingFee
-        }
-      });
-      
+
       // Create bill transaction records for each bill
       for (const bill of createdBills) {
         await prisma.billTransaction.create({
           data: {
             billId: bill.id,
             userId: user.id,
-            amount: processingFeePerBill,
-            originalAmount: processingFeePerBill,
+            amount: bill.processingFee || 0,
+            originalAmount: bill.processingFee || 0,
             discount: 0,
             status: 'paid',
             isFree: false
           }
         });
       }
-      
+
       creditInfo = {
         cost: totalProcessingFee,
-        remainingBalance: updatedUser.customerAccount?.creditBalance || 0
+        remainingBalance
       };
     }
 

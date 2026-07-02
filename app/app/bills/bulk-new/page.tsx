@@ -77,6 +77,7 @@ interface BillRow {
   id: string;
   billNo: string;
   dateOfMeasurement: string;
+  isAiUploaded?: boolean;
   cementAmount: number | string | '';
   steelTmtBarsAmount: number | string | '';
   steelAngleChannelAmount: number | string | '';
@@ -526,6 +527,7 @@ export default function BulkBillCreationPage() {
             ...row,
             billNo: billDetails?.billNo || row.billNo,
             dateOfMeasurement: normalizeExtractedDate(billDetails?.measurementDate) || row.dateOfMeasurement,
+            isAiUploaded: true,
             // AI items stay in classification entries; dedicated component
             // inputs are only for additional manually entered amounts.
             cementAmount: '',
@@ -589,6 +591,7 @@ export default function BulkBillCreationPage() {
           return {
             billNo: row.billNo.trim(),
             dateOfMeasurement: row.dateOfMeasurement,
+            isAiUploaded: row.isAiUploaded || false,
             zone: globalZone,
             fuelPriceType: globalFuelPriceType || 'four_city_avg',
             grossBillAmount: classificationTotal,
@@ -783,7 +786,8 @@ export default function BulkBillCreationPage() {
 
               <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
                 <p className="text-sm text-blue-900">
-                  <strong>Processing Fee:</strong> {processingFee} credits per bill (auto-deducted)
+                  <strong>Processing Fee:</strong> {processingFee} credits per manually entered bill;
+                  AI-extracted bills are charged the AI extraction rate. The exact total is deducted on submit.
                 </p>
               </div>
 
