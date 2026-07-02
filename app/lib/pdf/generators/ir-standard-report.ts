@@ -34,6 +34,7 @@ interface ClassificationEntry {
   scheduleItem?: string | null;
   itemNumber?: string | null;
   itemRows?: Array<{ itemNumber?: string | null }> | null;
+  steelTypes?: string[] | null;
   classificationJustification?: string | null;
   subClassification?: SubClassification | null;
 }
@@ -189,7 +190,31 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   const billAmount = bill.grossBillAmount ?? bill.billAmount;
   const entries = (bill.classificationEntries || []) as ClassificationEntry[];
   const weights = computeWeightedComponents(entries, billAmount);
-  const steelIdx = steelIndexNames[0] || 'Steel TMT Bars';
+
+  // Only the steel index types actually used by this bill (entry steel types or
+  // dedicated steel PVC amounts) are shown; falls back to all types if none is marked.
+  // steelIndexNames order: [TMT Bars, Angle/Channel, Plates, Other Sections].
+  const STEEL_TYPE_INDEX_POSITION: Record<string, number> = {
+    TMT: 0,
+    ANGLE_CHANNEL: 1,
+    PLATES: 2,
+    OTHER_SECTIONS: 3,
+  };
+  const usedSteelPositions = new Set<number>();
+  for (const entry of entries) {
+    for (const steelType of (Array.isArray(entry.steelTypes) ? entry.steelTypes : [])) {
+      const position = STEEL_TYPE_INDEX_POSITION[String(steelType).toUpperCase()];
+      if (position !== undefined) usedSteelPositions.add(position);
+    }
+  }
+  if (Math.abs(bill.pvcCalculation?.dedicatedSteelTmtBarsPvc ?? 0) > 0.005) usedSteelPositions.add(0);
+  if (Math.abs(bill.pvcCalculation?.dedicatedSteelAngleChannelPvc ?? 0) > 0.005) usedSteelPositions.add(1);
+  if (Math.abs(bill.pvcCalculation?.dedicatedSteelPlatesPvc ?? 0) > 0.005) usedSteelPositions.add(2);
+  if (Math.abs(bill.pvcCalculation?.dedicatedSteelOtherSectionsPvc ?? 0) > 0.005) usedSteelPositions.add(3);
+  const usedSteelIndexNames = usedSteelPositions.size > 0
+    ? Array.from(usedSteelPositions).sort().map(position => steelIndexNames[position]).filter(Boolean)
+    : steelIndexNames;
+  const steelIdx = usedSteelIndexNames[0] || steelIndexNames[0] || 'Steel TMT Bars';
 
   const ensureSpace = (need: number) => {
     if (y + need > pageH - 15) {
@@ -339,8 +364,8 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   const cemVar     = cemBase > 0 ? (cemAvg - cemBase) / cemBase : 0;
   const cemPvc     = (pvc?.cementPvc ?? 0) + (pvc?.dedicatedCementPvc ?? 0);
 
-  const steelBase  = getIndexBase(quarterlyAverages, steelIdx, ...steelIndexNames);
-  const steelAvg   = getIndexAvg(quarterlyAverages, steelIdx, ...steelIndexNames);
+  const steelBase  = getIndexBase(quarterlyAverages, steelIdx, ...usedSteelIndexNames);
+  const steelAvg   = getIndexAvg(quarterlyAverages, steelIdx, ...usedSteelIndexNames);
   const steelVar   = steelBase > 0 ? (steelAvg - steelBase) / steelBase : 0;
   const steelPvc   = (pvc?.steelPvc ?? 0) + (pvc?.dedicatedSteelTmtBarsPvc ?? 0) + (pvc?.dedicatedSteelAngleChannelPvc ?? 0) + (pvc?.dedicatedSteelPlatesPvc ?? 0) + (pvc?.dedicatedSteelOtherSectionsPvc ?? 0);
 
@@ -733,7 +758,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     if (c.name === 'Plant & Machinery') usedIndexNames.add('RBI Plant Machinery');
     if (c.name === 'Fuel / Power')     usedIndexNames.add(fuelIndexName);
     if (c.name === 'Cement')           usedIndexNames.add('RBI Cement');
-    if (c.name === 'Steel')            steelIndexNames.forEach(n => usedIndexNames.add(n));
+    if (c.name === 'Steel')            usedSteelIndexNames.forEach(n => usedIndexNames.add(n));
     if (c.name === 'Other Materials')  usedIndexNames.add('RBI Other Materials');
     if (c.name === 'Explosives')       usedIndexNames.add('RBI Explosives');
   }
