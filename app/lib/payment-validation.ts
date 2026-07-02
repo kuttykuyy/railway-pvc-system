@@ -343,6 +343,14 @@ export async function processPaymentForBill(
         data: { totalBillsProcessed: { increment: 1 } }
       });
       if (user.customerAccount) {
+        // Read the balance inside the transaction so the recorded balanceAfter
+        // matches the actual post-deduction value even under concurrent charges.
+        const account = await tx.customerAccount.findUnique({
+          where: { userId },
+          select: { creditBalance: true }
+        });
+        const balanceBefore = account?.creditBalance ?? 0;
+        const balanceAfter = balanceBefore - chargedAmount;
         await tx.customerAccount.update({
           where: { userId },
           data: {
@@ -350,6 +358,22 @@ export async function processPaymentForBill(
             creditBalance: { decrement: chargedAmount }
           }
         });
+        // Record the deduction so it appears in the user's Credit Transactions list.
+        // Amount is stored negative so the list renders it as a "-" deduction,
+        // matching the bulk-bill charge convention.
+        if (chargedAmount > 0) {
+          await tx.creditTransaction.create({
+            data: {
+              userId,
+              amount: -chargedAmount,
+              type: 'deduct',
+              reason: isAiUploaded ? 'AI PDF bill processing fee' : 'Bill processing fee',
+              balanceBefore,
+              balanceAfter,
+              billId,
+            }
+          });
+        }
       }
     });
 

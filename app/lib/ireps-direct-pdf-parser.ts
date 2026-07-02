@@ -154,13 +154,63 @@ function extractBillAmount(pages: PositionedPdfPage[]) {
   return undefined;
 }
 
+const MONTHS: Record<string, string> = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+};
+
+// Converts an IREPS-style date (DD-MM-YYYY, DD/MM/YYYY, DD-Mon-YYYY, YYYY-MM-DD) to ISO YYYY-MM-DD.
+function toIsoDate(raw: string): string {
+  const value = raw.trim();
+  const iso = value.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const named = value.match(/(\d{1,2})[-/ ]([A-Za-z]{3,})[-/ ](\d{4})/);
+  if (named) {
+    const month = MONTHS[named[2].slice(0, 3).toLowerCase()];
+    if (month) return `${named[3]}-${month}-${named[1].padStart(2, '0')}`;
+  }
+  const numeric = value.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (numeric) return `${numeric[3]}-${numeric[2].padStart(2, '0')}-${numeric[1].padStart(2, '0')}`;
+  return '';
+}
+
+// A date token in any IREPS-supported format.
+const DATE_TOKEN = String.raw`(\d{1,2}[-/]\d{1,2}[-/]\d{4}|\d{1,2}[-/ ][A-Za-z]{3,}[-/ ]\d{4}|\d{4}-\d{2}-\d{2})`;
+
+// Finds the measurement/recording date near common IREPS bill labels. Runs on the
+// fully-flattened page text (labels and values can be split across layout lines).
+function extractMeasurementDate(flatText: string): string {
+  const labels = [
+    'Measurement Date From',
+    'Date Of Measurement',
+    'Measurement Date',
+    'Measurement Recorded On',
+    'Recorded Date',
+    'Bill Date',
+    'Passing Date',
+    'M\\.?B\\.? Date',
+  ];
+  for (const label of labels) {
+    // Allow a few filler words/chars between the label and the date token.
+    const match = flatText.match(new RegExp(`${label}[^0-9]{0,15}${DATE_TOKEN}`, 'i'));
+    const iso = toIsoDate(match?.[1] || '');
+    if (iso) return iso;
+  }
+  return '';
+}
+
 function metadata(pages: PositionedPdfPage[]) {
   const text = pages.slice(0, 2).map(pagePlainText).join('\n');
+  const flatText = pages.slice(0, 2)
+    .flatMap(page => page.items.map(item => item.text))
+    .join(' ')
+    .replace(/\s+/g, ' ');
   return {
     billNo: text.match(/Bill No\.\s*([^\r\n]+)/i)?.[1]?.trim() || '',
-    agreementNo: text.match(/Agreement No\.\s*([^\s]+)\s+Agreement Date/i)?.[1]?.trim() || '',
+    agreementNo: flatText.match(/Agreement No\.\s*([^\s]+)/i)?.[1]?.trim() || '',
     contractorName: text.match(/Name Of Contractor\s+(.+?)(?=\s+LOA|\n)/i)?.[1]?.trim() || '',
     workDescription: text.match(/Name Of Work\s+(.+?)(?=\s+Name Of Contractor|\n)/i)?.[1]?.trim() || '',
+    measurementDate: extractMeasurementDate(flatText),
   };
 }
 
@@ -288,7 +338,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     : [];
   return {
     ...details,
-    measurementDate: '',
+    measurementDate: details.measurementDate || '',
     grossBillAmount: billAmount,
     scheduleSummary: Array.from(scheduleTotals, ([schedule, amountIncludingSpecialCondition]) => ({
       schedule,

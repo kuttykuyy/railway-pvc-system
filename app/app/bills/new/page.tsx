@@ -717,6 +717,25 @@ function NewBillPageContent() {
   const applyExtractedBillDetails = async (data: CementAnalysisData) => {
     setIsAiUploaded(true);
     const billDetails = data.billDetails;
+
+    // Auto-select the contract from the extracted Agreement No. when none is chosen yet.
+    // Selecting it also carries forward the railway zone from that contract's latest bill.
+    const extractedAgreementNo = (billDetails?.agreementNo || '').trim();
+    if (extractedAgreementNo && !formData.contractId) {
+      const normalize = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const target = normalize(extractedAgreementNo);
+      const matchedContract = contracts.find(contract => normalize(contract.agreementNo) === target)
+        || contracts.find(contract => {
+          const code = normalize(contract.agreementNo);
+          return code.length > 0 && (code.includes(target) || target.includes(code));
+        });
+      if (matchedContract) {
+        setFormData(prev => ({ ...prev, contractId: matchedContract.id }));
+        await fetchPreviousBills(matchedContract.id);
+        toast.success(`Matched contract ${matchedContract.agreementNo} from the bill`, { icon: '🔗' });
+      }
+    }
+
     let mappedEntries = buildClassificationEntriesFromExtractedBill(data);
     const extractedMeasurementDate = normalizeExtractedDate(billDetails?.measurementDate)
       || formData.dateOfMeasurement;
