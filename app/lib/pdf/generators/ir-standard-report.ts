@@ -312,9 +312,11 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   pdf.setTextColor(60, 60, 60);
   pdf.text('Formula (GCC Cl.17):  Vn = W x SUM[ Pn x (In - I0) / I0 ]', mL + 2, y);
   pdf.setFont('helvetica', 'italic');
-  pdf.text('where  W = Gross Bill Amount,  Pn = Component Weight (%),  I0 = Base Month Index,  In = Quarter Average Index', mL + 2, y + 4);
+  pdf.text(`where  W = Gross Bill Amount = ${fmtMoney(billAmount)},  Pn = Component Weight (%),  I0 = Base Month Index,  In = Quarter Average Index`, mL + 2, y + 4);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(`Component Amt = W x Pn.  Example: ${fmtMoney(billAmount)} x weighted % of each component below.`, mL + 2, y + 8);
   pdf.setTextColor(0, 0, 0);
-  y += 9;
+  y += 13;
 
   // Build component data
   const labourBase = getIndexBase(quarterlyAverages, 'Labour');
@@ -594,7 +596,119 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       },
     });
 
-    y = pdf.lastAutoTable.finalY + 4;
+    y = pdf.lastAutoTable.finalY + 5;
+
+    // Per-classification component percentage matrix so the weighted % in
+    // Section C can be verified by the reader.
+    const byCode = new Map<string, { sub: SubClassification; amount: number }>();
+    for (const entry of detailEntries) {
+      const sub = entry.subClassification;
+      if (!sub?.code) continue;
+      const existing = byCode.get(sub.code);
+      if (existing) existing.amount += Number(entry.amount) || 0;
+      else byCode.set(sub.code, { sub, amount: Number(entry.amount) || 0 });
+    }
+
+    if (byCode.size > 0) {
+      ensureSpace(35);
+      pdf.setFontSize(8.5);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Component percentages by classification (basis of the weighted % in Section C):', mL, y);
+      y += 2;
+
+      const pctHead = [[
+        'Classification',
+        'Amount (Rs.)',
+        'Share of Bill',
+        'Fixed %',
+        'Labour %',
+        'P&M %',
+        'Fuel %',
+        'Cement %',
+        'Steel %',
+        'Other %',
+        'Expl. %',
+      ]];
+      const pctBody: any[] = Array.from(byCode.values()).map(({ sub, amount }) => [
+        sub.code || '-',
+        fmt(amount),
+        billAmount > 0 ? ((amount / billAmount) * 100).toFixed(2) + '%' : '-',
+        sub.fixed || 0,
+        sub.labour || 0,
+        sub.plantMachinery || 0,
+        sub.fuel || 0,
+        sub.cement || 0,
+        sub.steel || 0,
+        sub.otherMaterials || 0,
+        sub.explosives || 0,
+      ]);
+      pctBody.push([
+        { content: 'WEIGHTED (Section C)', styles: { fontStyle: 'bold' as const } },
+        { content: fmt(billAmount), styles: { fontStyle: 'bold' as const, halign: 'right' as const } },
+        { content: '100.00%', styles: { fontStyle: 'bold' as const, halign: 'center' as const } },
+        ...([weights.fixed, weights.labour, weights.plantMachinery, weights.fuel,
+          weights.cement, weights.steel, weights.otherMaterials, weights.explosives]
+          .map(value => ({
+            content: (value * 100).toFixed(2),
+            styles: { fontStyle: 'bold' as const, halign: 'center' as const },
+          }))),
+      ]);
+
+      autoTable(pdf, {
+        startY: y + 2,
+        head: pctHead,
+        body: pctBody,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [70, 70, 70],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 7.5,
+          halign: 'center',
+          valign: 'middle',
+          cellPadding: 2,
+        },
+        bodyStyles: {
+          fontSize: 8,
+          cellPadding: { top: 1.8, right: 2.5, bottom: 1.8, left: 2.5 },
+          textColor: [0, 0, 0],
+          halign: 'center',
+        },
+        alternateRowStyles: { fillColor: [250, 250, 250] },
+        styles: { lineColor: [180, 180, 180], lineWidth: 0.3, font: 'helvetica', overflow: 'linebreak' },
+        margin: { left: mL, right: mR, top: mT },
+        tableWidth: contentW,
+        columnStyles: {
+          0: { cellWidth: 45, halign: 'left' },
+          1: { cellWidth: 36, halign: 'right' },
+          2: { cellWidth: 24 },
+          3: { cellWidth: 21 },
+          4: { cellWidth: 21 },
+          5: { cellWidth: 21 },
+          6: { cellWidth: 21 },
+          7: { cellWidth: 21 },
+          8: { cellWidth: 21 },
+          9: { cellWidth: 21 },
+          10: { cellWidth: 21 },
+        },
+        didParseCell: (data: any) => {
+          if (data.section === 'body' && data.row.index === pctBody.length - 1) {
+            data.cell.styles.fillColor = [220, 220, 220];
+          }
+        },
+      });
+
+      y = pdf.lastAutoTable.finalY + 3;
+      pdf.setFontSize(7.5);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setTextColor(80, 80, 80);
+      pdf.text(
+        'Weighted % of a component = SUM over classifications of (classification amount / Gross Bill Amount) x classification %.',
+        mL, y,
+      );
+      pdf.setTextColor(0, 0, 0);
+      y += 4;
+    }
 
     // Plain-language explanation for end users
     ensureSpace(18);
