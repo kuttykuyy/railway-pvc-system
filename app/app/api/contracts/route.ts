@@ -172,8 +172,8 @@ export async function POST(request: NextRequest) {
     const existingContract = await prisma.contract.findFirst({
       where: {
         OR: [
-          { agreementNo: normalizedAgreementNo },
-          { agreementNo: agreementNo.trim() }
+          { agreementNo: { equals: normalizedAgreementNo, mode: 'insensitive' } },
+          { agreementNo: { equals: agreementNo.trim(), mode: 'insensitive' } }
         ]
       },
       select: {

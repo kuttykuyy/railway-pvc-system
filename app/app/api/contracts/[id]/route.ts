@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateApiAccess } from '@/lib/payment-validation';
-import { parseAgreementNumber } from '@/lib/railway-division-helper';
+import { normalizeAgreementNo, parseAgreementNumber } from '@/lib/railway-division-helper';
 
 export const dynamic = "force-dynamic";
 
@@ -161,6 +161,32 @@ export async function PUT(
     } = body;
     
     agreementNoForError = agreementNo || 'unknown';
+
+    const normalizedAgreementNo = agreementNo ? normalizeAgreementNo(agreementNo) : existingContract.agreementNo;
+    if (!normalizedAgreementNo) {
+      return NextResponse.json(
+        { error: 'Invalid Agreement Number format' },
+        { status: 400 }
+      );
+    }
+    agreementNoForError = normalizedAgreementNo;
+
+    const duplicateContract = await prisma.contract.findFirst({
+      where: {
+        id: { not: id },
+        agreementNo: { equals: normalizedAgreementNo, mode: 'insensitive' },
+      },
+      select: { id: true },
+    });
+    if (duplicateContract) {
+      return NextResponse.json(
+        {
+          error: 'Contract with this Agreement Number already exists',
+          details: `A contract with Agreement Number "${normalizedAgreementNo}" is already in the system. Please use a different Agreement Number.`,
+        },
+        { status: 409 }
+      );
+    }
     
     // Parse LOA date if provided
     const loaDateParsed = loaDate ? new Date(loaDate) : undefined;
@@ -174,7 +200,7 @@ export async function PUT(
     const contract = await prisma.contract.update({
       where: { id: id },
       data: {
-        agreementNo,
+        agreementNo: normalizedAgreementNo,
         loaNo,
         loaDate: loaDateParsed !== undefined ? loaDateParsed : undefined,
         contractorName,

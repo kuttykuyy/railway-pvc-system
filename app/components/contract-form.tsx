@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { StatusMessage } from '@/components/ui/status-message';
 import { ValidationMessage } from '@/components/ui/validation-message';
-import { Calendar, Save, AlertTriangle, CheckCircle2, Info, FileText, IndianRupee, Clock, Package, Calculator as CalcIcon, Sparkles, Mail, ListOrdered, Plus, Trash2 } from 'lucide-react';
+import { Calendar, Save, AlertTriangle, CheckCircle2, Info, FileText, IndianRupee, Clock, Package, Calculator as CalcIcon, Sparkles, Mail, ListOrdered, Plus, Trash2, Loader2 } from 'lucide-react';
 import { checkPvcEligibility, formatContractValue, GCC_PVC_MINIMUM_VALUE, GCC_PVC_MINIMUM_MONTHS } from '@/lib/gcc-compliance';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -59,6 +59,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [agreementAvailability, setAgreementAvailability] = useState<'idle' | 'checking' | 'available' | 'duplicate' | 'error'>('idle');
   const { t, language } = useLanguage();
   const [formData, setFormData] = useState({
     agreementNo: initialData?.agreementNo || '',
@@ -91,12 +92,51 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     }
   }, [formData.tenderAdvertisedValue, formData.completionPeriodMonths]);
 
+  useEffect(() => {
+    const agreementNo = formData.agreementNo.trim();
+    const validation = validateAgreementNumber(agreementNo);
+
+    if (!agreementNo || !validation.isValid) {
+      setAgreementAvailability('idle');
+      return;
+    }
+
+    const controller = new AbortController();
+    setAgreementAvailability('checking');
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ agreementNo });
+        if (isEdit && contractId) params.set('excludeContractId', contractId);
+
+        const response = await fetch(`/api/contracts/check-agreement?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error('Agreement number check failed');
+
+        const data = await response.json();
+        setAgreementAvailability(data.available ? 'available' : 'duplicate');
+      } catch (checkError: any) {
+        if (checkError.name !== 'AbortError') setAgreementAvailability('error');
+      }
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [contractId, formData.agreementNo, isEdit]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+
+    if (name === 'agreementNo') {
+      setAgreementAvailability('idle');
+    }
     
     // Clear field error when user starts typing
     if (fieldErrors[name]) {
@@ -165,6 +205,11 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
       newFieldErrors.agreementNo = agreementValidation.errors[0];
     }
     allWarnings.push(...agreementValidation.warnings);
+    if (agreementAvailability === 'duplicate') {
+      const duplicateMessage = 'This agreement number already exists. Enter a different agreement number.';
+      allErrors.push(duplicateMessage);
+      newFieldErrors.agreementNo = duplicateMessage;
+    }
 
     // Validate contractor name
     if (!formData.contractorName.trim()) {
@@ -362,12 +407,31 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   onChange={handleInputChange}
                   placeholder={t('form.contract.agreement_no_placeholder')}
                   required
-                  className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${fieldErrors.agreementNo ? 'border-red-500 focus:border-red-500' : ''}`}
+                  aria-invalid={Boolean(fieldErrors.agreementNo) || agreementAvailability === 'duplicate'}
+                  aria-describedby="agreementNo-help agreementNo-status"
+                  className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${fieldErrors.agreementNo || agreementAvailability === 'duplicate' ? 'border-red-500 focus:border-red-500' : agreementAvailability === 'available' ? 'border-emerald-500 focus:border-emerald-500' : ''}`}
                 />
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                <p id="agreementNo-help" className="text-xs text-slate-500 mt-1 leading-relaxed">
                   {t('form.contract.agreement_no_desc')}
                 </p>
-                {fieldErrors.agreementNo && (
+                <div id="agreementNo-status" aria-live="polite">
+                  {agreementAvailability === 'checking' && (
+                    <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking agreement number...
+                    </p>
+                  )}
+                  {agreementAvailability === 'available' && (
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 mt-1">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Agreement number is available
+                    </p>
+                  )}
+                  {agreementAvailability === 'duplicate' && (
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-red-600 mt-1">
+                      <AlertTriangle className="h-3.5 w-3.5" /> This agreement number already exists
+                    </p>
+                  )}
+                </div>
+                {fieldErrors.agreementNo && agreementAvailability !== 'duplicate' && (
                   <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.agreementNo}</p>
                 )}
               </div>
@@ -876,7 +940,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
         </Button>
         <Button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || agreementAvailability === 'duplicate'}
           className="bg-blue-600 hover:bg-blue-750 text-white font-semibold shadow-md shadow-blue-500/10 rounded-xl px-6"
         >
           {isLoading ? (
