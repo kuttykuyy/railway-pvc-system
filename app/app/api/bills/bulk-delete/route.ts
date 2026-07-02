@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { canUserDeleteBills } from '@/lib/bill-permissions';
+import { recalculateCumulativePvcForContract } from '@/lib/recalculateCumulativePvc';
+import { advancedCache } from '@/lib/advanced-cache';
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +55,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const billsToDelete = await prisma.bill.findMany({
+      where: { id: { in: billIds } },
+      select: { id: true, contractId: true },
+    });
+    const affectedContractIds = [...new Set(billsToDelete.map(bill => bill.contractId))];
+
     // Delete InvoiceItems linked to BillTransactions for these bills
     // (InvoiceItem → BillTransaction lacks cascade, must delete manually first)
     const billTransactions = await prisma.billTransaction.findMany({
@@ -72,6 +80,20 @@ export async function POST(request: NextRequest) {
         }
       }
     });
+
+    for (const contractId of affectedContractIds) {
+      await recalculateCumulativePvcForContract(contractId);
+      const remainingBills = await prisma.bill.findMany({
+        where: { contractId },
+        select: { id: true },
+      });
+      for (const remainingBill of remainingBills) {
+        advancedCache.invalidateByPattern(new RegExp("^pdf-report:" + remainingBill.id + ":.*"));
+      }
+    }
+    for (const deletedBill of billsToDelete) {
+      advancedCache.invalidateByPattern(new RegExp("^pdf-report:" + deletedBill.id + ":.*"));
+    }
 
     return NextResponse.json({
       message: `${deletedBills.count} bills deleted successfully`,

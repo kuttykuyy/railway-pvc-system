@@ -264,6 +264,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields: contractId, billNo, grossBillAmount, billAmount, dateOfMeasurement' }, { status: 400 });
     }
 
+    const normalizedBillNo = String(billNo).trim();
+    const duplicateBill = await prisma.bill.findFirst({
+      where: {
+        contractId,
+        billNo: { equals: normalizedBillNo, mode: 'insensitive' },
+      },
+      select: { id: true },
+    });
+    if (duplicateBill) {
+      return NextResponse.json(
+        { error: `Bill number ${normalizedBillNo} already exists for this contract` },
+        { status: 409 },
+      );
+    }
+
     // ===== STEP 3B: Check for Recent PVC Check Credit =====
     // If user did a PVC check for the same contract/date within last 30 minutes, apply ₹500 credit
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
@@ -454,7 +469,7 @@ export async function POST(request: NextRequest) {
     const bill = await prisma.bill.create({
       data: {
         contractId,
-        billNo,
+        billNo: normalizedBillNo,
         grossBillAmount: parseFloat(grossBillAmount),
         billAmount: parseFloat(billAmount),
         cementAmount: classificationPolicy.cementAmount,

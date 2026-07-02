@@ -85,8 +85,18 @@ export async function DELETE(
       where: { id }
     });
 
-    // Invalidate cached PDFs for this bill
+    // A deleted historical bill changes every later bill's cumulative PVC.
+    await recalculateCumulativePvcForContract(bill.contractId);
+
+    // Clear the deleted bill and every remaining bill PDF for this contract.
     advancedCache.invalidateByPattern(new RegExp("^pdf-report:" + id + ":.*"));
+    const remainingBills = await prisma.bill.findMany({
+      where: { contractId: bill.contractId },
+      select: { id: true },
+    });
+    for (const remainingBill of remainingBills) {
+      advancedCache.invalidateByPattern(new RegExp("^pdf-report:" + remainingBill.id + ":.*"));
+    }
 
     return NextResponse.json({ message: 'Bill deleted successfully' });
   } catch (error) {
@@ -246,6 +256,22 @@ export async function PUT(
     if (!allowed) {
       return NextResponse.json({ error: reason || 'You do not have permission to edit this bill' }, { status: 403 });
     }
+
+    const normalizedBillNo = String(billNo).trim();
+    const duplicateBill = await prisma.bill.findFirst({
+      where: {
+        contractId: existingBill.contractId,
+        id: { not: id },
+        billNo: { equals: normalizedBillNo, mode: 'insensitive' },
+      },
+      select: { id: true },
+    });
+    if (duplicateBill) {
+      return NextResponse.json(
+        { error: `Bill number ${normalizedBillNo} already exists for this contract` },
+        { status: 409 },
+      );
+    }
     
     // ===== STEP 4: Get Contract =====
     const contract = await prisma.contract.findUnique({
@@ -314,7 +340,7 @@ export async function PUT(
       where: { id },
       data: {
         contractId: existingBill.contractId, // always use original contractId — immutable
-        billNo,
+        billNo: normalizedBillNo,
         editCount: { increment: 1 }, // track edit count for permission control
         grossBillAmount: parseFloat(grossBillAmount),
         billAmount: parseFloat(billAmount),

@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
       const existingBill = await prisma.bill.findFirst({
         where: {
           contractId,
-          billNo: billInput.billNo.trim(),
+          billNo: { equals: billInput.billNo.trim(), mode: 'insensitive' },
         },
       });
 

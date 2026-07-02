@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { buildCumulativePvcSummaries } from '@/lib/pdf/cumulative-pvc';
 
 /**
  * Recalculates cumulative PVC for all bills in a contract
@@ -13,23 +14,23 @@ export async function recalculateCumulativePvcForContract(contractId: string): P
   const bills = await prisma.bill.findMany({
     where: { contractId },
     include: { pvcCalculation: true },
-    orderBy: { dateOfMeasurement: 'asc' }
+    orderBy: [
+      { dateOfMeasurement: 'asc' },
+      { createdAt: 'asc' },
+      { id: 'asc' }
+    ]
   });
 
-  // Calculate cumulative PVC and update each bill
-  let cumulativePvc = 0;
+  const cumulativeSummaries = buildCumulativePvcSummaries(bills);
   
   for (const bill of bills) {
-    if (bill.pvcCalculation) {
-      // Add this bill's PVC to the cumulative total
-      cumulativePvc += bill.pvcCalculation.totalPvc;
-      
-      // Update the PVC calculation with the correct cumulative value
+    const summary = cumulativeSummaries.get(bill.id);
+    if (bill.pvcCalculation && summary) {
       await prisma.pvcCalculation.update({
         where: { id: bill.pvcCalculation.id },
         data: {
-          previousPvcTotal: cumulativePvc - bill.pvcCalculation.totalPvc,
-          cumulativePvc: cumulativePvc
+          previousPvcTotal: summary.previousPvcTotal,
+          cumulativePvc: summary.cumulativePvc
         }
       });
     }

@@ -359,6 +359,7 @@ export async function POST(request: NextRequest) {
         select: {
           id: true,
           contractId: true,
+          billNo: true,
           dateOfMeasurement: true,
           createdAt: true,
           pvcCalculation: { select: { totalPvc: true } },
