@@ -37,6 +37,7 @@ import { getRailwayZoneOptions, getSteelCityForZone } from '@/lib/zone-steel-cit
 import { ProvisionalDateNotification } from '@/components/ui/provisional-date-notification';
 import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
+import { calculateTotalPvc, formatPvcAmount } from '@/lib/classification-pvc';
 import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-dialog';
 import { BillPdfCementAnalyzer, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
 import { useLanguage } from '@/components/i18n-provider';
@@ -651,10 +652,75 @@ function NewBillPageContent() {
     });
   };
 
-  const applyExtractedBillDetails = (data: CementAnalysisData) => {
+  // Compares PVC across the sub-classifications of the entry's group and keeps the one
+  // with the least negative PVC, recording the comparison in the justification.
+  // Supply classifications (B/C) are never switched away from or into automatically.
+  const applyPvcComparisonToEntries = async (
+    mappedEntries: ClassificationEntry[],
+    measurementDate: string,
+  ): Promise<ClassificationEntry[]> => {
+    if (!selectedContract?.id || !measurementDate || mappedEntries.length === 0) return mappedEntries;
+    try {
+      const response = await fetch(
+        `/api/indices/comparison?contractId=${selectedContract.id}&measurementDate=${measurementDate}`,
+      );
+      if (!response.ok) return mappedEntries;
+      const indices = await response.json();
+      if (!indices.base || !indices.current) return mappedEntries;
+      const indicesData = { base: indices.base, current: indices.current };
+
+      return mappedEntries.map(entry => {
+        const currentSub = entry.subClassification;
+        const amount = Number(entry.amount) || 0;
+        if (!currentSub || amount <= 0) return entry;
+        const currentSuffix = currentSub.code.slice(-1).toUpperCase();
+        if (currentSuffix === 'B' || currentSuffix === 'C') return entry;
+
+        const group = classificationGroups.find(item => item.id === currentSub.groupId);
+        if (!group) return entry;
+        const candidates = group.subClassifications.filter(sub => {
+          const suffix = sub.code.slice(-1).toUpperCase();
+          return sub.id === currentSub.id || !['B', 'C'].includes(suffix);
+        });
+        if (candidates.length < 2) return entry;
+
+        const results = candidates
+          .map(sub => ({ sub, pvc: calculateTotalPvc(sub, amount, indicesData) }))
+          .sort((left, right) => right.pvc - left.pvc);
+        if (results.every(result => result.pvc === 0)) return entry;
+
+        const best = results[0];
+        const comparisonText = results.map(result => `${result.sub.code} = ${formatPvcAmount(result.pvc)}`).join('; ');
+        const decision = best.sub.id === currentSub.id
+          ? `${currentSub.code} gives the least negative PVC, confirming the classification.`
+          : `${best.sub.code} gives the least negative PVC, so it was selected over ${currentSub.code}.`;
+        const justification = [
+          entry.classificationJustification || '',
+          `PVC comparison on Rs ${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}: ${comparisonText}. ${decision}`,
+        ].filter(Boolean).join(' ');
+
+        if (best.sub.id !== currentSub.id) {
+          return {
+            ...entry,
+            subClassificationId: best.sub.id,
+            subClassification: best.sub,
+            classificationJustification: justification,
+          };
+        }
+        return { ...entry, classificationJustification: justification };
+      });
+    } catch {
+      return mappedEntries;
+    }
+  };
+
+  const applyExtractedBillDetails = async (data: CementAnalysisData) => {
     setIsAiUploaded(true);
     const billDetails = data.billDetails;
-    const mappedEntries = buildClassificationEntriesFromExtractedBill(data);
+    let mappedEntries = buildClassificationEntriesFromExtractedBill(data);
+    const extractedMeasurementDate = normalizeExtractedDate(billDetails?.measurementDate)
+      || formData.dateOfMeasurement;
+    mappedEntries = await applyPvcComparisonToEntries(mappedEntries, extractedMeasurementDate);
 
     setFormData(prev => ({
       ...prev,

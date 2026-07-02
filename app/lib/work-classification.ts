@@ -2,6 +2,7 @@ export interface MainWorkClassification {
   code: string;
   label: string;
   reason: string;
+  matchedKeywords: string[];
 }
 
 const MAIN_CLASSIFICATION_RULES: Array<{ code: string; label: string; patterns: RegExp[] }> = [
@@ -111,23 +112,35 @@ const MAIN_CLASSIFICATION_RULES: Array<{ code: string; label: string; patterns: 
 
 export function inferMainClassification(workDescription: string): MainWorkClassification {
   const contractText = String(workDescription || '').trim();
-  if (/\btunnel(?:ling|ing)?\b|\bTBM\b|\bunderground\b/i.test(contractText)) {
-    const usesExplosives = /\bexplosive|\bblasting\b|drill and blast/i.test(contractText);
+  const tunnelMatch = contractText.match(/\btunnel(?:ling|ing)?\b|\bTBM\b|\bunderground\b/i);
+  if (tunnelMatch) {
+    const explosiveMatch = contractText.match(/\bexplosive\w*|\bblasting\b|drill and blast/i);
     return {
-      code: usesExplosives ? '4' : '3',
-      label: usesExplosives ? 'Tunnelling Works (With Explosives)' : 'Tunnelling Works (Without Explosives)',
-      reason: usesExplosives ? 'Tunnel scope with blasting/explosives.' : 'Tunnel scope without blasting/explosives evidence.',
+      code: explosiveMatch ? '4' : '3',
+      label: explosiveMatch ? 'Tunnelling Works (With Explosives)' : 'Tunnelling Works (Without Explosives)',
+      reason: explosiveMatch ? 'Tunnel scope with blasting/explosives.' : 'Tunnel scope without blasting/explosives evidence.',
+      matchedKeywords: explosiveMatch ? [tunnelMatch[0], explosiveMatch[0]] : [tunnelMatch[0]],
     };
   }
 
   const scored = MAIN_CLASSIFICATION_RULES
-    .map(rule => ({ ...rule, score: rule.patterns.filter(pattern => pattern.test(contractText)).length }))
+    .map(rule => {
+      const matchedKeywords = rule.patterns
+        .map(pattern => contractText.match(pattern)?.[0]?.trim() || '')
+        .filter(Boolean);
+      return { ...rule, matchedKeywords, score: matchedKeywords.length };
+    })
     .sort((left, right) => right.score - left.score);
   const best = scored[0];
   if (!best || best.score === 0) {
-    return { code: '9', label: 'Any Other Works', reason: 'No unique match to GCC main groups 1-8.' };
+    return { code: '9', label: 'Any Other Works', reason: 'No unique match to GCC main groups 1-8.', matchedKeywords: [] };
   }
-  return { code: best.code, label: best.label, reason: `Matched ${best.label} from Name of Work.` };
+  return {
+    code: best.code,
+    label: best.label,
+    reason: `Matched ${best.label} from Name of Work.`,
+    matchedKeywords: best.matchedKeywords,
+  };
 }
 
 export function classificationCodeMatchesWork(subClassificationCode: string, workDescription: string): boolean {

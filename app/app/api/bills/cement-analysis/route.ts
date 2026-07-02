@@ -143,22 +143,26 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
   const contractMain = inferMainClassification(workDescription);
 
   // Determine the prefix (digit) to use:
+  const quoteKeywords = (keywords: string[]) =>
+    keywords.slice(0, 4).map(keyword => `"${keyword}"`).join(', ');
   let resolvedCode = contractMain.code;
-  let resolvedReason = `${contractMain.reason} (Fallback for item).`;
+  let resolvedReason = contractMain.matchedKeywords.length > 0
+    ? `The item description itself does not indicate a specific GCC work group, so it inherits Group ${contractMain.code} (${contractMain.label}) from the contract's Name of Work, which mentions ${quoteKeywords(contractMain.matchedKeywords)}.`
+    : `${contractMain.reason} (Fallback for item).`;
 
   if (itemMain.code !== '9') {
     resolvedCode = itemMain.code;
-    resolvedReason = `Matched Group ${itemMain.code} (${itemMain.label}) from item description.`;
+    resolvedReason = `The item description mentions ${quoteKeywords(itemMain.matchedKeywords)}, which places this work under GCC Group ${itemMain.code} (${itemMain.label}).`;
   } else if (isValidAiCode) {
     resolvedCode = aiCode.charAt(0);
-    resolvedReason = `Using AI suggested classification group ${resolvedCode}.`;
+    resolvedReason = `AI review of the item text assigned GCC Group ${resolvedCode}; no group keyword matched deterministically.`;
   }
 
   if (resolvedCode === '2' || resolvedCode === '7') {
     return {
       ...item,
       suggestedClassificationCode: resolvedCode,
-      suggestedClassificationReason: `${resolvedReason} This group has a single classification.`,
+      suggestedClassificationReason: `${resolvedReason} Group ${resolvedCode} has a single classification with no sub-divisions, so ${resolvedCode} applies directly.`,
     };
   }
 
@@ -173,25 +177,35 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
   const includesSteel = /including steel|with steel|contractor.{0,30}suppl/.test(text);
 
   let suffix = 'A';
-  let subReason = 'General work item.';
+  let subReason = `Sub-classification ${resolvedCode}A (general works) applies because this is a composite work item: `
+    + `it is not a separate steel supply item (${resolvedCode}B), not a separate cement supply item (${resolvedCode}C), `
+    + `and contains no fabrication/assembly/erection wording that would indicate ${resolvedCode}D or ${resolvedCode}E.`;
 
   if (aiSuffix && (supportsFabricationClasses || !['D', 'E'].includes(aiSuffix))) {
     suffix = aiSuffix;
-    subReason = `AI suggested suffix ${aiSuffix} based on item characteristics.`;
+    const suffixMeaning: Record<string, string> = {
+      A: 'general works with composite labour/material components',
+      B: 'a separate steel supply item where the contractor supplies the steel',
+      C: 'a separate cement supply item',
+      D: 'fabrication/assembly/erection work including contractor-supplied steel',
+      E: 'fabrication/assembly/erection work excluding steel supply',
+    };
+    subReason = `AI review of the item characteristics identified it as ${suffixMeaning[aiSuffix] || 'a specific work type'}, so sub-classification ${resolvedCode}${aiSuffix} applies.`;
   } else {
     // Deterministic fallback
+    const fabricationKeyword = text.match(/fabricat\w*|assembl\w*|erect\w*|launch\w*/)?.[0];
     if (supportsFabricationClasses && isFabrication && excludesSteel) {
       suffix = 'E';
-      subReason = 'Fabrication/assembly/erection work excluding steel supply (fallback).';
+      subReason = `The item text contains "${fabricationKeyword}" together with wording that steel is excluded/supplied by railway, so ${resolvedCode}E (fabrication and erection excluding steel supply) applies.`;
     } else if (supportsFabricationClasses && isFabrication && includesSteel) {
       suffix = 'D';
-      subReason = 'Fabrication/assembly/erection work including contractor-supplied steel (fallback).';
+      subReason = `The item text contains "${fabricationKeyword}" together with wording that the contractor supplies the steel, so ${resolvedCode}D (fabrication and erection including steel supply) applies.`;
     } else if (looksLikeDirectCementSupply(item)) {
       suffix = 'C';
-      subReason = 'Separate cement/grout supply item (fallback).';
+      subReason = `The item is billed in a cement supply unit (${item.unit}) and its description refers to cement supply rather than composite work, so ${resolvedCode}C (separate cement supply) applies.`;
     } else if (item.isSteelItem || /item\s*-?\s*steel|steel supply/.test(text)) {
       suffix = 'B';
-      subReason = 'Separate steel supply item (fallback).';
+      subReason = `The item is a separate steel supply item (steel supplied by the contractor as its own billed item), so ${resolvedCode}B (items for supply of steel) applies.`;
     }
   }
 
