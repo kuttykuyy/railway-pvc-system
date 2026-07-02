@@ -85,12 +85,6 @@ const DEFAULT_SETTINGS = [
     value: '5',
     description: 'Maximum number of contracts a Railway Official free account can create in total. Set to 0 for unlimited.',
     dataType: 'number'
-  },
-  {
-    key: 'AI_BILL_EXTRACTION_COST',
-    value: '50',
-    description: 'Cost in credits/INR to unlock and apply AI PDF bill extraction results',
-    dataType: 'number'
   }
 ];
 
@@ -112,6 +106,9 @@ export async function GET(request: NextRequest) {
       orderBy: { key: 'asc' }
     });
 
+    // This legacy fee is no longer charged; AI extraction is included in AI bill processing.
+    settings = settings.filter((setting: any) => setting.key !== 'AI_BILL_EXTRACTION_COST');
+
     // Check if any default settings are missing and add them
     const existingKeys = new Set(settings.map((s: any) => s.key));
     const missingSettings = DEFAULT_SETTINGS.filter(
@@ -129,6 +126,7 @@ export async function GET(request: NextRequest) {
       settings = await prisma.adminSettings.findMany({
         orderBy: { key: 'asc' }
       });
+      settings = settings.filter((setting: any) => setting.key !== 'AI_BILL_EXTRACTION_COST');
     }
 
     return NextResponse.json(settings);

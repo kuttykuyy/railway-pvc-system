@@ -173,7 +173,7 @@ export function BillPdfCementAnalyzer({
   const [extractionId, setExtractionId] = useState<string | null>(null);
   const [isUnlocked, setIsUnlocked] = useState(true);
   const [unlocking, setUnlocking] = useState(false);
-  const [unlockCost, setUnlockCost] = useState(50);
+  const [unlockCost, setUnlockCost] = useState(0);
 
   const [loadingStep, setLoadingStep] = useState(0);
   const [uploadPercent, setUploadPercent] = useState(0);

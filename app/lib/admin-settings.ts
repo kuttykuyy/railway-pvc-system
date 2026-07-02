@@ -98,7 +98,10 @@ export async function getBillingSettings() {
     const s = byKey.get(key);
     if (!s) return def;
     switch (s.dataType) {
-      case 'number': return parseFloat(s.value) || def;
+      case 'number': {
+        const value = parseFloat(s.value);
+        return Number.isFinite(value) ? value : def;
+      }
       case 'boolean': return s.value.toLowerCase() === 'true';
       default: return s.value;
     }
@@ -110,7 +113,6 @@ export async function getBillingSettings() {
     freeTrialBills:                 Number(parse('FREE_TRIAL_BILLS', 1)),
     lowCreditThreshold:             Number(parse('LOW_CREDIT_THRESHOLD', 50)),
     provisionalIndicesCheckEnabled: Boolean(parse('PROVISIONAL_INDICES_CHECK_ENABLED', true)),
-    aiExtractionCost:               Number(parse('AI_BILL_EXTRACTION_COST', 50)),
     aiBillCost:                     Number(parse('AI_BILL_PROCESSING_COST', 499)),
   };
 }

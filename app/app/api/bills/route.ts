@@ -353,7 +353,9 @@ export async function POST(request: NextRequest) {
           const currentBalance = user.customerAccount?.creditBalance || 0;
           
           const billingSettings = await getBillingSettings();
-          const fullCost = billingSettings.billCost || 199;
+          const fullCost = isAiUploaded
+            ? (billingSettings.aiBillCost || 499)
+            : (billingSettings.billCost || 199);
           const costToCharge = fullCost;
 
           if (currentBalance >= costToCharge) {
