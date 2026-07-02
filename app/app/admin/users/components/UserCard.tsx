@@ -157,12 +157,14 @@ export function UserCard({
                 <Badge 
                   variant="outline"
                   className={`text-[10px] font-bold uppercase rounded-lg px-2.5 py-0.5 ${
-                    user.customerAccount?.status === 'active' 
-                      ? 'bg-emerald-50 border-emerald-200/60 text-emerald-700' 
-                      : 'bg-rose-50 border-rose-200/60 text-rose-700'
+                    !user.customerAccount
+                      ? 'bg-amber-50 border-amber-200/60 text-amber-700'
+                      : user.customerAccount.status === 'active'
+                        ? 'bg-emerald-50 border-emerald-200/60 text-emerald-700'
+                        : 'bg-rose-50 border-rose-200/60 text-rose-700'
                   }`}
                 >
-                  {user.customerAccount?.status || 'inactive'}
+                  {user.customerAccount?.status || 'billing account missing'}
                 </Badge>
               </div>
             </div>

@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate && patch-package",
     "start": "next start",
     "lint": "next lint"
   },
@@ -24,6 +24,7 @@
     "eslint-config-next": "15.5.19",
     "eslint-plugin-prettier": "5.1.3",
     "eslint-plugin-react-hooks": "4.6.0",
+    "patch-package": "^8.0.1",
     "postcss": "^8.5.10",
     "prisma": "6.7.0",
     "tailwind-merge": "2.5.2",

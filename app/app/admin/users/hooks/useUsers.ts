@@ -17,6 +17,10 @@ export function useUsers() {
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
+      const repairResponse = await fetch('/api/admin/users', { method: 'POST' });
+      if (!repairResponse.ok) {
+        console.warn('Unable to repair missing customer accounts before loading users');
+      }
       const response = await fetch('/api/admin/users');
 
       if (!response.ok) {

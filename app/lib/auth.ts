@@ -21,6 +21,22 @@ export function getNextAuthSecret(): string {
   return secret;
 }
 
+async function ensureCustomerAccount(userId: string): Promise<void> {
+  await prisma.customerAccount.upsert({
+    where: { userId },
+    update: {},
+    create: {
+      userId,
+      status: 'active',
+      currentTier: 'standard',
+      creditBalance: 0,
+      monthlyBillCount: 0,
+      currentMonthBills: 0,
+      lastMonthBills: 0,
+    },
+  });
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
@@ -136,6 +152,14 @@ export const authOptions: NextAuthOptions = {
           console.error('Sign-in callback error:', error);
         }
       }
+
+      if (user.id) {
+        try {
+          await ensureCustomerAccount(user.id);
+        } catch (error) {
+          console.error('Customer account provisioning error:', error);
+        }
+      }
       return true;
     },
     async jwt({ token, user, trigger, session, account }) {
@@ -215,6 +239,9 @@ export const authOptions: NextAuthOptions = {
     }
   },
   events: {
+    async createUser({ user }) {
+      await ensureCustomerAccount(user.id);
+    },
     async signOut({ token }) {
       // Clear any cached data on sign out
       logger.log('User signed out:', token?.email);
