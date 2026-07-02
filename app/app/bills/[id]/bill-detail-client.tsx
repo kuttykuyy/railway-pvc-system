@@ -648,7 +648,8 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
   const [defaultTemplate, setDefaultTemplate] = useState<any>(null);
   const [templates, setTemplates] = useState<any[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [pdfFormat, setPdfFormat] = useState<'detailed' | 'ir_standard'>('detailed');
+  // Detailed format is hidden from the UI; IR Standard is the only downloadable report.
+  const [pdfFormat] = useState<'detailed' | 'ir_standard'>('ir_standard');
   const [whatsAppDialogOpen, setWhatsAppDialogOpen] = useState(false);
 
   // Fetch templates on mount
@@ -751,32 +752,6 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
 
         {/* Action Controls */}
         <div className="flex flex-wrap md:flex-nowrap items-center gap-2.5 pt-3 md:pt-0 border-t border-slate-100 dark:border-slate-800 md:border-none flex-shrink-0 w-full md:w-auto justify-start md:justify-end">
-
-          {/* PDF Format selector */}
-          <Select value={pdfFormat} onValueChange={(v) => setPdfFormat(v as 'detailed' | 'ir_standard')}>
-            <SelectTrigger className="w-[170px] h-11 rounded-xl shadow-sm border-slate-200 dark:border-slate-800">
-              <SelectValue placeholder="PDF Format" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl">
-              <SelectItem value="detailed" className="text-xs">Detailed Report</SelectItem>
-              <SelectItem value="ir_standard" className="text-xs">IR Standard Format</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {pdfFormat === 'detailed' && templates.length > 0 && (
-            <Select value={selectedTemplateId || 'default'} onValueChange={setSelectedTemplateId}>
-              <SelectTrigger className="w-[180px] h-11 rounded-xl shadow-sm border-slate-200 dark:border-slate-800">
-                <SelectValue placeholder="Report Template" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                {templates.map((tpl) => (
-                  <SelectItem key={tpl.id} value={tpl.id} className="text-xs">
-                    {tpl.name} {tpl.isDefault && '(Default)'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
 
           <Button
             variant="outline"
@@ -897,33 +872,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
         </div>
       </div>
 
-      {/* Templates & edit warnings */}
-      <div className="space-y-4">
-        {defaultTemplate && (
-          <div className="bg-gradient-to-r from-blue-500/10 to-indigo-500/5 border border-blue-500/20 rounded-2xl p-4 shadow-sm">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex-shrink-0">
-                <FileType className="h-5 w-5" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300">
-                  Using Report Template: {defaultTemplate.name}
-                </h3>
-                <p className="text-xs text-blue-700 dark:text-blue-400/80 mt-0.5">
-                  PDF exports are structured according to this template setting. 
-                  {templates.length > 1 && ' Select another template structure above if needed.'}
-                </p>
-                {defaultTemplate.description && (
-                  <p className="text-xs text-blue-600/70 dark:text-blue-400/60 mt-1 font-medium italic">
-                    &ldquo;{defaultTemplate.description}&rdquo;
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-      </div>
+      {/* Report template banner removed along with the hidden Detailed PDF format. */}
 
       {/* 3. Approval Actions card */}
       <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">

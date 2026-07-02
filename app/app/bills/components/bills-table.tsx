@@ -171,7 +171,7 @@ export function BillsTable({
                           View Details
                         </Link>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => window.open(`/api/bills/${bill.id}/pdf-report`, '_blank')}>
+                      <DropdownMenuItem onClick={() => window.open(`/api/bills/${bill.id}/pdf-report?format=ir_standard`, '_blank')}>
                         <FileText className="h-4 w-4 mr-2" />
                         Download PDF
                       </DropdownMenuItem>

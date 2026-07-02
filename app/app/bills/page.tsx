@@ -154,7 +154,8 @@ export default function BillsPage() {
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [selectedBillForWhatsApp, setSelectedBillForWhatsApp] = useState<{ id: string; billNo: string; contractorName: string; contractorPhone?: string | null } | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('default');
-  const [pdfFormat, setPdfFormat] = useState<'detailed' | 'ir_standard'>('detailed');
+  // Detailed format is hidden from the UI; IR Standard is the only downloadable report.
+  const [pdfFormat, setPdfFormat] = useState<'detailed' | 'ir_standard'>('ir_standard');
 
   // Delete permissions state
   const [deletableBillIds, setDeletableBillIds] = useState<Set<string>>(new Set());
@@ -1507,22 +1508,6 @@ export default function BillsPage() {
           </div>
           
           <div className="flex flex-wrap gap-2 items-center">
-            {/* Format selector inline in bulk action bar */}
-            <div className="flex items-center gap-1 border border-slate-200 rounded-xl px-2 h-10 bg-white shadow-sm">
-              <span className="text-xs text-slate-500 mr-1">Format:</span>
-              <button
-                onClick={() => setPdfFormat('detailed')}
-                className={`text-xs px-2 py-1 rounded-lg transition-colors ${pdfFormat === 'detailed' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-              >
-                Detailed
-              </button>
-              <button
-                onClick={() => setPdfFormat('ir_standard')}
-                className={`text-xs px-2 py-1 rounded-lg transition-colors ${pdfFormat === 'ir_standard' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-              >
-                IR Standard
-              </button>
-            </div>
             <Button
               onClick={generateBulkReport}
               disabled={generatingBulkReport || selectedBills.length < 2}
@@ -1919,17 +1904,6 @@ export default function BillsPage() {
                       </td>
                       <td className="px-4 py-3 text-center" colSpan={3}>
                         <div className="flex items-center justify-center gap-2">
-                          {/* Inline format selector for this batch */}
-                          <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden text-[10px] h-7">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setPdfFormat('detailed'); }}
-                              className={`px-2 h-full transition-colors ${pdfFormat === 'detailed' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-                            >Detailed</button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setPdfFormat('ir_standard'); }}
-                              className={`px-2 h-full transition-colors ${pdfFormat === 'ir_standard' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-                            >IR Std</button>
-                          </div>
                           <Button
                             variant="outline"
                             size="sm"
@@ -2376,17 +2350,6 @@ export default function BillsPage() {
                       </div>
 
                       <div className="flex gap-2 flex-wrap mb-1 items-center">
-                        {/* Format selector */}
-                        <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden text-xs h-9">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setPdfFormat('detailed'); }}
-                            className={`px-3 h-full font-medium transition-colors ${pdfFormat === 'detailed' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-                          >Detailed</button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setPdfFormat('ir_standard'); }}
-                            className={`px-3 h-full font-medium transition-colors ${pdfFormat === 'ir_standard' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-                          >IR Standard</button>
-                        </div>
                         <Button
                           variant="default"
                           size="sm"
@@ -2520,26 +2483,12 @@ export default function BillsPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {/* PDF Format Selector */}
+            {/* Report format is fixed to IR Standard; the Detailed format is hidden. */}
             <div className="space-y-2">
               <Label>Report Format</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPdfFormat('detailed')}
-                  className={`flex flex-col items-start p-3 rounded-lg border-2 text-left transition-colors ${pdfFormat === 'detailed' ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
-                >
-                  <span className="font-semibold text-sm">Detailed Report</span>
-                  <span className="text-xs text-muted-foreground mt-1">Full A3 landscape with indices, calculation steps & branding</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPdfFormat('ir_standard')}
-                  className={`flex flex-col items-start p-3 rounded-lg border-2 text-left transition-colors ${pdfFormat === 'ir_standard' ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
-                >
-                  <span className="font-semibold text-sm">IR Standard Format</span>
-                  <span className="text-xs text-muted-foreground mt-1">Official A4 proforma per GCC Clause 17 with signature block</span>
-                </button>
+              <div className="flex flex-col items-start p-3 rounded-lg border-2 border-blue-600 bg-blue-50 text-left">
+                <span className="font-semibold text-sm">IR Standard Format</span>
+                <span className="text-xs text-muted-foreground mt-1">Official A4 proforma per GCC Clause 17 with signature block</span>
               </div>
             </div>
 

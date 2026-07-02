@@ -247,7 +247,7 @@ function FullPvcReportContent() {
 
   const handleDownloadPdf = async () => {
     try {
-      const response = await fetch(`/api/bills/${billId}/pdf-report`);
+      const response = await fetch(`/api/bills/${billId}/pdf-report?format=ir_standard`);
       if (!response.ok) {
         throw new Error('Failed to generate PDF');
       }
