@@ -912,7 +912,10 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       function getQuarterLabel(offset: number): string {
         if (offset <= 0) return 'BASE';
         const qNum = Math.ceil(offset / 3);
-        return `Q${qNum}-${baseYear + Math.floor((baseMon + offset) / 12)}`;
+        // Label year comes from the quarter's FIRST month so a quarter spanning a
+        // year boundary (e.g. Nov-Dec-Jan) stays one group with one 3-month average.
+        const quarterStartOffset = (qNum - 1) * 3 + 1;
+        return `Q${qNum}-${baseYear + Math.floor((baseMon + quarterStartOffset) / 12)}`;
       }
 
       // Build table rows
