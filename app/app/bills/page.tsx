@@ -156,6 +156,7 @@ export default function BillsPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('default');
   // Detailed format is hidden from the UI; IR Standard is the only downloadable report.
   const [pdfFormat, setPdfFormat] = useState<'detailed' | 'ir_standard'>('ir_standard');
+  const [includeIndexDocs, setIncludeIndexDocs] = useState(true);
 
   // Delete permissions state
   const [deletableBillIds, setDeletableBillIds] = useState<Set<string>>(new Set());
@@ -946,6 +947,7 @@ export default function BillsPage() {
       const params = new URLSearchParams();
       if (selectedTemplateId && selectedTemplateId !== 'default') params.set('templateId', selectedTemplateId);
       if (pdfFormat === 'ir_standard') params.set('format', 'ir_standard');
+      if (!includeIndexDocs) params.set('includeDocs', '0');
       if (params.toString()) url += `?${params.toString()}`;
       
       const response = await fetch(url);
@@ -2483,12 +2485,26 @@ export default function BillsPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {/* Report format is fixed to IR Standard; the Detailed format is hidden. */}
+            {/* Report format is fixed to IR Standard; choose with or without index documents. */}
             <div className="space-y-2">
               <Label>Report Format</Label>
-              <div className="flex flex-col items-start p-3 rounded-lg border-2 border-blue-600 bg-blue-50 text-left">
-                <span className="font-semibold text-sm">IR Standard Format</span>
-                <span className="text-xs text-muted-foreground mt-1">Official A4 proforma per GCC Clause 17 with signature block</span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIncludeIndexDocs(true)}
+                  className={`flex flex-col items-start p-3 rounded-lg border-2 text-left transition-colors ${includeIndexDocs ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+                >
+                  <span className="font-semibold text-sm">IR PDF + Index Documents</span>
+                  <span className="text-xs text-muted-foreground mt-1">Official A4 proforma with the published index documents attached</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIncludeIndexDocs(false)}
+                  className={`flex flex-col items-start p-3 rounded-lg border-2 text-left transition-colors ${!includeIndexDocs ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+                >
+                  <span className="font-semibold text-sm">IR PDF only</span>
+                  <span className="text-xs text-muted-foreground mt-1">Statement pages only, without the supporting index documents</span>
+                </button>
               </div>
             </div>
 

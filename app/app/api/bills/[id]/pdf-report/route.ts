@@ -160,12 +160,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const { searchParams } = new URL(request.url);
         const templateId = searchParams.get('templateId');
         const pdfFormat = searchParams.get('format') || 'detailed';
+        // includeDocs=0 skips appending the supporting index documents to the IR PDF.
+        const includeIndexDocs = searchParams.get('includeDocs') !== '0';
         const session = await getServerSession(authOptions);
         const requesterRole = String((session?.user as any)?.role || '').toLowerCase();
         const isAdminRequester = requesterRole === 'admin' || requesterRole === 'superadmin';
-        
+
         // Check cache before running heavy PDF compiling
-        const cacheKey = `pdf-report:${billId}:${templateId || 'default'}:${pdfFormat}:${isAdminRequester ? 'admin' : 'standard'}`;
+        const cacheKey = `pdf-report:${billId}:${templateId || 'default'}:${pdfFormat}:${includeIndexDocs ? 'docs' : 'nodocs'}:${isAdminRequester ? 'admin' : 'standard'}`;
         const cachedPdf = advancedCache.get(cacheKey);
         if (cachedPdf) {
           console.log(`[PDF Cache] Hit for: ${cacheKey}`);
@@ -661,17 +663,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         allHistoricalMonthlyData,
       });
 
-      // Append index documents (same as detailed format)
+      // Append index documents (same as detailed format) unless the caller opted out
       let irFinalBytes: Uint8Array = irPdfBytes;
-      try {
-        const irComponentTypes = billHasSteel(bill) ? undefined : NON_STEEL_COMPONENT_TYPES;
-        irFinalBytes = await embedComponentIndicesRange(new Uint8Array(irPdfBytes), {
-          startDate: new Date(bill.contract.baseMonth),
-          endDate: new Date(bill.dateOfMeasurement),
-          componentTypes: irComponentTypes,
-        });
-      } catch (err) {
-        console.error('IR PDF: error embedding index documents:', err);
+      if (includeIndexDocs) {
+        try {
+          const irComponentTypes = billHasSteel(bill) ? undefined : NON_STEEL_COMPONENT_TYPES;
+          irFinalBytes = await embedComponentIndicesRange(new Uint8Array(irPdfBytes), {
+            startDate: new Date(bill.contract.baseMonth),
+            endDate: new Date(bill.dateOfMeasurement),
+            componentTypes: irComponentTypes,
+          });
+        } catch (err) {
+          console.error('IR PDF: error embedding index documents:', err);
+        }
       }
 
       // Apply trial watermark for free-trial bills only

@@ -650,6 +650,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   // Detailed format is hidden from the UI; IR Standard is the only downloadable report.
   const [pdfFormat] = useState<'detailed' | 'ir_standard'>('ir_standard');
+  const [includeIndexDocs, setIncludeIndexDocs] = useState(true);
   const [whatsAppDialogOpen, setWhatsAppDialogOpen] = useState(false);
 
   // Fetch templates on mount
@@ -683,6 +684,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
       const params = new URLSearchParams();
       if (selectedTemplateId && selectedTemplateId !== defaultTemplate?.id) params.set('templateId', selectedTemplateId);
       if (pdfFormat === 'ir_standard') params.set('format', 'ir_standard');
+      if (!includeIndexDocs) params.set('includeDocs', '0');
       if (params.toString()) url += `?${params.toString()}`;
       
       const response = await fetch(url);
@@ -752,6 +754,17 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
 
         {/* Action Controls */}
         <div className="flex flex-wrap md:flex-nowrap items-center gap-2.5 pt-3 md:pt-0 border-t border-slate-100 dark:border-slate-800 md:border-none flex-shrink-0 w-full md:w-auto justify-start md:justify-end">
+
+          {/* IR PDF variant: with or without the supporting index documents */}
+          <Select value={includeIndexDocs ? 'with_docs' : 'without_docs'} onValueChange={(v) => setIncludeIndexDocs(v === 'with_docs')}>
+            <SelectTrigger className="w-[210px] h-11 rounded-xl shadow-sm border-slate-200 dark:border-slate-800">
+              <SelectValue placeholder="PDF contents" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="with_docs" className="text-xs">IR PDF + Index Documents</SelectItem>
+              <SelectItem value="without_docs" className="text-xs">IR PDF only (no documents)</SelectItem>
+            </SelectContent>
+          </Select>
 
           <Button
             variant="outline"
