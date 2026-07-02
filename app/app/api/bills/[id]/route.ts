@@ -270,12 +270,6 @@ export async function PUT(
       classificationEntries,
       { cementAmount, steelTmtBarsAmount, steelAngleChannelAmount, steelPlatesAmount, steelOtherSectionsAmount },
     );
-    if (classificationPolicy.invalidCodes.length > 0) {
-      return NextResponse.json({
-        error: `Name of Work requires main classification ${classificationPolicy.requiredMain.code} - ${classificationPolicy.requiredMain.label}. Invalid classification(s): ${classificationPolicy.invalidCodes.join(', ')}.`,
-      }, { status: 400 });
-    }
-    
     // ===== STEP 5: Calculate Quarter =====
     const measurementDate = new Date(dateOfMeasurement);
     

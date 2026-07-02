@@ -144,11 +144,6 @@ export async function POST(request: NextRequest) {
         billInput.classificationEntries,
         billInput,
       );
-      if (classificationPolicy.invalidCodes.length > 0) {
-        validationErrors.push(
-          `Bill ${billInput.billNo}: Name of Work requires main classification ${classificationPolicy.requiredMain.code} - ${classificationPolicy.requiredMain.label}. Invalid classification(s): ${classificationPolicy.invalidCodes.join(', ')}`,
-        );
-      }
       billInput.cementAmount = classificationPolicy.cementAmount;
       billInput.steelTmtBarsAmount = classificationPolicy.steelTmtBarsAmount;
       billInput.steelAngleChannelAmount = classificationPolicy.steelAngleChannelAmount;
