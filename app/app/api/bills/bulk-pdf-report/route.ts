@@ -18,6 +18,7 @@ import { getSteelIndexNamesForZone, getSteelCityForZone, getFuelIndexNameForBill
 import rateLimiter, { RATE_LIMITS, getIdentifier } from '@/lib/rate-limiter';
 import { embedLabourIndex, embedComponentIndicesRange } from '@/lib/pdf/utils/labour-index-embedder';
 import { ComponentType } from '@prisma/client';
+import { buildCumulativePvcSummaries, compareBillsChronologically } from '@/lib/pdf/cumulative-pvc';
 
 const STEEL_COMPONENT_TYPES = [ComponentType.TMT_BARS, ComponentType.ANGLE_CHANNEL, ComponentType.PLATES, ComponentType.OTHER_SECTIONS];
 const NON_STEEL_COMPONENT_TYPES = Object.values(ComponentType).filter(t => !STEEL_COMPONENT_TYPES.includes(t as any)) as ComponentType[];
@@ -353,7 +354,20 @@ export async function POST(request: NextRequest) {
 
       const mergedPdf = await PDFDocument.create();
 
-      for (const bill of bills) {
+      const allContractBillsForCumulative = await prisma.bill.findMany({
+        where: { contractId: uniqueContractIds[0] },
+        select: {
+          id: true,
+          contractId: true,
+          dateOfMeasurement: true,
+          createdAt: true,
+          pvcCalculation: { select: { totalPvc: true } },
+        },
+      });
+      const cumulativeSummaries = buildCumulativePvcSummaries(allContractBillsForCumulative);
+      const irBills = [...bills].sort(compareBillsChronologically);
+
+      for (const bill of irBills) {
         const baseMonth = new Date(bill.contract.baseMonth);
         const fuelIdxName = getFuelName(bill.zone, bill.fuelPriceType);
         const steelIdxNames = getSteelNames(bill.zone);
@@ -388,6 +402,7 @@ export async function POST(request: NextRequest) {
           isProvisional: indicesStatus.isProvisional,
           provisionalIndices: indicesStatus.provisionalIndices,
           allHistoricalMonthlyData,
+          previousCumulativePvc: cumulativeSummaries.get(bill.id)?.previousPvcTotal ?? 0,
         });
 
         const billPdfDoc = await PDFDocument.load(billPdfBuf);

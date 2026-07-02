@@ -105,6 +105,7 @@ interface IRStandardReportOptions {
   isProvisional?: boolean;
   provisionalIndices?: string[];
   allHistoricalMonthlyData?: { indexName: string; month: string; value: number }[];
+  previousCumulativePvc?: number;
 }
 
 // jsPDF Helvetica does not support Rs. symbol, use "Rs." instead
@@ -171,6 +172,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     isProvisional = false,
     provisionalIndices = [],
     allHistoricalMonthlyData = [],
+    previousCumulativePvc,
   } = opts;
 
   // A4 Landscape: 297 x 210 mm
@@ -502,13 +504,15 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   // Draw summary right-aligned (120mm wide), certification note on the left
   const summaryX = pageW - mR - 120;
   const summaryStartY = y;
+  const summaryPreviousPvc = previousCumulativePvc ?? pvc?.previousPvcTotal ?? 0;
+  const summaryCurrentPvc = summaryPreviousPvc + totalPvcAmt;
 
   autoTable(pdf, {
     startY: summaryStartY,
     body: [
       ['Net PVC Amount for this Bill', 'Rs. ' + fmt(totalPvcAmt)],
-      ['Previous Cumulative PVC',      'Rs. ' + fmt(pvc?.previousPvcTotal ?? 0)],
-      ['Current Cumulative PVC',       'Rs. ' + fmt(pvc?.cumulativePvc ?? 0)],
+      ['Previous Cumulative PVC',      'Rs. ' + fmt(summaryPreviousPvc)],
+      ['Current Cumulative PVC',       'Rs. ' + fmt(summaryCurrentPvc)],
     ],
     theme: 'grid',
     styles: { fontSize: 8.5, cellPadding: 2.5, lineColor: [0, 0, 0], lineWidth: 0.3 },
@@ -952,10 +956,26 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       }
 
       for (const [qLabel, qMonths] of quarterGroups) {
+        const isAffectedQuarter = qLabel === bill.quarter;
+        const quarterHeaderFill = isAffectedQuarter
+          ? [0, 130, 115] as [number, number, number]
+          : [232, 232, 232] as [number, number, number];
+        const affectedMonthFill = [230, 248, 245] as [number, number, number];
+        const averageFill = isAffectedQuarter
+          ? [205, 235, 230] as [number, number, number]
+          : [242, 242, 242] as [number, number, number];
+
         // Quarter header row
         histRows.push([
-          { content: `QUARTER ${qLabel}`, colSpan: 1 + orderedIdxNames.length,
-            styles: { fontStyle: 'bold' as const, fillColor: [220, 235, 220] as [number,number,number] } }
+          {
+            content: `QUARTER ${qLabel}${isAffectedQuarter ? '  [AFFECTED QUARTER FOR THIS BILL]' : ''}`,
+            colSpan: 1 + orderedIdxNames.length,
+            styles: {
+              fontStyle: 'bold' as const,
+              fillColor: quarterHeaderFill,
+              textColor: isAffectedQuarter ? [255, 255, 255] as [number, number, number] : [0, 0, 0] as [number, number, number],
+            },
+          }
         ]);
 
         // Monthly rows
@@ -963,10 +983,16 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
           const [yr, mo] = mk.split('-').map(Number);
           const mLabel = format(new Date(yr, mo - 1, 1), 'MMM yyyy');
           histRows.push([
-            mLabel,
+            { content: mLabel, styles: { fillColor: isAffectedQuarter ? affectedMonthFill : undefined } },
             ...orderedIdxNames.map(n => {
               const v = histLookup.get(n)?.get(mk);
-              return { content: v !== undefined ? fmtIdx(v) : '-', styles: { halign: 'center' as const } };
+              return {
+                content: v !== undefined ? fmtIdx(v) : '-',
+                styles: {
+                  halign: 'center' as const,
+                  fillColor: isAffectedQuarter ? affectedMonthFill : undefined,
+                },
+              };
             })
           ]);
         }
@@ -981,10 +1007,10 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         const [ye, me] = qEnd.split('-').map(Number);
         const qAvgLabel = `${format(new Date(ys, ms - 1, 1), 'MMM yyyy')}-${format(new Date(ye, me - 1, 1), 'MMM yyyy')} AVG`;
         histRows.push([
-          { content: qAvgLabel, styles: { fontStyle: 'bold' as const, fillColor: [240, 248, 240] as [number,number,number] } },
+          { content: `${qAvgLabel}${isAffectedQuarter ? ' [USED]' : ''}`, styles: { fontStyle: 'bold' as const, fillColor: averageFill } },
           ...qAvgVals.map(v => ({
             content: v !== null ? fmtIdx(v) : '-',
-            styles: { fontStyle: 'bold' as const, halign: 'center' as const, fillColor: [240, 248, 240] as [number,number,number] }
+            styles: { fontStyle: 'bold' as const, halign: 'center' as const, fillColor: averageFill }
           }))
         ]);
       }

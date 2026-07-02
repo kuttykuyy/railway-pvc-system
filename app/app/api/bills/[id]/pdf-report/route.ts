@@ -20,6 +20,7 @@ import { PDFDocument } from 'pdf-lib';
 import { ComponentType } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { getNextAuthSecret } from '@/lib/auth';
+import { buildCumulativePvcSummaries } from '@/lib/pdf/cumulative-pvc';
 
 const STEEL_COMPONENT_TYPES = [ComponentType.TMT_BARS, ComponentType.ANGLE_CHANNEL, ComponentType.PLATES, ComponentType.OTHER_SECTIONS];
 const NON_STEEL_COMPONENT_TYPES = Object.values(ComponentType).filter(t => !STEEL_COMPONENT_TYPES.includes(t as any)) as ComponentType[];
@@ -632,6 +633,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const steelIdxNames = getSteelIndexNamesForZone(bill.zone);
       const allIdxNames = ['Labour', 'RBI Plant Machinery', fuelIdxName, 'RBI Other Materials', 'RBI Cement', 'RBI Explosives', ...steelIdxNames];
       const irQuarterlyAverages = await getQuarterlyAverages(bill.quarter, allIdxNames, baseMonth, 'auto');
+      const cumulativeSummary = buildCumulativePvcSummaries(allContractBills).get(bill.id);
 
       // Fetch all monthly values from base month to end of current quarter for the monthly indices table
       const currentQtrMonths = getQuarterMonths(bill.quarter, baseMonth);
@@ -661,6 +663,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         isProvisional: indicesStatusForIR.isProvisional,
         provisionalIndices: indicesStatusForIR.provisionalIndices,
         allHistoricalMonthlyData,
+        previousCumulativePvc: cumulativeSummary?.previousPvcTotal ?? 0,
       });
 
       // Append index documents (same as detailed format) unless the caller opted out
