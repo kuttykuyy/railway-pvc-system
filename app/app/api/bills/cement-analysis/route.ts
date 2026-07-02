@@ -463,7 +463,7 @@ ${JSON.stringify(payload)}`;
           .replace(/\s+/g, ' ')
           .trim();
         if (aiJustification.length >= 40) {
-          original.suggestedClassificationReason = `AI review: ${aiJustification.slice(0, 900)}`;
+          original.suggestedClassificationReason = aiJustification.slice(0, 900);
         }
       }
       if (typeof enhancement?.isCementAffected === 'boolean') {

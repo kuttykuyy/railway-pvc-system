@@ -16,6 +16,8 @@ declare module 'jspdf' {
 }
 
 interface SubClassification {
+  code?: string;
+  name?: string;
   labour: number;
   plantMachinery: number;
   fuel: number;
@@ -28,6 +30,9 @@ interface SubClassification {
 
 interface ClassificationEntry {
   amount: number;
+  description?: string | null;
+  scheduleItem?: string | null;
+  classificationJustification?: string | null;
   subClassification?: SubClassification | null;
 }
 
@@ -511,6 +516,89 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
 
   // Return to last page for indices rendering
   pdf.setPage(pagesAfterSummary);
+
+  // ── D. WORK CLASSIFICATION & JUSTIFICATION ────────────────────────────────
+  const detailEntries = entries.filter(entry =>
+    (Number(entry.amount) || 0) !== 0 || entry.classificationJustification || entry.description);
+  if (detailEntries.length > 0) {
+    y = Math.max(pdf.lastAutoTable.finalY, summaryStartY + 30) + 6;
+    ensureSpace(30);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('D. WORK CLASSIFICATION & JUSTIFICATION', mL, y);
+    y += 2;
+
+    const classHead = [[
+      'Sl.',
+      'Classification',
+      'Schedule',
+      'Amount (Rs.)',
+      'Why this classification applies',
+    ]];
+    const classBody = detailEntries.map((entry, index) => {
+      const sub = entry.subClassification;
+      const classification = sub?.code ? `${sub.code}${sub.name ? ' - ' + sub.name : ''}` : '-';
+      const justification = String(entry.classificationJustification || '').trim()
+        || String(entry.description || '').trim()
+        || '-';
+      return [
+        index + 1,
+        classification,
+        entry.scheduleItem || '-',
+        fmt(Number(entry.amount) || 0),
+        justification,
+      ];
+    });
+
+    autoTable(pdf, {
+      startY: y + 2,
+      head: classHead,
+      body: classBody,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [20, 20, 20],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 8,
+        halign: 'center',
+        valign: 'middle',
+        cellPadding: 2.5,
+      },
+      bodyStyles: {
+        fontSize: 8,
+        cellPadding: { top: 2, right: 3, bottom: 2, left: 3 },
+        textColor: [0, 0, 0],
+        valign: 'top',
+      },
+      alternateRowStyles: { fillColor: [250, 250, 250] },
+      styles: { lineColor: [180, 180, 180], lineWidth: 0.3, font: 'helvetica', overflow: 'linebreak' },
+      margin: { left: mL, right: mR, top: mT },
+      tableWidth: contentW,
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 45, halign: 'left' },
+        2: { cellWidth: 26, halign: 'left' },
+        3: { cellWidth: 32, halign: 'right' },
+        4: { cellWidth: 160, halign: 'left' },
+      },
+    });
+
+    y = pdf.lastAutoTable.finalY + 4;
+
+    // Plain-language explanation for end users
+    ensureSpace(18);
+    pdf.setFontSize(7.5);
+    pdf.setFont('helvetica', 'italic');
+    pdf.setTextColor(80, 80, 80);
+    pdf.text(
+      'How to read this statement: each work amount is grouped under a GCC classification, which fixes the component percentages '
+      + '(labour, fuel, cement, steel, etc.) shown in Section C.\n'
+      + 'PVC for a component = component amount x percentage change of its published price index between the Base Month and the bill quarter.\n'
+      + 'A positive PVC amount is payable to the contractor; a negative PVC amount is recoverable because prices fell below the base month level.',
+      mL, y,
+    );
+    pdf.setTextColor(0, 0, 0);
+  }
 
   // ── PAGE 2: AFFECTED PRICE INDICES WITH MONTHLY BREAKDOWN ─────────────────
   // Build set of index names actually used in this PVC calculation
