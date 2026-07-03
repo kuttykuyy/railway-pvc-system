@@ -386,6 +386,19 @@ export function BillPdfCementAnalyzer({
     };
   };
 
+  // A cement coefficient row is identified by its ITEM NUMBER (DSR / item no). An item
+  // is cement-affected only when its item number appears in the coefficient table.
+  // Description is deliberately NOT used to match, because different items can share the
+  // same description (e.g. two "Concrete of M25 grade..." rows with different item nos),
+  // which would otherwise add cement to an item that is not in the coefficient list.
+  const coeffKey = (x: { dsrCode?: string; itemNo?: string } | undefined) =>
+    String(x?.dsrCode || x?.itemNo || '').trim();
+  const findCoeffIndex = (list: ExtractedBillItem[] | undefined, item: ExtractedBillItem) => {
+    const key = coeffKey(item);
+    if (!key || !list) return -1;
+    return list.findIndex(ci => coeffKey(ci) === key);
+  };
+
   const getScheduleCementAmount = (sched: string) => {
     if (!result) return 0;
     const { derivedRatePerMt } = getDerivedRates(sched);
@@ -397,8 +410,8 @@ export function BillPdfCementAnalyzer({
     items.forEach(item => {
       const itemSched = item.schedule || item.scheduleGroup || 'Default';
       if (itemSched === sched && item.isCementAffected && item.sourceBook !== 'USSR_2021') {
-        const coeffIndex = result.coefficientItems?.findIndex(ci => ci.dsrCode === item.dsrCode && ci.description === item.description);
-        if (coeffIndex !== undefined && coeffIndex !== -1) {
+        const coeffIndex = findCoeffIndex(result.coefficientItems, item);
+        if (coeffIndex !== -1) {
           scheduleCementQtyMT += result.results[coeffIndex]?.cementQuantity || 0;
         }
       }
@@ -412,8 +425,8 @@ export function BillPdfCementAnalyzer({
     const sched = item.schedule || item.scheduleGroup || 'Default';
     const { derivedRatePerMt } = getDerivedRates(sched);
     
-    const coeffIndex = resData.coefficientItems?.findIndex(ci => ci.dsrCode === item.dsrCode && ci.description === item.description);
-    if (coeffIndex === undefined || coeffIndex === -1) return 0;
+    const coeffIndex = findCoeffIndex(resData.coefficientItems, item);
+    if (coeffIndex === -1) return 0;
     const cementQtyMT = resData.results[coeffIndex]?.cementQuantity || 0;
     return cementQtyMT * derivedRatePerMt;
   };
@@ -524,7 +537,16 @@ export function BillPdfCementAnalyzer({
 
   const deleteCementResultItem = (itemToRemove: CementAnalysisResultItem) => {
     if (!result) return;
+    // `coefficientItems` and `results` are parallel arrays (getItemCementDeduction and
+    // applyCalculatedAmount match a bill item to its cement by the SAME index in both).
+    // Remove the row from BOTH so the arrays stay aligned — otherwise later items shift
+    // and get the wrong cement quantity.
+    const removeIndex = result.results.indexOf(itemToRemove);
     const updatedResults = result.results.filter(item => item !== itemToRemove);
+    const updatedCoefficientItems = result.coefficientItems && removeIndex >= 0
+      ? result.coefficientItems.filter((_, index) => index !== removeIndex)
+      : result.coefficientItems;
+
     const matchedResults = updatedResults.filter(item => item.matched);
     const unmatchedItemCount = updatedResults.length - matchedResults.length;
     const cementQuantity = matchedResults.reduce((sum, item) => sum + item.cementQuantity, 0);
@@ -534,9 +556,25 @@ export function BillPdfCementAnalyzer({
       warnings.push(`${unmatchedItemCount} item(s) need DSR cement coefficients before cement amount can be finalized.`);
     }
 
+    // The cement deduction is baked onto the matching bill item (originalAmount /
+    // cementDeduction). Strip it and restore the item's full amount, so the rebuilt
+    // classification entries no longer carve out a cement portion for the removed row.
+    const stripCementFromItem = (item: ExtractedBillItem): ExtractedBillItem => {
+      if (coeffKey(item) !== coeffKey(itemToRemove)) return item;
+      const anyItem = item as any;
+      const restoredAmount = anyItem.originalAmount ?? item.amountSinceLastBill;
+      const { originalAmount, cementDeduction, cementQuantityQuintals, cementRatePerQuintal, ...rest } = anyItem;
+      return { ...(rest as ExtractedBillItem), amountSinceLastBill: restoredAmount, isCementAffected: false, requiresDsrCementCoefficient: false };
+    };
+
     const updated: CementAnalysisData = {
       ...result,
       results: updatedResults,
+      coefficientItems: updatedCoefficientItems,
+      billDetails: result.billDetails
+        ? { ...result.billDetails, items: result.billDetails.items?.map(stripCementFromItem) }
+        : result.billDetails,
+      extractedItems: result.extractedItems?.map(stripCementFromItem) ?? result.extractedItems,
       summary: {
         ...result.summary,
         matchedItemCount: matchedResults.length,
@@ -549,7 +587,7 @@ export function BillPdfCementAnalyzer({
     };
     setResult(updated);
     onApplyBillDetails?.(updated);
-    toast.success('Coefficient row removed.');
+    toast.success('Coefficient row removed. Its cement is excluded from the calculation.');
   };
 
   const applyCalculatedAmount = (amount: number) => {
@@ -562,9 +600,9 @@ export function BillPdfCementAnalyzer({
         // Store the original amount in a new property if not already present
         const originalAmount = (item as any).originalAmount ?? Number(item.amountSinceLastBill || 0);
         
-        // Find cement quantity in MT from result
-        const coeffIndex = result.coefficientItems?.findIndex(ci => ci.dsrCode === item.dsrCode && ci.description === item.description);
-        const cementQtyMT = coeffIndex !== undefined && coeffIndex !== -1 ? result.results[coeffIndex]?.cementQuantity || 0 : 0;
+        // Find cement quantity in MT from result (matched by item number)
+        const coeffIndex = findCoeffIndex(result.coefficientItems, item);
+        const cementQtyMT = coeffIndex !== -1 ? result.results[coeffIndex]?.cementQuantity || 0 : 0;
         const cementQuantityQuintals = cementQtyMT * 10;
 
         const sched = item.schedule || item.scheduleGroup || 'Default';

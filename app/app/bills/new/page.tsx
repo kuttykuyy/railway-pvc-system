@@ -501,9 +501,22 @@ function NewBillPageContent() {
   const findSubClassificationForExtractedItem = (item: ExtractedBillItem) => {
     const code = (item.suggestedClassificationCode || '').trim().toUpperCase();
     if (!code) return null;
-    return classificationGroups
-      .flatMap(group => group.subClassifications)
-      .find(sub => sub.code.toUpperCase() === code) || null;
+    const allSubs = classificationGroups.flatMap(group => group.subClassifications);
+    // 1. Exact code (e.g. "9A").
+    const exact = allSubs.find(sub => sub.code.toUpperCase() === code);
+    if (exact) return exact;
+    // 2. Same main group — prefer "<digit>A", else the group's default/first sub. This
+    // keeps an item mapped to a valid sub-class even when its exact suffix has no
+    // matching row (e.g. a single-class group, or a bare "5"), so it is never dropped
+    // or left without a sub-classification id.
+    const digit = code.match(/^\d+/)?.[0];
+    const group = digit ? classificationGroups.find(g => g.code.toUpperCase() === digit) : undefined;
+    if (group && group.subClassifications.length) {
+      return group.subClassifications.find(sub => sub.code.toUpperCase() === `${digit}A`)
+        || group.subClassifications.find(sub => sub.isDefault)
+        || group.subClassifications[0];
+    }
+    return null;
   };
 
   const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData): ClassificationEntry[] => {
@@ -1000,35 +1013,39 @@ function NewBillPageContent() {
     setError('');
 
     try {
-      // Validate classification entries (if any exist)
-      // Allow bills without classification entries
-      if (classificationEntries.length > 0) {
-        // Validate that all entries have sub-classifications and non-negative amounts
-        const hasInvalidEntries = classificationEntries.some(entry => {
-          if (!entry.subClassificationId) return true;
-          const numAmount = entry.amount === '' || entry.amount === null || entry.amount === undefined 
-            ? 0 
-            : typeof entry.amount === 'string' 
-              ? parseFloat(entry.amount) || 0 
-              : entry.amount;
-          return numAmount < 0;
-        });
-        if (hasInvalidEntries) {
-          toast.error('All classification entries must have a valid sub-classification and non-negative amount');
+      // Recover the sub-classification id from the entry's classification object when
+      // the id string is missing (an intermediate transform can carry the object but
+      // drop the id), and drop rows that are entirely empty — so a validly-classified
+      // uploaded row is never rejected by the check below.
+      const amountOf = (value: ClassificationEntry['amount']) =>
+        value === '' || value === null || value === undefined
+          ? 0
+          : typeof value === 'string' ? parseFloat(value) || 0 : value;
+      const isEmptyEntry = (entry: ClassificationEntry) =>
+        !entry.subClassificationId && !(entry.subClassification as any)?.id
+        && amountOf(entry.amount) === 0 && !(entry.description || '').trim();
+      const cleanedEntries = classificationEntries
+        .filter(entry => !isEmptyEntry(entry))
+        .map(entry => ({
+          ...entry,
+          subClassificationId: entry.subClassificationId || (entry.subClassification as any)?.id || '',
+        }));
+      if (cleanedEntries.length !== classificationEntries.length) {
+        setClassificationEntries(cleanedEntries);
+      }
+
+      // Validate that all remaining entries have a sub-classification and non-negative amount
+      if (cleanedEntries.length > 0) {
+        const invalidIndex = cleanedEntries.findIndex(entry => !entry.subClassificationId || amountOf(entry.amount) < 0);
+        if (invalidIndex >= 0) {
+          toast.error(`Entry ${invalidIndex + 1} needs a valid sub-classification and a non-negative amount.`);
           setSaving(false);
           return;
         }
       }
 
       // Calculate total classification amount, treating blank/undefined/null as 0
-      const totalClassificationAmount = classificationEntries.reduce((sum, entry) => {
-        const amount = entry.amount === '' || entry.amount === null || entry.amount === undefined 
-          ? 0 
-          : typeof entry.amount === 'string' 
-            ? parseFloat(entry.amount) || 0 
-            : entry.amount;
-        return sum + amount;
-      }, 0);
+      const totalClassificationAmount = cleanedEntries.reduce((sum, entry) => sum + amountOf(entry.amount), 0);
 
       // Convert sub-classifications to proper format with numeric amounts (legacy support)
       const formattedSubClassifications = subClassifications
@@ -1062,7 +1079,7 @@ function NewBillPageContent() {
           ...formData,
           grossBillAmount: grossAmount,
           billAmount: netBillAmount, // Calculated net amount
-          classificationEntries: classificationEntries.map(entry => ({
+          classificationEntries: cleanedEntries.map(entry => ({
             subClassificationId: entry.subClassificationId,
             amount: entry.amount === '' || entry.amount === null || entry.amount === undefined 
               ? 0 

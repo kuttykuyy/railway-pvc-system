@@ -380,9 +380,18 @@ export default function BulkBillCreationPage() {
   const findSubClassificationForExtractedItem = (item: ExtractedBillItem) => {
     const code = (item.suggestedClassificationCode || '').trim().toUpperCase();
     if (!code) return null;
-    return classificationGroups
-      .flatMap(group => group.subClassifications)
-      .find(sub => sub.code.toUpperCase() === code) || null;
+    const allSubs = classificationGroups.flatMap(group => group.subClassifications);
+    const exact = allSubs.find(sub => sub.code.toUpperCase() === code);
+    if (exact) return exact;
+    // Fall back to the same main group's "<digit>A" (or its default/first sub) so an
+    // item is never left without a valid sub-classification.
+    const digit = code.match(/^\d+/)?.[0];
+    const group = digit ? classificationGroups.find(g => g.code.toUpperCase() === digit) : undefined;
+    if (group && group.subClassifications.length) {
+      return group.subClassifications.find(sub => sub.code.toUpperCase() === `${digit}A`)
+        || group.subClassifications[0];
+    }
+    return null;
   };
 
   const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData): ClassificationEntry[] => {
@@ -581,7 +590,9 @@ export default function BulkBillCreationPage() {
 
       for (let j = 0; j < row.classificationEntries.length; j++) {
         const entry = row.classificationEntries[j];
-        if (!entry.subClassificationId) return `Bill ${i + 1}: Classification ${j + 1} must have a sub-classification`;
+        // Recover the id from the classification object if the id string was lost upstream.
+        const subId = entry.subClassificationId || (entry.subClassification as any)?.id || '';
+        if (!subId) return `Bill ${i + 1}: Classification ${j + 1} must have a sub-classification`;
         const numAmount = entry.amount === '' || entry.amount === null || entry.amount === undefined
           ? 0 : typeof entry.amount === 'string' ? parseFloat(entry.amount) || 0 : entry.amount;
         if (numAmount < 0) return `Bill ${i + 1}: Classification ${j + 1} amount must be zero or greater`;
@@ -620,7 +631,7 @@ export default function BulkBillCreationPage() {
             steelOtherSectionsAmount: parseAmount(row.steelOtherSectionsAmount),
             cementAmount: parseAmount(row.cementAmount),
             classificationEntries: row.classificationEntries.map(entry => ({
-              subClassificationId: entry.subClassificationId,
+              subClassificationId: entry.subClassificationId || (entry.subClassification as any)?.id || '',
               amount: entry.amount === '' || entry.amount === null || entry.amount === undefined
                 ? 0 : typeof entry.amount === 'string' ? parseFloat(entry.amount) || 0 : entry.amount,
               description: entry.description || '',
