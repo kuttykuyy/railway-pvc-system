@@ -73,6 +73,7 @@ interface ClassificationEntry {
   agreementRate?: number | string | '';
   itemRows?: ItemRow[];
   aiReviewed?: boolean;
+  manualClassification?: boolean;
 }
 
 interface BillRow {
@@ -480,6 +481,8 @@ export default function BulkBillCreationPage() {
       const indicesData = { base: indices.base, current: indices.current };
 
       return mappedEntries.map(entry => {
+        // Never second-guess a classification the user picked by hand.
+        if (entry.manualClassification) return entry;
         const currentSub = entry.subClassification;
         const amount = Number(entry.amount) || 0;
         if (!currentSub || amount <= 0) return entry;

@@ -107,6 +107,7 @@ interface ClassificationEntry {
   agreementRate?: number | string | '';
   itemRows?: ItemRow[];
   aiReviewed?: boolean;
+  manualClassification?: boolean;
 }
 
 
@@ -691,6 +692,8 @@ function NewBillPageContent() {
       const indicesData = { base: indices.base, current: indices.current };
 
       return mappedEntries.map(entry => {
+        // Never second-guess a classification the user picked by hand.
+        if (entry.manualClassification) return entry;
         const currentSub = entry.subClassification;
         const amount = Number(entry.amount) || 0;
         if (!currentSub || amount <= 0) return entry;
@@ -776,6 +779,31 @@ function NewBillPageContent() {
     }
 
     let mappedEntries = buildClassificationEntriesFromExtractedBill(data);
+
+    // Entries are rebuilt from the extracted items every time the analyzer changes
+    // (item deleted, cement cost applied, ...). Carry the user's manual classification
+    // choices over from the current entries so a rebuild never undoes a hand edit.
+    const entryKey = (entry: ClassificationEntry) =>
+      `${(entry.itemNumber || '').trim()}|${(entry.description || '').trim().slice(0, 120)}`;
+    const manualByKey = new Map(
+      classificationEntries
+        .filter(entry => entry.manualClassification && entry.subClassificationId)
+        .map(entry => [entryKey(entry), entry] as const),
+    );
+    if (manualByKey.size > 0) {
+      mappedEntries = mappedEntries.map(entry => {
+        const manual = manualByKey.get(entryKey(entry));
+        if (!manual) return entry;
+        return {
+          ...entry,
+          subClassificationId: manual.subClassificationId,
+          subClassification: manual.subClassification,
+          manualClassification: true,
+          classificationJustification: manual.classificationJustification || entry.classificationJustification,
+        };
+      });
+    }
+
     const extractedMeasurementDate = normalizeExtractedDate(billDetails?.measurementDate)
       || formData.dateOfMeasurement;
     mappedEntries = await applyPvcComparisonToEntries(mappedEntries, extractedMeasurementDate);

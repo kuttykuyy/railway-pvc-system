@@ -59,6 +59,9 @@ interface ClassificationEntry {
   classificationJustification?: string;
   /** True when the AI reviewed/wrote this item's classification (vs rule-based). */
   aiReviewed?: boolean;
+  /** True once the user manually picks a classification — rebuilds and the automatic
+   * PVC comparison must never override a manual choice. */
+  manualClassification?: boolean;
 }
 
 interface BillClassificationEntriesProps {
@@ -135,6 +138,9 @@ export function BillClassificationEntries({
       nextEntry.subClassification = classificationGroups
         .flatMap(group => group.subClassifications)
         .find(sub => sub.id === patch.subClassificationId);
+      // A user-picked classification is final: entry rebuilds (re-extraction, cement
+      // apply) and the automatic PVC comparison must not override it.
+      nextEntry.manualClassification = true;
     }
     nextEntries[entryIndex] = nextEntry;
     commit(nextEntries);
