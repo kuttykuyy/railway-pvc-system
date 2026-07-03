@@ -11,7 +11,7 @@ import {
   IndianRupee, Smartphone, Lock,
   TrendingUp, Gift, Play,
   ChevronRight, Download, Layers, FileSpreadsheet,
-  CalendarDays, ReceiptText, ScanSearch
+  CalendarDays, ReceiptText, ScanSearch, Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Footer } from '@/components/footer';
@@ -60,18 +60,18 @@ export default function HomePage() {
 
             {/* Left Content */}
             <div className="flex-1 space-y-8 text-center lg:text-left z-10">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-sm font-medium text-slate-600 shadow-sm hover:shadow transition-shadow">
-                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                Free Trial · IR Standard PDF · Free Preview
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 border border-indigo-200 text-sm font-semibold text-indigo-700 shadow-sm hover:shadow transition-shadow">
+                <Sparkles className="h-4 w-4 text-indigo-600" />
+                New: AI PDF Bill Extraction
               </div>
 
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight text-slate-900 leading-[1.1]">
-                Effortless PVC <br className="hidden lg:block"/>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Calculations</span>
+                Upload the bill PDF. <br className="hidden lg:block"/>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Get a ready PVC bill.</span>
               </h1>
 
               <p className="text-lg sm:text-xl text-slate-600 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-light">
-                The modern platform for Indian Railway contractors to automate Price Variation Clause calculations, generate IR Standard PVC statements, manage bulk billing, and track indices instantly—now with full Hindi (हिन्दी) language support.
+                The modern platform for Indian Railway contractors. Now you can <strong className="font-semibold text-slate-800">upload your signed bill PDF and let AI extract</strong> the schedules, quantities, rates, and classifications automatically — or enter them yourself. Generate IR Standard PVC statements, manage bulk billing, and track indices instantly, with full Hindi (हिन्दी) support.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
@@ -90,10 +90,10 @@ export default function HomePage() {
               </div>
 
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-5 pt-6 text-sm text-slate-500 font-medium">
+                <span className="flex items-center gap-2"><ScanSearch className="w-5 h-5 text-indigo-500" /> AI PDF Extraction</span>
                 <span className="flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-500" /> Auto Indices</span>
                 <span className="flex items-center gap-2"><FileText className="w-5 h-5 text-blue-500" /> IR Standard PDF</span>
                 <span className="flex items-center gap-2"><Layers className="w-5 h-5 text-purple-500" /> Bulk Bills</span>
-                <span className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-emerald-500" /> Free Preview</span>
                 <span className="flex items-center gap-2"><Users className="w-5 h-5 text-indigo-500" /> Bilingual (English / हिन्दी)</span>
               </div>
             </div>
@@ -133,6 +133,22 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+            <div className="group relative bg-gradient-to-br from-indigo-600 to-blue-700 rounded-3xl p-8 lg:p-10 border border-indigo-500 shadow-2xl shadow-indigo-900/20 hover:-translate-y-1 transition-all duration-500 flex flex-col justify-between md:col-span-2 lg:col-span-1 overflow-hidden">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-2xl -translate-y-1/3 translate-x-1/3 pointer-events-none" />
+              <div className="relative">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 text-white text-[11px] font-bold uppercase tracking-wider mb-5">
+                  <Sparkles className="h-3 w-3" /> New
+                </div>
+                <div className="w-14 h-14 rounded-2xl bg-white/15 text-white flex items-center justify-center mb-6 backdrop-blur-sm">
+                  <ScanSearch className="h-7 w-7" />
+                </div>
+                <h3 className="text-2xl font-bold text-white mb-3 tracking-tight">AI PDF Bill Extraction</h3>
+                <p className="text-blue-100 leading-relaxed font-light">
+                  Upload your signed railway bill PDF and let AI read it — schedules, current quantities, agreement rates, work classifications, and cement/steel calculations, all laid out for a quick review. Works for single bills and bulk uploads. Extraction and preview are free.
+                </p>
+              </div>
+            </div>
 
             <div className="group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-blue-100 hover:shadow-2xl hover:shadow-blue-900/5 transition-all duration-500 flex flex-col justify-between">
               <div>
@@ -243,7 +259,7 @@ export default function HomePage() {
             <div className="lg:w-2/3 grid grid-cols-1 sm:grid-cols-2 gap-8">
               {[
                 { step: '01', title: 'Add Contract', desc: 'Enter agreement details, base month, zone, and extension type. The system validates against Railway norms automatically.', icon: <FileText className="w-6 h-6" /> },
-                { step: '02', title: 'Input Bill Data', desc: 'Add line items by classification — or use Bulk Bill Creation to submit multiple bills at once with shared zone and fuel settings.', icon: <Layers className="w-6 h-6" /> },
+                { step: '02', title: 'Add or Upload Bill Data', desc: 'Upload your signed bill PDF and let AI extract the items automatically, or add line items by classification yourself. Bulk upload multiple bills at once with shared zone and fuel settings.', icon: <ScanSearch className="w-6 h-6" /> },
                 { step: '03', title: 'Auto Calculation', desc: 'Our engine fetches current indices from official sources and computes PVC per GCC Clause 17 instantly — no manual lookups.', icon: <Calculator className="w-6 h-6" /> },
                 { step: '04', title: 'Export PDF', desc: 'Download in Detailed Report or IR Standard Format (GCC Cl.17 proforma with monthly indices, formula, and fixed component row). Share via WhatsApp.', icon: <Download className="w-6 h-6" /> },
               ].map((item) => (
