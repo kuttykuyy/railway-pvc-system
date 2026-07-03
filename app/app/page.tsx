@@ -98,24 +98,80 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Right Graphic */}
+            {/* Right Graphic — AI extraction mockup */}
             <div className="flex-1 flex justify-center lg:justify-end z-10 w-full max-w-md lg:max-w-none">
-              <div className="relative w-full aspect-square max-w-lg bg-white rounded-3xl border border-slate-100 shadow-2xl shadow-slate-200/50 p-8 flex flex-col items-center justify-center overflow-hidden group hover:border-blue-100 transition-colors duration-500">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                <div className="relative w-48 h-48 sm:w-64 sm:h-64 drop-shadow-xl transition-transform duration-700 group-hover:scale-105">
-                  <Image
-                    src="/srca-logo-official.png"
-                    alt="Southern Railway Contractors Association"
-                    fill
-                    className="object-contain"
-                    priority
-                  />
+              <div className="relative w-full max-w-lg">
+                {/* Product window mockup */}
+                <div className="relative bg-white rounded-3xl border border-slate-200 shadow-2xl shadow-slate-300/40 overflow-hidden">
+                  {/* Window bar */}
+                  <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100 bg-slate-50/80">
+                    <span className="h-3 w-3 rounded-full bg-red-400" />
+                    <span className="h-3 w-3 rounded-full bg-amber-400" />
+                    <span className="h-3 w-3 rounded-full bg-emerald-400" />
+                    <span className="ml-3 text-xs font-medium text-slate-400">IR-PVC · Create Bill</span>
+                  </div>
+
+                  <div className="p-5 sm:p-6">
+                    {/* Upload row */}
+                    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-500">
+                        <FileText className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-800">Signed Bill (16).pdf</p>
+                        <p className="text-xs text-slate-400">28 pages · uploaded</p>
+                      </div>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-2.5 py-1 text-[11px] font-bold text-white">
+                        <ScanSearch className="h-3 w-3" /> AI reading
+                      </span>
+                    </div>
+
+                    {/* Extracted table */}
+                    <div className="mt-4 overflow-hidden rounded-xl border border-slate-100">
+                      <div className="grid grid-cols-12 gap-2 bg-slate-900 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-300">
+                        <span className="col-span-2">Item</span>
+                        <span className="col-span-4">Description</span>
+                        <span className="col-span-2 text-right">Qty</span>
+                        <span className="col-span-2 text-right">Rate</span>
+                        <span className="col-span-2 text-right">Class</span>
+                      </div>
+                      {[
+                        { it: '052090', d: 'Shotcrete 40mm', q: '4000.0', r: '707.35', c: '5A' },
+                        { it: '051010', d: 'TMT bars Fe-500', q: '12.480', r: '61,310', c: '6B' },
+                        { it: '061010', d: 'OPC 53 grade', q: '20.02', r: '6,138', c: '6C' },
+                        { it: '052091', d: 'Wire mesh fixing', q: '850.0', r: '243.10', c: '5A' },
+                      ].map((row, i) => (
+                        <div key={i} className={`grid grid-cols-12 items-center gap-2 px-3 py-2.5 text-[11px] ${i % 2 ? 'bg-slate-50/60' : 'bg-white'}`}>
+                          <span className="col-span-2 font-mono font-medium text-slate-700">{row.it}</span>
+                          <span className="col-span-4 truncate text-slate-500">{row.d}</span>
+                          <span className="col-span-2 text-right font-medium text-slate-700">{row.q}</span>
+                          <span className="col-span-2 text-right font-medium text-slate-700">{row.r}</span>
+                          <span className="col-span-2 text-right"><span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">{row.c}</span></span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Footer stat */}
+                    <div className="mt-4 flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3">
+                      <span className="flex items-center gap-2 text-sm font-semibold text-emerald-800"><CheckCircle className="h-4 w-4 text-emerald-600" /> 74 items extracted &amp; classified</span>
+                      <span className="text-xs font-medium text-emerald-600">ready to review</span>
+                    </div>
+                  </div>
                 </div>
-                 <div className="mt-8 text-center relative z-10">
-                  <p className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-2">Developed For</p>
-                  <p className="text-base sm:text-lg text-slate-700 font-semibold leading-tight">Southern Railway Contractors Association<br/><span className="text-slate-500 font-medium">Tiruchirappalli Division</span></p>
-                  <p className="text-xs text-slate-400 font-normal mt-4 border-t border-slate-100 pt-3">
-                    Powered by <strong className="text-indigo-600 font-semibold">ILLALL TECH</strong>
+
+                {/* Floating badge */}
+                <div className="absolute -top-4 -right-2 hidden sm:flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 shadow-lg ring-1 ring-slate-100">
+                  <Sparkles className="h-3.5 w-3.5 text-indigo-500" /> Powered by AI
+                </div>
+
+                {/* SRCA / ILLALL credit */}
+                <div className="mt-6 flex items-center justify-center gap-3 text-center">
+                  <div className="relative h-9 w-9 shrink-0">
+                    <Image src="/srca-logo-official.png" alt="Southern Railway Contractors Association" fill className="object-contain" priority />
+                  </div>
+                  <p className="text-xs text-slate-400 leading-tight">
+                    Developed for <span className="font-semibold text-slate-500">Southern Railway Contractors Association</span>, Tiruchirappalli Division
+                    · Powered by <strong className="font-semibold text-indigo-600">ILLALL TECH</strong>
                   </p>
                 </div>
               </div>
