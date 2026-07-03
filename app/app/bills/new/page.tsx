@@ -198,6 +198,9 @@ function NewBillPageContent() {
   const [subscribing, setSubscribing] = useState<boolean>(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState<boolean>(false);
   const [isAiUploaded, setIsAiUploaded] = useState(false);
+  // True when an AI extraction has cement items whose derived cost has NOT yet been
+  // applied. PVC check / bill creation is blocked until the user applies it.
+  const [cementCostPending, setCementCostPending] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState<any>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -744,6 +747,14 @@ function NewBillPageContent() {
 
   const applyExtractedBillDetails = async (data: CementAnalysisData) => {
     setIsAiUploaded(true);
+    // Block PVC check / create until the derived cement cost is applied: there are
+    // cement items (rows with a coefficient) but the cost hasn't been calculated and
+    // applied yet (no cementAmountSource / cement amount on the result).
+    const cementItemsPresent = (data.results || []).some(
+      row => (row.coefficient ?? 0) > 0 && (row.cementQuantity ?? 0) > 0,
+    );
+    const cementCostApplied = !!data.cementAmountSource || (data.summary?.cementAmount ?? 0) > 0;
+    setCementCostPending(cementItemsPresent && !cementCostApplied);
     const billDetails = data.billDetails;
 
     // Auto-select the contract from the extracted Agreement No. when none is chosen yet.
@@ -976,6 +987,10 @@ function NewBillPageContent() {
       toast.error('Please fill Contract, Zone, and Date of Measurement before previewing');
       return;
     }
+    if (cementCostPending) {
+      toast.error('Apply the derived cement cost (enter the rate settings and apply) before checking PVC.');
+      return;
+    }
     setIsPreviewLoading(true);
     try {
       const grossAmount = classificationEntries.reduce((sum, e) => {
@@ -1022,6 +1037,10 @@ function NewBillPageContent() {
   };
 
   const handleSubmit = async () => {
+    if (cementCostPending) {
+      toast.error('Apply the derived cement cost (enter the rate settings and apply) before creating the bill.');
+      return;
+    }
     setSaving(true);
     setError('');
 
@@ -1399,6 +1418,7 @@ function NewBillPageContent() {
                   title="Direct PDF Bill Extraction"
                   contractId={formData.contractId}
                   onApplyBillDetails={applyExtractedBillDetails}
+                  onApplyCementAmount={(_amount, cementData) => applyExtractedBillDetails(cementData)}
                 />
 
                 {/* Accordion for organized sections */}
