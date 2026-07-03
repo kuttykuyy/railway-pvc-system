@@ -67,3 +67,22 @@ export function formatPvcAmount(value: number): string {
   const prefix = value < 0 ? '-Rs ' : 'Rs ';
   return prefix + Math.abs(value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+/**
+ * Whether the automatic PVC comparison may switch an item from `currentSuffix` to
+ * `candidateSuffix`. Classification must reflect the NATURE of the work, not the
+ * highest payout, so the comparison may only move between sub-classes of the same
+ * nature:
+ *  - Supply classes (B = steel supply, C = cement supply) are never auto-selected.
+ *  - Fabrication & Erection classes (D/E) never mix with general work (A): a plain
+ *    concrete/masonry item must never become "5E" just because it yields a better PVC.
+ * A fabrication item may still compare within D/E; a general item only stays at A.
+ */
+export function pvcComparisonAllowsSuffix(currentSuffix: string, candidateSuffix: string): boolean {
+  const current = String(currentSuffix || '').toUpperCase();
+  const candidate = String(candidateSuffix || '').toUpperCase();
+  if (candidate === 'B' || candidate === 'C') return false;
+  const currentIsFabrication = current === 'D' || current === 'E';
+  const candidateIsFabrication = candidate === 'D' || candidate === 'E';
+  return currentIsFabrication === candidateIsFabrication;
+}

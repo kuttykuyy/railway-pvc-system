@@ -19,7 +19,7 @@ import { BillClassificationEntries } from '@/components/bill-classification-entr
 import { BillPdfCementAnalyzer, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
-import { calculateTotalPvc, formatPvcAmount } from '@/lib/classification-pvc';
+import { calculateTotalPvc, formatPvcAmount, pvcComparisonAllowsSuffix } from '@/lib/classification-pvc';
 import { computeRebateFactor, scaleComponentsWithRebate } from '@/lib/rebate';
 
 interface Contract {
@@ -476,10 +476,11 @@ export default function BulkBillCreationPage() {
 
         const group = classificationGroups.find(item => item.id === currentSub.groupId);
         if (!group) return entry;
-        const candidates = group.subClassifications.filter(sub => {
-          const suffix = sub.code.slice(-1).toUpperCase();
-          return sub.id === currentSub.id || !['B', 'C'].includes(suffix);
-        });
+        // Only compare within the same nature of work — never switch a general item
+        // into a Fabrication & Erection (D/E) or supply (B/C) class for a better PVC.
+        const candidates = group.subClassifications.filter(sub =>
+          sub.id === currentSub.id || pvcComparisonAllowsSuffix(currentSuffix, sub.code.slice(-1)),
+        );
         if (candidates.length < 2) return entry;
 
         const results = candidates

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateTotalPvc } from './classification-pvc';
+import { calculateTotalPvc, pvcComparisonAllowsSuffix } from './classification-pvc';
 
 const zero = { fixed: 0, labour: 0, steel: 0, cement: 0, plantMachinery: 0, fuel: 0, otherMaterials: 0, explosives: 0 };
 
@@ -58,5 +58,29 @@ describe('calculateTotalPvc', () => {
       },
     );
     expect(pvc).toBe(1000);
+  });
+});
+
+describe('pvcComparisonAllowsSuffix', () => {
+  it('never lets a general item (A) switch into Fabrication & Erection (D/E)', () => {
+    // The reported bug: a plain concrete "5A" item was switched to "5E" for a better PVC.
+    expect(pvcComparisonAllowsSuffix('A', 'E')).toBe(false);
+    expect(pvcComparisonAllowsSuffix('A', 'D')).toBe(false);
+  });
+
+  it('keeps a general item comparable only with A', () => {
+    expect(pvcComparisonAllowsSuffix('A', 'A')).toBe(true);
+  });
+
+  it('never auto-selects supply classes (B/C)', () => {
+    expect(pvcComparisonAllowsSuffix('A', 'B')).toBe(false);
+    expect(pvcComparisonAllowsSuffix('A', 'C')).toBe(false);
+    expect(pvcComparisonAllowsSuffix('D', 'C')).toBe(false);
+  });
+
+  it('lets a fabrication item compare within D/E but not fall back to A', () => {
+    expect(pvcComparisonAllowsSuffix('E', 'D')).toBe(true);
+    expect(pvcComparisonAllowsSuffix('D', 'E')).toBe(true);
+    expect(pvcComparisonAllowsSuffix('E', 'A')).toBe(false);
   });
 });
