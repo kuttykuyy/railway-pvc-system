@@ -696,29 +696,38 @@ function NewBillPageContent() {
 
         const group = classificationGroups.find(item => item.id === currentSub.groupId);
         if (!group) return entry;
-        // Only compare within the same nature of work — never switch a general item
-        // into a Fabrication & Erection (D/E) or supply (B/C) class for a better PVC.
-        const candidates = group.subClassifications.filter(sub =>
-          sub.id === currentSub.id || pvcComparisonAllowsSuffix(currentSuffix, sub.code.slice(-1)),
-        );
-        if (candidates.length < 2) return entry;
+        // Compare across all non-supply sub-classes (A/D/E) so the justification stays
+        // transparent about what each option would pay. Selection still follows the
+        // actual nature of the work: we only switch to a higher-paying class when it is
+        // the same kind of work — never turn a general item into Fabrication & Erection
+        // just for a bigger PVC.
+        const compareSet = group.subClassifications.filter(sub => {
+          const suffix = sub.code.slice(-1).toUpperCase();
+          return sub.id === currentSub.id || !['B', 'C'].includes(suffix);
+        });
+        if (compareSet.length < 2) return entry;
 
-        const results = candidates
+        const results = compareSet
           .map(sub => ({ sub, pvc: calculateTotalPvc(sub, amount, indicesData) }))
           .sort((left, right) => right.pvc - left.pvc);
         if (results.every(result => result.pvc === 0)) return entry;
 
         const best = results[0];
-        const comparisonText = results.map(result => `${result.sub.code} = ${formatPvcAmount(result.pvc)}`).join('; ');
-        const decision = best.sub.id === currentSub.id
-          ? `${currentSub.code} gives the least negative PVC, confirming the classification.`
-          : `${best.sub.code} gives the least negative PVC, so it was selected over ${currentSub.code}.`;
+        const canSwitch = best.sub.id !== currentSub.id
+          && pvcComparisonAllowsSuffix(currentSuffix, best.sub.code.slice(-1));
+        const selected = canSwitch ? best.sub : currentSub;
+
+        const comparisonText = results.map(result => `${result.sub.code} → ${formatPvcAmount(result.pvc)}`).join(', ');
+        const note = selected.id === best.sub.id
+          ? `${selected.code} comes out best here and it fits the work, so that is what's used.`
+          : `${best.sub.code} would pay more, but that is fabrication/erection work — this item is genuinely ${selected.code}, so it stays ${selected.code}.`;
+        const amountLabel = amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const justification = [
           entry.classificationJustification || '',
-          `PVC comparison on Rs ${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}: ${comparisonText}. ${decision}`,
+          `Checking the price variation on Rs ${amountLabel}: ${comparisonText}. ${note}`,
         ].filter(Boolean).join(' ');
 
-        if (best.sub.id !== currentSub.id) {
+        if (canSwitch) {
           return {
             ...entry,
             subClassificationId: best.sub.id,
