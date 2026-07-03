@@ -9,6 +9,18 @@ const globalForPrisma = globalThis as unknown as {
   reconnecting: boolean
 }
 
+// True when the URL points at Supabase's transaction pooler (pgbouncer, port 6543).
+// Serverless (Vercel) runs against this, and it needs a very small client pool and
+// no keep-alive — holding connections across requests exhausts the shared pool.
+function isPgBouncerUrl(rawUrl: string): boolean {
+  try {
+    const u = new URL(rawUrl)
+    return u.port === '6543' || u.searchParams.get('pgbouncer') === 'true'
+  } catch {
+    return false
+  }
+}
+
 // Build connection URL with optimal pooling and timeout parameters
 // SERVER-SIDE ONLY: This function should never run in the browser
 function buildDatabaseUrl(): string {
@@ -36,28 +48,35 @@ function buildDatabaseUrl(): string {
   // Parse URL to add/update parameters
   try {
     const url = new URL(baseUrl)
-    
-    url.searchParams.set('connection_limit', '15')           // Increased pool size for better concurrency
-    url.searchParams.set('pool_timeout', '20')              // Increased wait timeout for connection pool
-    url.searchParams.set('connect_timeout', '15')            // Faster timeout for quicker retry
-    
-    // CRITICAL: Connection lifecycle management
-    // Set connection lifetime MUCH shorter than server's idle_session_timeout (120s)
-    // This forces Prisma to proactively recycle connections before PostgreSQL kills them
-    url.searchParams.set('connection_lifetime', '30')       // Recycle every 30s (was 60s)
-    
-    // Disable statement cache to prevent stale prepared statements on recycled connections
-    url.searchParams.set('statement_cache_size', '0')
-    
-    // TCP keepalive - CRITICAL for detecting dead connections quickly
-    url.searchParams.set('keepalives', '1')                 // Enable TCP keepalives
-    url.searchParams.set('keepalives_idle', '10')           // Start after 10s idle
-    url.searchParams.set('keepalives_interval', '5')        // Every 5s
-    url.searchParams.set('keepalives_count', '3')           // 3 retries before declaring dead
-    
-    // Application-level timeout (PostgreSQL session parameter)
-    url.searchParams.set('options', '-c idle_in_transaction_session_timeout=30000') // 30s
-    
+
+    if (isPgBouncerUrl(baseUrl)) {
+      // Supabase transaction pooler (pgbouncer, port 6543) — what production
+      // (Vercel serverless) uses. Each short-lived function instance must hold as
+      // few connections as possible, or the shared pool is exhausted and Prisma
+      // reports P2024 "timed out fetching a new connection". pgbouncer also does not
+      // honour libpq startup options (`options=-c ...`) or persistent prepared
+      // statements, so those are intentionally omitted here.
+      const serverless = !!process.env.VERCEL
+      url.searchParams.set('pgbouncer', 'true')
+      url.searchParams.set('connection_limit', serverless ? '1' : '5')
+      url.searchParams.set('pool_timeout', '20')
+      url.searchParams.set('connect_timeout', '15')
+      url.searchParams.set('statement_cache_size', '0')
+    } else {
+      // Direct / session connection (long-running server): the original tuning that
+      // proactively recycles connections ahead of PostgreSQL's idle_session_timeout.
+      url.searchParams.set('connection_limit', '15')
+      url.searchParams.set('pool_timeout', '20')
+      url.searchParams.set('connect_timeout', '15')
+      url.searchParams.set('connection_lifetime', '30')
+      url.searchParams.set('statement_cache_size', '0')
+      url.searchParams.set('keepalives', '1')
+      url.searchParams.set('keepalives_idle', '10')
+      url.searchParams.set('keepalives_interval', '5')
+      url.searchParams.set('keepalives_count', '3')
+      url.searchParams.set('options', '-c idle_in_transaction_session_timeout=30000')
+    }
+
     return url.toString()
   } catch (error: any) {
     console.error('⚠️ Failed to parse DATABASE_URL:', error?.message || error)
@@ -276,8 +295,13 @@ if (typeof window === 'undefined') {
     }, 15000) // 15 seconds - more aggressive to prevent ANY idle timeout
   }
   
-  // Start keep-alive when module loads
-  startKeepAlive()
+  // Start keep-alive when module loads — but NOT on the pgbouncer transaction pooler.
+  // There, pgbouncer manages the server connections, a per-instance client pool is 1,
+  // and a periodic SELECT 1 would just contend for that single connection. The keep-
+  // alive exists only for direct/session connections that hit PostgreSQL's idle timeout.
+  if (!isPgBouncerUrl(process.env.DATABASE_URL || '')) {
+    startKeepAlive()
+  }
   
   // Graceful shutdown handling - only register once
   if (!globalForPrisma.listenersRegistered) {
