@@ -324,7 +324,6 @@ export function BillClassificationEntries({
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-slate-600">Main classification</label>
                     <Select
-                      disabled={locked}
                       value={selectedGroup?.id || ''}
                       onValueChange={groupId => {
                         const group = classificationGroups.find(item => item.id === groupId);
@@ -347,7 +346,6 @@ export function BillClassificationEntries({
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-slate-600">Sub classification</label>
                     <Select
-                      disabled={locked}
                       value={currentSub && selectedGroup?.subClassifications.some(sub => sub.id === currentSub.id)
                         ? currentSub.id
                         : ''}
