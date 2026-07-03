@@ -115,7 +115,12 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: 'jwt',
-    maxAge: 15 * 24 * 60 * 60, // 15 days
+    // Idle timeout: a session expires 3 days after its last refresh. Rolling refresh
+    // (updateAge) re-issues the token at most once a day while the user is active, so
+    // regular users stay signed in but an abandoned/leaked token is valid for <= 3 days
+    // (down from the previous 15 days).
+    maxAge: 3 * 24 * 60 * 60, // 3 days
+    updateAge: 24 * 60 * 60, // refresh at most once per day
   },
   callbacks: {
     async signIn({ user, account, profile }) {
