@@ -1094,3 +1094,24 @@ model RateLimit {
   @@index([windowEnd])
   @@map("rate_limits")
 }
+
+/// One row per call to the AI provider (Abacus RouteLLM), so the admin can see
+/// how much AI has been consumed. Token counts come from the provider response
+/// `usage`. Abacus exposes no balance API, so remaining credit is NOT stored —
+/// only consumption and whether the call succeeded (failures record why, e.g.
+/// "out_of_credit"). Written fire-and-forget from lib/ai-usage.ts.
+model AiUsageLog {
+  id               String   @id @default(cuid())
+  operation        String // e.g. "bill-extraction"
+  model            String   @default("route-llm")
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  success          Boolean  @default(true)
+  errorType        String? // e.g. "out_of_credit"
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([success])
+  @@map("ai_usage_logs")
+}

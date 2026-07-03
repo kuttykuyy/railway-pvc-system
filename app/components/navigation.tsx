@@ -44,7 +44,8 @@ import {
   MessageSquare,
   TrendingUp,
   BarChart3,
-  Gift
+  Gift,
+  Sparkles
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -85,6 +86,7 @@ const navigationGroups = [
       { name: 'Railway Official Limits', href: '/admin/railway-official-settings', icon: ShieldCheck, adminOnly: true },
       { name: 'Credit Statements', href: '/admin/credit-statements', icon: Wallet, adminOnly: true },
       { name: 'WhatsApp Logs', href: '/admin/whatsapp-logs', icon: MessageSquare, adminOnly: true },
+      { name: 'AI Usage & Credit', href: '/admin/ai-usage', icon: Sparkles, adminOnly: true },
     ]
   }
 ];

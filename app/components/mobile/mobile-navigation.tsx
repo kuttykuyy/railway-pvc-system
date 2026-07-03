@@ -27,6 +27,7 @@ import {
   Wallet,
   Gift
   ,Star
+  ,Sparkles
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getClientRoleInfo } from '@/lib/role-auth';
@@ -67,6 +68,7 @@ const mobileNavSections = [
       { name: 'Credit Statements', href: '/admin/credit-statements', icon: Wallet, adminOnly: true },
       { name: 'Review Rewards', href: '/admin/review-rewards', icon: Star, adminOnly: true },
       { name: 'WhatsApp Logs', href: '/admin/whatsapp-logs', icon: MessageSquare, adminOnly: true },
+      { name: 'AI Usage & Credit', href: '/admin/ai-usage', icon: Sparkles, adminOnly: true },
     ]
   }
 ];

@@ -15,6 +15,7 @@ import {
 } from '@/lib/dsr-cement-calculation';
 import { inferMainClassification } from '@/lib/work-classification';
 import { inferCpwdDsrSubHead, CONTEXT as DSR_CONTEXT } from '@/lib/dsr-subhead-classification';
+import { recordAiUsage } from '@/lib/ai-usage';
 import { parseIrepsBillMarkdown } from '@/lib/ireps-bill-parser';
 import { parseIrepsBillPdfDirect } from '@/lib/ireps-direct-pdf-parser';
 
@@ -329,7 +330,9 @@ async function requestAiExtraction(
 
   if (!response.ok) {
     const details = await response.text().catch(() => '');
-    if (/no remaining credits|insufficient credits|credit balance/i.test(details)) {
+    const outOfCredit = response.status === 402 || /no remaining credits|insufficient credits|credit balance|payment method/i.test(details);
+    await recordAiUsage({ operation: 'bill-extraction', success: false, errorType: outOfCredit ? 'out_of_credit' : 'error' });
+    if (outOfCredit) {
       throw new AiProviderCreditsExhaustedError();
     }
     throw new Error(`AI extraction failed: ${details || response.statusText}`);
@@ -338,13 +341,22 @@ async function requestAiExtraction(
   const data = await response.json();
   const choice = data.choices?.[0];
   const content = extractAiMessageContent(choice?.message?.content);
+  const usage = data.usage && typeof data.usage === 'object' ? data.usage : null;
+
+  await recordAiUsage({
+    operation: 'bill-extraction',
+    success: true,
+    promptTokens: Number(usage?.prompt_tokens || 0),
+    completionTokens: Number(usage?.completion_tokens || 0),
+    totalTokens: Number(usage?.total_tokens || 0),
+  });
 
   return {
     content,
     finishReason: String(choice?.finish_reason || 'unknown'),
     choiceCount: Array.isArray(data.choices) ? data.choices.length : 0,
     messageKeys: choice?.message && typeof choice.message === 'object' ? Object.keys(choice.message) : [],
-    usage: data.usage && typeof data.usage === 'object' ? data.usage : null,
+    usage,
   };
 }
 
