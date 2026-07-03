@@ -80,7 +80,22 @@ export async function GET(
   }
 }
 
-function generateGstInvoiceHtml(invoice: any, user: any): string {
+function generateGstInvoiceHtml(invoiceRaw: any, user: any): string {
+  // Escape user-controlled string fields to prevent stored XSS (SA-01).
+  const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+  const invoice = {
+    ...invoiceRaw,
+    customerName: esc(invoiceRaw.customerName),
+    customerEmail: esc(invoiceRaw.customerEmail),
+    customerPhone: esc(invoiceRaw.customerPhone),
+    customerAddress: esc(invoiceRaw.customerAddress),
+    customerGstin: esc(invoiceRaw.customerGstin),
+    description: esc(invoiceRaw.description),
+    hsn: esc(invoiceRaw.hsn),
+    invoiceNumber: esc(invoiceRaw.invoiceNumber),
+    razorpayTransactionId: esc(invoiceRaw.razorpayTransactionId),
+  };
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString('en-IN', {
       day: '2-digit',
