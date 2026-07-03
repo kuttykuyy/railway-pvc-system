@@ -126,7 +126,8 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user) {
-      console.error(`[${requestId}] User not found: ${session.user.email}`);
+      // Avoid writing the raw email to persistent logs; the requestId is enough to correlate.
+      console.error(`[${requestId}] User not found for authenticated session`);
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
@@ -153,81 +154,78 @@ export async function POST(request: NextRequest) {
     const paymentDetails = await fetchPaymentDetails(razorpay_payment_id);
     logger.log(`[${requestId}] Payment method: ${paymentDetails.method}`);
 
-    // Update transaction status
-    logger.log(`[${requestId}] Updating transaction status to success...`);
-    await prisma.razorpayTransaction.update({
-      where: { id: transaction.id },
-      data: {
-        razorpayPaymentId: razorpay_payment_id,
-        razorpaySignature: razorpay_signature,
-        status: 'success',
-        paymentMethod: paymentDetails.method,
-        completedAt: new Date(),
-      },
-    });
-    logger.log(`[${requestId}] Transaction status updated`);
-
     // Determine how much to add to wallet based on GST option
-    // Get gstOption from transaction notes
     const transactionNotes = transaction.notes as any;
     const gstOption = transactionNotes?.gstOption || 'exclude';
-    
-    let creditsToAdd = transaction.creditAmount;
-    
-    // If "Include GST" option was selected, add the full totalAmount to wallet (including GST)
-    if (gstOption === 'include') {
-      creditsToAdd = transaction.totalAmount; // Add full amount including GST
-      logger.log(`[${requestId}] GST Option: Include - Adding full payment amount to wallet (₹${creditsToAdd})`);
-    } else {
-      logger.log(`[${requestId}] GST Option: ${gstOption} - Adding creditAmount to wallet (₹${creditsToAdd})`);
-    }
+    const creditsToAdd = gstOption === 'include' ? transaction.totalAmount : transaction.creditAmount;
 
-    // Get current balance
-    const currentBalance = user.customerAccount?.creditBalance || 0;
-    const newBalance = currentBalance + creditsToAdd;
-
-    logger.log(`[${requestId}] Credit update:`, {
-      currentBalance,
-      addingCredits: creditsToAdd,
-      gstOption,
-      newBalance
-    });
-
-    // Update or create customer account
-    if (user.customerAccount) {
-      logger.log(`[${requestId}] Updating existing customer account...`);
-      await prisma.customerAccount.update({
-        where: { userId: user.id },
+    // Flip the transaction to 'success' and credit the wallet in a single atomic
+    // transaction. The conditional update (status not already 'success') guarantees the
+    // credit is applied exactly once even if the Razorpay webhook processes the same
+    // order concurrently.
+    const creditResult = await prisma.$transaction(async (tx) => {
+      const flip = await tx.razorpayTransaction.updateMany({
+        where: { id: transaction.id, status: { not: 'success' } },
         data: {
-          creditBalance: newBalance,
+          razorpayPaymentId: razorpay_payment_id,
+          razorpaySignature: razorpay_signature,
+          status: 'success',
+          paymentMethod: paymentDetails.method,
+          completedAt: new Date(),
         },
       });
-    } else {
-      logger.log(`[${requestId}] Creating new customer account...`);
-      await prisma.customerAccount.create({
-        data: {
+      if (flip.count === 0) return { credited: false, newBalance: 0 };
+      const account = await tx.customerAccount.findUnique({
+        where: { userId: user.id },
+        select: { creditBalance: true },
+      });
+      const balanceBefore = account?.creditBalance ?? 0;
+      const balanceAfter = balanceBefore + creditsToAdd;
+      await tx.customerAccount.upsert({
+        where: { userId: user.id },
+        update: { creditBalance: balanceAfter },
+        create: {
           userId: user.id,
           creditBalance: creditsToAdd,
           currentMonthBills: 0,
           outstandingAmount: 0,
         },
       });
-    }
-    logger.log(`[${requestId}] Customer account updated`);
-
-    // Create credit transaction record
-    logger.log(`[${requestId}] Creating credit transaction record...`);
-    await prisma.creditTransaction.create({
-      data: {
-        userId: user.id,
-        amount: creditsToAdd,
-        type: 'add',
-        reason: `Razorpay payment - Order ID: ${razorpay_order_id}${gstOption === 'include' ? ' (includes GST)' : ''}`,
-        balanceBefore: currentBalance,
-        balanceAfter: newBalance,
-      },
+      await tx.creditTransaction.create({
+        data: {
+          userId: user.id,
+          amount: creditsToAdd,
+          type: 'add',
+          reason: `Razorpay payment - Order ID: ${razorpay_order_id}${gstOption === 'include' ? ' (includes GST)' : ''}`,
+          balanceBefore,
+          balanceAfter,
+        },
+      });
+      return { credited: true, newBalance: balanceAfter };
     });
-    logger.log(`[${requestId}] Credit transaction record created`);
+
+    // If the webhook (or another verify call) already credited this order, acknowledge
+    // without running the referral/WhatsApp/Zoho side effects a second time.
+    if (!creditResult.credited) {
+      logger.log(`[${requestId}] Order already credited concurrently; skipping duplicate credit`);
+      const gstInvoice = await prisma.gstInvoice.findFirst({
+        where: { razorpayTransactionId: transaction.id },
+      });
+      return NextResponse.json({
+        success: true,
+        message: 'Payment already verified',
+        creditAmount: creditsToAdd,
+        gstAmount: transaction.gstAmount,
+        totalAmount: transaction.totalAmount,
+        newBalance: 0,
+        invoiceNumber: gstInvoice?.invoiceNumber || 'N/A',
+        invoiceId: gstInvoice?.id || null,
+        alreadyProcessed: true,
+      });
+    }
+
+    const newBalance = creditResult.newBalance;
+    logger.log(`[${requestId}] Credited ₹${creditsToAdd} (gstOption: ${gstOption}); new balance ₹${newBalance}`);
 
     await processReferralReward(user.id, transaction.id)
       .then((result) => {

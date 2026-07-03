@@ -55,7 +55,13 @@ export async function POST(request: NextRequest) {
       .update(body)
       .digest('hex');
 
-    if (signature !== expectedSignature) {
+    // Constant-time comparison to avoid signature timing attacks.
+    const signatureBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expectedSignature);
+    const signatureValid = signatureBuffer.length === expectedBuffer.length
+      && crypto.timingSafeEqual(signatureBuffer, expectedBuffer);
+
+    if (!signatureValid) {
       console.error(`[${requestId}] Invalid webhook signature`);
       await sendSlackAlert('critical', 'Razorpay webhook invalid signature', {
         'Request ID': requestId,
@@ -126,24 +132,14 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
     return;
   }
 
-  // Check if already processed
+  // Early idempotency check (cheap path); the authoritative guard is the atomic
+  // conditional status flip below.
   if (transaction.status === 'success') {
     logger.log(`[${requestId}] Transaction already processed: ${orderId}`);
     return;
   }
 
   logger.log(`[${requestId}] Processing transaction: ${transaction.id}`);
-
-  // Update transaction
-  await prisma.razorpayTransaction.update({
-    where: { id: transaction.id },
-    data: {
-      razorpayPaymentId: paymentId,
-      status: 'success',
-      paymentMethod: payment.method,
-      completedAt: new Date(),
-    },
-  });
 
   // Get user with customer account
   const user = await prisma.user.findUnique({
@@ -161,41 +157,61 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
     return;
   }
 
-  const currentBalance = user.customerAccount?.creditBalance || 0;
-  const newBalance = currentBalance + transaction.creditAmount;
+  // Credit amount honours the GST option so the webhook and client verify-payment
+  // credit the same value regardless of which one wins the race.
+  const transactionNotes = transaction.notes as any;
+  const gstOption = transactionNotes?.gstOption || 'exclude';
+  const creditsToAdd = gstOption === 'include' ? transaction.totalAmount : transaction.creditAmount;
 
-  logger.log(`[${requestId}] Adding credits:`, {
-    userId: user.id,
-    currentBalance,
-    addingCredits: transaction.creditAmount,
-    newBalance,
+  // Flip the transaction to 'success' and credit the wallet in a single atomic
+  // transaction. The conditional update (status not already 'success') ensures the
+  // credit is applied exactly once even if the client verify-payment call or a webhook
+  // retry processes the same order concurrently.
+  const creditResult = await prisma.$transaction(async (tx) => {
+    const flip = await tx.razorpayTransaction.updateMany({
+      where: { id: transaction.id, status: { not: 'success' } },
+      data: {
+        razorpayPaymentId: paymentId,
+        status: 'success',
+        paymentMethod: payment.method,
+        completedAt: new Date(),
+      },
+    });
+    if (flip.count === 0) return { credited: false, newBalance: 0 };
+    const account = await tx.customerAccount.findUnique({
+      where: { userId: user.id },
+      select: { creditBalance: true },
+    });
+    const balanceBefore = account?.creditBalance ?? 0;
+    const balanceAfter = balanceBefore + creditsToAdd;
+    await tx.customerAccount.upsert({
+      where: { userId: user.id },
+      update: { creditBalance: balanceAfter },
+      create: {
+        userId: user.id,
+        creditBalance: creditsToAdd,
+        currentMonthBills: 0,
+        outstandingAmount: 0,
+      },
+    });
+    await tx.creditTransaction.create({
+      data: {
+        userId: user.id,
+        amount: creditsToAdd,
+        type: 'add',
+        reason: `Razorpay payment - Order ID: ${orderId}`,
+        balanceBefore,
+        balanceAfter,
+      },
+    });
+    return { credited: true, newBalance: balanceAfter };
   });
 
-  // Update or create customer account
-  await prisma.customerAccount.upsert({
-    where: { userId: user.id },
-    update: {
-      creditBalance: newBalance,
-    },
-    create: {
-      userId: user.id,
-      creditBalance: transaction.creditAmount,
-      currentMonthBills: 0,
-      outstandingAmount: 0,
-    },
-  });
-
-  // Create credit transaction record
-  await prisma.creditTransaction.create({
-    data: {
-      userId: user.id,
-      amount: transaction.creditAmount,
-      type: 'add',
-      reason: `Razorpay payment - Order ID: ${orderId}`,
-      balanceBefore: currentBalance,
-      balanceAfter: newBalance,
-    },
-  });
+  if (!creditResult.credited) {
+    logger.log(`[${requestId}] Transaction already credited concurrently: ${orderId}`);
+    return;
+  }
+  const newBalance = creditResult.newBalance;
 
   logger.log(`[${requestId}] ✅ Payment processed successfully via webhook`);
   logger.log(`[${requestId}] Credits: ₹${transaction.creditAmount} added. GST invoice will be generated when user provides billing details.`);
