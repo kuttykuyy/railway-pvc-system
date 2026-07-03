@@ -111,6 +111,18 @@ interface ClassificationEntry {
   manualClassification?: boolean;
 }
 
+function classificationEntryKey(entry: ClassificationEntry): string {
+  const rowNumbers = (entry.itemRows || [])
+    .map(row => String(row.itemNumber || '').trim().toUpperCase())
+    .filter(Boolean);
+  const itemNumbers = rowNumbers.length
+    ? rowNumbers
+    : [String(entry.itemNumber || '').trim().toUpperCase()].filter(Boolean);
+
+  if (itemNumbers.length) return `items:${itemNumbers.join('|')}`;
+  return `description:${(entry.description || '').trim().toUpperCase().slice(0, 160)}`;
+}
+
 
 function NewBillPageContent() {
   const router = useRouter();
@@ -176,6 +188,8 @@ function NewBillPageContent() {
   
   // Classification entries state - array of { subClassificationId, amount, description }
   const [classificationEntries, setClassificationEntries] = useState<ClassificationEntry[]>([]);
+  const manualClassificationOverridesRef = useRef<Map<string, ClassificationEntry>>(new Map());
+  const extractedBillIdentityRef = useRef('');
   
   // Sub-classifications state - array of { code, name, amount }
   const [subClassifications, setSubClassifications] = useState<Array<{ code: string; name: string; amount: string }>>([]);
@@ -760,6 +774,15 @@ function NewBillPageContent() {
     const cementCostApplied = !!data.cementAmountSource || (data.summary?.cementAmount ?? 0) > 0;
     setCementCostPending(cementItemsPresent && !cementCostApplied);
     const billDetails = data.billDetails;
+    const extractedBillIdentity = [
+      billDetails?.agreementNo,
+      billDetails?.billNo,
+      normalizeExtractedDate(billDetails?.measurementDate),
+    ].map(value => String(value || '').trim().toUpperCase()).join('|');
+    if (extractedBillIdentity && extractedBillIdentityRef.current !== extractedBillIdentity) {
+      manualClassificationOverridesRef.current.clear();
+      extractedBillIdentityRef.current = extractedBillIdentity;
+    }
 
     // Auto-select the contract from the extracted Agreement No. when none is chosen yet.
     // Selecting it also carries forward the railway zone from that contract's latest bill.
@@ -784,21 +807,18 @@ function NewBillPageContent() {
     // Entries are rebuilt from the extracted items every time the analyzer changes
     // (item deleted, cement cost applied, ...). Carry the user's manual classification
     // choices over from the current entries so a rebuild never undoes a hand edit.
-    const entryKey = (entry: ClassificationEntry) =>
-      `${(entry.itemNumber || '').trim()}|${(entry.description || '').trim().slice(0, 120)}`;
     const preserveManualClassifications = (
       nextEntries: ClassificationEntry[],
       currentEntries: ClassificationEntry[],
     ) => {
-      const manualByKey = new Map(
-        currentEntries
+      const manualByKey = new Map(manualClassificationOverridesRef.current);
+      currentEntries
         .filter(entry => entry.manualClassification && entry.subClassificationId)
-        .map(entry => [entryKey(entry), entry] as const),
-      );
+        .forEach(entry => manualByKey.set(classificationEntryKey(entry), entry));
       if (manualByKey.size === 0) return nextEntries;
 
       return nextEntries.map(entry => {
-        const manual = manualByKey.get(entryKey(entry));
+        const manual = manualByKey.get(classificationEntryKey(entry));
         if (!manual) return entry;
         return {
           ...entry,
@@ -872,6 +892,15 @@ function NewBillPageContent() {
       setOpenAccordion(prev => Array.from(new Set([...prev, 'basic'])));
       toast('Bill details extracted. Classification mapping needs review.');
     }
+  };
+
+  const handleClassificationEntriesChange = (entries: ClassificationEntry[]) => {
+    entries
+      .filter(entry => entry.manualClassification && entry.subClassificationId)
+      .forEach(entry => {
+        manualClassificationOverridesRef.current.set(classificationEntryKey(entry), entry);
+      });
+    setClassificationEntries(entries);
   };
 
   const handleContractChange = async (value: string) => {
@@ -1807,7 +1836,7 @@ function NewBillPageContent() {
                       {/* Multi-Classification Entries Component */}
                       <BillClassificationEntries
                         value={classificationEntries}
-                        onChange={setClassificationEntries}
+                        onChange={handleClassificationEntriesChange}
                         classificationGroups={classificationGroups}
                         workDescription={selectedContract?.workDescription}
                         contractSchedules={selectedContract?.schedules || []}
