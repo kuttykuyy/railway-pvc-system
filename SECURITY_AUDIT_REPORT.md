@@ -173,11 +173,11 @@ The core money/identity paths are solid: authentication uses a DB-verified signe
 
 ---
 
-## Manual Review Items (cannot be fully proven from code)
+## Manual Review Items — now resolved
 
-- **SSRF via report logo fetch:** `bills/[id]/pdf-report/route.ts` does `fetch(brandingSettings.logoUrl)` where `logoUrl = await getFileUrl(user.logoPath, 3600)`. `logoPath` is set through the upload flow (not a free-form URL), so this is likely a controlled signed-storage URL — but the upload/`getFileUrl` validation of `logoPath` was not traced end-to-end. **Confirm `logoPath` cannot be attacker-set to an arbitrary/internal URL.**
-- **Runtime reachability of `ws`/socket.io (SA-03):** confirm whether a WebSocket server is actually served in production; if not, the `ws` DoS is not reachable and SA-03 drops to Low.
-- **Exhaustive route coverage:** the high-risk ~40 routes (payments, admin, bills, contracts, auth, external/v1, public, gst-invoices) were traced in full; the remaining lower-risk routes were sampled, not each read line-by-line.
+- **SSRF via report logo fetch — RESOLVED (false positive + hardened).** Traced end-to-end: `user.logoPath` is set only at `app/api/settings/branding/route.ts:175` to the return of `uploadFile(buffer, fileName)` (a server-generated `logos/<userId>-<ts>.<ext>` key, 5 MB-validated upload), and `getFileUrl` (`lib/s3.ts:69`) only ever returns a URL on our own domain (`db://` → `/api/public/uploads`) or a signed URL for our own S3 bucket — never an attacker-supplied URL. **No arbitrary-URL SSRF.** As defense-in-depth, the three logo fetches now use a 5 s `AbortSignal.timeout` so a slow storage URL cannot stall report generation.
+- **Runtime reachability of `ws`/socket.io — RESOLVED.** No `socket.io`/`ws` usage exists in application code (verified; earlier grep hits were false regex matches), it is not a direct dependency, and after `npm audit fix` the tree reports **0 vulnerabilities**. Not reachable and already patched.
+- **Exhaustive route coverage (unchanged note):** the high-risk ~40 routes were traced in full; the remaining lower-risk routes were sampled. No additional issues surfaced in the sampled set.
 
 ---
 

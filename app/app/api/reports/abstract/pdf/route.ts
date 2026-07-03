@@ -254,8 +254,8 @@ export async function GET(request: NextRequest) {
     // Add logo if enabled and available
     if (brandingSettings.showLogoInReports && brandingSettings.logoUrl) {
       try {
-        // Fetch logo image
-        const logoResponse = await fetch(brandingSettings.logoUrl);
+        // Fetch logo image (5s timeout so a slow storage URL can't stall report generation)
+        const logoResponse = await fetch(brandingSettings.logoUrl, { signal: AbortSignal.timeout(5000) });
         const logoBlob = await logoResponse.arrayBuffer();
         const logoBase64 = Buffer.from(logoBlob).toString('base64');
         const logoDataUrl = `data:image/png;base64,${logoBase64}`;
