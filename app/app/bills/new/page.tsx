@@ -1084,11 +1084,25 @@ function NewBillPageContent() {
       const isEmptyEntry = (entry: ClassificationEntry) =>
         !entry.subClassificationId && !(entry.subClassification as any)?.id
         && amountOf(entry.amount) === 0 && !(entry.description || '').trim();
+      // Resolve each entry to a currently-valid sub-classification id: keep the stored
+      // id when it exists in the loaded groups; otherwise re-resolve by the attached
+      // classification's CODE (stable across re-seeds); otherwise fall back to the raw id.
+      const allSubs = classificationGroups.flatMap(group => group.subClassifications);
+      const resolveSubId = (entry: ClassificationEntry): string => {
+        const raw = entry.subClassificationId || (entry.subClassification as any)?.id || '';
+        if (raw && allSubs.some(sub => sub.id === raw)) return raw;
+        const code = String((entry.subClassification as any)?.code || '').toUpperCase();
+        if (code) {
+          const byCode = allSubs.find(sub => sub.code.toUpperCase() === code);
+          if (byCode) return byCode.id;
+        }
+        return raw;
+      };
       const cleanedEntries = classificationEntries
         .filter(entry => !isEmptyEntry(entry))
         .map(entry => ({
           ...entry,
-          subClassificationId: entry.subClassificationId || (entry.subClassification as any)?.id || '',
+          subClassificationId: resolveSubId(entry),
         }));
       if (cleanedEntries.length !== classificationEntries.length) {
         setClassificationEntries(cleanedEntries);

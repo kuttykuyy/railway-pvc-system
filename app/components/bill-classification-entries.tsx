@@ -247,9 +247,16 @@ export function BillClassificationEntries({
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
         <div className="divide-y divide-slate-200">
           {entries.map((entry, entryIndex) => {
-            const currentSub = classificationGroups
-              .flatMap(group => group.subClassifications)
-              .find(sub => sub.id === entry.subClassificationId);
+            const allSubs = classificationGroups.flatMap(group => group.subClassifications);
+            // Resolve the entry's classification by id; when the stored id doesn't match
+            // any loaded sub (stale id from an older dataset), fall back to the attached
+            // classification object's CODE, which is stable. Without this, the sub select
+            // rendered blank and the main select fell back to the inferred group — making
+            // the classification look stuck/unchangeable.
+            const currentSub = allSubs.find(sub => sub.id === entry.subClassificationId)
+              || (entry.subClassification?.code
+                ? allSubs.find(sub => sub.code.toUpperCase() === entry.subClassification!.code.toUpperCase())
+                : undefined);
             // The entry's own group wins so an AI-matched classification from another
             // group still displays; the inferred work group is only the default.
             const selectedGroup = (currentSub
@@ -341,8 +348,8 @@ export function BillClassificationEntries({
                     <label className="text-xs font-medium text-slate-600">Sub classification</label>
                     <Select
                       disabled={locked}
-                      value={selectedGroup?.subClassifications.some(sub => sub.id === entry.subClassificationId)
-                        ? entry.subClassificationId
+                      value={currentSub && selectedGroup?.subClassifications.some(sub => sub.id === currentSub.id)
+                        ? currentSub.id
                         : ''}
                       onValueChange={subClassificationId => updateEntry(entryIndex, { subClassificationId })}
                     >
