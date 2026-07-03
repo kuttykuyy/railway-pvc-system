@@ -59,12 +59,22 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' }
       },
       async authorize(credentials) {
-        
+
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
 
         try {
+          // Distributed brute-force protection: cap login attempts per email/window
+          // across all instances. Fails open if the limiter DB call errors.
+          const { checkDbRateLimit } = await import('./rate-limit-db');
+          const loginKey = `login:${credentials.email.toLowerCase().trim()}`;
+          const rl = await checkDbRateLimit(loginKey, 10, 15 * 60 * 1000); // 10 attempts / 15 min
+          if (!rl.allowed) {
+            console.warn(`[auth] Login rate limit exceeded for ${credentials.email}`);
+            throw new Error('TooManyAttempts');
+          }
+
           const user = await prisma.user.findUnique({
             where: { email: credentials.email }
           });

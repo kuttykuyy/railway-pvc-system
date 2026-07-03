@@ -1080,3 +1080,17 @@ model ApiKey {
   @@index([isActive])
   @@map("api_keys")
 }
+
+/// Distributed, atomic rate-limit counters shared across serverless instances.
+/// One row per limiter key (e.g. "login:user@x.com", "otp:ip"). The window is
+/// reset atomically via an ON CONFLICT upsert in lib/rate-limit-db.ts.
+model RateLimit {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  count     Int      @default(0)
+  windowEnd DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([windowEnd])
+  @@map("rate_limits")
+}
