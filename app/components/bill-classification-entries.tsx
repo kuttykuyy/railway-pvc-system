@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Plus, Trash2, Sparkles } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Plus, Trash2, Sparkles, Pencil } from 'lucide-react';
 
 import { BillAmountCalculator } from './bill-amount-calculator';
 import { ClassificationComparisonDialog } from './classification-comparison-dialog';
@@ -74,6 +74,9 @@ interface BillClassificationEntriesProps {
   indicesData?: { base: { [key: string]: number }; current: { [key: string]: number } } | null;
   contractId?: string;
   measurementDate?: string;
+  /** When true (bill built from a PDF extraction), entries render read-only and each
+   * one needs its Edit button clicked before it can be changed. */
+  lockEntries?: boolean;
 }
 
 const STEEL_TYPES = [
@@ -97,11 +100,14 @@ export function BillClassificationEntries({
   indicesData = null,
   contractId,
   measurementDate,
+  lockEntries = false,
 }: BillClassificationEntriesProps) {
   // Fully controlled: `value` is the single source of truth (aliased to `entries` for
   // readability). Every edit goes straight to onChange, so a manual classification change
   // can't be reverted by a local-copy/prop mismatch.
   const entries = value;
+  // Which locked entries the user has explicitly opened for editing (by index).
+  const [unlockedEntries, setUnlockedEntries] = useState<Set<number>>(new Set());
   const requiredMainCode = useMemo(
     () => workDescription ? inferMainClassification(workDescription).code : '',
     [workDescription],
@@ -165,6 +171,8 @@ export function BillClassificationEntries({
   const addEntry = () => {
     const group = requiredGroup || classificationGroups[0];
     const sub = group?.subClassifications.find(item => item.isDefault) || group?.subClassifications[0];
+    // A freshly added entry is the user's own — editable immediately even in locked mode.
+    setUnlockedEntries(prev => new Set(prev).add(entries.length));
     commit([...entries, {
       subClassificationId: sub?.id || '',
       subClassification: sub,
@@ -253,6 +261,7 @@ export function BillClassificationEntries({
             const displayedAmount = typeof entry.amount === 'number'
               ? Number(entry.amount.toFixed(2))
               : entry.amount;
+            const locked = lockEntries && !unlockedEntries.has(entryIndex);
 
             return (
               <section key={entry.id || entryIndex} className="space-y-4 p-4">
@@ -268,24 +277,47 @@ export function BillClassificationEntries({
                         Rule-based
                       </Badge>
                     )}
+                    {lockEntries && !locked && (
+                      <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700 text-[10px]">
+                        Editing
+                      </Badge>
+                    )}
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => commit(entries.filter((_, index) => index !== entryIndex))}
-                    className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700"
-                    title="Delete entry"
-                    aria-label={`Delete entry ${entryIndex + 1}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    {locked && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setUnlockedEntries(prev => new Set(prev).add(entryIndex))}
+                        className="h-8 px-2 text-xs"
+                        title="Enable editing for this entry"
+                        aria-label={`Edit entry ${entryIndex + 1}`}
+                      >
+                        <Pencil className="mr-1 h-3.5 w-3.5" />
+                        Edit
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      disabled={locked}
+                      onClick={() => commit(entries.filter((_, index) => index !== entryIndex))}
+                      className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
+                      title="Delete entry"
+                      aria-label={`Delete entry ${entryIndex + 1}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_minmax(200px,1.2fr)_minmax(150px,0.8fr)_minmax(140px,0.7fr)]">
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-slate-600">Main classification</label>
                     <Select
+                      disabled={locked}
                       value={selectedGroup?.id || ''}
                       onValueChange={groupId => {
                         const group = classificationGroups.find(item => item.id === groupId);
@@ -308,6 +340,7 @@ export function BillClassificationEntries({
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-slate-600">Sub classification</label>
                     <Select
+                      disabled={locked}
                       value={selectedGroup?.subClassifications.some(sub => sub.id === entry.subClassificationId)
                         ? entry.subClassificationId
                         : ''}
@@ -328,6 +361,7 @@ export function BillClassificationEntries({
                     <label className="text-xs font-medium text-slate-600">Schedule</label>
                     {contractSchedules.length ? (
                       <Select
+                        disabled={locked}
                         value={entry.scheduleItem || '_none_'}
                         onValueChange={scheduleItem => updateEntry(entryIndex, {
                           scheduleItem: scheduleItem === '_none_' ? '' : scheduleItem,
@@ -348,6 +382,7 @@ export function BillClassificationEntries({
                       </Select>
                     ) : (
                       <Input
+                        disabled={locked}
                         value={entry.scheduleItem || ''}
                         onChange={event => updateEntry(entryIndex, { scheduleItem: event.target.value })}
                         placeholder="e.g. Schedule A2"
@@ -359,6 +394,7 @@ export function BillClassificationEntries({
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-slate-600">Payable amount (Rs)</label>
                     <Input
+                      disabled={locked}
                       type="number"
                       step="0.01"
                       value={displayedAmount === 0 ? '0' : (displayedAmount || '')}
@@ -374,22 +410,24 @@ export function BillClassificationEntries({
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-slate-600">Work description</label>
                   <textarea
+                    disabled={locked}
                     value={entry.description || ''}
                     onChange={event => updateEntry(entryIndex, { description: event.target.value })}
                     rows={2}
                     placeholder="Item description or reference notes"
-                    className="min-h-[58px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                    className="min-h-[58px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-50 disabled:text-slate-500"
                   />
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-slate-600">Justification for classification</label>
                   <textarea
+                    disabled={locked}
                     value={entry.classificationJustification || ''}
                     onChange={event => updateEntry(entryIndex, { classificationJustification: event.target.value })}
                     rows={2}
                     placeholder="Why this classification was chosen for this item"
-                    className="min-h-[58px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                    className="min-h-[58px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-50 disabled:text-slate-500"
                   />
                 </div>
 
@@ -411,6 +449,7 @@ export function BillClassificationEntries({
                     {STEEL_TYPES.map(steelType => (
                       <label key={steelType.value} className="flex cursor-pointer items-center gap-1.5">
                         <Checkbox
+                          disabled={locked}
                           checked={(entry.steelTypes || []).includes(steelType.value)}
                           onCheckedChange={checked => {
                             const current = entry.steelTypes || [];
@@ -442,12 +481,14 @@ export function BillClassificationEntries({
                     return (
                       <div key={rowIndex} className="grid gap-2 sm:grid-cols-[minmax(90px,0.7fr)_minmax(100px,1fr)_24px_minmax(120px,1fr)_minmax(110px,0.8fr)_32px] sm:items-center">
                         <Input
+                          disabled={locked}
                           value={row.itemNumber || ''}
                           onChange={event => updateItemRow(entryIndex, rowIndex, { itemNumber: event.target.value })}
                           placeholder="Item No."
                           className="h-9 bg-white text-sm"
                         />
                         <Input
+                          disabled={locked}
                           type="number"
                           step="0.00001"
                           value={row.quantity === 0 ? '0' : (row.quantity || '')}
@@ -457,6 +498,7 @@ export function BillClassificationEntries({
                         />
                         <span className="hidden text-center text-slate-400 sm:block">x</span>
                         <Input
+                          disabled={locked}
                           type="number"
                           step="0.00001"
                           value={row.agreementRate === 0 ? '0' : (row.agreementRate || '')}
@@ -472,8 +514,9 @@ export function BillClassificationEntries({
                             type="button"
                             variant="ghost"
                             size="icon"
+                            disabled={locked}
                             onClick={() => removeItemRow(entryIndex, rowIndex)}
-                            className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-700"
+                            className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
                             title="Delete item row"
                             aria-label="Delete item row"
                           >
@@ -489,8 +532,9 @@ export function BillClassificationEntries({
                       type="button"
                       variant="ghost"
                       size="sm"
+                      disabled={locked}
                       onClick={() => addItemRow(entryIndex)}
-                      className="h-8 px-2 text-xs text-blue-700 hover:bg-blue-50"
+                      className="h-8 px-2 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-40"
                     >
                       <Plus className="mr-1 h-3.5 w-3.5" />
                       Add another item
@@ -505,10 +549,12 @@ export function BillClassificationEntries({
                           measurementDate={measurementDate}
                         />
                       )}
-                      <BillAmountCalculator
-                        label=""
-                        onInsertTotal={total => updateEntry(entryIndex, { amount: total })}
-                      />
+                      {!locked && (
+                        <BillAmountCalculator
+                          label=""
+                          onInsertTotal={total => updateEntry(entryIndex, { amount: total })}
+                        />
+                      )}
                     </div>
                   </div>
                 </div>

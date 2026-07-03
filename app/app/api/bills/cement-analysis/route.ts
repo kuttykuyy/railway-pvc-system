@@ -456,8 +456,9 @@ Rules:
 - Suffix A: general work; B: separate steel supply; C: separate cement/grout supply; D: fabrication/erection including contractor steel; E: fabrication/erection excluding/free-issue steel.
 - Main groups 2 and 7 do not use suffixes; return suffix A for them.
 - justification must be 2-4 plain, natural sentences that read like an experienced railway engineer explaining the call to a colleague — professional but human, never robotic, templated, or legalistic. Say in everyday words what the item actually is, weave in the key wording from the description that decides the group and suffix, and briefly note why the other suffixes do not fit. A reviewer should be able to verify it, but it should not read like a form.
-- Avoid stiff, machine-like phrasing such as "This item is classified as", "The aforementioned", "It is hereby", "falls under the purview of", or starting with "The description". Do not just restate the classification code.
+- Avoid stiff, machine-like phrasing such as "This item is classified as", "This item describes", "This item involves", "Therefore, suffix X is appropriate", "The aforementioned", "It is hereby", "falls under the purview of", or starting with "The description". Do not just restate the classification code.
 - Never reuse the same opening for multiple items. Start with the work itself, e.g. 'These are Fe-500D TMT bars supplied as a separate steel item, so it sits in suffix B...' or 'This is shotcrete over masonry — composite building repair work, which makes it suffix A...'.
+- Good example of tone: "Rolling and consolidating the sub-grade is ordinary road preparation — labour, machinery and fuel, nothing supplied separately. No steel or cement changes hands here, so the general class A fits; B and C are for separate supply items and D/E are for fabrication jobs, none of which this is."
 - USSR work items may consume cement but do not require DSR cement coefficients because cement is separately paid.
 - Direct cement supply is not cement-affected work.
 - Keep descriptions under 350 characters and do not add facts absent from source data.

@@ -1788,6 +1788,7 @@ function NewBillPageContent() {
                         contractSchedules={selectedContract?.schedules || []}
                         contractId={formData.contractId || undefined}
                         measurementDate={formData.dateOfMeasurement || undefined}
+                        lockEntries={isAiUploaded}
                       />
                     </AccordionContent>
                   </AccordionItem>

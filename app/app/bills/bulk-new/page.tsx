@@ -997,6 +997,7 @@ export default function BulkBillCreationPage() {
               contractSchedules={selectedContract?.schedules || []}
               contractId={selectedContract?.id}
               measurementDate={getEditingBill()?.dateOfMeasurement || undefined}
+              lockEntries={!!getEditingBill()?.isAiUploaded}
             />
           )}
           <div className="flex justify-end gap-2 mt-4">
