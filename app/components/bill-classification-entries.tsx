@@ -145,8 +145,12 @@ export function BillClassificationEntries({
       const selectedSub = classificationGroups
         .flatMap(group => group.subClassifications)
         .find(sub => sub.id === patch.subClassificationId);
-      nextEntry.subClassification = selectedSub;
-      if (selectedSub) nextEntry.mainClassificationGroupId = selectedSub.groupId;
+      if (selectedSub) {
+        nextEntry.subClassification = selectedSub;
+        nextEntry.mainClassificationGroupId = selectedSub.groupId;
+      }
+      // When the patched id can't be resolved (e.g. an empty group), keep the previous
+      // subClassification object — it carries the code used to self-heal stale ids.
       // A user-picked classification is final: entry rebuilds (re-extraction, cement
       // apply) and the automatic PVC comparison must not override it.
       nextEntry.manualClassification = true;
@@ -263,11 +267,15 @@ export function BillClassificationEntries({
             const explicitGroup = classificationGroups.find(
               group => group.id === entry.mainClassificationGroupId,
             );
-            // The entry's own group wins so an AI-matched classification from another
-            // group still displays; the inferred work group is only the default.
-            const selectedGroup = explicitGroup || (currentSub
+            const subGroup = currentSub
               ? classificationGroups.find(group => group.id === currentSub.groupId)
-              : undefined) || requiredGroup || classificationGroups[0];
+              : undefined;
+            // The group that actually contains the entry's sub-classification wins.
+            // If mainClassificationGroupId ever disagrees with the sub (a half-applied
+            // update), trusting the explicit group would render a blank Sub select and
+            // a Main select that looks stuck on the wrong group — the entry's real
+            // classification is the sub, so display its group and stay editable.
+            const selectedGroup = subGroup || explicitGroup || requiredGroup || classificationGroups[0];
             const selectedSub = currentSub?.groupId === selectedGroup?.id ? currentSub : undefined;
             const scheduleInList = !entry.scheduleItem || contractSchedules.includes(entry.scheduleItem);
             const rows = getRows(entry);
@@ -338,9 +346,11 @@ export function BillClassificationEntries({
                         const group = classificationGroups.find(item => item.id === groupId);
                         const defaultSub = group?.subClassifications.find(sub => sub.isDefault)
                           || group?.subClassifications[0];
+                        // Never write an empty sub id: if the picked group has no subs
+                        // loaded, keep the current sub instead of blanking the entry.
                         updateEntry(entryIndex, {
                           mainClassificationGroupId: groupId,
-                          subClassificationId: defaultSub?.id || '',
+                          ...(defaultSub ? { subClassificationId: defaultSub.id } : {}),
                         });
                       }}
                       className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
