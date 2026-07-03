@@ -106,6 +106,7 @@ interface ClassificationEntry {
   quantity?: number | string | '';
   agreementRate?: number | string | '';
   itemRows?: ItemRow[];
+  aiReviewed?: boolean;
 }
 
 
@@ -578,6 +579,7 @@ function NewBillPageContent() {
                   agreementRate: netRate,
                 }],
                 classificationJustification: item.suggestedClassificationReason || '',
+                aiReviewed: !!item.classificationReviewedByAi,
               },
             },
             {
@@ -632,6 +634,7 @@ function NewBillPageContent() {
             agreementRate: itemRate,
           }],
           classificationJustification: item.suggestedClassificationReason || '',
+          aiReviewed: !!item.classificationReviewedByAi,
         },
       }];
     });
@@ -649,6 +652,7 @@ function NewBillPageContent() {
       existing.amount = (Number(existing.amount) || 0) + (Number(entry.amount) || 0);
       const steelSet = new Set([...(existing.steelTypes || []), ...(entry.steelTypes || [])]);
       existing.steelTypes = Array.from(steelSet);
+      existing.aiReviewed = existing.aiReviewed || entry.aiReviewed;
       if (!existing.classificationJustification) {
         existing.classificationJustification = entry.classificationJustification || '';
       }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Plus, Trash2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Plus, Trash2, Sparkles } from 'lucide-react';
 
 import { BillAmountCalculator } from './bill-amount-calculator';
 import { ClassificationComparisonDialog } from './classification-comparison-dialog';
@@ -57,6 +57,8 @@ interface ClassificationEntry {
   agreementRate?: number | string | '';
   itemRows?: ItemRow[];
   classificationJustification?: string;
+  /** True when the AI reviewed/wrote this item's classification (vs rule-based). */
+  aiReviewed?: boolean;
 }
 
 interface BillClassificationEntriesProps {
@@ -249,7 +251,18 @@ export function BillClassificationEntries({
             return (
               <section key={entry.id || entryIndex} className="space-y-4 p-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-800">Entry {entryIndex + 1}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-slate-800">Entry {entryIndex + 1}</h3>
+                    {entry.aiReviewed ? (
+                      <Badge variant="outline" className="border-purple-300 bg-purple-50 text-purple-700 text-[10px]">
+                        <Sparkles className="mr-1 h-3 w-3" /> AI-reviewed
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-500 text-[10px]">
+                        Rule-based
+                      </Badge>
+                    )}
+                  </div>
                   <Button
                     type="button"
                     variant="ghost"

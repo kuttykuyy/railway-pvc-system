@@ -55,6 +55,7 @@ export interface ExtractedBillItem {
   suggestedClassificationCode?: string;
   suggestedClassificationReason?: string;
   confidence?: 'high' | 'medium' | 'low';
+  classificationReviewedByAi?: boolean;
 }
 
 export interface ExtractedBillDetails {

@@ -72,6 +72,7 @@ interface ClassificationEntry {
   quantity?: number | string | '';
   agreementRate?: number | string | '';
   itemRows?: ItemRow[];
+  aiReviewed?: boolean;
 }
 
 interface BillRow {
@@ -425,6 +426,7 @@ export default function BulkBillCreationPage() {
           agreementRate,
           itemRows: [{ itemNumber, quantity, agreementRate }],
           classificationJustification: item.suggestedClassificationReason || '',
+          aiReviewed: !!(item as any).classificationReviewedByAi,
         } as ClassificationEntry,
       }];
     });
@@ -442,6 +444,7 @@ export default function BulkBillCreationPage() {
       existing.amount = (Number(existing.amount) || 0) + (Number(entry.amount) || 0);
       const steelSet = new Set([...(existing.steelTypes || []), ...(entry.steelTypes || [])]);
       existing.steelTypes = Array.from(steelSet);
+      existing.aiReviewed = existing.aiReviewed || entry.aiReviewed;
       if (!existing.classificationJustification) {
         existing.classificationJustification = entry.classificationJustification || '';
       }

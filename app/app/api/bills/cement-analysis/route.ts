@@ -56,6 +56,8 @@ interface ExtractedBillItem {
   suggestedClassificationReason?: string;
   confidence?: 'high' | 'medium' | 'low';
   reason?: string;
+  /** True when the AI reviewed/wrote this item's classification (vs deterministic rules). */
+  classificationReviewedByAi?: boolean;
 }
 
 type SourceBook = NonNullable<ExtractedBillItem['sourceBook']>;
@@ -498,6 +500,7 @@ ${JSON.stringify(payload)}`;
           .trim();
         if (aiJustification.length >= 40) {
           original.suggestedClassificationReason = aiJustification.slice(0, 900);
+          original.classificationReviewedByAi = true;
         }
       }
       if (typeof enhancement?.isCementAffected === 'boolean') {
