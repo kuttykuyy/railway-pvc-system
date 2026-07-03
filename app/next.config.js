@@ -6,6 +6,7 @@ const nextConfig = {
   output: process.env.NEXT_OUTPUT_MODE,
   productionBrowserSourceMaps: false,
   outputFileTracingRoot: path.join(__dirname, '../'),
+  serverExternalPackages: ['@napi-rs/canvas'],
   eslint: {
     ignoreDuringBuilds: false,
   },
