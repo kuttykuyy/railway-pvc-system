@@ -351,12 +351,14 @@ async function requestAiExtraction(
   const content = extractAiMessageContent(choice?.message?.content);
   const usage = data.usage && typeof data.usage === 'object' ? data.usage : null;
 
+  // Abacus RouteLLM reports usage as input_tokens/output_tokens (not the OpenAI
+  // prompt_tokens/completion_tokens names) — accept both so token counts land.
   await recordAiUsage({
     operation: 'bill-extraction',
     success: true,
-    promptTokens: Number(usage?.prompt_tokens || 0),
-    completionTokens: Number(usage?.completion_tokens || 0),
-    totalTokens: Number(usage?.total_tokens || 0),
+    promptTokens: Number(usage?.prompt_tokens ?? usage?.input_tokens ?? 0),
+    completionTokens: Number(usage?.completion_tokens ?? usage?.output_tokens ?? 0),
+    totalTokens: Number(usage?.total_tokens ?? 0),
   });
 
   return {
