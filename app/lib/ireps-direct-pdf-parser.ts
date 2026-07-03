@@ -140,18 +140,45 @@ function materialFlags(description: string) {
   return { isSteelItem, isCementAffected, steelType };
 }
 
-function extractBillAmount(pages: PositionedPdfPage[]) {
+// Reads the first positive rupee value on the Schedule Summary row whose label
+// matches `labelPattern`, scanning from the last page (the summary sits near the
+// end). Returns the matched label text too, so callers can pull the rebate % out
+// of a "Rebate(30.01%)" label.
+function extractSummaryRow(pages: PositionedPdfPage[], labelPattern: RegExp) {
   for (const page of [...pages].reverse()) {
-    const labelLine = pageLines(page).find(line => /Bill Amount\s*\(Rs\.?\)/i.test(line.text));
+    const labelLine = pageLines(page).find(line => labelPattern.test(line.text));
     if (!labelLine) continue;
-    const amount = page.items
+    const value = page.items
       .filter(item => item.x > 250 && Math.abs(item.y - labelLine.y) <= 12 && NUMBER_PATTERN.test(item.text.trim()))
       .sort((left, right) => left.x - right.x)
       .map(item => numericValue(item.text.trim()))
-      .find((value): value is number => value !== undefined && value > 0);
-    if (amount !== undefined) return amount;
+      .find((candidate): candidate is number => candidate !== undefined && candidate > 0);
+    if (value !== undefined) return { value, labelText: labelLine.text };
   }
   return undefined;
+}
+
+// The printed net "Bill Amount (Rs.) (Including Tax (GST))" — the amount actually payable.
+function extractBillAmount(pages: PositionedPdfPage[]) {
+  return extractSummaryRow(pages, /Bill Amount\s*\(Rs\.?\)/i)?.value;
+}
+
+// Pulls the gross "Total Amount(Rs.)", the "Rebate(xx.xx%)" percentage/amount, and
+// the net "Bill Amount" from the Schedule Summary. When a work is awarded below the
+// estimate, the gross total is reduced by the rebate to give the net Bill Amount.
+function extractScheduleSummaryFinancials(pages: PositionedPdfPage[]) {
+  const billAmount = extractBillAmount(pages);
+  const totalRow = extractSummaryRow(pages, /Total Amount\s*\(Rs\.?\)/i);
+  const rebateRow = extractSummaryRow(pages, /Rebate\s*\(/i);
+  const rebatePercentage = rebateRow
+    ? numericValue(rebateRow.labelText.match(/Rebate\s*\(\s*(-?[\d.]+)\s*%/i)?.[1] || '')
+    : undefined;
+  return {
+    billAmount,
+    totalAmount: totalRow?.value,
+    rebatePercentage,
+    rebateAmount: rebateRow?.value,
+  };
 }
 
 const MONTHS: Record<string, string> = {
@@ -313,38 +340,55 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     for (const line of lines) updateContext(line.text);
   }
 
-  const billAmount = extractBillAmount(pages);
+  const financials = extractScheduleSummaryFinancials(pages);
+  const netBillAmount = financials.billAmount;
   if (!items.length) {
     throw new Error('No payable IREPS item rows were found in this PDF.');
   }
-  if (billAmount === undefined) {
+  if (netBillAmount === undefined) {
     throw new Error('The printed Bill Amount could not be read from this PDF.');
   }
+  // The extracted item rows carry the GROSS "Amt including Special Condition"
+  // values, so they reconcile against the gross "Total Amount(Rs.)". When a
+  // rebate is present the net "Bill Amount" is lower — reconciling against it
+  // (the old behaviour) made every rebate bill fail by exactly the rebate.
+  const grossTotal = financials.totalAmount ?? netBillAmount;
   const itemAmountTotal = Math.round(items.reduce((sum, item) => sum + item.amountSinceLastBill, 0) * 100) / 100;
-  const expectedAmount = Math.round((billAmount - excludedZeroQtyAmount) * 100) / 100;
+  const expectedAmount = Math.round((grossTotal - excludedZeroQtyAmount) * 100) / 100;
   const amountDifference = Math.round((itemAmountTotal - expectedAmount) * 100) / 100;
   const amountsReconciled = Math.abs(amountDifference) <= 0.05;
   if (!amountsReconciled) {
     throw new Error(
-      `Direct PDF item total Rs ${itemAmountTotal.toFixed(2)} does not match Bill Amount Rs ${billAmount.toFixed(2)}` +
+      `Direct PDF item total Rs ${itemAmountTotal.toFixed(2)} does not match Total Amount Rs ${grossTotal.toFixed(2)}` +
       (excludedZeroQtyAmount > 0 ? ` (minus Rs ${excludedZeroQtyAmount.toFixed(2)} from zero-quantity rows excluded).` : '.'),
     );
   }
   const scheduleTotals = new Map<string, number>();
   for (const item of items) scheduleTotals.set(item.schedule, (scheduleTotals.get(item.schedule) || 0) + item.amountSinceLastBill);
   const details = metadata(pages);
+  const rebatePercentage = financials.rebatePercentage;
+  const rebateAmount = financials.rebateAmount;
   const warnings = excludedZeroQtyAmount > 0.05
     ? [`Excluded Rs ${excludedZeroQtyAmount.toFixed(2)} of payable amount from rows where printed Qty since last Bill is zero.`]
     : [];
+  if (rebateAmount && rebateAmount > 0) {
+    warnings.push(
+      `A rebate of Rs ${rebateAmount.toFixed(2)}${rebatePercentage ? ` (${rebatePercentage}%)` : ''} was applied: ` +
+      `gross Rs ${grossTotal.toFixed(2)} → net Bill Amount Rs ${netBillAmount.toFixed(2)}. Component amounts are scaled to the net value.`,
+    );
+  }
   return {
     ...details,
     measurementDate: details.measurementDate || '',
-    grossBillAmount: billAmount,
+    grossBillAmount: grossTotal,
+    netBillAmount,
+    rebatePercentage,
+    rebateAmount,
     scheduleSummary: Array.from(scheduleTotals, ([schedule, amountIncludingSpecialCondition]) => ({
       schedule,
       amountIncludingSpecialCondition: Math.round(amountIncludingSpecialCondition * 100) / 100,
     })),
-    scheduleSummaryTotal: billAmount,
+    scheduleSummaryTotal: grossTotal,
     itemAmountTotal,
     amountDifference,
     amountsReconciled,

@@ -20,6 +20,7 @@ import { BillPdfCementAnalyzer, type CementAnalysisData, type ExtractedBillItem 
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
 import { calculateTotalPvc, formatPvcAmount } from '@/lib/classification-pvc';
+import { computeRebateFactor, scaleComponentsWithRebate } from '@/lib/rebate';
 
 interface Contract {
   id: string;
@@ -518,6 +519,22 @@ export default function BulkBillCreationPage() {
       mappedEntries,
       normalizeExtractedDate(billDetails?.measurementDate) || '',
     );
+
+    // Rebate: scale components to the net Bill Amount so PVC uses the post-rebate value.
+    const rebateFactor = computeRebateFactor({
+      grossTotal: billDetails?.grossBillAmount,
+      netBillAmount: billDetails?.netBillAmount,
+      rebatePercentage: billDetails?.rebatePercentage,
+    });
+    if (rebateFactor < 1) {
+      const scaledAmounts = scaleComponentsWithRebate(
+        mappedEntries.map(entry => Number(entry.amount || 0)),
+        rebateFactor,
+      );
+      mappedEntries = mappedEntries.map((entry, index) => ({ ...entry, amount: scaledAmounts[index] }));
+      const pct = billDetails?.rebatePercentage;
+      toast.success(`Rebate${pct ? ` of ${pct}%` : ''} applied — components scaled to the net Bill Amount`, { icon: '↓' });
+    }
 
     setBillRows((prev) => {
       const emptyIndex = prev.findIndex(row => !row.billNo.trim() && row.classificationEntries.length === 0);

@@ -45,6 +45,7 @@ import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { ContextualHelp } from '@/components/contextual-help';
 import { validateDate, validateDateForApi } from '@/lib/date-validation';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
+import { computeRebateFactor, scaleComponentsWithRebate } from '@/lib/rebate';
 import { inferMainClassification } from '@/lib/work-classification';
 
 
@@ -741,11 +742,41 @@ function NewBillPageContent() {
       || formData.dateOfMeasurement;
     mappedEntries = await applyPvcComparisonToEntries(mappedEntries, extractedMeasurementDate);
 
+    // Rebate handling: when the work was awarded below the estimate, the printed
+    // gross "Total Amount" is reduced to the net "Bill Amount (Incl GST)". Scale
+    // every component down by the same factor so the stored bill amount and the
+    // per-component PVC are computed on the post-rebate (payable) value.
+    const rebateFactor = computeRebateFactor({
+      grossTotal: billDetails?.grossBillAmount,
+      netBillAmount: billDetails?.netBillAmount,
+      rebatePercentage: billDetails?.rebatePercentage,
+    });
+    if (rebateFactor < 1) {
+      // Scale as a group so the components tie exactly to the net (no paise drift).
+      const scaledAmounts = scaleComponentsWithRebate(
+        mappedEntries.map(entry => Number(entry.amount || 0)),
+        rebateFactor,
+      );
+      mappedEntries = mappedEntries.map((entry, index) => ({
+        ...entry,
+        amount: scaledAmounts[index],
+      }));
+      const netFigure = billDetails?.netBillAmount;
+      const pct = billDetails?.rebatePercentage;
+      toast.success(
+        `Rebate${pct ? ` of ${pct}%` : ''} applied — components scaled to the net Bill Amount`
+        + (netFigure ? ` ₹${netFigure.toLocaleString('en-IN')}` : ''),
+        { icon: '↓', duration: 4000 },
+      );
+    }
+
     setFormData(prev => ({
       ...prev,
       billNo: billDetails?.billNo || prev.billNo,
       dateOfMeasurement: normalizeExtractedDate(billDetails?.measurementDate) || prev.dateOfMeasurement,
-      grossBillAmount: billDetails?.grossBillAmount ? billDetails.grossBillAmount.toFixed(2) : prev.grossBillAmount,
+      // Post-rebate: components are scaled to the net Bill Amount, so the gross field
+      // (pre-non-schedule deduction) reflects the same rebate factor. No rebate → factor 1.
+      grossBillAmount: billDetails?.grossBillAmount ? (billDetails.grossBillAmount * rebateFactor).toFixed(2) : prev.grossBillAmount,
       // Extracted items are already represented in classification entries. Dedicated
       // inputs are reserved for additional components entered manually.
       cementAmount: '',

@@ -227,6 +227,8 @@ interface ExtractedBillDetails {
   measurementDate?: string;
   grossBillAmount?: number;
   netBillAmount?: number;
+  rebatePercentage?: number;
+  rebateAmount?: number;
   workDescription?: string;
   classificationGroupCode?: string;
   scheduleSummary?: Array<{
@@ -689,6 +691,28 @@ function extractPrintedBillAmount(markdown: string): number | undefined {
   if (label < 0) return undefined;
   const numbers = markdown.slice(label, label + 500).match(/\d[\d,]*(?:\.\d+)?/g) || [];
   return numbers.map(toFiniteNumber).find((value): value is number => value !== undefined && value > 0);
+}
+
+// The gross "Total Amount(Rs.)" from the Schedule Summary (before any rebate).
+// Extracted items carry gross "including special condition" amounts, so they must
+// reconcile against this, not the (possibly rebate-reduced) net Bill Amount.
+function extractPrintedTotalAmount(markdown: string): number | undefined {
+  const label = markdown.search(/Total Amount\s*\(Rs\.?\)/i);
+  if (label < 0) return undefined;
+  const numbers = markdown.slice(label, label + 500).match(/\d[\d,]*(?:\.\d+)?/g) || [];
+  return numbers.map(toFiniteNumber).find((value): value is number => value !== undefined && value > 0);
+}
+
+// The "Rebate(xx.xx%)" row: percentage from the label and the rupee amount that
+// follows it. Present only when the work was awarded below the estimated cost.
+function extractPrintedRebate(markdown: string): { percentage?: number; amount?: number } | undefined {
+  const match = markdown.match(/Rebate\s*\(\s*([\d.]+)\s*%\s*\)/i);
+  if (!match) return undefined;
+  const start = (match.index || 0) + match[0].length;
+  const amount = (markdown.slice(start, start + 300).match(/\d[\d,]*(?:\.\d+)?/g) || [])
+    .map(toFiniteNumber)
+    .find((value): value is number => value !== undefined && value > 0);
+  return { percentage: toFiniteNumber(match[1]), amount };
 }
 
 async function correctSpecialConditionAmounts(
@@ -1248,13 +1272,23 @@ async function finalizeExtractedBillDetails(
     0,
   );
   const printedBillAmount = extractPrintedBillAmount(billMarkdown);
+  const printedTotalAmount = extractPrintedTotalAmount(billMarkdown);
+  const rebate = extractPrintedRebate(billMarkdown);
+  // Reconcile the gross item amounts against the gross "Total Amount". When a
+  // rebate is present the printed "Bill Amount" is the lower net figure; using it
+  // as the reconciliation target would make the AI wrongly force item amounts down.
   const scheduleSummaryTotal = Number(
-    printedBillAmount
+    printedTotalAmount
+    ?? printedBillAmount
     ?? (summedScheduleTotal > 0 ? summedScheduleTotal : toFiniteNumber(parsed.scheduleSummaryTotal)),
   );
+  const netBillAmount = toFiniteNumber(printedBillAmount) ?? toFiniteNumber(parsed.netBillAmount);
 
   console.info('[bill-extraction] Reconciliation source totals', {
     printedBillAmount,
+    printedTotalAmount,
+    rebatePercentage: rebate?.percentage,
+    rebateAmount: rebate?.amount,
     summedScheduleTotal,
     aiScheduleSummaryTotal: toFiniteNumber(parsed.scheduleSummaryTotal),
     selectedTotal: scheduleSummaryTotal,
@@ -1335,7 +1369,9 @@ async function finalizeExtractedBillDetails(
     workDescription,
     measurementDate: parsed.measurementDate || '',
     grossBillAmount: scheduleSummaryTotal,
-    netBillAmount: toFiniteNumber(parsed.netBillAmount),
+    netBillAmount,
+    rebatePercentage: rebate?.percentage,
+    rebateAmount: rebate?.amount,
     classificationGroupCode,
     scheduleSummary,
     scheduleSummaryTotal,

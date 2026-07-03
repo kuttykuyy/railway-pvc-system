@@ -65,6 +65,8 @@ export interface ExtractedBillDetails {
   measurementDate?: string;
   grossBillAmount?: number;
   netBillAmount?: number;
+  rebatePercentage?: number;
+  rebateAmount?: number;
   classificationGroupCode?: string;
   scheduleSummary?: Array<{
     schedule: string;

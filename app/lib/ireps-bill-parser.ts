@@ -30,6 +30,10 @@ export interface DeterministicBillDetails {
   measurementDate: string;
   grossBillAmount?: number;
   netBillAmount?: number;
+  /** Rebate percentage from the Schedule Summary "Rebate(xx.xx%)" row, if present. */
+  rebatePercentage?: number;
+  /** Rebate rupee amount deducted from the gross total, if present. */
+  rebateAmount?: number;
   scheduleSummary: Array<{ schedule: string; amountIncludingSpecialCondition: number }>;
   scheduleSummaryTotal?: number;
   itemAmountTotal: number;
