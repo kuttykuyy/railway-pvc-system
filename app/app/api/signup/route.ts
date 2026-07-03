@@ -20,6 +20,19 @@ import {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate-limit signups per source IP to slow mass account-enumeration (SA-05).
+    const { checkDbRateLimit } = await import('@/lib/rate-limit-db');
+    const ip = (request.headers.get('x-forwarded-for')?.split(',')[0]?.trim())
+      || request.headers.get('x-real-ip')
+      || 'unknown';
+    const signupRl = await checkDbRateLimit(`signup:${ip}`, 20, 60 * 60 * 1000); // 20 / hour / IP
+    if (!signupRl.allowed) {
+      return NextResponse.json(
+        { error: 'Too many signup attempts. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
     const { email, password, fullName, whatsappNumber, accountType, railwayZone, referralCode } = await request.json();
     const normalizedEmail = email?.toLowerCase()?.trim();
     const normalizedReferralCode = normalizeReferralCode(referralCode);

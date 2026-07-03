@@ -241,13 +241,18 @@ export const authOptions: NextAuthOptions = {
       }
     },
     async redirect({ url, baseUrl }) {
-      // If URL is provided and starts with baseUrl, use it
-      if (url.startsWith(baseUrl)) {
-        return url;
-      }
-      // If URL is a relative path, prepend baseUrl
+      // Relative path — safe, keep it on our origin.
       if (url.startsWith('/')) {
         return `${baseUrl}${url}`;
+      }
+      // Absolute URL — only allow an EXACT origin match (a prefix check like
+      // startsWith(baseUrl) would accept https://irpvc.in.evil.com — SA-04).
+      try {
+        if (new URL(url).origin === new URL(baseUrl).origin) {
+          return url;
+        }
+      } catch {
+        // malformed URL — fall through to the safe default
       }
       // Default to contracts page
       return `${baseUrl}/contracts`;
