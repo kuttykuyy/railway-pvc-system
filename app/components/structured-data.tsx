@@ -60,9 +60,9 @@ export default function StructuredData() {
     },
     offers: {
       '@type': 'Offer',
-      price: '1',
+      price: '199',
       priceCurrency: 'INR',
-      description: 'Flexible pricing starting at ₹1 per bill calculation with free trial available',
+      description: 'Pay-as-you-go credits: ₹199 per manually entered bill or ₹499 per AI PDF auto-extracted bill. First bill free for new users.',
       availability: 'https://schema.org/InStock',
       url: 'https://irpvc.in/pricing',
     },

@@ -20,9 +20,14 @@ export default function HomePage() {
   const router = useRouter();
   const { status } = useSession();
   const [mounted, setMounted] = useState(false);
+  const [pricing, setPricing] = useState({ billCost: 199, aiBillCost: 499 });
 
   useEffect(() => {
     setMounted(true);
+    fetch('/api/public/pricing')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) setPricing({ billCost: data.billCost ?? 199, aiBillCost: data.aiBillCost ?? 499 }); })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -367,18 +372,30 @@ export default function HomePage() {
                 {/* Left: price */}
                 <div className="p-10 lg:p-12 flex flex-col justify-center border-b md:border-b-0 md:border-r border-slate-100">
                   <p className="text-sm font-semibold text-blue-600 uppercase tracking-widest mb-3">Per Bill Credit Cost</p>
-                  <div className="flex items-end gap-2 mb-1">
-                    <span className="text-7xl font-black text-slate-900">₹199</span>
-                    <span className="text-slate-500 font-medium pb-2 text-lg">/ bill</span>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <p className="text-[11px] font-semibold text-slate-600 mb-1">Manual entry</p>
+                      <div className="flex items-end gap-1">
+                        <span className="text-4xl font-black text-slate-900">₹{pricing.billCost}</span>
+                        <span className="text-slate-500 text-xs pb-1">/ bill</span>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
+                      <p className="text-[11px] font-semibold text-indigo-600 mb-1">AI PDF auto-extract</p>
+                      <div className="flex items-end gap-1">
+                        <span className="text-4xl font-black text-indigo-700">₹{pricing.aiBillCost}</span>
+                        <span className="text-slate-500 text-xs pb-1">/ bill</span>
+                      </div>
+                    </div>
                   </div>
                   <p className="text-xs text-emerald-600 font-semibold mb-3">First bill FREE — one-time trial automatically applied for new users</p>
                   <p className="text-slate-500 font-light text-sm leading-relaxed">
-                    Each PVC bill deducts credits from your wallet. Top up any amount — credits never expire.
+                    You are charged only when a bill is saved. Enter it manually, or upload the bill PDF and let AI extract the items automatically (higher rate). Credits never expire.
                   </p>
                   <div className="mt-6 flex flex-col gap-2">
                     <span className="flex items-center gap-2 text-sm text-slate-600 font-medium"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Free PVC preview before paying</span>
                     <span className="flex items-center gap-2 text-sm text-slate-600 font-medium"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> All PDF formats (Detailed + IR Standard)</span>
-                    <span className="flex items-center gap-2 text-sm text-slate-600 font-medium"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Bulk bill creation at same rate</span>
+                    <span className="flex items-center gap-2 text-sm text-slate-600 font-medium"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> Bulk bill creation at the same per-bill rates</span>
                     <span className="flex items-center gap-2 text-sm text-slate-600 font-medium"><CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> PVC check credit applied if checked recently</span>
                   </div>
                 </div>

@@ -1,12 +1,22 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { BackButton } from '@/components/ui/back-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Check, IndianRupee, Zap, Building2, Users, Shield, Clock, Award, Sparkles, CheckCircle, Crown } from 'lucide-react';
+import { Check, IndianRupee, Zap, Building2, Users, Shield, Clock, Award, Sparkles, CheckCircle, Crown, ScanText, PencilLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
 export default function PricingPage() {
+  const [pricing, setPricing] = useState({ billCost: 199, aiBillCost: 499, freeTrialBills: 1 });
+
+  useEffect(() => {
+    fetch('/api/public/pricing')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) setPricing({ billCost: data.billCost ?? 199, aiBillCost: data.aiBillCost ?? 499, freeTrialBills: data.freeTrialBills ?? 1 }); })
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="relative min-h-screen pb-16 space-y-8 overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
       {/* Decorative Light Backdrops */}
@@ -27,7 +37,7 @@ export default function PricingPage() {
             Simple, Transparent Pricing
           </h1>
           <p className="text-sm sm:text-base text-slate-500 font-normal">
-            Pay only for what you process with a simple flat-rate credit system. Start with a free trial on your first bill.
+            Pay only for what you process with a simple pay-as-you-go credit system. Start with a free trial on your first bill.
           </p>
         </div>
 
@@ -35,7 +45,7 @@ export default function PricingPage() {
         <div className="max-w-xl mx-auto pt-4">
           <Card className="flex flex-col justify-between border border-blue-200 rounded-3xl transition-all duration-300 relative overflow-hidden bg-gradient-to-b from-blue-50/50 to-white shadow-[0_20px_50px_rgba(37,99,235,0.08)] hover:shadow-lg">
             <div className="absolute top-0 right-0 bg-blue-600 text-[10px] text-white font-extrabold px-3.5 py-1 tracking-wider uppercase">
-              Flat Rate
+              Pay As You Go
             </div>
             
             <CardHeader className="text-center pb-6 pt-8">
@@ -43,12 +53,19 @@ export default function PricingPage() {
                 <Zap className="h-6 w-6" />
               </div>
               <CardTitle className="text-xl font-black text-slate-800 mb-2">Standard Plan</CardTitle>
-              <div className="flex items-baseline justify-center gap-0.5 mt-2">
-                <IndianRupee className="h-6 w-6 text-blue-600 font-bold" />
-                <span className="text-4xl font-black tracking-tight text-blue-600">199</span>
-                <span className="text-xs text-slate-500 font-medium ml-1">/ bill</span>
+              <p className="text-xs text-slate-500 font-light mb-4">Pay-as-you-go credits — you are charged only when a bill is saved. The rate depends on how you create it:</p>
+              <div className="grid grid-cols-2 gap-3 text-left">
+                <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-center gap-1.5 text-slate-700 text-xs font-semibold mb-1"><PencilLine className="h-3.5 w-3.5" /> Manual entry</div>
+                  <div className="flex items-baseline gap-0.5"><IndianRupee className="h-4 w-4 text-blue-600" /><span className="text-2xl font-black text-blue-600">{pricing.billCost}</span><span className="text-[10px] text-slate-500 ml-1">/ bill</span></div>
+                  <p className="text-[10px] text-slate-500 mt-1">Enter classifications & amounts yourself.</p>
+                </div>
+                <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-3">
+                  <div className="flex items-center gap-1.5 text-indigo-700 text-xs font-semibold mb-1"><ScanText className="h-3.5 w-3.5" /> AI PDF auto-extract</div>
+                  <div className="flex items-baseline gap-0.5"><IndianRupee className="h-4 w-4 text-indigo-600" /><span className="text-2xl font-black text-indigo-600">{pricing.aiBillCost}</span><span className="text-[10px] text-slate-500 ml-1">/ bill</span></div>
+                  <p className="text-[10px] text-slate-500 mt-1">Upload the bill PDF; items are read automatically.</p>
+                </div>
               </div>
-              <p className="text-xs text-slate-500 font-light mt-1">Pay-as-you-go credit structure. No hidden fees.</p>
             </CardHeader>
             
             <CardContent className="space-y-6 flex-grow flex flex-col justify-between">

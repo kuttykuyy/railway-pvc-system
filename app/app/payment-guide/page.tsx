@@ -19,6 +19,7 @@ import { BackButton } from '@/components/ui/back-button';
 
 interface BillingSettings {
   billCost: number;
+  aiBillCost: number;
   freeTrialBills: number;
   freeTrialUsed: number;
   freeTrialRemaining: number;
@@ -49,11 +50,18 @@ export default function PaymentGuidePage() {
     fetchSettings();
   }, []);
 
-  const effectiveBillCost = billingSettings?.isFreeAccount 
-    ? 0 
+  const effectiveBillCost = billingSettings?.isFreeAccount
+    ? 0
     : billingSettings?.customProcessingFee !== null && billingSettings?.customProcessingFee !== undefined
       ? billingSettings.customProcessingFee
       : billingSettings?.billCost || 199;
+
+  // AI PDF auto-extracted bills are charged the AI rate (free/custom-fee accounts still pay 0).
+  const effectiveAiBillCost = billingSettings?.isFreeAccount
+    ? 0
+    : billingSettings?.customProcessingFee !== null && billingSettings?.customProcessingFee !== undefined
+      ? billingSettings.customProcessingFee
+      : billingSettings?.aiBillCost || 499;
 
   const freeTrialText = billingSettings?.freeTrialBills === 1 
     ? 'First 1 bill is free (Trial Active)' 
@@ -157,9 +165,12 @@ export default function PaymentGuidePage() {
                   ) : (
                     <div className="space-y-1">
                       <p className="text-sm font-extrabold text-slate-800">
-                        ₹{effectiveBillCost.toLocaleString()} <span className="text-xs text-slate-500 font-light">/ bill</span>
+                        ₹{effectiveBillCost.toLocaleString()} <span className="text-xs text-slate-500 font-light">/ manually entered bill</span>
                       </p>
-                      <p className="text-xs text-slate-500 font-light">{freeTrialText}</p>
+                      <p className="text-sm font-extrabold text-indigo-700">
+                        ₹{effectiveAiBillCost.toLocaleString()} <span className="text-xs text-slate-500 font-light">/ AI PDF auto-extracted bill</span>
+                      </p>
+                      <p className="text-xs text-slate-500 font-light">Charged only when a bill is saved. Same rates apply to bulk creation. {freeTrialText}</p>
                     </div>
                   )}
                 </div>

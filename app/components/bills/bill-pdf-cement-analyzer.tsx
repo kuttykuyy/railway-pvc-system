@@ -845,6 +845,10 @@ export function BillPdfCementAnalyzer({
               <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
                 Convert a railway bill PDF into schedules, current quantities, agreement rates, classifications, and material calculations in one reviewable extraction.
               </p>
+              <p className="mt-3 inline-flex max-w-2xl items-start gap-1.5 rounded-md bg-slate-800/70 px-3 py-2 text-xs leading-5 text-amber-200">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                Extraction and preview are free. A bill created from an AI upload is charged the higher AI PDF rate (not the manual rate) — only when you save it.
+              </p>
               <div className="mt-7 grid grid-cols-1 gap-4 border-t border-slate-700 pt-5 text-sm sm:grid-cols-3">
                 <div className="flex items-start gap-2.5">
                   <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />

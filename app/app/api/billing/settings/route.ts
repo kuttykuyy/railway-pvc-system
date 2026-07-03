@@ -32,6 +32,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       billCost: settings.billCost,
+      aiBillCost: settings.aiBillCost,
       freeTrialBills: settings.freeTrialBills,
       freeTrialUsed,
       freeTrialRemaining,
