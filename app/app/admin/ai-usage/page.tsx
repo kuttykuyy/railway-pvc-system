@@ -33,10 +33,11 @@ interface UsageSummary {
   recent: RecentCall[];
   lastFailureAt: string | null;
 }
-type ProviderStatus = 'working' | 'out_of_credit' | 'not_configured' | 'error';
+type ProviderStatus = 'working' | 'payment_required' | 'out_of_credit' | 'not_configured' | 'error';
 
 const STATUS_META: Record<ProviderStatus, { label: string; className: string; Icon: typeof CheckCircle2 }> = {
   working: { label: 'Working', className: 'bg-green-100 text-green-800 border-green-300', Icon: CheckCircle2 },
+  payment_required: { label: 'Payment method required', className: 'bg-red-100 text-red-800 border-red-300', Icon: XCircle },
   out_of_credit: { label: 'Out of credit', className: 'bg-red-100 text-red-800 border-red-300', Icon: XCircle },
   not_configured: { label: 'Not configured', className: 'bg-gray-100 text-gray-800 border-gray-300', Icon: AlertTriangle },
   error: { label: 'Error', className: 'bg-amber-100 text-amber-800 border-amber-300', Icon: AlertTriangle },

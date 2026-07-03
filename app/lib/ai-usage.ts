@@ -12,7 +12,7 @@ import { prisma } from './db';
 
 const ABACUS_ENDPOINT = 'https://routellm.abacus.ai/v1/chat/completions';
 
-export type AiProviderStatus = 'working' | 'out_of_credit' | 'not_configured' | 'error';
+export type AiProviderStatus = 'working' | 'payment_required' | 'out_of_credit' | 'not_configured' | 'error';
 
 /** Records one AI call. Fire-and-forget: never throws, so it can't break extraction. */
 export async function recordAiUsage(entry: {
@@ -104,8 +104,17 @@ export async function checkAiProviderStatus(): Promise<{ status: AiProviderStatu
     });
     if (response.ok) return { status: 'working', detail: 'AI extraction is available.' };
     const body = await response.text().catch(() => '');
-    if (response.status === 402 || /payment method|no remaining credits|insufficient credits|credit balance/i.test(body)) {
-      return { status: 'out_of_credit', detail: 'Abacus reports payment required / credits exhausted. Recharge the account to resume AI extraction.' };
+    // A missing payment method is distinct from running out of credit. The RouteLLM API
+    // is billed to a card on the Abacus account and needs a payment method on file even
+    // when ChatLLM credits remain — so report it separately, not as "out of credit".
+    if (/payment method/i.test(body)) {
+      return {
+        status: 'payment_required',
+        detail: 'The Abacus API needs a valid payment method on the account. This is separate from ChatLLM credits — RouteLLM API usage is billed to a card. Add a payment method in the Abacus dashboard to enable AI extraction.',
+      };
+    }
+    if (response.status === 402 || /no remaining credits|insufficient credits|credit balance/i.test(body)) {
+      return { status: 'out_of_credit', detail: 'Abacus reports credits are exhausted. Recharge the account to resume AI extraction.' };
     }
     return { status: 'error', detail: `Provider returned HTTP ${response.status}. ${body.slice(0, 200)}` };
   } catch (error: any) {

@@ -330,9 +330,15 @@ async function requestAiExtraction(
 
   if (!response.ok) {
     const details = await response.text().catch(() => '');
-    const outOfCredit = response.status === 402 || /no remaining credits|insufficient credits|credit balance|payment method/i.test(details);
-    await recordAiUsage({ operation: 'bill-extraction', success: false, errorType: outOfCredit ? 'out_of_credit' : 'error' });
-    if (outOfCredit) {
+    const paymentRequired = /payment method/i.test(details);
+    const outOfCredit = /no remaining credits|insufficient credits|credit balance/i.test(details);
+    const blocked = response.status === 402 || paymentRequired || outOfCredit;
+    await recordAiUsage({
+      operation: 'bill-extraction',
+      success: false,
+      errorType: paymentRequired ? 'payment_required' : outOfCredit ? 'out_of_credit' : blocked ? 'payment_required' : 'error',
+    });
+    if (blocked) {
       throw new AiProviderCreditsExhaustedError();
     }
     throw new Error(`AI extraction failed: ${details || response.statusText}`);
