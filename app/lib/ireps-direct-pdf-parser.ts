@@ -101,28 +101,50 @@ function extractDescription(page: PositionedPdfPage, rowY: number, nextRowY: num
     .map(item => item.y)
     .sort((left, right) => left - right)[0];
   const endY = totalY || nextRowY;
-  const descriptionItems = page.items
-    .filter(item => {
-      const x = normalizedX(page, item);
-      return item.y > rowY + 12 && item.y < endY - 2 && x >= X.unit[0] && x < 790;
-    });
+  // Collect every token between this item's data row and the next, then group them
+  // into visual lines. Description text, the numeric data rows (rate/qty/amount),
+  // and section headings each sit on their own y-line, so we can keep the
+  // description lines and discard the rest — instead of blending them together
+  // (which used to append stray column numbers and heading words like "ROOFING"
+  // to the description and break keyword-based classification).
+  const band = page.items.filter(item => item.y > rowY + 12 && item.y < endY - 2);
   const lines = new Map<number, PositionedPdfTextItem[]>();
-  for (const item of descriptionItems) {
-    if (/^(?:Now to pay|Page\s+\d+|Schedule\s+|Chapter Name|Group Name)/i.test(item.text.trim())) continue;
+  for (const item of band) {
     const y = Math.round(item.y / 2) * 2;
     lines.set(y, [...(lines.get(y) || []), item]);
   }
-  return Array.from(lines.entries())
-    .sort(([left], [right]) => left - right)
-    .map(([, items]) => items
-      .sort((left, right) => normalizedX(page, left) - normalizedX(page, right))
+  const keptLines: string[] = [];
+  for (const [, items] of Array.from(lines.entries()).sort(([left], [right]) => left - right)) {
+    const ordered = items.sort((left, right) => normalizedX(page, left) - normalizedX(page, right));
+    const tokens = ordered.map(item => item.text.trim()).filter(Boolean);
+    if (!tokens.length) continue;
+    const fullLine = tokens.join(' ');
+    // Drop section headings and running page headers/footers.
+    if (/Chapter Name|Group Name|Sub Head|Schedule\b|Now to pay|Page\s+\d+/i.test(fullLine)) continue;
+    // Drop numeric data rows: rates, quantities and amounts sit on their own line,
+    // so a line that is mostly standalone numbers is not description text.
+    const numericTokens = tokens.filter(token => NUMBER_PATTERN.test(token));
+    if (numericTokens.length >= Math.max(2, Math.ceil(tokens.length * 0.6))) continue;
+    // Keep only the description column (drop left-margin serial / item-code tokens).
+    const descTokens = ordered
+      .filter(item => {
+        const x = normalizedX(page, item);
+        return x >= X.unit[0] && x < 790;
+      })
       .map(item => item.text.trim())
-      .join(' '))
+      .filter(Boolean);
+    if (descTokens.length) keptLines.push(descTokens.join(' '));
+  }
+  return keptLines
     .join(' ')
     .replace(/&amp;/g, '&')
     .replace(/&gt;/g, '>')
     .replace(/&lt;/g, '<')
     .replace(/\s+/g, ' ')
+    // Strip trailing bare numbers: an amount/quantity from the right-hand columns can
+    // land at the end of the final wrapped description line (e.g. "...330 kg /cum 156852.1").
+    // Work descriptions never end in a standalone number, so this is safe.
+    .replace(/(?:\s+-?\d[\d,]*(?:\.\d+)?\.?)+\s*$/, '')
     .trim()
     .slice(0, 500);
 }
@@ -307,9 +329,12 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       const nextRowY = candidates[index + 1]?.y || page.height - 5;
       const itemNo = extractItemCode(page, unitItem.y, nextRowY);
       const description = extractDescription(page, unitItem.y, nextRowY) || `IREPS item ${itemNo || items.length + 1}`;
+      // Detect the source book from the schedule heading. CPWD headings vary
+      // ("CPWD SOR DSR Vol-I & II(2021)", "CPWD-DSR 2021", "DSR Vol-I"), so match
+      // CPWD/DSR loosely rather than requiring an exact "CPWD-DSR" token.
       const sourceBook = /USSR|UNIFIED STANDARD/i.test(currentScheduleHeading)
         ? 'USSR_2021'
-        : /CPWD-?DSR|DSR\s*2021/i.test(currentScheduleHeading)
+        : /CPWD.*DSR|DSR.*(?:2021|Vol)|CPWD\s*SOR|\bDSR\b/i.test(currentScheduleHeading)
           ? 'DSR_2021'
           : /NOT COVERED/i.test(currentScheduleHeading)
             ? 'NON_SCHEDULE'

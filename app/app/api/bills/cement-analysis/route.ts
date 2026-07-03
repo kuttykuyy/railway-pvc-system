@@ -14,6 +14,7 @@ import {
   summarizeCementCalculation,
 } from '@/lib/dsr-cement-calculation';
 import { inferMainClassification } from '@/lib/work-classification';
+import { inferCpwdDsrSubHead, CONTEXT as DSR_CONTEXT } from '@/lib/dsr-subhead-classification';
 import { parseIrepsBillMarkdown } from '@/lib/ireps-bill-parser';
 import { parseIrepsBillPdfDirect } from '@/lib/ireps-direct-pdf-parser';
 
@@ -154,7 +155,20 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
     ? `The item description itself does not indicate a specific GCC work group, so it inherits Group ${contractMain.code} (${contractMain.label}) from the contract's Name of Work, which mentions ${quoteKeywords(contractMain.matchedKeywords)}.`
     : `${contractMain.reason} (Fallback for item).`;
 
-  if (itemMain.code !== '9') {
+  // 0. Highest priority: the CPWD DSR sub-head from the item number (e.g. "16.3.3"
+  // → sub-head 16 Road Work → Group 9). This is a structural signal that beats
+  // description keywords, and works even when the printed Chapter Name is missing.
+  const subHead = inferCpwdDsrSubHead({ itemNo: item.itemNo, chapter: item.chapter, sourceBook: item.sourceBook });
+  if (subHead && subHead.gccGroup !== DSR_CONTEXT) {
+    resolvedCode = subHead.gccGroup;
+    resolvedReason = `Item number ${item.itemNo} falls under CPWD DSR sub-head ${subHead.number} (${subHead.name}), which is classified as GCC Group ${subHead.gccGroup}.`;
+  } else if (subHead && subHead.gccGroup === DSR_CONTEXT) {
+    // Context-dependent sub-head (e.g. Earth Work, Pile work, plumbing): its GCC
+    // group depends on the nature of the overall work, so resolve it from the
+    // contract's Name of Work rather than a fixed mapping.
+    resolvedCode = contractMain.code;
+    resolvedReason = `Item is CPWD DSR sub-head ${subHead.number} (${subHead.name}), whose GCC group depends on the nature of work; taken as Group ${contractMain.code} (${contractMain.label}) from the contract's Name of Work${contractMain.matchedKeywords.length ? ` (${quoteKeywords(contractMain.matchedKeywords)})` : ''}.`;
+  } else if (itemMain.code !== '9') {
     resolvedCode = itemMain.code;
     resolvedReason = `The item description mentions ${quoteKeywords(itemMain.matchedKeywords)}, which places this work under GCC Group ${itemMain.code} (${itemMain.label}).`;
   } else if (isValidAiCode) {
