@@ -103,6 +103,10 @@ export default function HomePage() {
               <div className="relative w-full max-w-lg">
                 {/* Product window mockup */}
                 <div className="relative bg-white rounded-3xl border border-slate-200 shadow-2xl shadow-slate-300/40 overflow-hidden">
+                  {/* Subtle AI scan sweep */}
+                  <div aria-hidden="true" className="animate-scan pointer-events-none absolute inset-x-0 z-20 h-16 bg-gradient-to-b from-transparent via-indigo-400/15 to-transparent">
+                    <div className="absolute inset-x-0 bottom-0 h-px bg-indigo-400/70 shadow-[0_0_8px_1px_rgba(99,102,241,0.5)]" />
+                  </div>
                   {/* Window bar */}
                   <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100 bg-slate-50/80">
                     <span className="h-3 w-3 rounded-full bg-red-400" />

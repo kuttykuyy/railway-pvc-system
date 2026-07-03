@@ -258,3 +258,18 @@
 .animate-blink {
   animation: blink 1.5s ease-in-out infinite;
 }
+/* Subtle scan-line sweep for the AI extraction hero mockup */
+@keyframes irpvc-scan {
+  0%   { top: -18%; opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.animate-scan {
+  animation: irpvc-scan 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-scan { animation: none; opacity: 0; }
+}
