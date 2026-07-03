@@ -1,7 +1,7 @@
 ﻿import { prisma } from './db';
 
 
-import { parseAgreementNumber } from './railway-division-helper';
+import { agreementMatchesZone } from './railway-division-helper';
 
 
 
@@ -56,8 +56,7 @@ export async function checkUserContractAccess(
 
     if (user?.role === 'railway_official') {
       // Access allowed if contract zone matches official's zone
-      const parsed = parseAgreementNumber(contract.agreementNo);
-      if (parsed && user.railwayZone && parsed.zone.toUpperCase() === user.railwayZone.toUpperCase()) {
+      if (agreementMatchesZone(contract.agreementNo, user.railwayZone)) {
         return {
           canView: true,
           canEdit: false,
@@ -247,15 +246,19 @@ export async function getUserAccessibleContracts(userId: string): Promise<string
       if (!user.railwayZone) {
         return ownedContracts.map(c => c.id);
       }
-      // Official can access all contracts matching their zone in the agreement number
-      const zoneContracts = await prisma.contract.findMany({
+      // Official can access all contracts matching their zone in the agreement number.
+      // The DB `startsWith` is a coarse prefilter; the authoritative agreementMatchesZone
+      // refinement keeps this consistent with checkUserContractAccess.
+      const zoneCandidates = await prisma.contract.findMany({
         where: {
           agreementNo: {
-            startsWith: `${user.railwayZone}/`
+            startsWith: `${user.railwayZone}/`,
+            mode: 'insensitive'
           }
         },
-        select: { id: true }
+        select: { id: true, agreementNo: true }
       });
+      const zoneContracts = zoneCandidates.filter(c => agreementMatchesZone(c.agreementNo, user.railwayZone));
       return [...new Set([...ownedContracts.map(c => c.id), ...zoneContracts.map(c => c.id)])];
     }
 

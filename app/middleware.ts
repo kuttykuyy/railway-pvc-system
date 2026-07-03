@@ -30,12 +30,11 @@ export async function middleware(req: NextRequest) {
   // is never granted based solely on the presence of query parameters.
 
   // Allow access to auth pages and API routes without token
-  if (pathname.startsWith('/auth/') || 
+  if (pathname.startsWith('/auth/') ||
       pathname.startsWith('/api/auth/') ||
       pathname.startsWith('/api/signup') ||
       pathname.startsWith('/api/public/') ||
       pathname.startsWith('/api/health/') ||
-      pathname === '/api/pdf-to-markdown' ||
       pathname.startsWith('/api/whatsapp/webhook') ||
       pathname.startsWith('/api/razorpay/webhook') ||
       pathname.startsWith('/api/external/')) {
@@ -124,6 +123,6 @@ export const config = {
      * - ads.txt (AdSense ads.txt)
      * - public folder
      */
-    "/((?!api/auth|api/public|api/v1|api/external|api/whatsapp/webhook|api/telegram|api/razorpay/webhook|api/pdf-to-markdown|_next/static|_next/image|favicon|manifest.json|sw.js|icons/|public|api/signup|sitemap.xml|robots.txt|ads.txt|about|pricing|refund|privacy|terms|contact|payment-guide|logo.png|.*\\.(?:html|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/((?!api/auth|api/public|api/v1|api/external|api/whatsapp/webhook|api/telegram|api/razorpay/webhook|_next/static|_next/image|favicon|manifest.json|sw.js|icons/|public|api/signup|sitemap.xml|robots.txt|ads.txt|about|pricing|refund|privacy|terms|contact|payment-guide|logo.png|.*\\.(?:html|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
   ],
 };

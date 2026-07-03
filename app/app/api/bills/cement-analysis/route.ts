@@ -7,7 +7,6 @@ if (typeof globalThis !== 'undefined' && !('DOMMatrix' in globalThis)) {
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateApiAccess } from '@/lib/payment-validation';
-import { advancedCache } from '@/lib/advanced-cache';
 import {
   calculateDsrCementRequirement,
   inferCementCoefficientFromMix,
@@ -1581,8 +1580,10 @@ export async function POST(request: NextRequest) {
       aiEnhancement,
     };
 
-    // Cache the full data for 1 hour (3600000 ms)
-    advancedCache.set(`ai-extraction:${extractionId}`, fullData, 3600000);
+    // The full extraction is returned inline below and applied directly by the client,
+    // so there is no server-side cache to read back. (A previous in-memory cache here
+    // was unreliable on multi-instance/serverless deployments — cross-instance reads
+    // produced spurious "extraction expired" errors — and is intentionally removed.)
 
     // All users get the full data unlocked for preview/import (extraction is free, they are only charged upon processing the bill).
     return NextResponse.json({

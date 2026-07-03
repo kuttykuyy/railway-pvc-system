@@ -5,7 +5,11 @@ import { advancedCache } from '@/lib/advanced-cache';
 export const dynamic = 'force-dynamic';
 
 /**
- * Returns cached extraction details. AI billing occurs once when the bill is saved.
+ * DEPRECATED. Extraction results are now returned inline by /api/bills/cement-analysis
+ * (always `isUnlocked: true`) and applied directly on the client, so there is no
+ * server-side cache to read back here. This handler is retained only for backward
+ * compatibility and will report that the result must be re-extracted.
+ * AI billing occurs once when the bill is saved.
  */
 export async function POST(request: Request) {
   try {

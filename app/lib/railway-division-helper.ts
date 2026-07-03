@@ -161,6 +161,17 @@ export function parseAgreementNumber(agreementNo: string): AgreementNumberParts 
 }
 
 /**
+ * Authoritative check for whether an agreement number belongs to a railway zone.
+ * Used everywhere a railway official's zone is compared against a contract so the
+ * bulk-access query and the per-contract permission check stay consistent.
+ */
+export function agreementMatchesZone(agreementNo: string | null | undefined, zone: string | null | undefined): boolean {
+  if (!agreementNo || !zone) return false;
+  const parsed = parseAgreementNumber(agreementNo);
+  return !!parsed && parsed.zone === zone.trim().toUpperCase();
+}
+
+/**
  * Check if a railway official's division matches the contract division
  */
 export function isOfficialInContractDivision(
