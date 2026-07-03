@@ -54,6 +54,36 @@ export const CPWD_DSR_SUBHEADS: Record<number, DsrSubHead> = {
   26: { name: 'New Technologies and Materials', gccGroup: CONTEXT },
 };
 
+/**
+ * IR Unified Standard Schedule of Rates (USSOR) 2021 chapter → GCC group.
+ * Source: the printed USSOR 2021 INDEX (chapters 1-21). Same semantics as the
+ * CPWD table above: fixed groups where the chapter is unambiguous, CONTEXT where
+ * the GCC group depends on the contract's Name of Work.
+ */
+export const USSOR_2021_CHAPTERS: Record<number, DsrSubHead> = {
+  1: { name: 'Earth Work', gccGroup: CONTEXT },                       // 1 (formation) vs 5 (building) — from Name of Work
+  2: { name: 'Bridge Works - Substructure', gccGroup: '6' },
+  3: { name: 'Bridge Works - Super Structure (RCC)', gccGroup: '6' },
+  4: { name: 'Bridge Works - Super Structure (Steel)', gccGroup: '6' },
+  5: { name: 'Bridge Works - Misc.', gccGroup: '6' },
+  6: { name: 'Rails, Sleepers and Fittings Renewal', gccGroup: '7' },
+  7: { name: 'Turnouts and Renewals', gccGroup: '7' },
+  8: { name: 'Deep Screening and Ballast Related Activities', gccGroup: CONTEXT }, // 2 (ballast supply) vs 7 (deep screening)
+  9: { name: 'Welding Activities', gccGroup: '7' },
+  10: { name: 'Reconditioning of Points and Crossings', gccGroup: '7' },
+  11: { name: 'Formation Rehabilitation', gccGroup: '1' },
+  12: { name: 'Activities at Construction Sites', gccGroup: CONTEXT },
+  13: { name: 'Maintenance Activities', gccGroup: CONTEXT },
+  14: { name: 'Testing of Rails and other Components', gccGroup: '9' },
+  15: { name: 'Heavy Track Machines', gccGroup: '7' },
+  16: { name: 'Small Track Machines', gccGroup: '7' },
+  17: { name: 'Handling of Materials', gccGroup: '9' },
+  18: { name: 'Level Crossings', gccGroup: CONTEXT },                 // road vs track nature — from Name of Work
+  19: { name: 'Bridge Related Activities', gccGroup: '6' },
+  20: { name: 'Supply of P.Way Materials', gccGroup: '7' },
+  21: { name: 'Miscellaneous Items', gccGroup: '9' },
+};
+
 function normalizeName(value: string | undefined | null): string {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -89,4 +119,48 @@ export function inferCpwdDsrSubHead(input: {
   if (!isDsr && !chapterMatches) return null;
 
   return { number, name: entry.name, gccGroup: entry.gccGroup };
+}
+
+/**
+ * Resolves the GCC group for a USSOR 2021 item from its chapter. The printed
+ * "Chapter Name" is the primary signal (matched against the USSOR index names);
+ * the item number's leading integer is a fallback when the chapter line was not
+ * captured. Only applies to USSOR items (`sourceBook` 'USSR_2021').
+ */
+export function inferUssorChapter(input: {
+  itemNo?: string | null;
+  chapter?: string | null;
+  sourceBook?: string | null;
+}): { number: number; name: string; gccGroup: string } | null {
+  if (input.sourceBook !== 'USSR_2021') return null;
+
+  const chapterNorm = normalizeName(input.chapter);
+  if (chapterNorm.length > 0) {
+    for (const [num, entry] of Object.entries(USSOR_2021_CHAPTERS)) {
+      const nameNorm = normalizeName(entry.name);
+      if (chapterNorm === nameNorm || chapterNorm.includes(nameNorm) || nameNorm.includes(chapterNorm)) {
+        return { number: Number(num), name: entry.name, gccGroup: entry.gccGroup };
+      }
+    }
+  }
+
+  const number = subHeadNumberFromItemNo(input.itemNo);
+  if (number != null && USSOR_2021_CHAPTERS[number]) {
+    const entry = USSOR_2021_CHAPTERS[number];
+    return { number, name: entry.name, gccGroup: entry.gccGroup };
+  }
+  return null;
+}
+
+/**
+ * Schedule-aware dispatcher: USSOR items resolve via the USSOR chapter index,
+ * everything else via the CPWD DSR sub-head table.
+ */
+export function inferScheduleSubHead(input: {
+  itemNo?: string | null;
+  chapter?: string | null;
+  sourceBook?: string | null;
+}): { number: number; name: string; gccGroup: string } | null {
+  if (input.sourceBook === 'USSR_2021') return inferUssorChapter(input);
+  return inferCpwdDsrSubHead(input);
 }

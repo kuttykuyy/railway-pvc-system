@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { subHeadNumberFromItemNo, inferCpwdDsrSubHead, CPWD_DSR_SUBHEADS, CONTEXT } from './dsr-subhead-classification';
+import {
+  subHeadNumberFromItemNo,
+  inferCpwdDsrSubHead,
+  inferUssorChapter,
+  inferScheduleSubHead,
+  CPWD_DSR_SUBHEADS,
+  USSOR_2021_CHAPTERS,
+  CONTEXT,
+} from './dsr-subhead-classification';
 
 describe('subHeadNumberFromItemNo', () => {
   it('takes the leading integer of a DSR item number', () => {
@@ -50,5 +58,47 @@ describe('inferCpwdDsrSubHead', () => {
     for (const entry of Object.values(CPWD_DSR_SUBHEADS)) {
       expect(entry.gccGroup === CONTEXT || /^[1-9]$/.test(entry.gccGroup)).toBe(true);
     }
+  });
+});
+
+describe('inferUssorChapter', () => {
+  it('classifies bridge chapters as Group 6 from the printed chapter name', () => {
+    expect(inferUssorChapter({ chapter: 'BRIDGE WORKS - SUBSTRUCTURE', sourceBook: 'USSR_2021' })?.gccGroup).toBe('6');
+    expect(inferUssorChapter({ chapter: 'Bridge Works - Super Structure (Steel)', sourceBook: 'USSR_2021' })?.gccGroup).toBe('6');
+  });
+
+  it('classifies P-Way chapters as Group 7', () => {
+    expect(inferUssorChapter({ chapter: 'RAILS, SLEEPERS AND FITTINGS RENEWAL', sourceBook: 'USSR_2021' })?.gccGroup).toBe('7');
+    expect(inferUssorChapter({ chapter: 'Welding Activities', sourceBook: 'USSR_2021' })?.gccGroup).toBe('7');
+    expect(inferUssorChapter({ chapter: 'Turnouts and Renewals', sourceBook: 'USSR_2021' })?.gccGroup).toBe('7');
+  });
+
+  it('marks context-dependent chapters (Earth Work, Deep Screening/Ballast, Level Crossings) as CONTEXT', () => {
+    expect(inferUssorChapter({ chapter: 'EARTH WORK', sourceBook: 'USSR_2021' })?.gccGroup).toBe(CONTEXT);
+    expect(inferUssorChapter({ chapter: 'Deep Screening and Ballast Related Activities', sourceBook: 'USSR_2021' })?.gccGroup).toBe(CONTEXT);
+    expect(inferUssorChapter({ chapter: 'Level Crossings', sourceBook: 'USSR_2021' })?.gccGroup).toBe(CONTEXT);
+  });
+
+  it('falls back to the item number leading integer when the chapter is missing', () => {
+    expect(inferUssorChapter({ itemNo: '11.4.2', sourceBook: 'USSR_2021' })?.gccGroup).toBe('1'); // Formation Rehabilitation
+  });
+
+  it('never applies to non-USSOR items', () => {
+    expect(inferUssorChapter({ chapter: 'EARTH WORK', sourceBook: 'DSR_2021' })).toBeNull();
+  });
+
+  it('every USSOR chapter has a valid GCC group 1-9 or CONTEXT', () => {
+    for (const entry of Object.values(USSOR_2021_CHAPTERS)) {
+      expect(entry.gccGroup === CONTEXT || /^[1-9]$/.test(entry.gccGroup)).toBe(true);
+    }
+  });
+});
+
+describe('inferScheduleSubHead (dispatcher)', () => {
+  it('routes USSOR items to the USSOR table and DSR items to the CPWD table', () => {
+    // Same chapter text, different schedule: USSOR "Formation Rehabilitation" → 1;
+    // DSR item 16.x → Road Work → 9.
+    expect(inferScheduleSubHead({ chapter: 'FORMATION REHABILITATION', sourceBook: 'USSR_2021' })?.gccGroup).toBe('1');
+    expect(inferScheduleSubHead({ itemNo: '16.3.3', sourceBook: 'DSR_2021' })?.gccGroup).toBe('9');
   });
 });
