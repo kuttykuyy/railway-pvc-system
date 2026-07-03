@@ -1350,7 +1350,7 @@ export function BillPdfCementAnalyzer({
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {result.results.slice(0, compact ? 5 : undefined).map((item, index) => (
+                      {result.results.filter(row => row.coefficient != null && row.coefficient > 0).slice(0, compact ? 5 : undefined).map((item, index) => (
                         <tr key={`${item.dsrCode}-${index}`}>
                           <td className="whitespace-nowrap px-2 py-2 font-medium">{item.dsrCode || '-'}</td>
                           <td className="max-w-[360px] px-2 py-2">
@@ -1422,7 +1422,7 @@ export function BillPdfCementAnalyzer({
 
                 {result.results.some(item => !item.coefficient) && !compact && (
                   <div className="text-xs text-muted-foreground">
-                    Missing coefficient: enter MT of cement required per displayed item unit, then save. Administrator access is required because this updates the shared library.
+                    Items without a cement coefficient are treated as non-cement and are not shown here.
                   </div>
                 )}
 

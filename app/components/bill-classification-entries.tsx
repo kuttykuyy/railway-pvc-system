@@ -95,7 +95,10 @@ export function BillClassificationEntries({
   contractId,
   measurementDate,
 }: BillClassificationEntriesProps) {
-  const [entries, setEntries] = useState<ClassificationEntry[]>(value);
+  // Fully controlled: `value` is the single source of truth (aliased to `entries` for
+  // readability). Every edit goes straight to onChange, so a manual classification change
+  // can't be reverted by a local-copy/prop mismatch.
+  const entries = value;
   const requiredMainCode = useMemo(
     () => workDescription ? inferMainClassification(workDescription).code : '',
     [workDescription],
@@ -105,10 +108,7 @@ export function BillClassificationEntries({
     [classificationGroups, requiredMainCode],
   );
 
-  useEffect(() => setEntries(value), [value]);
-
   const commit = (nextEntries: ClassificationEntry[]) => {
-    setEntries(nextEntries);
     onChange(nextEntries);
   };
 
