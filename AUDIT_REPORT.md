@@ -17,7 +17,7 @@ All findings have been remediated except **L4** (a product decision left to the 
 | M2 | Public GST-invoice PDF exposed PII by id | ✅ Fixed — signed token OR owner/admin session required; share links carry a token; `no-store` cache |
 | M3 | In-memory AI-extraction cache unreliable on serverless | ✅ Fixed — removed the dead cache write (full data already returned inline); unlock route marked deprecated |
 | M4 | Webhook signature not timing-safe + non-atomic credit | ✅ Fixed — `crypto.timingSafeEqual`; credit folded into the H1 atomic transaction |
-| M5 | `/api/admin/maintenance-status` unauthenticated | ⚠️ Left as-is — read-only, non-sensitive; the authenticated `/api/settings/maintenance-status` is what clients use. Recommend moving/removing the admin-path duplicate. |
+| M5 | `/api/admin/maintenance-status` unauthenticated | ✅ Fixed — the route was an unused duplicate (all clients use the authenticated `/api/settings/maintenance-status`) and has been deleted |
 | L1 | Dead/backup files + stale middleware entry | ✅ Fixed — 5 dead files removed; dead `/api/pdf-to-markdown` reference removed from middleware |
 | L2 | Inconsistent railway-official zone matching | ✅ Fixed — shared `agreementMatchesZone()` used by both the per-contract and bulk paths |
 | L3 | PII in logs | ✅ Mitigated — `logger.*` already suppressed in production; the one raw email in an error log masked; Slack ops alerts left intentional |
