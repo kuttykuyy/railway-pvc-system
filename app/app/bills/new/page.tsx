@@ -785,13 +785,18 @@ function NewBillPageContent() {
     // choices over from the current entries so a rebuild never undoes a hand edit.
     const entryKey = (entry: ClassificationEntry) =>
       `${(entry.itemNumber || '').trim()}|${(entry.description || '').trim().slice(0, 120)}`;
-    const manualByKey = new Map(
-      classificationEntries
+    const preserveManualClassifications = (
+      nextEntries: ClassificationEntry[],
+      currentEntries: ClassificationEntry[],
+    ) => {
+      const manualByKey = new Map(
+        currentEntries
         .filter(entry => entry.manualClassification && entry.subClassificationId)
         .map(entry => [entryKey(entry), entry] as const),
-    );
-    if (manualByKey.size > 0) {
-      mappedEntries = mappedEntries.map(entry => {
+      );
+      if (manualByKey.size === 0) return nextEntries;
+
+      return nextEntries.map(entry => {
         const manual = manualByKey.get(entryKey(entry));
         if (!manual) return entry;
         return {
@@ -802,7 +807,8 @@ function NewBillPageContent() {
           classificationJustification: manual.classificationJustification || entry.classificationJustification,
         };
       });
-    }
+    };
+    mappedEntries = preserveManualClassifications(mappedEntries, classificationEntries);
 
     const extractedMeasurementDate = normalizeExtractedDate(billDetails?.measurementDate)
       || formData.dateOfMeasurement;
@@ -853,7 +859,11 @@ function NewBillPageContent() {
     }));
 
     if (mappedEntries.length > 0) {
-      setClassificationEntries(mappedEntries);
+      // The extraction pipeline is asynchronous. A user may change a classification while
+      // indices/rebate processing is still finishing, so merge against the latest state at
+      // commit time instead of overwriting that manual choice with an older extraction.
+      setClassificationEntries(currentEntries =>
+        preserveManualClassifications(mappedEntries, currentEntries));
       setOpenAccordion(prev => Array.from(new Set([...prev, 'basic', 'classification', 'optional'])));
       toast.success(`Applied ${mappedEntries.length} mapped bill item(s)`);
     } else {
@@ -1460,7 +1470,6 @@ function NewBillPageContent() {
                   title="Direct PDF Bill Extraction"
                   contractId={formData.contractId}
                   onApplyBillDetails={applyExtractedBillDetails}
-                  onApplyCementAmount={(_amount, cementData) => applyExtractedBillDetails(cementData)}
                 />
 
                 {/* Accordion for organized sections */}
