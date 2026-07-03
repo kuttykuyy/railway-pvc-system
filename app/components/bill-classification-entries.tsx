@@ -46,6 +46,7 @@ interface ItemRow {
 
 interface ClassificationEntry {
   id?: string;
+  mainClassificationGroupId?: string;
   subClassificationId: string;
   subClassification?: SubClassification;
   amount: number | string | '';
@@ -140,10 +141,12 @@ export function BillClassificationEntries({
   const updateEntry = (entryIndex: number, patch: Partial<ClassificationEntry>) => {
     const nextEntries = [...entries];
     const nextEntry = { ...nextEntries[entryIndex], ...patch };
-    if (patch.subClassificationId) {
-      nextEntry.subClassification = classificationGroups
+    if (Object.prototype.hasOwnProperty.call(patch, 'subClassificationId')) {
+      const selectedSub = classificationGroups
         .flatMap(group => group.subClassifications)
         .find(sub => sub.id === patch.subClassificationId);
+      nextEntry.subClassification = selectedSub;
+      if (selectedSub) nextEntry.mainClassificationGroupId = selectedSub.groupId;
       // A user-picked classification is final: entry rebuilds (re-extraction, cement
       // apply) and the automatic PVC comparison must not override it.
       nextEntry.manualClassification = true;
@@ -257,9 +260,12 @@ export function BillClassificationEntries({
               || (entry.subClassification?.code
                 ? allSubs.find(sub => sub.code.toUpperCase() === entry.subClassification!.code.toUpperCase())
                 : undefined);
+            const explicitGroup = classificationGroups.find(
+              group => group.id === entry.mainClassificationGroupId,
+            );
             // The entry's own group wins so an AI-matched classification from another
             // group still displays; the inferred work group is only the default.
-            const selectedGroup = (currentSub
+            const selectedGroup = explicitGroup || (currentSub
               ? classificationGroups.find(group => group.id === currentSub.groupId)
               : undefined) || requiredGroup || classificationGroups[0];
             const selectedSub = currentSub?.groupId === selectedGroup?.id ? currentSub : undefined;
@@ -322,25 +328,28 @@ export function BillClassificationEntries({
 
                 <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_minmax(200px,1.2fr)_minmax(150px,0.8fr)_minmax(140px,0.7fr)]">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-600">Main classification</label>
-                    <Select
+                    <label htmlFor={`main-classification-${entryIndex}`} className="text-xs font-medium text-slate-600">Main classification</label>
+                    <select
+                      id={`main-classification-${entryIndex}`}
+                      data-testid={`main-classification-${entryIndex}`}
                       value={selectedGroup?.id || ''}
-                      onValueChange={groupId => {
+                      onChange={event => {
+                        const groupId = event.target.value;
                         const group = classificationGroups.find(item => item.id === groupId);
                         const defaultSub = group?.subClassifications.find(sub => sub.isDefault)
                           || group?.subClassifications[0];
-                        updateEntry(entryIndex, { subClassificationId: defaultSub?.id || '' });
+                        updateEntry(entryIndex, {
+                          mainClassificationGroupId: groupId,
+                          subClassificationId: defaultSub?.id || '',
+                        });
                       }}
+                      className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
                     >
-                      <SelectTrigger className="h-9 bg-white text-sm">
-                        <SelectValue placeholder="Select group" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {classificationGroups.map(group => (
-                          <SelectItem key={group.id} value={group.id}>{group.code} - {group.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <option value="" disabled>Select group</option>
+                      {classificationGroups.map(group => (
+                        <option key={group.id} value={group.id}>{group.code} - {group.name}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="space-y-1.5">

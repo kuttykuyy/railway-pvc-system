@@ -95,6 +95,7 @@ interface ItemRow {
 
 interface ClassificationEntry {
   id?: string;
+  mainClassificationGroupId?: string;
   subClassificationId: string;
   subClassification?: SubClassification;
   amount: number | string | '';  // Allow blank values
@@ -801,6 +802,7 @@ function NewBillPageContent() {
         if (!manual) return entry;
         return {
           ...entry,
+          mainClassificationGroupId: manual.mainClassificationGroupId || manual.subClassification?.groupId,
           subClassificationId: manual.subClassificationId,
           subClassification: manual.subClassification,
           manualClassification: true,
