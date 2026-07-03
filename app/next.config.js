@@ -20,24 +20,20 @@ const nextConfig = {
   },
   poweredByHeader: false,
   async headers() {
-    // ENFORCED CSP: only restricts framing/objects/base-uri (does not touch
-    // script/style/connect), so it cannot break Razorpay/Google/AdSense.
-    const enforcedCsp = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'";
-
-    // FULL CSP in Report-Only mode: blocks nothing (zero breakage risk) but reports
-    // what a strict script-src policy would break. The app loads Razorpay checkout,
-    // Google AdSense (many dynamic ad domains), and inline scripts, so this must be
-    // validated against real ad/checkout/login traffic (watch the browser console for
-    // "Report Only" CSP violations) BEFORE promoting it to an enforced policy — at which
-    // point, change the header key below from ...-Report-Only to Content-Security-Policy.
-    const fullCspReportOnly = [
+    // ENFORCED CSP. script-src keeps 'unsafe-inline'/'unsafe-eval' (required by
+    // Next.js hydration + AdSense), so no app-critical script is blocked; the value is
+    // in blocking UNKNOWN external script/frame/connect origins, plus object-src/base-uri/
+    // frame-ancestors. The Google/AdSense + Razorpay allowlists are intentionally broad
+    // (missing an ad domain would hide ads; allowing an extra is harmless). If ads or the
+    // Razorpay top-up ever misbehave, add the reported origin here — a one-line change.
+    const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://*.razorpay.com https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.googleadservices.com https://*.doubleclick.net https://*.google.com https://*.gstatic.com https://*.googletagmanager.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://*.razorpay.com https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.googleadservices.com https://*.googletagservices.com https://*.doubleclick.net https://*.google.com https://*.gstatic.com https://*.googletagmanager.com https://*.google-analytics.com https://*.adtrafficquality.google",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https://fonts.gstatic.com",
-      "connect-src 'self' https://*.razorpay.com https://*.google.com https://*.googlesyndication.com https://*.doubleclick.net https://*.googleadservices.com https://*.google-analytics.com https://pagead2.googlesyndication.com",
-      "frame-src https://*.razorpay.com https://*.google.com https://*.doubleclick.net https://*.googlesyndication.com",
+      "connect-src 'self' https://*.razorpay.com https://*.google.com https://*.googlesyndication.com https://*.googleadservices.com https://*.googletagservices.com https://*.doubleclick.net https://*.google-analytics.com https://*.googletagmanager.com https://*.adtrafficquality.google https://pagead2.googlesyndication.com",
+      "frame-src https://*.razorpay.com https://*.google.com https://*.doubleclick.net https://*.googlesyndication.com https://*.googleadservices.com",
       "object-src 'none'",
       "base-uri 'self'",
       "frame-ancestors 'none'",
@@ -49,8 +45,7 @@ const nextConfig = {
       { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
       { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
       { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-      { key: 'Content-Security-Policy', value: enforcedCsp },
-      { key: 'Content-Security-Policy-Report-Only', value: fullCspReportOnly },
+      { key: 'Content-Security-Policy', value: csp },
     ];
     return [{ source: '/:path*', headers: securityHeaders }];
   },
