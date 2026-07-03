@@ -266,7 +266,10 @@ function metadata(pages: PositionedPdfPage[]) {
 export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<DeterministicBillDetails> {
   const pages = await extractPositionedPdfPages(pdfBuffer);
   if (!pages.length || pages.reduce((sum, page) => sum + page.items.length, 0) < 20) {
-    throw new Error('This PDF has no usable positioned text. Scanned bills require OCR or manual entry.');
+    throw new Error(
+      'This looks like a scanned copy — the pages are images with no readable text, so the amounts cannot be extracted. '
+      + 'Please upload the digitally-generated IREPS PDF (downloaded from IREPS) instead of a scanned or photographed copy.',
+    );
   }
 
   const items: DeterministicBillItem[] = [];
