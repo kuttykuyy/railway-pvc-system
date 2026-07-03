@@ -8,8 +8,8 @@
 
 ## Executive Summary
 
-- **Final score: 74 / 100**
-- **Production readiness: Production Ready after minor fixes** — the app is already live and serving real users/payments with a strong security posture; the deductions are robustness gaps (DB migration baseline, automated tests) rather than blocking defects.
+- **Final score: 74 / 100 → 76 / 100** (after AUD-01 fix, below)
+- **Production readiness: Production Ready after minor fixes** — the app is already live and serving real users/payments with a strong security posture; the deductions are robustness gaps (automated tests) rather than blocking defects. **Update 2026-07-03: AUD-01 (DB migration baseline) is now RESOLVED and verified** — the schema is fully reproducible from migrations.
 - **Biggest strengths:** hardened security (atomic exactly-once payments, distributed rate limiting, enforced CSP + headers, XSS fixed), consistent tenant/ownership authorization, a well-indexed and constrained schema, and a polished, bilingual UI.
 - **Biggest risks:** (1) **no baseline DB migration** — the schema cannot be reproduced from migrations; (2) **zero automated tests** around payment/permission logic; (3) several **4,000+ line monolithic files** and heavy `any` usage.
 
@@ -34,20 +34,21 @@
 | Security | 90 | Atomic/idempotent payments, timing-safe webhook, DB-backed login rate limiting, enforced CSP + security headers, XSS escaped, deps clean (`npm audit`=0), parameterized SQL, no public secret leaks. Minor: `script-src` needs `'unsafe-inline'` (AdSense), heavy `any` in auth paths. |
 | Tenant isolation / authorization | 88 | Consistent ownership via `checkUserBillAccess`/`checkUserContractAccess`, v1 API scoped by `userId`, admin gated by `validateAdminAccess`, bulk-delete validates every id. Minor: some pre-check-then-mutate (non-atomic) patterns; not all 183 routes exhaustively traced. |
 | Code quality | 62 | Several 2,000–4,300 line files, 835 `any` usages, 3× duplicated ~400-line invoice generator, 152 raw `console.log`. Positives: `tsc` clean, only 9 TODOs, consistent structure. |
-| Database design | 82 | 47 models, 83 `@@index`, 33 cascades, 40 unique constraints, parameterized queries. Deduction: incomplete migration history (see AUD-01); no `organizationId` (user-ownership by design). |
+| Database design | 82 → 86 | 47 models, 83 `@@index`, 33 cascades, 40 unique constraints, parameterized queries. **AUD-01 resolved:** migration history is now complete and reproduces prod exactly. Remaining minor: no `organizationId` (user-ownership by design). |
 | Performance | 72 | Dashboard uses one raw aggregate (no N+1), bills list paginated, accessible-id queries avoid memory cliffs. Deductions: `images.unoptimized`, 166 client components, synchronous in-request PDF generation. |
 | Scalability | 70 | DB-backed rate limiter now cross-instance; Supabase pooler; pagination. Deductions: in-request heavy PDF work (no queue), residual in-memory caches don't scale across instances, no report CDN/cache. |
 | UI/UX | 75 | Polished landing page, shadcn/Tailwind design system, bilingual (EN/हिन्दी), loading spinners, empty states, one error boundary. Deductions: no `loading.tsx`/`not-found.tsx`, a hydration mismatch warning, accessibility not systematically verified. |
 | Reliability | 76 | 172/183 routes have try/catch, `/api/health/db` health check, atomic payment/credit transactions, webhook idempotency, fail-open limiter, Slack alerts. Deductions: 0 tests, no boot-time env validation, no retry/queue for external calls. |
 | Maintainability | 63 | Clear folders, prod-safe logger, low TODOs. Deductions: 835 `any`, 4,000+ line files, duplicated generators, no tests to refactor safely. |
-| Production readiness | 68 | Security hardened, health check, `.env` gitignored, CSP/headers, recent migrations. Deductions: **no baseline migration**, **0 tests**, no visible CI, `images.unoptimized`, monitoring limited to Slack alerts, backups assumed (Supabase). |
-| **Overall** | **74** | Strong, live, secure product held back by migration-reproducibility, test coverage, and code-size/duplication debt. |
+| Production readiness | 68 → 74 | Security hardened, health check, `.env` gitignored, CSP/headers, **baseline migration added (AUD-01 fixed) — schema reproducible from migrations**. Remaining deductions: **0 tests**, no visible CI, `images.unoptimized`, monitoring limited to Slack alerts, backups assumed (Supabase). |
+| **Overall** | **76** | Strong, live, secure product; the DB is now reproducible from migrations. Remaining debt: test coverage and code-size/duplication. |
 
 ---
 
 ## Confirmed Issues
 
-### AUD-01 — No baseline DB migration (schema not reproducible from migrations)
+### AUD-01 — No baseline DB migration (schema not reproducible from migrations) — ✅ RESOLVED (2026-07-03)
+- **Resolution:** Added a baseline migration `app/prisma/migrations/20260101000000_init/` (43 tables representing the pre-additive schema) plus `migration_lock.toml`, ordered before the 5 additive migrations. **Verified on a throwaway isolated schema:** `prisma migrate deploy` on a fresh empty database applies all 6 migrations and reproduces production **exactly — 48 tables, 42 foreign keys, 170 indexes (identical to prod)**. Production was reconciled with `prisma migrate resolve --applied 20260101000000_init` (bookkeeping only, no DDL); `migrate status` = "up to date" and data is intact (125 users, 57 bills, 32 contracts, 11 payments). No feature code changed.
 - **Area:** Database / Production readiness · **Severity:** High · **Score impact:** −8 (prod readiness), −4 (DB)
 - **Files:** `app/prisma/migrations/` (only 5 folders); earliest `20260623000100_add_referral_program/migration.sql:1`
 - **Evidence:** The first migration is `ALTER TABLE "User" ADD COLUMN "referralCode" TEXT;` and later `FOREIGN KEY ("referrerUserId") REFERENCES "User"("id")` — it **references `User` but never creates it**. `grep -rl 'CREATE TABLE "users"|"contracts"|"bills"' prisma/migrations` returns **nothing**. The 47-model baseline was clearly applied with `prisma db push`, not migrations.
@@ -137,7 +138,7 @@
 ## Priority Fix Plan
 
 ### Must fix before production *(for new-environment / DR confidence)*
-- **AUD-01** Baseline DB migration (so the schema can be recreated / DR works).
+- ~~**AUD-01** Baseline DB migration~~ — ✅ **DONE** (2026-07-03): `migrate deploy` now recreates the full schema on a fresh DB; verified identical to prod.
 - **AUD-02** Automated tests for payments, permissions, and PVC math.
 
 ### Should fix soon
