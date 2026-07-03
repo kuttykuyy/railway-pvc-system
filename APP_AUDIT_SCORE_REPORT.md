@@ -33,15 +33,15 @@
 | ---- | ----: | ------ |
 | Security | 90 | Atomic/idempotent payments, timing-safe webhook, DB-backed login rate limiting, enforced CSP + security headers, XSS escaped, deps clean (`npm audit`=0), parameterized SQL, no public secret leaks. Minor: `script-src` needs `'unsafe-inline'` (AdSense), heavy `any` in auth paths. |
 | Tenant isolation / authorization | 88 | Consistent ownership via `checkUserBillAccess`/`checkUserContractAccess`, v1 API scoped by `userId`, admin gated by `validateAdminAccess`, bulk-delete validates every id. Minor: some pre-check-then-mutate (non-atomic) patterns; not all 183 routes exhaustively traced. |
-| Code quality | 62 | Several 2,000–4,300 line files, 835 `any` usages, 3× duplicated ~400-line invoice generator, 152 raw `console.log`. Positives: `tsc` clean, only 9 TODOs, consistent structure. |
+| Code quality | 62 → 65 | Several 2,000–4,300 line files, 835 `any` usages, 152 raw `console.log`. **AUD-05 resolved:** the 3× duplicated invoice generator is now one shared module. Positives: `tsc` clean, only 9 TODOs, consistent structure. |
 | Database design | 82 → 86 | 47 models, 83 `@@index`, 33 cascades, 40 unique constraints, parameterized queries. **AUD-01 resolved:** migration history is now complete and reproduces prod exactly. Remaining minor: no `organizationId` (user-ownership by design). |
 | Performance | 72 | Dashboard uses one raw aggregate (no N+1), bills list paginated, accessible-id queries avoid memory cliffs. Deductions: `images.unoptimized`, 166 client components, synchronous in-request PDF generation. |
 | Scalability | 70 | DB-backed rate limiter now cross-instance; Supabase pooler; pagination. Deductions: in-request heavy PDF work (no queue), residual in-memory caches don't scale across instances, no report CDN/cache. |
 | UI/UX | 75 | Polished landing page, shadcn/Tailwind design system, bilingual (EN/हिन्दी), loading spinners, empty states, one error boundary. Deductions: no `loading.tsx`/`not-found.tsx`, a hydration mismatch warning, accessibility not systematically verified. |
 | Reliability | 76 → 80 | 172/183 routes have try/catch, `/api/health/db`, atomic payment/credit transactions, webhook idempotency, fail-open limiter, Slack alerts. **AUD-02 partly fixed:** Vitest + 27 unit tests on core logic. Remaining: DB-integration tests for payments/permissions; no boot-time env validation. |
-| Maintainability | 63 → 67 | Clear folders, prod-safe logger, low TODOs, **now a test harness (Vitest) + 27 tests**. Deductions: 835 `any`, 4,000+ line files, duplicated generators. |
+| Maintainability | 63 → 69 | Clear folders, prod-safe logger, low TODOs, **a test harness (Vitest) + 30 tests, and the invoice generator de-duplicated (AUD-05)**. Deductions: 835 `any`, 4,000+ line files. |
 | Production readiness | 68 → 74 | Security hardened, health check, `.env` gitignored, CSP/headers, **baseline migration added (AUD-01 fixed) — schema reproducible from migrations**. Remaining deductions: **0 tests**, no visible CI, `images.unoptimized`, monitoring limited to Slack alerts, backups assumed (Supabase). |
-| **Overall** | **78** | Strong, live, secure product; DB reproducible from migrations and a test harness with 27 core-logic tests in place. Remaining debt: DB-integration tests for payments/permissions, and code-size/duplication. |
+| **Overall** | **79** | Strong, live, secure product; DB reproducible from migrations, a test harness with 30 tests, and the invoice generator de-duplicated. Remaining debt: DB-integration tests for payments/permissions, oversized files, and `any` usage. |
 
 ---
 
@@ -75,7 +75,8 @@
 - **Why it matters:** `any` disables type checking exactly where correctness matters (auth payloads, Prisma results, payment data). E.g., invoice generators are typed `(invoice: any, user: any)` — the XSS in this session was possible partly because fields were untyped `any`.
 - **Recommended fix:** Type the high-risk surfaces first: payment/credit objects, permission results, invoice/bill shapes. Add `noImplicitAny` enforcement incrementally per-folder.
 
-### AUD-05 — Duplicated GST-invoice HTML generator (×3)
+### AUD-05 — Duplicated GST-invoice HTML generator (×3) — ✅ RESOLVED (2026-07-03)
+- **Resolution:** Extracted the byte-identical 454-line generator into a single module `app/lib/gst-invoice-html.ts`; the public, user, and admin invoice routes now import it. Added 3 unit tests (`lib/gst-invoice-html.test.ts`) locking the XSS escaping. `tsc` clean, dev server boots clean, all 30 unit tests pass. The security escaping now lives in one place instead of three.
 - **Area:** Code quality / Maintainability · **Severity:** Medium · **Score impact:** −4
 - **Files:** `app/api/public/gst-invoice-pdf/[id]/route.ts`, `app/api/gst-invoices/[id]/pdf/route.ts`, `app/api/admin/gst-invoices/[id]/pdf/route.ts` — each contains a byte-identical ~400-line `generateGstInvoiceHtml`.
 - **Evidence:** `diff` of the three functions = IDENTICAL (verified this session). The XSS fix had to be applied three times.
@@ -144,7 +145,7 @@
 
 ### Should fix soon
 - **AUD-03** Break up the 4,307-line PDF route and other 2,000+ line files.
-- **AUD-05** De-duplicate the GST-invoice HTML generator.
+- ~~**AUD-05** De-duplicate the GST-invoice HTML generator~~ — ✅ **DONE** (2026-07-03): one shared `lib/gst-invoice-html.ts`, imported by all 3 routes, with escaping tests.
 - **AUD-07** Move heavy/bulk PDF generation off the request path.
 - **AUD-04** Reduce `any` on auth/payment/DB surfaces.
 
