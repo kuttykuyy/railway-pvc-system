@@ -33,7 +33,7 @@ export async function isUserAdmin(request?: Request): Promise<{
       };
     }
 
-    const isAdmin = user.role === 'admin' || user.email === '30prasath93@gmail.com';
+    const isAdmin = user.role === 'admin' || user.role === 'superadmin';
 
     return {
       isAdmin,
@@ -78,7 +78,7 @@ export async function isUserRailwayOfficial(request?: Request): Promise<{
       };
     }
 
-    const isRailwayOfficial = user.role === 'railway_official' || user.role === 'admin';
+    const isRailwayOfficial = user.role === 'railway_official' || user.role === 'admin' || user.role === 'superadmin';
 
     return {
       isRailwayOfficial,
@@ -123,7 +123,7 @@ export async function isUserContractor(request?: Request): Promise<{
       };
     }
 
-    const isContractor = user.role === 'contractor' || user.role === 'admin';
+    const isContractor = user.role === 'contractor' || user.role === 'admin' || user.role === 'superadmin';
 
     return {
       isContractor,
@@ -161,9 +161,9 @@ export async function validateAdminAccess(request: Request): Promise<{
  */
 export function getClientRoleInfo(session: any) {
   return {
-    isAdmin: session?.user?.role === 'admin' || session?.user?.email === '30prasath93@gmail.com',
-    isRailwayOfficial: session?.user?.role === 'railway_official' || session?.user?.role === 'admin',
-    isContractor: session?.user?.role === 'contractor' || session?.user?.role === 'admin',
+    isAdmin: session?.user?.role === 'admin' || session?.user?.role === 'superadmin',
+    isRailwayOfficial: session?.user?.role === 'railway_official' || session?.user?.role === 'admin' || session?.user?.role === 'superadmin',
+    isContractor: session?.user?.role === 'contractor' || session?.user?.role === 'admin' || session?.user?.role === 'superadmin',
     role: session?.user?.role || 'contractor',
     email: session?.user?.email,
     designation: session?.user?.designation,

@@ -1,14 +1,46 @@
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import jwt from 'jsonwebtoken';
 import { prisma } from '@/lib/db';
+import { authOptions, getNextAuthSecret } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * GET /api/public/gst-invoice-pdf/[id]
- * Public endpoint for GST invoice PDF (used for WhatsApp sharing)
- * No authentication required - invoice ID serves as the access token
+ * GET /api/public/gst-invoice-pdf/[id]?token=<jwt>
+ * Serves a GST invoice PDF. Access requires EITHER:
+ *  - a valid signed token scoped to this invoice id (used for WhatsApp-shared links), OR
+ *  - an authenticated session belonging to the invoice owner (or an admin).
+ * The invoice contains customer PII and financial data, so the bare id is not sufficient.
  */
+async function isAuthorized(request: NextRequest, invoice: { id: string; userId: string }): Promise<boolean> {
+  // 1) Signed token in the URL (WhatsApp / email share links).
+  const token = new URL(request.url).searchParams.get('token');
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, getNextAuthSecret()) as { invoiceId?: string };
+      if (decoded.invoiceId === invoice.id) return true;
+    } catch {
+      // fall through to session check
+    }
+  }
+
+  // 2) Authenticated owner or admin.
+  const session = await getServerSession(authOptions);
+  if (session?.user?.email) {
+    const requester = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true, role: true },
+    });
+    if (requester) {
+      if (requester.id === invoice.userId) return true;
+      if (requester.role === 'admin' || requester.role === 'superadmin') return true;
+    }
+  }
+  return false;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -24,6 +56,13 @@ export async function GET(
       return NextResponse.json(
         { error: 'Invoice not found' },
         { status: 404 }
+      );
+    }
+
+    if (!(await isAuthorized(request, invoice))) {
+      return NextResponse.json(
+        { error: 'Not authorized to view this invoice' },
+        { status: 403 }
       );
     }
 
@@ -46,7 +85,8 @@ export async function GET(
     return new NextResponse(html, {
       headers: {
         'Content-Type': 'text/html',
-        'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+        // Contains customer PII — never cache on shared/CDN layers.
+        'Cache-Control': 'private, no-store',
       },
     });
   } catch (error: any) {

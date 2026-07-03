@@ -2,7 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import jwt from 'jsonwebtoken';
+import { authOptions, getNextAuthSecret } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { createGstInvoice } from '@/lib/gst-invoice';
 import { sendBillPDFNotification, isMyDreamsWhatsAppConfigured } from '@/lib/whatsapp-mydreams';
@@ -133,8 +134,14 @@ export async function POST(request: NextRequest) {
       if (whatsappConfigured) {
         logger.log(`[GST Invoice] Attempting to send WhatsApp notification to ${customerPhone}`);
         
-        // Public PDF URL (no authentication required for WhatsApp download)
-        const pdfUrl = `https://irpvc.in/api/public/gst-invoice-pdf/${gstInvoice.id}`;
+        // Public PDF URL protected by a signed, invoice-scoped token so the link is
+        // shareable via WhatsApp but the bare invoice id alone cannot fetch the PII.
+        const invoiceToken = jwt.sign(
+          { invoiceId: gstInvoice.id },
+          getNextAuthSecret(),
+          { expiresIn: '365d' }
+        );
+        const pdfUrl = `https://irpvc.in/api/public/gst-invoice-pdf/${gstInvoice.id}?token=${encodeURIComponent(invoiceToken)}`;
         const pdfFileName = `GST_Invoice_${gstInvoice.invoiceNumber}.pdf`;
         
         // Format date for WhatsApp message
