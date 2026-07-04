@@ -713,8 +713,9 @@ export default function SpreadsheetPage() {
     return 'mixed';
   };
 
-  // Toggle provisional status for all values in a column for the current year
-  const handleToggleProvisional = async (colDbName: string, colKey: string, setProvisional: boolean) => {
+  // Toggle provisional status. Whole column/year by default, or a single month
+  // when monthIndex (0-11) is given.
+  const handleToggleProvisional = async (colDbName: string, colKey: string, setProvisional: boolean, monthIndex?: number) => {
     setTogglingCol(colKey);
     try {
       const response = await fetch('/api/indices/monthly/toggle-provisional', {
@@ -723,12 +724,13 @@ export default function SpreadsheetPage() {
         body: JSON.stringify({
           priceIndexName: colDbName,
           year,
+          ...(typeof monthIndex === 'number' ? { month: monthIndex + 1 } : {}),
           isProvisional: setProvisional,
         }),
       });
       const result = await response.json();
       if (result.success) {
-        toast.success(`${colDbName}: ${result.updated} values marked as ${setProvisional ? 'Provisional' : 'Final'}`);
+        toast.success(`${colDbName}: ${result.updated} value(s) marked as ${setProvisional ? 'Provisional' : 'Final'}`);
         fetchData();
       } else {
         toast.error(result.error || 'Failed to update');
@@ -1803,10 +1805,17 @@ export default function SpreadsheetPage() {
                           >
                             {hasValue ? (
                               <div className="flex items-center justify-center gap-1 group">
-                                <span>
-                                  {cell.value.toFixed(2)}
-                                  {cell.isProvisional && <span className="text-amber-600 text-xs ml-1">(P)</span>}
-                                </span>
+                                <span>{cell.value.toFixed(2)}</span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleProvisional(col.dbName, col.key, !cell.isProvisional, row.monthIndex);
+                                  }}
+                                  className={`text-[10px] font-bold leading-none px-1 py-0.5 rounded ${cell.isProvisional ? "text-amber-700 bg-amber-100 hover:bg-amber-200" : "text-green-700 bg-green-100 hover:bg-green-200"}`}
+                                  title={cell.isProvisional ? "Provisional — click to mark this month Final" : "Final — click to mark this month Provisional"}
+                                >
+                                  {cell.isProvisional ? "P" : "F"}
+                                </button>
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1858,8 +1867,17 @@ export default function SpreadsheetPage() {
                               <div className="flex items-center justify-center gap-1 group">
                                 <span className={`font-mono ${hasDetail ? "underline decoration-dotted decoration-gray-400" : ""}`}>
                                   {cell.value.toFixed(0)}
-                                  {cell.isProvisional && <span className="text-amber-600 ml-0.5">(P)</span>}
                                 </span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleProvisional(col.dbName, col.key, !cell.isProvisional, row.monthIndex);
+                                  }}
+                                  className={`text-[10px] font-bold leading-none px-1 py-0.5 rounded ${cell.isProvisional ? "text-amber-700 bg-amber-100 hover:bg-amber-200" : "text-green-700 bg-green-100 hover:bg-green-200"}`}
+                                  title={cell.isProvisional ? "Provisional — click to mark this month Final" : "Final — click to mark this month Provisional"}
+                                >
+                                  {cell.isProvisional ? "P" : "F"}
+                                </button>
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();

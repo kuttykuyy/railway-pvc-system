@@ -18,7 +18,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { priceIndexId, priceIndexName, year, isProvisional } = body;
+    const { priceIndexId, priceIndexName, year, month, isProvisional } = body;
 
     if (!year || typeof isProvisional !== 'boolean') {
       return NextResponse.json({ error: 'year and isProvisional are required' }, { status: 400 });
@@ -38,8 +38,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'priceIndexId or priceIndexName required' }, { status: 400 });
     }
 
-    const startDate = new Date(Date.UTC(year, 0, 1));
-    const endDate = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
+    // If a month (1-12) is given, target just that month; otherwise the whole year.
+    const hasMonth = typeof month === 'number' && month >= 1 && month <= 12;
+    const startDate = hasMonth ? new Date(Date.UTC(year, month - 1, 1)) : new Date(Date.UTC(year, 0, 1));
+    const endDate = hasMonth
+      ? new Date(Date.UTC(year, month - 1, 31, 23, 59, 59))
+      : new Date(Date.UTC(year, 11, 31, 23, 59, 59));
 
     const result = await prisma.monthlyIndexValue.updateMany({
       where: {
