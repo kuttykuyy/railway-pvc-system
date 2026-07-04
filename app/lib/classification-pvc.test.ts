@@ -78,9 +78,17 @@ describe('pvcComparisonAllowsSuffix', () => {
     expect(pvcComparisonAllowsSuffix('D', 'C')).toBe(false);
   });
 
-  it('lets a fabrication item compare within D/E but not fall back to A', () => {
-    expect(pvcComparisonAllowsSuffix('E', 'D')).toBe(true);
-    expect(pvcComparisonAllowsSuffix('D', 'E')).toBe(true);
+  it('never swaps fabrication D<->E for a bigger payout (steel supply is a nature choice)', () => {
+    // The reported bug: a "Supplying & fixing steel" item (contractor steel -> 6D)
+    // was switched to 6E because 6E paid more. D and E differ by who supplies the
+    // steel, so the payout comparison must never move between them.
+    expect(pvcComparisonAllowsSuffix('D', 'E')).toBe(false);
+    expect(pvcComparisonAllowsSuffix('E', 'D')).toBe(false);
     expect(pvcComparisonAllowsSuffix('E', 'A')).toBe(false);
+  });
+
+  it('only confirms the current suffix, never moves to a different one', () => {
+    expect(pvcComparisonAllowsSuffix('D', 'D')).toBe(true);
+    expect(pvcComparisonAllowsSuffix('E', 'E')).toBe(true);
   });
 });

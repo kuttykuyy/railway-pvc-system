@@ -71,18 +71,19 @@ export function formatPvcAmount(value: number): string {
 /**
  * Whether the automatic PVC comparison may switch an item from `currentSuffix` to
  * `candidateSuffix`. Classification must reflect the NATURE of the work, not the
- * highest payout, so the comparison may only move between sub-classes of the same
- * nature:
- *  - Supply classes (B = steel supply, C = cement supply) are never auto-selected.
- *  - Fabrication & Erection classes (D/E) never mix with general work (A): a plain
- *    concrete/masonry item must never become "5E" just because it yields a better PVC.
- * A fabrication item may still compare within D/E; a general item only stays at A.
+ * highest payout. Each GCC 46A suffix denotes a distinct nature:
+ *  - A = general work,
+ *  - B = steel supply, C = cement supply,
+ *  - D = fabrication/erection INCLUDING contractor-supplied steel,
+ *  - E = fabrication/erection EXCLUDING steel (free-issue / railway-supplied).
+ * None of these may be swapped for another just because it yields a better PVC —
+ * in particular D and E differ by who supplies the steel, so a "Supplying &
+ * fixing steel" item (contractor steel → D) must never become E for a bigger
+ * payout. The comparison is therefore transparency-only: it may confirm the
+ * current suffix but never move to a different one.
  */
 export function pvcComparisonAllowsSuffix(currentSuffix: string, candidateSuffix: string): boolean {
   const current = String(currentSuffix || '').toUpperCase();
   const candidate = String(candidateSuffix || '').toUpperCase();
-  if (candidate === 'B' || candidate === 'C') return false;
-  const currentIsFabrication = current === 'D' || current === 'E';
-  const candidateIsFabrication = candidate === 'D' || candidate === 'E';
-  return currentIsFabrication === candidateIsFabrication;
+  return current === candidate;
 }

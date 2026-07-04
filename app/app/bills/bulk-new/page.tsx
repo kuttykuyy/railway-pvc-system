@@ -513,8 +513,8 @@ export default function BulkBillCreationPage() {
 
         const comparisonText = results.map(result => `${result.sub.code} → ${formatPvcAmount(result.pvc)}`).join(', ');
         const note = selected.id === best.sub.id
-          ? `${selected.code} comes out best here and it fits the work, so that is what's used.`
-          : `${best.sub.code} would pay more, but that is fabrication/erection work — this item is genuinely ${selected.code}, so it stays ${selected.code}.`;
+          ? `${selected.code} matches the nature of the work.`
+          : `${best.sub.code} would yield a higher PVC, but classification follows the nature of the work rather than the payout, so this item stays ${selected.code}.`;
         const amountLabel = amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const justification = [
           entry.classificationJustification || '',

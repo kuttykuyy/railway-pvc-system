@@ -1,7 +1,7 @@
 // Service Worker for IR-PVC PWA
 // Bump CACHE_VERSION on every release to force clients to drop old cached assets
 // and pull the new build (stale cache was serving old app code after deploys).
-const CACHE_VERSION = '1.1.6';
+const CACHE_VERSION = '1.1.7';
 const CACHE_NAME = `railway-pvc-${CACHE_VERSION}`;
 
 const urlsToCache = [
