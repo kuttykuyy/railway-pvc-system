@@ -291,7 +291,9 @@ export function BillClassificationEntries({
             // update), trusting the explicit group would render a blank Sub select and
             // a Main select that looks stuck on the wrong group — the entry's real
             // classification is the sub, so display its group and stay editable.
-            const selectedGroup = subGroup || explicitGroup || requiredGroup || classificationGroups[0];
+            // No inferred-group fallback: an entry without a resolvable classification
+            // (e.g. just cleared) shows the "Select group" placeholder, not a guess.
+            const selectedGroup = subGroup || explicitGroup;
             const selectedSub = currentSub?.groupId === selectedGroup?.id ? currentSub : undefined;
             const scheduleInList = !entry.scheduleItem || contractSchedules.includes(entry.scheduleItem);
             const rows = getRows(entry);
