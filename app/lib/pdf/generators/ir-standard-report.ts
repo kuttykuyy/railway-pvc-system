@@ -936,6 +936,149 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     });
   }
 
+  // ── G. STATUTORY ESCALATION FRAMEWORK & CALCULATIONS ──────────────────────
+  // Per-component statutory escalation (GCC Clause 46A): each cost component's
+  // price variation = its weighted amount x [(I1 - I0) / I0]; dedicated cement
+  // and dedicated steel apply the 85% variable factor. Mirrors the on-screen
+  // "Statutory Escalate Framework & Calculations" panel, with the bill's item
+  // numbers listed alongside.
+  if (pvc && allComponents.length > 0) {
+    pdf.addPage();
+    y = mT;
+
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('G. STATUTORY ESCALATION FRAMEWORK & CALCULATIONS', mL, y);
+    y += 5;
+
+    pdf.setFontSize(7.5);
+    pdf.setFont('helvetica', 'italic');
+    pdf.setTextColor(80, 80, 80);
+    const gIntro = pdf.splitTextToSize(
+      'Statutory escalation per GCC Clause 46A: Component Escalation = Component Amount x [(I1 - I0) / I0], '
+      + 'where I0 = Base Month index and I1 = Quarter Average index. Dedicated cement / steel apply the 85% variable factor.',
+      contentW,
+    );
+    pdf.text(gIntro, mL, y);
+    pdf.setTextColor(0, 0, 0);
+    y += gIntro.length * 3.4 + 3;
+
+    const escHead = [[
+      'Component',
+      '% (Wtd.)',
+      'Component Amt (Rs.)',
+      'I0',
+      'I1',
+      'Statutory Escalate Formula',
+      'Escalation Amt (Rs.)',
+    ]];
+    const escBody: any[] = allComponents.map(c => {
+      const amt = billAmount * c.pct;
+      return [
+        c.name,
+        (c.pct * 100).toFixed(2) + '%',
+        fmt(amt),
+        fmtIdx(c.base),
+        fmtIdx(c.avg),
+        `${fmt(amt)} x [(${fmtIdx(c.avg)} - ${fmtIdx(c.base)}) / ${fmtIdx(c.base)}]`,
+        fmt(c.pvcAmt),
+      ];
+    });
+
+    // Dedicated cement / steel rows use the 85% escalation factor and their own
+    // dedicated amounts / section indices.
+    const b = bill as any;
+    const dedicated: Array<{ label: string; amount: number; base: number; avg: number; pvc: number }> = [];
+    if (Math.abs(pvc.dedicatedCementPvc ?? 0) > 0.005) {
+      dedicated.push({ label: 'Dedicated Cement (85%)', amount: Number(b.cementAmount) || 0, base: cemBase, avg: cemAvg, pvc: pvc.dedicatedCementPvc! });
+    }
+    const steelDed: Array<[number, string, number]> = [
+      [pvc.dedicatedSteelTmtBarsPvc ?? 0, 'Dedicated Steel TMT Bars (85%)', Number(b.steelTmtBarsAmount) || 0],
+      [pvc.dedicatedSteelAngleChannelPvc ?? 0, 'Dedicated Steel Angle/Channel (85%)', Number(b.steelAngleChannelAmount) || 0],
+      [pvc.dedicatedSteelPlatesPvc ?? 0, 'Dedicated Steel Plates (85%)', Number(b.steelPlatesAmount) || 0],
+      [pvc.dedicatedSteelOtherSectionsPvc ?? 0, 'Dedicated Steel Other Sections (85%)', Number(b.steelOtherSectionsAmount) || 0],
+    ];
+    steelDed.forEach(([pvcVal, label, amount], i) => {
+      if (Math.abs(pvcVal) > 0.005) {
+        const nm = steelIndexNames[i];
+        dedicated.push({ label, amount, base: getIndexBase(quarterlyAverages, nm), avg: getIndexAvg(quarterlyAverages, nm), pvc: pvcVal });
+      }
+    });
+    for (const d of dedicated) {
+      escBody.push([
+        d.label,
+        '85%',
+        fmt(d.amount),
+        fmtIdx(d.base),
+        fmtIdx(d.avg),
+        `${fmt(d.amount)} x [(${fmtIdx(d.avg)} - ${fmtIdx(d.base)}) / ${fmtIdx(d.base)}] x 85%`,
+        fmt(d.pvc),
+      ]);
+    }
+
+    escBody.push([
+      { content: 'TOTAL PRICE VARIATION FOR THIS BILL', colSpan: 6, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [220, 220, 220] as [number, number, number] } },
+      { content: fmt(pvc.totalPvc ?? 0), styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [220, 220, 220] as [number, number, number] } },
+    ]);
+
+    autoTable(pdf, {
+      startY: y,
+      head: escHead,
+      body: escBody,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [20, 20, 20],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 8,
+        halign: 'center',
+        valign: 'middle',
+        cellPadding: 2.5,
+      },
+      bodyStyles: {
+        fontSize: 8,
+        cellPadding: { top: 2, right: 2.5, bottom: 2, left: 2.5 },
+        textColor: [0, 0, 0],
+        valign: 'middle',
+      },
+      alternateRowStyles: { fillColor: [250, 250, 250] },
+      styles: { lineColor: [180, 180, 180], lineWidth: 0.3, font: 'helvetica', overflow: 'linebreak' },
+      margin: { left: mL, right: mR, top: mT },
+      tableWidth: contentW,
+      columnStyles: {
+        0: { cellWidth: 42, halign: 'left' },
+        1: { cellWidth: 16, halign: 'center' },
+        2: { cellWidth: 30, halign: 'right' },
+        3: { cellWidth: 17, halign: 'center' },
+        4: { cellWidth: 17, halign: 'center' },
+        5: { cellWidth: 120, halign: 'left' },
+        6: { cellWidth: 31, halign: 'right' },
+      },
+    });
+
+    y = pdf.lastAutoTable.finalY + 5;
+
+    // Bill item numbers covered by this escalation (item-number list alongside).
+    const escItemNos = Array.from(new Set(
+      entries.flatMap(e => {
+        const rows = (e.itemRows || []).map(r => String(r?.itemNumber || '').trim()).filter(Boolean);
+        return rows.length > 0 ? rows : [String(e.itemNumber || '').trim()];
+      }).filter(Boolean)
+    ));
+    if (escItemNos.length > 0) {
+      ensureSpace(16);
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Bill item numbers covered by this escalation:', mL, y);
+      y += 4;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      const itemLines = pdf.splitTextToSize(escItemNos.join(',   '), contentW);
+      pdf.text(itemLines, mL, y);
+      y += itemLines.length * 3.4;
+    }
+  }
+
   // ── PAGE 2: AFFECTED PRICE INDICES WITH MONTHLY BREAKDOWN ─────────────────
   // Build set of index names actually used in this PVC calculation
   const usedIndexNames = new Set<string>();
@@ -1230,6 +1373,165 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         margin: { left: mL, right: mR },
         tableWidth: contentW,
         columnStyles: histColStyles,
+      });
+    }
+  }
+
+  // ── AVERAGE JPC STEEL & MONTHLY FUEL (DIESEL) INDICES ─────────────────────
+  // Generated average tables in the railway proforma, filtered to the sections
+  // and city actually selected for this bill.
+  const drawProformaHeader = (title: string, clauseNote: string) => {
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(title, pageW / 2, y, { align: 'center' });
+    y += 5;
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    const nowLines = pdf.splitTextToSize(`Name of Work: ${bill.contract.workDescription || '-'}`, contentW);
+    pdf.text(nowLines, mL, y);
+    y += nowLines.length * 3.6 + 1;
+    const loaBits = [
+      bill.contract.loaNo ? `LOA No.: ${bill.contract.loaNo}` : `Agreement No.: ${bill.contract.agreementNo}`,
+      bill.contract.loaDate ? `dtd: ${format(new Date(bill.contract.loaDate), 'dd.MM.yyyy')}` : '',
+    ].filter(Boolean).join('   ');
+    pdf.text(loaBits, mL, y);
+    y += 4;
+    pdf.setFontSize(7.5);
+    pdf.setFont('helvetica', 'italic');
+    pdf.setTextColor(80, 80, 80);
+    pdf.text(clauseNote, mL, y);
+    pdf.setTextColor(0, 0, 0);
+    y += 3;
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.4);
+    pdf.line(mL, y, pageW - mR, y);
+    y += 5;
+  };
+
+  // Clean section label: "Steel TMT Bars - Mumbai" -> "TMT Bars"
+  const cleanSteelLabel = (name: string) =>
+    name.replace(/^Steel\s+/i, '').replace(/\s*-\s*[A-Za-z ]+$/,'').trim();
+
+  // AVERAGE JPC STEEL INDICES (selected sections only)
+  if (weights.steel > 0.0001 && usedSteelIndexNames.length > 0) {
+    const steelHist = allHistoricalMonthlyData.filter(d => usedSteelIndexNames.includes(d.indexName));
+    if (steelHist.length > 0) {
+      pdf.addPage();
+      y = mT;
+      drawProformaHeader(
+        'AVERAGE JPC STEEL INDICES',
+        'Clause 46A.9:(1) Relevant category of steel for the purpose of Price Variation formula as mentioned in this clause. '
+        + 'Values are the average JPC steel indices for the section(s) applicable to this bill.',
+      );
+
+      const baseMKey = `${baseMonth.getFullYear()}-${String(baseMonth.getMonth() + 1).padStart(2, '0')}`;
+      const steelMonths = Array.from(new Set(steelHist.map(d => d.month))).sort().filter(mk => mk !== baseMKey);
+      const steelLookup = new Map<string, Map<string, number>>();
+      for (const d of steelHist) {
+        if (!steelLookup.has(d.indexName)) steelLookup.set(d.indexName, new Map());
+        steelLookup.get(d.indexName)!.set(d.month, d.value);
+      }
+      const steelBaseLookup = new Map(quarterlyAverages.map(qa => [qa.indexName, qa.baseValue]));
+      const steelAvgLookup = new Map(quarterlyAverages.map(qa => [qa.indexName, qa.average]));
+
+      const steelHead = [['Month', ...usedSteelIndexNames.map(cleanSteelLabel)]];
+      const steelRows: any[] = [];
+      // Base month row
+      steelRows.push([
+        { content: `Base (${format(baseMonth, 'MMM yyyy')})`, styles: { fontStyle: 'bold' as const, fillColor: [230, 230, 230] as [number, number, number] } },
+        ...usedSteelIndexNames.map(n => ({
+          content: fmtIdx(steelBaseLookup.get(n) ?? steelLookup.get(n)?.get(`${baseMonth.getFullYear()}-${String(baseMonth.getMonth() + 1).padStart(2, '0')}`) ?? 0),
+          styles: { fontStyle: 'bold' as const, halign: 'center' as const, fillColor: [230, 230, 230] as [number, number, number] },
+        })),
+      ]);
+      for (const mk of steelMonths) {
+        const [yr, mo] = mk.split('-').map(Number);
+        steelRows.push([
+          format(new Date(yr, mo - 1, 1), 'MMM yyyy'),
+          ...usedSteelIndexNames.map(n => {
+            const v = steelLookup.get(n)?.get(mk);
+            return { content: v !== undefined ? fmtIdx(v) : '-', styles: { halign: 'center' as const } };
+          }),
+        ]);
+      }
+      // Quarter average row
+      steelRows.push([
+        { content: `Quarter Average (I1) [${bill.quarter}]`, styles: { fontStyle: 'bold' as const, fillColor: [205, 235, 230] as [number, number, number] } },
+        ...usedSteelIndexNames.map(n => ({
+          content: fmtIdx(steelAvgLookup.get(n) ?? 0),
+          styles: { fontStyle: 'bold' as const, halign: 'center' as const, fillColor: [205, 235, 230] as [number, number, number] },
+        })),
+      ]);
+
+      const steelColW = Math.min(40, Math.floor((contentW - 45) / usedSteelIndexNames.length));
+      const steelColStyles: Record<number, any> = { 0: { cellWidth: 45, halign: 'left' } };
+      usedSteelIndexNames.forEach((_, i) => { steelColStyles[1 + i] = { cellWidth: steelColW, halign: 'center' }; });
+
+      autoTable(pdf, {
+        startY: y,
+        head: steelHead,
+        body: steelRows,
+        theme: 'grid',
+        headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center', valign: 'middle', cellPadding: 2.5 },
+        bodyStyles: { fontSize: 9, cellPadding: { top: 2.5, right: 3, bottom: 2.5, left: 3 }, textColor: [0, 0, 0] },
+        alternateRowStyles: { fillColor: [248, 248, 248] },
+        styles: { lineColor: [180, 180, 180], lineWidth: 0.3 },
+        margin: { left: mL, right: mR },
+        tableWidth: 45 + steelColW * usedSteelIndexNames.length,
+        columnStyles: steelColStyles,
+      });
+    }
+  }
+
+  // MONTHLY FUEL INDICES (DIESEL) — selected city only
+  if (weights.fuel > 0.0001) {
+    const fuelHist = allHistoricalMonthlyData.filter(d => d.indexName === fuelIndexName);
+    if (fuelHist.length > 0) {
+      const cityLabel = fuelIndexName === 'MPNG Fuel'
+        ? '4-City Average (Delhi, Mumbai, Chennai, Kolkata)'
+        : fuelIndexName.replace(/^MPNG Fuel\s*-\s*/i, '');
+      pdf.addPage();
+      y = mT;
+      drawProformaHeader(
+        'MONTHLY FUEL INDICES (DIESEL)',
+        `Average of official Diesel prices published by the Petroleum Planning & Analysis Cell (PPAC). Basis: ${cityLabel}.`,
+      );
+
+      const fuelBaseVal = quarterlyAverages.find(qa => qa.indexName === fuelIndexName)?.baseValue
+        ?? fuelHist.find(d => d.month === `${baseMonth.getFullYear()}-${String(baseMonth.getMonth() + 1).padStart(2, '0')}`)?.value ?? 0;
+      const fuelAvgVal = quarterlyAverages.find(qa => qa.indexName === fuelIndexName)?.average ?? 0;
+
+      const fuelHead = [['Month', `Diesel Rate — ${cityLabel} (Rs./Litre)`]];
+      const fuelRows: any[] = [];
+      fuelRows.push([
+        { content: `Base (${format(baseMonth, 'MMM yyyy')})`, styles: { fontStyle: 'bold' as const, fillColor: [230, 230, 230] as [number, number, number] } },
+        { content: fmtIdx(fuelBaseVal), styles: { fontStyle: 'bold' as const, halign: 'center' as const, fillColor: [230, 230, 230] as [number, number, number] } },
+      ]);
+      const fuelBaseMKey = `${baseMonth.getFullYear()}-${String(baseMonth.getMonth() + 1).padStart(2, '0')}`;
+      for (const d of [...fuelHist].filter(d => d.month !== fuelBaseMKey).sort((a, b) => a.month.localeCompare(b.month))) {
+        const [yr, mo] = d.month.split('-').map(Number);
+        fuelRows.push([
+          format(new Date(yr, mo - 1, 1), 'MMM yyyy'),
+          { content: fmtIdx(d.value), styles: { halign: 'center' as const } },
+        ]);
+      }
+      fuelRows.push([
+        { content: `Quarter Average (I1) [${bill.quarter}]`, styles: { fontStyle: 'bold' as const, fillColor: [205, 235, 230] as [number, number, number] } },
+        { content: fmtIdx(fuelAvgVal), styles: { fontStyle: 'bold' as const, halign: 'center' as const, fillColor: [205, 235, 230] as [number, number, number] } },
+      ]);
+
+      autoTable(pdf, {
+        startY: y,
+        head: fuelHead,
+        body: fuelRows,
+        theme: 'grid',
+        headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center', valign: 'middle', cellPadding: 2.5 },
+        bodyStyles: { fontSize: 9, cellPadding: { top: 2.5, right: 3, bottom: 2.5, left: 3 }, textColor: [0, 0, 0] },
+        alternateRowStyles: { fillColor: [248, 248, 248] },
+        styles: { lineColor: [180, 180, 180], lineWidth: 0.3 },
+        margin: { left: mL, right: mR },
+        tableWidth: 130,
+        columnStyles: { 0: { cellWidth: 50, halign: 'left' }, 1: { cellWidth: 80, halign: 'center' } },
       });
     }
   }
