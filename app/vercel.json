@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/wpi-import",
+      "schedule": "0 5 * * *"
+    }
+  ]
+}
