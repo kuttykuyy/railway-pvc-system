@@ -443,6 +443,12 @@ export async function getMPNGFuelMonthlyAverage(
 
       let totalSum = 0;
 
+      // Gap-filled monthly averages (a diesel price holds until the next revision),
+      // so a month with only a few recorded days still gets the right value.
+      const { computeMonthlyFuelAverages } = await import('@/lib/fuel-monthly-average');
+      const ffCity = (!isZoneCity || !cityName) ? 'fourCity' : (cityName.toLowerCase() as any);
+      const monthlyFF = computeMonthlyFuelAverages(dailyFuelPrices, ffCity);
+
       for (const [monthKey, dailyPrices] of monthlyGroups) {
         let monthSum = 0;
         const formattedDailyPrices = dailyPrices.map((dp) => {
@@ -458,7 +464,7 @@ export async function getMPNGFuelMonthlyAverage(
           };
         });
 
-        const monthAvg = monthSum / dailyPrices.length;
+        const monthAvg = monthlyFF.get(monthKey) ?? (monthSum / dailyPrices.length);
         totalSum += monthAvg;
 
         monthlyValues.push({

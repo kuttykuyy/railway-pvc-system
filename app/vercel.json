@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/wpi-import",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/ppac-import",
+      "schedule": "0 6 * * *"
     }
   ]
 }
