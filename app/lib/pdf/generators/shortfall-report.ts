@@ -141,14 +141,15 @@ export function generateShortfallReport(opts: ShortfallReportOptions): Buffer {
   });
   y = pdf.lastAutoTable.finalY + 6;
 
-  // ── Headline recoverable / overpaid box ──
-  const isRecoverable = result.shortfallTotal > 0.005;
-  const boxColor: [number, number, number] = isRecoverable ? [176, 0, 0] : [0, 120, 70];
+  // ── Headline recoverable / over-settled box ──
+  const isRecoverable = result.direction === 'recoverable';
+  const isOverSettled = result.direction === 'over_settled';
+  const boxColor: [number, number, number] = isRecoverable ? [176, 0, 0] : isOverSettled ? [200, 140, 0] : [0, 120, 70];
   const headline = isRecoverable
     ? `AMOUNT RECOVERABLE FROM RAILWAY:  ${rs(result.recoverable)}`
-    : result.overpaid > 0.005
-      ? `NOTE: Railway paid ${rs(result.overpaid)} more than the computed entitlement.`
-      : 'Railway payment matches the computed PVC entitlement. No shortfall.';
+    : isOverSettled
+      ? `RAILWAY SETTLED ${rs(result.overpaid)} MORE THAN DUE - AT RISK OF RECOVERY`
+      : 'Railway settlement matches the computed PVC entitlement. No shortfall.';
   pdf.setFillColor(boxColor[0], boxColor[1], boxColor[2]);
   pdf.roundedRect(mL, y, contentW, 12, 2, 2, 'F');
   pdf.setFontSize(11.5);

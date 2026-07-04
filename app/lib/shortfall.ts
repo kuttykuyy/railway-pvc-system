@@ -28,6 +28,8 @@ export interface ShortfallRow {
   shortfall: number | null;
 }
 
+export type ShortfallDirection = 'recoverable' | 'over_settled' | 'matched';
+
 export interface ShortfallResult {
   hasRailwayData: boolean;
   hasComponentBreakdown: boolean;
@@ -37,6 +39,10 @@ export interface ShortfallResult {
   recoverable: number;
   overpaid: number;
   shortfallPct: number;
+  /** Sign of the entitlement: PVC positive = Railway pays contractor; negative = deduction/recovery from contractor. */
+  entitlementIsRecoveryFromContractor: boolean;
+  /** recoverable = Railway settled less than due (contractor is owed); over_settled = Railway settled more (recovery risk). */
+  direction: ShortfallDirection;
   rows: ShortfallRow[];
 }
 
@@ -101,6 +107,10 @@ export function computeShortfall(pvc: any, audit: any | null): ShortfallResult {
     };
   });
 
+  const TOL = 0.005;
+  const direction: ShortfallDirection =
+    shortfallTotal > TOL ? 'recoverable' : shortfallTotal < -TOL ? 'over_settled' : 'matched';
+
   return {
     hasRailwayData,
     hasComponentBreakdown,
@@ -109,7 +119,10 @@ export function computeShortfall(pvc: any, audit: any | null): ShortfallResult {
     shortfallTotal,
     recoverable: Math.max(0, shortfallTotal),
     overpaid: Math.max(0, -shortfallTotal),
-    shortfallPct: ent.total !== 0 ? Math.round((shortfallTotal / ent.total) * 10000) / 100 : 0,
+    // % of the entitlement magnitude, so a negative-PVC bill does not flip the sign.
+    shortfallPct: ent.total !== 0 ? Math.round((shortfallTotal / Math.abs(ent.total)) * 10000) / 100 : 0,
+    entitlementIsRecoveryFromContractor: ent.total < 0,
+    direction,
     rows,
   };
 }

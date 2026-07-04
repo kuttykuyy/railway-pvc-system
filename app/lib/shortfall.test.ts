@@ -26,16 +26,30 @@ describe('computeShortfall', () => {
 
   it('computes recoverable when Railway underpaid (total only)', () => {
     const r = computeShortfall(pvc, { railwayTotal: 10000 });
+    expect(r.direction).toBe('recoverable');
     expect(r.shortfallTotal).toBeCloseTo(15577.75, 2);
     expect(r.recoverable).toBeCloseTo(15577.75, 2);
     expect(r.overpaid).toBe(0);
     expect(r.shortfallPct).toBeCloseTo(60.9, 1);
   });
 
-  it('reports overpaid when Railway paid more', () => {
+  it('reports over_settled when Railway settled more than due', () => {
     const r = computeShortfall(pvc, { railwayTotal: 30000 });
+    expect(r.direction).toBe('over_settled');
     expect(r.recoverable).toBe(0);
     expect(r.overpaid).toBeCloseTo(4422.25, 2);
+  });
+
+  it('handles a negative-PVC bill without flipping the % sign (recovery/deduction case)', () => {
+    // The bill from the screenshot: entitlement is a deduction (-3,84,797.77),
+    // Railway credited +2,84,000 -> Railway over-settled by 6,68,797.77.
+    const negPvc = { totalPvc: -384797.77 };
+    const r = computeShortfall(negPvc, { railwayTotal: 284000 });
+    expect(r.entitlementIsRecoveryFromContractor).toBe(true);
+    expect(r.direction).toBe('over_settled');
+    expect(r.overpaid).toBeCloseTo(668797.77, 2);
+    expect(r.shortfallPct).toBeLessThan(0); // magnitude-based, stays negative for over-settlement
+    expect(Number.isFinite(r.shortfallPct)).toBe(true);
   });
 
   it('uses the component sum as the total when only components are entered', () => {

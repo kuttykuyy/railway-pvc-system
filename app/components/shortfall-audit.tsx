@@ -24,6 +24,8 @@ interface ShortfallResult {
   recoverable: number;
   overpaid: number;
   shortfallPct: number;
+  entitlementIsRecoveryFromContractor: boolean;
+  direction: 'recoverable' | 'over_settled' | 'matched';
   rows: ShortfallRow[];
 }
 
@@ -82,8 +84,14 @@ export function ShortfallAudit({ billId }: { billId: string }) {
 
   if (loading || !result) return null;
 
-  const { entitlementTotal, railwayTotal: paidTotal, shortfallTotal, recoverable, overpaid, shortfallPct, hasRailwayData } = result;
-  const positive = shortfallTotal > 0.005;
+  const { entitlementTotal, railwayTotal: paidTotal, recoverable, overpaid, shortfallPct, hasRailwayData, direction } = result;
+  const isRecoverable = direction === 'recoverable';
+  const isOverSettled = direction === 'over_settled';
+  const resultCard = isRecoverable
+    ? { border: 'border-rose-200 bg-rose-50/40 dark:bg-rose-950/10', text: 'text-rose-600 dark:text-rose-400', label: 'Recoverable from Railway', amount: recoverable }
+    : isOverSettled
+      ? { border: 'border-amber-300 bg-amber-50/50 dark:bg-amber-950/10', text: 'text-amber-600 dark:text-amber-400', label: 'Railway over-settled', amount: overpaid }
+      : { border: 'border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/10', text: 'text-emerald-600 dark:text-emerald-400', label: 'Matches entitlement', amount: 0 };
 
   return (
     <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
@@ -95,16 +103,22 @@ export function ShortfallAudit({ billId }: { billId: string }) {
       </CardHeader>
       <CardContent className="p-6 space-y-5">
         <p className="text-sm text-muted-foreground">
-          Enter the PVC amount Railway actually paid/certified for this bill. We compare it against the
-          GCC-correct entitlement this app computed and show what is recoverable.
+          Enter the PVC amount Railway actually settled for this bill. We compare it against the
+          GCC-correct entitlement this app computed ({inr(result.entitlementTotal)}) and show the difference.
         </p>
+        {result.entitlementIsRecoveryFromContractor && (
+          <p className="text-xs rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 px-3 py-2">
+            Note: this bill&apos;s PVC entitlement is <b>negative</b> — the correct PVC is a <b>recovery/deduction of {inr(Math.abs(result.entitlementTotal))}</b> from the contractor (prices fell below the base month). Enter what Railway settled with the matching sign (use a minus if Railway deducted it).
+          </p>
+        )}
 
         {/* Entry */}
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="text-xs font-semibold text-muted-foreground block mb-1">PVC paid by Railway (Rs.)</label>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1">PVC settled by Railway (Rs.)</label>
             <Input type="number" inputMode="decimal" value={railwayTotal} placeholder="0.00"
               onChange={e => setRailwayTotal(e.target.value)} />
+            <span className="text-[11px] text-muted-foreground mt-0.5 block">Minus sign if Railway deducted it from your bill.</span>
           </div>
           <div>
             <label className="text-xs font-semibold text-muted-foreground block mb-1">Railway PVC certificate / advice ref. (optional)</label>
@@ -154,19 +168,24 @@ export function ShortfallAudit({ billId }: { billId: string }) {
                 <span className="font-mono font-bold text-slate-800 dark:text-slate-200 mt-1 block">{inr(entitlementTotal)}</span>
               </div>
               <div className="rounded-2xl border border-slate-100 dark:border-slate-800 p-3.5">
-                <span className="text-xs text-muted-foreground block">Paid by Railway</span>
+                <span className="text-xs text-muted-foreground block">Settled by Railway</span>
                 <span className="font-mono font-bold text-slate-800 dark:text-slate-200 mt-1 block">{inr(paidTotal)}</span>
               </div>
-              <div className={`rounded-2xl border p-3.5 ${positive ? 'border-rose-200 bg-rose-50/40 dark:bg-rose-950/10' : 'border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/10'}`}>
-                <span className="text-xs text-muted-foreground block">{positive ? 'Recoverable' : overpaid > 0.005 ? 'Overpaid' : 'Matched'}</span>
-                <span className={`font-mono font-extrabold mt-1 flex items-center justify-center gap-0.5 ${positive ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                  <IndianRupee size={13} />{inr(positive ? recoverable : overpaid)}
+              <div className={`rounded-2xl border p-3.5 ${resultCard.border}`}>
+                <span className="text-xs text-muted-foreground block">{resultCard.label}</span>
+                <span className={`font-mono font-extrabold mt-1 flex items-center justify-center gap-0.5 ${resultCard.text}`}>
+                  <IndianRupee size={13} />{inr(resultCard.amount)}
                 </span>
               </div>
             </div>
-            {positive && (
+            {isRecoverable && (
               <p className="text-xs text-rose-600 dark:text-rose-400 font-medium text-center">
-                Railway has short-paid {shortfallPct.toFixed(2)}% of the PVC due on this bill — ₹{inr(recoverable)} is recoverable.
+                Railway settled {Math.abs(shortfallPct).toFixed(2)}% less than the PVC due on this bill — ₹{inr(recoverable)} is recoverable.
+              </p>
+            )}
+            {isOverSettled && (
+              <p className="text-xs text-amber-700 dark:text-amber-400 font-medium text-center">
+                Railway settled ₹{inr(overpaid)} more than the computed entitlement of {inr(entitlementTotal)}. This excess is at risk of being recovered from you — verify the figures before relying on it.
               </p>
             )}
 
