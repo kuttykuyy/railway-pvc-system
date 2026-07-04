@@ -20,11 +20,31 @@ import {
   WPI_MAPPINGS,
   parseWPIExcelData,
   updateIndicesFromWPI,
-  getLatestWPIUrl,
+  getWPIDownloadUrl,
 } from '@/lib/wpi-fetcher';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
+
+const WPI_CODES = new Set(Object.values(WPI_MAPPINGS).map((m: any) => m.code));
+
+/** Fetch + parse a WPI workbook; returns the mapped rows, or null if the file is
+ *  missing / not yet published (does not contain our commodities). */
+async function fetchWpiMonth(year: number, month: number): Promise<any[] | null> {
+  const url = getWPIDownloadUrl(year, month);
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; IR-PVC/1.0; +https://irpvc.in)' },
+  }).catch(() => null);
+  if (!res || !res.ok) return null;
+  try {
+    const wb = XLSX.read(await res.arrayBuffer(), { type: 'array' });
+    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }) as any[][];
+    const parsed = parseWPIExcelData(data);
+    return parsed.some((r: any) => WPI_CODES.has(r.commCode)) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -56,24 +76,30 @@ export async function GET(request: NextRequest) {
 
   const startedAt = Date.now();
   try {
-    const url = getLatestWPIUrl();
-    logger.log('[WPI Cron] Fetching latest WPI from:', url);
+    // The newest month may not be published yet (WPI lags ~2-3 weeks), so step
+    // back from last month until we find a workbook that actually has our data.
+    const now = new Date();
+    let baseYear = now.getUTCFullYear();
+    let baseMonth = now.getUTCMonth(); // 0-indexed current == 1-indexed previous
+    if (baseMonth === 0) { baseMonth = 12; baseYear -= 1; }
 
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; IR-PVC/1.0; +https://irpvc.in)' },
-    });
-    if (!response.ok) {
+    let wpiData: any[] | null = null;
+    let url = '';
+    for (let i = 0; i < 5; i++) {
+      let y = baseYear;
+      let m = baseMonth - i;
+      while (m <= 0) { m += 12; y -= 1; }
+      url = getWPIDownloadUrl(y, m);
+      logger.log('[WPI Cron] Trying', url);
+      wpiData = await fetchWpiMonth(y, m);
+      if (wpiData) break;
+    }
+    if (!wpiData) {
       return NextResponse.json(
-        { error: `Failed to fetch WPI data: ${response.status} ${response.statusText}`, url },
+        { error: 'No published WPI workbook with our commodities found in the last 5 months.' },
         { status: 502 },
       );
     }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-    const wpiData = parseWPIExcelData(data);
 
     // Snapshot which months are provisional before/after, so we can report which
     // ones this run finalised (a signal that any bill using them may now differ).
