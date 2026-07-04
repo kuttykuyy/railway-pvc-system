@@ -131,6 +131,32 @@ function fmtVariation(n: number): string {
   return (n * 100).toFixed(4) + '%';
 }
 
+// Natural ("human") sort for dotted item numbers like 2.25, 5.9.1, 5.33.2.1,
+// 16.3.3-CEM. Compares segment-by-segment: numeric chunks numerically, text
+// chunks lexically — so 5.9 sorts before 5.33 and a "-CEM" suffix stays next to
+// its base item.
+function compareItemNumbers(a: string, b: string): number {
+  const tokenize = (s: string): (number | string)[] =>
+    (s.trim().match(/\d+|\D+/g) || []).map(t => (/^\d+$/.test(t) ? Number(t) : t.toLowerCase()));
+  const ta = tokenize(a);
+  const tb = tokenize(b);
+  const n = Math.max(ta.length, tb.length);
+  for (let i = 0; i < n; i++) {
+    const x = ta[i];
+    const y = tb[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    if (typeof x === 'number' && typeof y === 'number') {
+      if (x !== y) return x - y;
+    } else {
+      const xs = String(x);
+      const ys = String(y);
+      if (xs !== ys) return xs < ys ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
 function getIndexAvg(qa: QuarterlyAverage[], ...names: string[]): number {
   for (const name of names) {
     const found = qa.find(q => q.indexName === name);
@@ -571,37 +597,67 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       'Sl.',
       'Item No.',
       'Classification',
-      'Schedule',
       'Amount (Rs.)',
       'Why this classification applies',
     ]];
-    const classBody = detailEntries.map((entry, index) => {
-      const sub = entry.subClassification;
-      const classification = sub?.code ? `${sub.code}${sub.name ? ' - ' + sub.name : ''}` : '-';
-      // The bill-entry justification may carry an appended internal "price variation"
-      // comparison (e.g. "Checking the price variation on Rs ...: 9A -> ..."). That is a
-      // working aid for the app, not part of the official record, and its ->/Rs glyphs
-      // render poorly in the PDF font — so strip it from the report justification.
-      const justification = String(entry.classificationJustification || '')
-        .replace(/\s*(Checking the price variation|PVC comparison)\b[\s\S]*$/i, '')
-        .trim()
-        || String(entry.description || '').trim()
-        || '-';
-      const rowItemNumbers = (entry.itemRows || [])
-        .map(row => String(row?.itemNumber || '').trim())
-        .filter(Boolean);
-      const itemNumbers = rowItemNumbers.length > 0
-        ? Array.from(new Set(rowItemNumbers)).join(', ')
-        : String(entry.itemNumber || '').trim() || '-';
-      return [
-        index + 1,
-        itemNumbers,
-        classification,
-        entry.scheduleItem || '-',
-        fmt(Number(entry.amount) || 0),
-        justification,
-      ];
-    });
+
+    // Sort key = the entry's lowest item number (natural order).
+    const entryItemNo = (entry: ClassificationEntry): string => {
+      const rows = (entry.itemRows || []).map(r => String(r?.itemNumber || '').trim()).filter(Boolean);
+      const nums = rows.length > 0 ? rows : [String(entry.itemNumber || '').trim()].filter(Boolean);
+      return nums.length > 0 ? nums.slice().sort(compareItemNumbers)[0] : '';
+    };
+
+    // Group entries by schedule (rendered as a header row instead of a column),
+    // and sort the items within each schedule by item number.
+    const dGroups = new Map<string, ClassificationEntry[]>();
+    for (const entry of detailEntries) {
+      const sched = String(entry.scheduleItem || '').trim() || '-';
+      if (!dGroups.has(sched)) dGroups.set(sched, []);
+      dGroups.get(sched)!.push(entry);
+    }
+    const sortedDGroups = Array.from(dGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+    const dGroupHeaderStyle = {
+      fontStyle: 'bold' as const,
+      fillColor: [225, 225, 225] as [number, number, number],
+      textColor: [0, 0, 0] as [number, number, number],
+      halign: 'left' as const,
+    };
+
+    const classBody: any[] = [];
+    let dSl = 0;
+    for (const [sched, groupEntries] of sortedDGroups) {
+      groupEntries.sort((a, b) => compareItemNumbers(entryItemNo(a), entryItemNo(b)));
+      classBody.push([{ content: `Schedule: ${sched}`, colSpan: 5, styles: dGroupHeaderStyle }]);
+      for (const entry of groupEntries) {
+        dSl++;
+        const sub = entry.subClassification;
+        const classification = sub?.code ? `${sub.code}${sub.name ? ' - ' + sub.name : ''}` : '-';
+        // The bill-entry justification may carry an appended internal "price variation"
+        // comparison (e.g. "Checking the price variation on Rs ...: 9A -> ..."). That is a
+        // working aid for the app, not part of the official record, and its ->/Rs glyphs
+        // render poorly in the PDF font — so strip it from the report justification.
+        const justification = String(entry.classificationJustification || '')
+          .replace(/\s*(Checking the price variation|PVC comparison)\b[\s\S]*$/i, '')
+          .trim()
+          || String(entry.description || '').trim()
+          || '-';
+        const rowItemNumbers = (entry.itemRows || [])
+          .map(row => String(row?.itemNumber || '').trim())
+          .filter(Boolean);
+        const itemNumbers = rowItemNumbers.length > 0
+          ? Array.from(new Set(rowItemNumbers)).sort(compareItemNumbers).join(', ')
+          : String(entry.itemNumber || '').trim() || '-';
+        classBody.push([
+          dSl,
+          itemNumbers,
+          classification,
+          fmt(Number(entry.amount) || 0),
+          justification,
+        ]);
+      }
+    }
 
     autoTable(pdf, {
       startY: y + 2,
@@ -629,11 +685,10 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       tableWidth: contentW,
       columnStyles: {
         0: { cellWidth: 10, halign: 'center' },
-        1: { cellWidth: 30, halign: 'left' },
-        2: { cellWidth: 42, halign: 'left' },
-        3: { cellWidth: 24, halign: 'left' },
-        4: { cellWidth: 30, halign: 'right' },
-        5: { cellWidth: 137, halign: 'left' },
+        1: { cellWidth: 32, halign: 'left' },
+        2: { cellWidth: 46, halign: 'left' },
+        3: { cellWidth: 32, halign: 'right' },
+        4: { cellWidth: 153, halign: 'left' },
       },
     });
 
@@ -811,15 +866,46 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     pdf.text('E. BILL SCHEDULE ITEMS', mL, y);
     y += 2;
 
-    const itemHead = [['Sl.', 'Item No.', 'Schedule', 'Quantity', 'Agreement Rate (Rs.)', 'Amount (Rs.)']];
-    const itemBody = scheduleRows.map((row, index) => [
-      index + 1,
-      row.itemNumber,
-      row.schedule,
-      row.qty ? row.qty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : '-',
-      row.rate ? fmt(row.rate) : '-',
-      fmt(row.amount),
-    ]);
+    const itemHead = [['Sl.', 'Item No.', 'Quantity', 'Agreement Rate (Rs.)', 'Amount (Rs.)']];
+
+    // Group items by schedule (rendered as a header row instead of a column),
+    // sorted by item number within each schedule.
+    const eGroups = new Map<string, ScheduleRow[]>();
+    for (const row of scheduleRows) {
+      if (!eGroups.has(row.schedule)) eGroups.set(row.schedule, []);
+      eGroups.get(row.schedule)!.push(row);
+    }
+    const sortedEGroups = Array.from(eGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+    const eGroupHeaderStyle = {
+      fontStyle: 'bold' as const,
+      fillColor: [225, 225, 225] as [number, number, number],
+      textColor: [0, 0, 0] as [number, number, number],
+      halign: 'left' as const,
+    };
+
+    const itemBody: any[] = [];
+    let eSl = 0;
+    for (const [sched, rows] of sortedEGroups) {
+      rows.sort((a, b) => compareItemNumbers(a.itemNumber, b.itemNumber));
+      itemBody.push([{ content: `Schedule: ${sched}`, colSpan: 5, styles: eGroupHeaderStyle }]);
+      let groupTotal = 0;
+      for (const row of rows) {
+        eSl++;
+        groupTotal += row.amount;
+        itemBody.push([
+          eSl,
+          row.itemNumber,
+          row.qty ? row.qty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : '-',
+          row.rate ? fmt(row.rate) : '-',
+          fmt(row.amount),
+        ]);
+      }
+      itemBody.push([
+        { content: 'Schedule Total', colSpan: 4, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [242, 242, 242] as [number, number, number] } },
+        { content: fmt(groupTotal), styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [242, 242, 242] as [number, number, number] } },
+      ]);
+    }
 
     autoTable(pdf, {
       startY: y + 2,
@@ -848,10 +934,9 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       columnStyles: {
         0: { cellWidth: 12, halign: 'center' },
         1: { cellWidth: 55, halign: 'left' },
-        2: { cellWidth: 40, halign: 'left' },
-        3: { cellWidth: 45, halign: 'right' },
-        4: { cellWidth: 55, halign: 'right' },
-        5: { cellWidth: 66, halign: 'right' },
+        2: { cellWidth: 60, halign: 'right' },
+        3: { cellWidth: 68, halign: 'right' },
+        4: { cellWidth: 78, halign: 'right' },
       },
     });
 
