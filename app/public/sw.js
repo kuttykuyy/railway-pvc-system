@@ -1,7 +1,7 @@
 // Service Worker for IR-PVC PWA
 // Bump CACHE_VERSION on every release to force clients to drop old cached assets
 // and pull the new build (stale cache was serving old app code after deploys).
-const CACHE_VERSION = '1.1.5';
+const CACHE_VERSION = '1.1.6';
 const CACHE_NAME = `railway-pvc-${CACHE_VERSION}`;
 
 const urlsToCache = [
@@ -46,6 +46,16 @@ self.addEventListener('fetch', (event) => {
   // Only GET requests are cacheable — Cache.put() throws on POST/PUT/DELETE
   // (server actions, form submissions), so let the browser handle them natively.
   if (request.method !== 'GET') {
+    return;
+  }
+
+  // Only manage same-origin requests. Cross-origin resources (YouTube video
+  // thumbnails, Google fonts/ads/analytics, etc.) must go straight to the
+  // network: re-fetching them here is subject to the page CSP connect-src and
+  // fails for hosts not on that allow-list, after which the image handler below
+  // would serve an empty 204 and the picture would appear broken. Letting the
+  // browser load them natively uses img-src ('https:'), which is allowed.
+  if (url.origin !== self.location.origin) {
     return;
   }
 
