@@ -456,6 +456,7 @@ model Bill {
   contract                 Contract                  @relation(fields: [contractId], references: [id], onDelete: Cascade)
   workClassification       Classification?           @relation(fields: [workClassificationId], references: [id])
   pvcCalculation           PvcCalculation?
+  shortfallAudit           ShortfallAudit?
   userAccess               UserBillAccess[]
   whatsappLogs             WhatsAppLog[]
 
@@ -511,6 +512,30 @@ model BillClassificationEntry {
   @@index([classificationId])
   @@index([subClassificationId])
   @@map("bill_classification_entries")
+}
+
+// Railway's own PVC figures for a bill, entered by the contractor so the app can
+// compute the shortfall between what Railway paid/certified and the correct
+// GCC 46A entitlement it computed. One optional record per bill.
+model ShortfallAudit {
+  id                    String   @id @default(cuid())
+  billId                String   @unique
+  railwayTotal          Float    @default(0) // total PVC Railway paid/certified
+  // Optional component-wise figures Railway paid (leave 0/null if only the total is known)
+  railwayLabour         Float?
+  railwayPlantMachinery Float?
+  railwayFuelPower      Float?
+  railwayCement         Float?
+  railwaySteel          Float?
+  railwayOtherMaterials Float?
+  railwayExplosives     Float?
+  railwayReference      String? // Railway PVC certificate / payment-advice reference
+  remarks               String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  bill                  Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@map("shortfall_audits")
 }
 
 model PvcCalculation {

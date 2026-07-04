@@ -1,6 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ShortfallAudit } from '@/components/shortfall-audit';
 import { BillStatusBadge } from '@/components/bills/bill-status-badge';
 import { ApprovalActions } from '@/components/bills/approval-actions';
 import { ApprovalHistory } from '@/components/bills/approval-history';
@@ -1406,6 +1407,9 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
           </CardContent>
         </Card>
       )}
+
+      {/* PVC Shortfall Auditor — compare Railway-paid PVC vs computed entitlement */}
+      {bill.pvcCalculation && <ShortfallAudit billId={bill.id} />}
 
       {/* Approval history timeline */}
       <ApprovalHistory billId={bill.id} />
