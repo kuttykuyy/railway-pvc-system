@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Plus, Trash2, Sparkles, Pencil } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Plus, Trash2, Sparkles, Pencil, X } from 'lucide-react';
 
 import { BillAmountCalculator } from './bill-amount-calculator';
 import { ClassificationComparisonDialog } from './classification-comparison-dialog';
@@ -156,6 +156,22 @@ export function BillClassificationEntries({
       nextEntry.manualClassification = true;
     }
     nextEntries[entryIndex] = nextEntry;
+    commit(nextEntries);
+  };
+
+  // Fully resets an entry's classification (group + sub + attached object) so the
+  // user can re-select from scratch — the escape hatch for any stuck/orphaned state.
+  const clearClassification = (entryIndex: number) => {
+    const nextEntries = [...entries];
+    nextEntries[entryIndex] = {
+      ...nextEntries[entryIndex],
+      mainClassificationGroupId: undefined,
+      subClassificationId: '',
+      subClassification: undefined,
+      // Deliberate user action: keep the entry out of the automatic PVC comparison
+      // until they pick a classification themselves.
+      manualClassification: true,
+    };
     commit(nextEntries);
   };
 
@@ -337,48 +353,80 @@ export function BillClassificationEntries({
                 <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_minmax(200px,1.2fr)_minmax(150px,0.8fr)_minmax(140px,0.7fr)]">
                   <div className="space-y-1.5">
                     <label htmlFor={`main-classification-${entryIndex}`} className="text-xs font-medium text-slate-600">Main classification</label>
-                    <select
-                      id={`main-classification-${entryIndex}`}
-                      data-testid={`main-classification-${entryIndex}`}
-                      value={selectedGroup?.id || ''}
-                      onChange={event => {
-                        const groupId = event.target.value;
-                        const group = classificationGroups.find(item => item.id === groupId);
-                        const defaultSub = group?.subClassifications.find(sub => sub.isDefault)
-                          || group?.subClassifications[0];
-                        // Never write an empty sub id: if the picked group has no subs
-                        // loaded, keep the current sub instead of blanking the entry.
-                        updateEntry(entryIndex, {
-                          mainClassificationGroupId: groupId,
-                          ...(defaultSub ? { subClassificationId: defaultSub.id } : {}),
-                        });
-                      }}
-                      className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-                    >
-                      <option value="" disabled>Select group</option>
-                      {classificationGroups.map(group => (
-                        <option key={group.id} value={group.id}>{group.code} - {group.name}</option>
-                      ))}
-                    </select>
+                    <div className="flex items-center gap-1">
+                      <select
+                        id={`main-classification-${entryIndex}`}
+                        data-testid={`main-classification-${entryIndex}`}
+                        value={selectedGroup?.id || ''}
+                        onChange={event => {
+                          const groupId = event.target.value;
+                          const group = classificationGroups.find(item => item.id === groupId);
+                          const defaultSub = group?.subClassifications.find(sub => sub.isDefault)
+                            || group?.subClassifications[0];
+                          // Never write an empty sub id: if the picked group has no subs
+                          // loaded, keep the current sub instead of blanking the entry.
+                          updateEntry(entryIndex, {
+                            mainClassificationGroupId: groupId,
+                            ...(defaultSub ? { subClassificationId: defaultSub.id } : {}),
+                          });
+                        }}
+                        className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                      >
+                        <option value="" disabled>Select group</option>
+                        {classificationGroups.map(group => (
+                          <option key={group.id} value={group.id}>{group.code} - {group.name}</option>
+                        ))}
+                      </select>
+                      {(entry.subClassificationId || entry.mainClassificationGroupId) && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          disabled={locked}
+                          onClick={() => clearClassification(entryIndex)}
+                          className="h-8 w-8 shrink-0 text-slate-400 hover:text-red-600 disabled:opacity-40"
+                          title="Clear classification (reset both dropdowns)"
+                          aria-label={`Clear classification for entry ${entryIndex + 1}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-slate-600">Sub classification</label>
-                    <Select
-                      value={currentSub && selectedGroup?.subClassifications.some(sub => sub.id === currentSub.id)
-                        ? currentSub.id
-                        : ''}
-                      onValueChange={subClassificationId => updateEntry(entryIndex, { subClassificationId })}
-                    >
-                      <SelectTrigger className="h-9 bg-white text-sm">
-                        <SelectValue placeholder="Select classification" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(selectedGroup?.subClassifications || []).map(sub => (
-                          <SelectItem key={sub.id} value={sub.id}>{sub.code} - {sub.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-1">
+                      <Select
+                        value={currentSub && selectedGroup?.subClassifications.some(sub => sub.id === currentSub.id)
+                          ? currentSub.id
+                          : ''}
+                        onValueChange={subClassificationId => updateEntry(entryIndex, { subClassificationId })}
+                      >
+                        <SelectTrigger className="h-9 bg-white text-sm">
+                          <SelectValue placeholder="Select classification" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(selectedGroup?.subClassifications || []).map(sub => (
+                            <SelectItem key={sub.id} value={sub.id}>{sub.code} - {sub.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {(entry.subClassificationId || entry.mainClassificationGroupId) && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          disabled={locked}
+                          onClick={() => clearClassification(entryIndex)}
+                          className="h-8 w-8 shrink-0 text-slate-400 hover:text-red-600 disabled:opacity-40"
+                          title="Clear classification (reset both dropdowns)"
+                          aria-label={`Clear sub classification for entry ${entryIndex + 1}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                     {!currentSub && entry.subClassificationId && (
                       // Diagnostic: the stored reference doesn't match any loaded
                       // classification. Surface exactly what is broken instead of a

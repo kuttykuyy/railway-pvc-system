@@ -896,9 +896,16 @@ function NewBillPageContent() {
 
   const handleClassificationEntriesChange = (entries: ClassificationEntry[]) => {
     entries
-      .filter(entry => entry.manualClassification && entry.subClassificationId)
+      .filter(entry => entry.manualClassification)
       .forEach(entry => {
-        manualClassificationOverridesRef.current.set(classificationEntryKey(entry), entry);
+        const key = classificationEntryKey(entry);
+        if (entry.subClassificationId) {
+          manualClassificationOverridesRef.current.set(key, entry);
+        } else {
+          // The user cleared this entry's classification — drop any remembered
+          // override so a rebuild doesn't resurrect the classification they removed.
+          manualClassificationOverridesRef.current.delete(key);
+        }
       });
     setClassificationEntries(entries);
   };
