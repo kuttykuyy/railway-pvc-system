@@ -126,7 +126,23 @@ function normalizeExtractedItem(item: any): ExtractedBillItem {
   };
 }
 
+// CPWD DSR item numbers that are pure cement-supply items (the entire billed
+// amount is cement, not a work item that merely consumes cement). When matched,
+// the item is classified under its group's C sub-class and priced only against
+// the cement index — it is never split into a work portion. Prefix match, so
+// '5.35' also covers sub-items like '5.35.1'.
+const CEMENT_SUPPLY_DSR_CODES = ['5.35'];
+
+function isCementSupplyByItemNo(item: ExtractedBillItem): boolean {
+  if (item.sourceBook === 'USSR_2021') return false; // these are CPWD DSR codes
+  const raw = String(item.itemNo || '').replace(/\s+/g, '');
+  if (!raw) return false;
+  const code = (raw.match(/^\d+(?:\.\d+)*/) || [raw])[0];
+  return CEMENT_SUPPLY_DSR_CODES.some(c => code === c || code.startsWith(`${c}.`));
+}
+
 function looksLikeDirectCementSupply(item: ExtractedBillItem): boolean {
+  if (isCementSupplyByItemNo(item)) return true;
   const text = `${item.schedule || ''} ${item.scheduleGroup || ''} ${item.description}`;
   const unit = item.unit.trim().toUpperCase().replace(/\s+/g, ' ');
   const isCementUnit = ['MT', 'M.T.', 'TONNE', 'METRIC TONNE', 'METRIC TON', 'BAG', 'BAGS'].includes(unit);
@@ -186,6 +202,20 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
       ...item,
       suggestedClassificationCode: resolvedCode,
       suggestedClassificationReason: withAiNote(`${resolvedReason} Group ${resolvedCode} has a single classification with no sub-divisions, so ${resolvedCode} applies directly.`),
+    };
+  }
+
+  // Designated cement-supply items (recognised by item number): the whole amount
+  // is cement supply, so force the group's C sub-class, mark it not cement-affected
+  // (so it is never split into a work portion), and price it against the cement
+  // index only. This overrides any AI-suggested suffix.
+  if (isCementSupplyByItemNo(item)) {
+    return {
+      ...item,
+      isCementAffected: false,
+      requiresDsrCementCoefficient: false,
+      suggestedClassificationCode: `${resolvedCode}C`,
+      suggestedClassificationReason: withAiNote(`${resolvedReason} Item number ${item.itemNo} is a designated cement-supply item, so its full amount is classified under Sub-classification ${resolvedCode}C (items for the supply of cement) and priced only against the cement index (no work portion, no split).`),
     };
   }
 
@@ -1558,7 +1588,10 @@ export async function POST(request: NextRequest) {
     // Refine items classification and cement flags using database coefficients
     for (const item of extractedItems) {
       const dsrCode = normalizeDsrCode(item.dsrCode);
-      const coefficient = item.sourceBook !== 'USSR_2021' ? getCoefficient(dsrCode) : undefined;
+      // A designated cement-supply item is pure cement, not a cement-affected work
+      // item, so it must not pick up a cement coefficient or get split.
+      const coefficient = (item.sourceBook !== 'USSR_2021' && !isCementSupplyByItemNo(item))
+        ? getCoefficient(dsrCode) : undefined;
 
       if (coefficient) {
         item.isCementAffected = true;
