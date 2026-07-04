@@ -7,6 +7,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
+import type { SteelBreakdownSection } from '@/lib/jpc-items';
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -112,6 +113,7 @@ interface IRStandardReportOptions {
   provisionalIndices?: string[];
   allHistoricalMonthlyData?: { indexName: string; month: string; value: number }[];
   previousCumulativePvc?: number;
+  steelBreakdown?: SteelBreakdownSection[];
 }
 
 // jsPDF Helvetica does not support Rs. symbol, use "Rs." instead
@@ -238,6 +240,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     provisionalIndices = [],
     allHistoricalMonthlyData = [],
     previousCumulativePvc,
+    steelBreakdown = [],
   } = opts;
 
   // A4 Landscape: 297 x 210 mm
@@ -1567,8 +1570,102 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     }
   };
 
+  // Renders one steel section as its own table showing the constituent JPC
+  // readings (e.g. TMT: 10mm F1/F2, 25mm F1/F2) and the derived monthly index,
+  // so the reader can see how each section's average is built up.
+  const renderSteelSectionTable = (section: SteelBreakdownSection) => {
+    const monthsAll = section.months.filter(m => m.average != null || m.values.some(v => v != null));
+    if (monthsAll.length === 0) return;
+    const baseMK = `${baseMonth.getFullYear()}-${String(baseMonth.getMonth() + 1).padStart(2, '0')}`;
+    const qa = quarterlyAverages.find(q => q.indexName === section.indexName);
+    const quarterKeys = new Set((qa?.monthlyValues || []).map(m => m.month));
+    const cell = (v: number | null | undefined) => (v == null ? '-' : fmtIdx(v));
+
+    ensureSpace(34);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(section.sectionLabel, mL, y);
+    y += 4;
+    pdf.setFontSize(7.5);
+    pdf.setFont('helvetica', 'italic');
+    pdf.setTextColor(80, 80, 80);
+    pdf.text(`Monthly index = ${section.formula}`, mL, y);
+    pdf.setTextColor(0, 0, 0);
+    y += 2.5;
+
+    const head = [['Month', ...section.columns, 'Average']];
+    const grey = [230, 230, 230] as [number, number, number];
+    const teal = [205, 235, 230] as [number, number, number];
+    const body: any[] = [];
+    for (const m of monthsAll) {
+      const [yr, mo] = m.month.split('-').map(Number);
+      const isBase = m.month === baseMK;
+      const label = `${isBase ? 'Base (' : ''}${format(new Date(yr, mo - 1, 1), 'MMM yyyy')}${isBase ? ')' : ''}`;
+      const baseSty = isBase ? { fontStyle: 'bold' as const, fillColor: grey } : {};
+      body.push([
+        { content: label, styles: { ...baseSty } },
+        ...m.values.map(v => ({ content: cell(v), styles: { halign: 'center' as const, ...baseSty } })),
+        { content: cell(m.average), styles: { halign: 'center' as const, fontStyle: 'bold' as const, ...(isBase ? { fillColor: grey } : {}) } },
+      ]);
+    }
+    // Quarter-average row: per-column mean over the quarter months, plus the
+    // official section I1 in the Average column.
+    const qMonths = monthsAll.filter(m => quarterKeys.has(m.month));
+    const colMeans = section.columns.map((_, ci) => {
+      const vals = qMonths.map(m => m.values[ci]).filter((v): v is number => v != null && v > 0);
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    });
+    body.push([
+      { content: `Quarter Average (I1) [${bill.quarter}]`, styles: { fontStyle: 'bold' as const, fillColor: teal } },
+      ...colMeans.map(v => ({ content: cell(v), styles: { halign: 'center' as const, fontStyle: 'bold' as const, fillColor: teal } })),
+      { content: fmtIdx(qa?.average ?? 0), styles: { halign: 'center' as const, fontStyle: 'bold' as const, fillColor: teal } },
+    ]);
+
+    const nCols = section.columns.length;
+    const dataW = contentW - 40 - 30;
+    const colW = Math.floor(dataW / nCols);
+    const colStyles: Record<number, any> = { 0: { cellWidth: 40, halign: 'left' } };
+    section.columns.forEach((_, i) => { colStyles[1 + i] = { cellWidth: colW, halign: 'center' }; });
+    colStyles[1 + nCols] = { cellWidth: 30, halign: 'center' };
+
+    autoTable(pdf, {
+      startY: y + 1,
+      head,
+      body,
+      theme: 'grid',
+      headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center', valign: 'middle', cellPadding: 2 },
+      bodyStyles: { fontSize: 8, cellPadding: { top: 1.4, right: 2, bottom: 1.4, left: 2 }, textColor: [0, 0, 0] },
+      styles: { lineColor: [180, 180, 180], lineWidth: 0.3 },
+      margin: { left: mL, right: mR, top: mT },
+      tableWidth: contentW,
+      columnStyles: colStyles,
+    });
+    y = pdf.lastAutoTable.finalY + 5;
+  };
+
   // AVERAGE JPC STEEL INDICES (selected sections only)
   if (weights.steel > 0.0001 && usedSteelIndexNames.length > 0) {
+    // Preferred: per-section breakdown tables showing the constituent JPC
+    // readings (F1/F2 per size) that build up each section's monthly index.
+    const usedBreakdown = (steelBreakdown || []).filter(s =>
+      usedSteelIndexNames.includes(s.indexName)
+      && s.months.some(m => m.average != null || m.values.some(v => v != null)));
+
+    if (usedBreakdown.length > 0) {
+      pdf.addPage();
+      y = mT;
+      drawProformaHeader(
+        'AVERAGE JPC STEEL INDICES',
+        'Clause 46A.9:(1) Relevant category of steel for the purpose of Price Variation formula as mentioned in this clause. '
+        + 'Each section index is the average of the JPC readings shown; the fortnightly F1/F2 prices build up the monthly value.',
+      );
+      // Order the section tables to match the bill's used sections.
+      for (const n of usedSteelIndexNames) {
+        const section = usedBreakdown.find(s => s.indexName === n);
+        if (section) renderSteelSectionTable(section);
+      }
+      renderAvgCalc(usedSteelIndexNames, cleanSteelLabel);
+    } else {
     const steelHist = allHistoricalMonthlyData.filter(d => usedSteelIndexNames.includes(d.indexName));
     if (steelHist.length > 0) {
       pdf.addPage();
@@ -1639,6 +1736,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       });
 
       renderAvgCalc(usedSteelIndexNames, cleanSteelLabel);
+    }
     }
   }
 

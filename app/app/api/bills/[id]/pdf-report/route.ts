@@ -653,7 +653,35 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         value: mv.value
       }));
 
+      // Per-item JPC steel readings (fortnightly F1/F2 per size) for the bill's
+      // steel city, so the AVERAGE JPC STEEL INDICES page can show how each
+      // section's monthly index is derived (e.g. TMT = (10mm F1 + 10mm F2 + 25mm
+      // F1 + 25mm F2) / 4).
+      let steelBreakdown: any[] | undefined;
+      try {
+        const { buildSteelBreakdown } = await import('@/lib/jpc-items');
+        const jpcRows = await prisma.jpcSteelItem.findMany({
+          where: {
+            city: billSteelCity,
+            month: { gte: new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1), lt: qtrEndDate },
+          },
+          select: { month: true, itemCode: true, f1: true, f2: true, average: true },
+        });
+        if (jpcRows.length > 0) {
+          const itemsByMonth = new Map<string, Map<string, { f1: number | null; f2: number | null; average: number | null }>>();
+          for (const r of jpcRows) {
+            const mk = new Date(r.month).toISOString().slice(0, 7);
+            if (!itemsByMonth.has(mk)) itemsByMonth.set(mk, new Map());
+            itemsByMonth.get(mk)!.set(r.itemCode, { f1: r.f1, f2: r.f2, average: r.average });
+          }
+          steelBreakdown = buildSteelBreakdown(steelIdxNames, itemsByMonth);
+        }
+      } catch (err) {
+        console.error('IR PDF: error building steel breakdown:', err);
+      }
+
       let irPdfBytes = await generateIRStandardReport({
+        steelBreakdown,
         bill: bill as any,
         quarterlyAverages: irQuarterlyAverages,
         baseMonth,

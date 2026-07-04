@@ -154,6 +154,117 @@ export const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
   SPONGE: "Sponge Iron"
 };
 
+// ── Steel index breakdown (for the AVERAGE JPC STEEL INDICES report page) ────
+// Each steel index is the mean of specific JPC readings, per GCC 2022 Cl.46A.9:
+//   TMT Bars       = (10mm F1 + 10mm F2 + 25mm F1 + 25mm F2) / 4   (raw fortnights)
+//   Angle/Channel  = (ISA 75x6 + MS Plate 10mm + ISMC 150x75) / 3  (item averages)
+//   Plates         = (MS Plate 10mm + MS Plate 25mm) / 2           (item averages)
+//   Other Sections = (TMT + Angle/Channel + Plates) / 3            (derived indices)
+const STEEL_SECTION_ORDER = ['TMT', 'ANGLE_CHANNEL', 'PLATES', 'OTHER_SECTIONS'] as const;
+export type SteelSectionKey = typeof STEEL_SECTION_ORDER[number];
+
+const STEEL_SECTION_LABEL: Record<SteelSectionKey, string> = {
+  TMT: 'TMT Bars', ANGLE_CHANNEL: 'Angle / Channel', PLATES: 'Plates', OTHER_SECTIONS: 'Other Sections',
+};
+const STEEL_SECTION_FORMULA: Record<SteelSectionKey, string> = {
+  TMT: '(10mm F1 + 10mm F2 + 25mm F1 + 25mm F2) / 4',
+  ANGLE_CHANNEL: '(ISA 75x6 + MS Plate 10mm + ISMC 150x75) / 3',
+  PLATES: '(MS Plate 10mm + MS Plate 25mm) / 2',
+  OTHER_SECTIONS: '(TMT Bars + Angle/Channel + Plates) / 3   [GCC 46A.9]',
+};
+const STEEL_SECTION_ITEM_COLUMNS: Record<'TMT' | 'ANGLE_CHANNEL' | 'PLATES',
+  { label: string; itemCode: string; field: 'f1' | 'f2' | 'average' }[]> = {
+  TMT: [
+    { label: '10mm F1', itemCode: 'tmt_10mm', field: 'f1' },
+    { label: '10mm F2', itemCode: 'tmt_10mm', field: 'f2' },
+    { label: '25mm F1', itemCode: 'tmt_25mm', field: 'f1' },
+    { label: '25mm F2', itemCode: 'tmt_25mm', field: 'f2' },
+  ],
+  ANGLE_CHANNEL: [
+    { label: 'ISA 75x6', itemCode: 'angle_75x75x6mm', field: 'average' },
+    { label: 'MS Plate 10mm', itemCode: 'plate_10mm', field: 'average' },
+    { label: 'ISMC 150x75', itemCode: 'channel_150x75mm', field: 'average' },
+  ],
+  PLATES: [
+    { label: 'MS Plate 10mm', itemCode: 'plate_10mm', field: 'average' },
+    { label: 'MS Plate 25mm', itemCode: 'plate_25mm', field: 'average' },
+  ],
+};
+
+export interface JpcMonthItem { f1: number | null; f2: number | null; average: number | null }
+
+/** The four section index values for one month, using the exact GCC 46A.9 formula. */
+export function computeSteelSectionsForMonth(
+  getItem: (code: string) => JpcMonthItem | undefined,
+): Record<SteelSectionKey, number | null> {
+  const g = (code: string) => {
+    const it = getItem(code);
+    return { f1: Number(it?.f1) || 0, f2: Number(it?.f2) || 0, avg: Number(it?.average) || 0 };
+  };
+  const mean = (vals: number[]) =>
+    vals.length ? Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2)) : null;
+  const t10 = g('tmt_10mm'); const t25 = g('tmt_25mm');
+  const TMT = mean([t10.f1, t10.f2, t25.f1, t25.f2].filter(v => v > 0));
+  const ANGLE_CHANNEL = mean([g('angle_75x75x6mm').avg, g('plate_10mm').avg, g('channel_150x75mm').avg].filter(v => v > 0));
+  const PLATES = mean([g('plate_10mm').avg, g('plate_25mm').avg].filter(v => v > 0));
+  const OTHER_SECTIONS = mean([TMT, ANGLE_CHANNEL, PLATES].filter((v): v is number => v != null && v > 0));
+  return { TMT, ANGLE_CHANNEL, PLATES, OTHER_SECTIONS };
+}
+
+export interface SteelBreakdownMonth { month: string; values: (number | null)[]; average: number | null }
+export interface SteelBreakdownSection {
+  indexName: string;
+  sectionKey: SteelSectionKey;
+  sectionLabel: string;
+  formula: string;
+  columns: string[];
+  months: SteelBreakdownMonth[];
+}
+
+/**
+ * Builds the per-section JPC steel breakdown (constituent readings + derived
+ * monthly index) for each of the four sections, aligned to `steelIndexNames`
+ * (order: TMT, Angle/Channel, Plates, Other Sections).
+ */
+export function buildSteelBreakdown(
+  steelIndexNames: string[],
+  itemsByMonth: Map<string, Map<string, JpcMonthItem>>,
+): SteelBreakdownSection[] {
+  const months = Array.from(itemsByMonth.keys()).sort();
+  const out: SteelBreakdownSection[] = [];
+  STEEL_SECTION_ORDER.forEach((key, pos) => {
+    const indexName = steelIndexNames[pos];
+    if (!indexName) return;
+    if (key === 'OTHER_SECTIONS') {
+      out.push({
+        indexName, sectionKey: key, sectionLabel: STEEL_SECTION_LABEL[key], formula: STEEL_SECTION_FORMULA[key],
+        columns: ['TMT Bars', 'Angle/Channel', 'Plates'],
+        months: months.map(mk => {
+          const lookup = itemsByMonth.get(mk);
+          const sec = computeSteelSectionsForMonth(code => lookup?.get(code));
+          return { month: mk, values: [sec.TMT, sec.ANGLE_CHANNEL, sec.PLATES], average: sec.OTHER_SECTIONS };
+        }),
+      });
+      return;
+    }
+    const specCols = STEEL_SECTION_ITEM_COLUMNS[key];
+    out.push({
+      indexName, sectionKey: key, sectionLabel: STEEL_SECTION_LABEL[key], formula: STEEL_SECTION_FORMULA[key],
+      columns: specCols.map(c => c.label),
+      months: months.map(mk => {
+        const lookup = itemsByMonth.get(mk);
+        const values = specCols.map(c => {
+          const v = lookup?.get(c.itemCode)?.[c.field];
+          return v == null ? null : Number(v);
+        });
+        const sec = computeSteelSectionsForMonth(code => lookup?.get(code));
+        return { month: mk, values, average: sec[key] };
+      }),
+    });
+  });
+  return out;
+}
+
 // Summary of items used in calculation
 export const CALCULATION_ITEM_COUNTS = {
   TMT: PVC_CALCULATION_ITEMS.TMT.length,           // 2 items: 10mm, 25mm
