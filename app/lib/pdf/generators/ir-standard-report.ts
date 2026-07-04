@@ -1497,6 +1497,48 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   const cleanSteelLabel = (name: string) =>
     name.replace(/^Steel\s+/i, '').replace(/\s*-\s*[A-Za-z ]+$/,'').trim();
 
+  // Shows how the Quarter Average (I1) is derived: it is the arithmetic mean of
+  // the quarter's monthly values, printed as an explicit sum for each column.
+  const renderAvgCalc = (indexNames: string[], labelFor: (n: string) => string) => {
+    const monthLabel = (mk: string) => {
+      const [yr, mo] = mk.split('-');
+      return format(new Date(+yr, +mo - 1, 1), 'MMM yyyy');
+    };
+    const refQa = indexNames
+      .map(n => quarterlyAverages.find(q => q.indexName === n))
+      .find(q => q && (q.monthlyValues?.length ?? 0) > 0);
+    const refMonths = refQa?.monthlyValues || [];
+    if (refMonths.length === 0) return;
+
+    y = pdf.lastAutoTable.finalY + 6;
+    ensureSpace(12 + indexNames.length * 4);
+    pdf.setFontSize(8.5);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`How the Quarter Average (I1) [${bill.quarter}] is calculated`, mL, y);
+    y += 4.5;
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(60, 60, 60);
+    const introLines = pdf.splitTextToSize(
+      `The Quarter Average is the arithmetic mean of the published monthly index values for the quarter months (${refMonths.map(mv => monthLabel(mv.month)).join(', ')}):`,
+      contentW,
+    );
+    pdf.text(introLines, mL, y);
+    y += introLines.length * 3.6 + 1.5;
+    pdf.setTextColor(0, 0, 0);
+    for (const n of indexNames) {
+      const qa = quarterlyAverages.find(q => q.indexName === n);
+      const mvs = qa?.monthlyValues || [];
+      if (mvs.length === 0) continue;
+      const values = mvs.map(mv => fmtIdx(mv.value));
+      const line = `${labelFor(n)}  =  (${values.join(' + ')}) / ${values.length}  =  ${fmtIdx(qa!.average)}`;
+      const wrapped = pdf.splitTextToSize(line, contentW);
+      ensureSpace(wrapped.length * 3.6 + 2);
+      pdf.text(wrapped, mL, y);
+      y += wrapped.length * 3.6 + 1.5;
+    }
+  };
+
   // AVERAGE JPC STEEL INDICES (selected sections only)
   if (weights.steel > 0.0001 && usedSteelIndexNames.length > 0) {
     const steelHist = allHistoricalMonthlyData.filter(d => usedSteelIndexNames.includes(d.indexName));
@@ -1548,8 +1590,10 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         })),
       ]);
 
-      const steelColW = Math.min(40, Math.floor((contentW - 45) / usedSteelIndexNames.length));
-      const steelColStyles: Record<number, any> = { 0: { cellWidth: 45, halign: 'left' } };
+      // Full page width: fixed Month column, remaining width split across sections.
+      const steelMonthColW = 60;
+      const steelColW = Math.floor((contentW - steelMonthColW) / usedSteelIndexNames.length);
+      const steelColStyles: Record<number, any> = { 0: { cellWidth: steelMonthColW, halign: 'left' } };
       usedSteelIndexNames.forEach((_, i) => { steelColStyles[1 + i] = { cellWidth: steelColW, halign: 'center' }; });
 
       autoTable(pdf, {
@@ -1557,14 +1601,16 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         head: steelHead,
         body: steelRows,
         theme: 'grid',
-        headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center', valign: 'middle', cellPadding: 2.5 },
-        bodyStyles: { fontSize: 9, cellPadding: { top: 2.5, right: 3, bottom: 2.5, left: 3 }, textColor: [0, 0, 0] },
+        headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center', valign: 'middle', cellPadding: 2 },
+        bodyStyles: { fontSize: 8.5, cellPadding: { top: 1.5, right: 3, bottom: 1.5, left: 3 }, textColor: [0, 0, 0] },
         alternateRowStyles: { fillColor: [248, 248, 248] },
         styles: { lineColor: [180, 180, 180], lineWidth: 0.3 },
         margin: { left: mL, right: mR },
-        tableWidth: 45 + steelColW * usedSteelIndexNames.length,
+        tableWidth: contentW,
         columnStyles: steelColStyles,
       });
+
+      renderAvgCalc(usedSteelIndexNames, cleanSteelLabel);
     }
   }
 
@@ -1610,14 +1656,16 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         head: fuelHead,
         body: fuelRows,
         theme: 'grid',
-        headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center', valign: 'middle', cellPadding: 2.5 },
-        bodyStyles: { fontSize: 9, cellPadding: { top: 2.5, right: 3, bottom: 2.5, left: 3 }, textColor: [0, 0, 0] },
+        headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center', valign: 'middle', cellPadding: 2 },
+        bodyStyles: { fontSize: 8.5, cellPadding: { top: 1.5, right: 3, bottom: 1.5, left: 3 }, textColor: [0, 0, 0] },
         alternateRowStyles: { fillColor: [248, 248, 248] },
         styles: { lineColor: [180, 180, 180], lineWidth: 0.3 },
         margin: { left: mL, right: mR },
-        tableWidth: 130,
-        columnStyles: { 0: { cellWidth: 50, halign: 'left' }, 1: { cellWidth: 80, halign: 'center' } },
+        tableWidth: contentW,
+        columnStyles: { 0: { cellWidth: 90, halign: 'left' }, 1: { cellWidth: contentW - 90, halign: 'center' } },
       });
+
+      renderAvgCalc([fuelIndexName], () => `Diesel Rate — ${cityLabel}`);
     }
   }
 
