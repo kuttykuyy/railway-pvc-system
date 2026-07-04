@@ -151,10 +151,13 @@ export function BillClassificationEntries({
         nextEntry.mainClassificationGroupId = selectedSub.groupId;
         // The previous justification (including its "price variation" comparison) was
         // written for the OLD classification, so it is now stale. When the user picks a
-        // different class, replace it with a note for the newly-selected classification.
+        // different class, replace it with a formal GCC-clause note for the newly-selected
+        // classification (matching the railway documentation format used elsewhere).
         if (previousSubId && previousSubId !== selectedSub.id) {
-          nextEntry.classificationJustification =
-            `Manually classified under GCC 46A ${selectedSub.code} (${selectedSub.name}).`;
+          const group = classificationGroups.find(g => g.id === selectedSub.groupId);
+          nextEntry.classificationJustification = group
+            ? `The item is classified under GCC 46A as Group ${group.code} - ${group.name}, Sub-classification ${selectedSub.code} (${selectedSub.name}), as manually selected.`
+            : `The item is classified under GCC 46A as Sub-classification ${selectedSub.code} (${selectedSub.name}), as manually selected.`;
         }
       }
       // When the patched id can't be resolved (e.g. an empty group), keep the previous
