@@ -33,6 +33,8 @@ interface NewUserSignupData {
   fullName: string;
   userId: string;
   signupDate: Date;
+  /** How the account was created, e.g. "Email" or "Google (SSO)". */
+  signupMethod?: string;
 }
 
 interface NewBillData {
@@ -97,7 +99,7 @@ async function sendSlackNotification(payload: SlackNotificationPayload): Promise
  * Send a new user signup notification to Slack
  */
 export async function notifyNewUserSignup(data: NewUserSignupData): Promise<boolean> {
-  const { email, fullName, userId, signupDate } = data;
+  const { email, fullName, userId, signupDate, signupMethod = 'Email' } = data;
   
   const formattedDate = new Date(signupDate).toLocaleString('en-IN', {
     dateStyle: 'medium',
@@ -132,6 +134,10 @@ export async function notifyNewUserSignup(data: NewUserSignupData): Promise<bool
           {
             type: 'mrkdwn',
             text: `*Signup Date:*\n${formattedDate}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Signup Method:*\n${signupMethod}`
           }
         ]
       },

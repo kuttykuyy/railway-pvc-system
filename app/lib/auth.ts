@@ -7,6 +7,7 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { isEmailVerificationRequired } from '@/lib/admin-settings';
+import { notifyNewUserSignup } from '@/lib/slack-webhook';
 
 /**
  * Return the configured NextAuth secret.
@@ -261,6 +262,20 @@ export const authOptions: NextAuthOptions = {
   events: {
     async createUser({ user }) {
       await ensureCustomerAccount(user.id);
+
+      // A user created through NextAuth's adapter comes from an OAuth/SSO provider
+      // (e.g. "Continue with Google"). Email/password signups are created in
+      // /api/signup and notify there, so this is the SSO counterpart and does not
+      // double-fire. Non-blocking so a Slack hiccup never breaks sign-in.
+      notifyNewUserSignup({
+        email: user.email || 'N/A',
+        fullName: user.name || 'N/A',
+        userId: user.id,
+        signupDate: (user as any).createdAt || new Date(),
+        signupMethod: 'Google (SSO)',
+      }).catch(error => {
+        console.error('⚠️ Failed to send Slack notification for SSO signup:', error);
+      });
     },
     async signOut({ token }) {
       // Clear any cached data on sign out
