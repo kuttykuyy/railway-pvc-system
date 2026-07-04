@@ -1568,12 +1568,14 @@ export async function POST(request: NextRequest) {
         const mainCode = currentCode.charAt(0);
 
         if (mainCode && mainCode !== '2' && mainCode !== '7') {
+          const desc = String(item.description || '').trim();
+          const descQuote = desc ? ` "${desc}"` : '';
           if (looksLikeDirectCementSupply(item)) {
             item.suggestedClassificationCode = `${mainCode}C`;
-            item.suggestedClassificationReason = `Refined classification: Separate cement supply item (confirmed by DSR coefficient ${coefficient.dsrCode})`;
+            item.suggestedClassificationReason = `Under GCC Clause 46A, item${descQuote} (DSR ${coefficient.dsrCode}) is a direct supply of cement and is therefore classified under Sub-classification ${mainCode}C (items for the supply of cement).`;
           } else {
             item.suggestedClassificationCode = `${mainCode}A`;
-            item.suggestedClassificationReason = `Refined classification: General concrete/masonry item (confirmed by DSR coefficient ${coefficient.dsrCode})`;
+            item.suggestedClassificationReason = `Under GCC Clause 46A, item${descQuote} (DSR ${coefficient.dsrCode}) is a general work item classified under Sub-classification ${mainCode}A; the cement it consumes is valued separately from the DSR cement coefficient and grouped under ${mainCode}C.`;
           }
         }
       }

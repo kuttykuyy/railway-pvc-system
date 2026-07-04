@@ -131,6 +131,39 @@ function fmtVariation(n: number): string {
   return (n * 100).toFixed(4) + '%';
 }
 
+// Rewrites a stored classification justification for display: strips the internal
+// price-variation working note, and rewords the older terse "Refined classification:
+// ..." text into GCC-clause style. Cement-supply rows (code ending in C) get a
+// cement-specific reason, so a "...C - supply of cement" row is never described as a
+// general concrete/masonry item (the split-off cement portion used to inherit the
+// parent item's justification).
+function formatJustification(
+  raw: string | null | undefined,
+  sub: SubClassification | null | undefined,
+  description?: string | null,
+): string {
+  const text = String(raw || '')
+    .replace(/\s*(Checking the price variation|PVC comparison)\b[\s\S]*$/i, '')
+    .trim();
+  const code = sub?.code || '';
+  const subName = sub?.name ? ` (${sub.name})` : '';
+  const dsrMatch = text.match(/DSR(?:\s+coefficient)?\s+([\d.]+)/i);
+  const dsr = dsrMatch ? ` (DSR ${dsrMatch[1]})` : '';
+  const isTerse = /^Refined classification:/i.test(text);
+  const isCementSupply = /c$/i.test(code);
+  const cleanDesc = String(description || '')
+    .replace(/\s*\((?:Excluding Cement|Cement Portion)\)\s*$/i, '')
+    .trim();
+
+  if (isCementSupply && (isTerse || /general concrete|masonry item/i.test(text) || text === '')) {
+    return `Under GCC Clause 46A this represents the cement supplied / consumed for the work${cleanDesc ? ` "${cleanDesc}"` : ''}${dsr}, classified under Sub-classification ${code}${subName} so that the cement price index is applied to this value.`;
+  }
+  if (isTerse) {
+    return `Under GCC Clause 46A, item${cleanDesc ? ` "${cleanDesc}"` : ''}${dsr} is a general work item classified under Sub-classification ${code}${subName}; the cement it consumes is valued and grouped separately.`;
+  }
+  return text || cleanDesc || '-';
+}
+
 // Natural ("human") sort for dotted item numbers like 2.25, 5.9.1, 5.33.2.1,
 // 16.3.3-CEM. Compares segment-by-segment: numeric chunks numerically, text
 // chunks lexically — so 5.9 sorts before 5.33 and a "-CEM" suffix stays next to
@@ -634,15 +667,10 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         dSl++;
         const sub = entry.subClassification;
         const classification = sub?.code ? `${sub.code}${sub.name ? ' - ' + sub.name : ''}` : '-';
-        // The bill-entry justification may carry an appended internal "price variation"
-        // comparison (e.g. "Checking the price variation on Rs ...: 9A -> ..."). That is a
-        // working aid for the app, not part of the official record, and its ->/Rs glyphs
-        // render poorly in the PDF font — so strip it from the report justification.
-        const justification = String(entry.classificationJustification || '')
-          .replace(/\s*(Checking the price variation|PVC comparison)\b[\s\S]*$/i, '')
-          .trim()
-          || String(entry.description || '').trim()
-          || '-';
+        // Normalise the stored justification for display: strip the internal
+        // price-variation working note and reword terse / mismatched cement-supply
+        // reasons into GCC-clause style. (See formatJustification.)
+        const justification = formatJustification(entry.classificationJustification, sub, entry.description);
         const rowItemNumbers = (entry.itemRows || [])
           .map(row => String(row?.itemNumber || '').trim())
           .filter(Boolean);
