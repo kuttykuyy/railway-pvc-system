@@ -145,9 +145,17 @@ export function BillClassificationEntries({
       const selectedSub = classificationGroups
         .flatMap(group => group.subClassifications)
         .find(sub => sub.id === patch.subClassificationId);
+      const previousSubId = nextEntries[entryIndex]?.subClassificationId;
       if (selectedSub) {
         nextEntry.subClassification = selectedSub;
         nextEntry.mainClassificationGroupId = selectedSub.groupId;
+        // The previous justification (including its "price variation" comparison) was
+        // written for the OLD classification, so it is now stale. When the user picks a
+        // different class, replace it with a note for the newly-selected classification.
+        if (previousSubId && previousSubId !== selectedSub.id) {
+          nextEntry.classificationJustification =
+            `Manually classified under GCC 46A ${selectedSub.code} (${selectedSub.name}).`;
+        }
       }
       // When the patched id can't be resolved (e.g. an empty group), keep the previous
       // subClassification object — it carries the code used to self-heal stale ids.
