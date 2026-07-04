@@ -33,7 +33,13 @@ interface ClassificationEntry {
   description?: string | null;
   scheduleItem?: string | null;
   itemNumber?: string | null;
-  itemRows?: Array<{ itemNumber?: string | null }> | null;
+  quantity?: number | null;
+  agreementRate?: number | null;
+  itemRows?: Array<{
+    itemNumber?: string | null;
+    quantity?: number | null;
+    agreementRate?: number | null;
+  }> | null;
   steelTypes?: string[] | null;
   classificationJustification?: string | null;
   subClassification?: SubClassification | null;
@@ -758,6 +764,176 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       mL, y,
     );
     pdf.setTextColor(0, 0, 0);
+  }
+
+  // ── E. BILL SCHEDULE ITEMS & SUMMARY ──────────────────────────────────────
+  // Item-wise listing of the bill schedule (item no., schedule, quantity,
+  // agreement rate, amount) followed by a schedule-wise summary, so every
+  // classified amount can be traced back to the source bill lines.
+  type ScheduleRow = { itemNumber: string; schedule: string; qty: number; rate: number; amount: number };
+  const scheduleRows: ScheduleRow[] = [];
+  for (const entry of entries) {
+    const schedule = String(entry.scheduleItem || '').trim() || '-';
+    const rawRows = Array.isArray(entry.itemRows) ? entry.itemRows : [];
+    const usableRows = rawRows.filter(row => row && (row.itemNumber || row.quantity || row.agreementRate));
+    if (usableRows.length > 0) {
+      for (const row of usableRows) {
+        const qty = Number(row.quantity) || 0;
+        const rate = Number(row.agreementRate) || 0;
+        scheduleRows.push({
+          itemNumber: String(row.itemNumber || '').trim() || '-',
+          schedule,
+          qty,
+          rate,
+          amount: qty * rate,
+        });
+      }
+    } else if (entry.itemNumber || entry.quantity || entry.agreementRate) {
+      const qty = Number(entry.quantity) || 0;
+      const rate = Number(entry.agreementRate) || 0;
+      const gross = qty * rate;
+      scheduleRows.push({
+        itemNumber: String(entry.itemNumber || '').trim() || '-',
+        schedule,
+        qty,
+        rate,
+        amount: gross > 0 ? gross : (Number(entry.amount) || 0),
+      });
+    }
+  }
+
+  if (scheduleRows.length > 0) {
+    pdf.addPage();
+    y = mT;
+
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('E. BILL SCHEDULE ITEMS', mL, y);
+    y += 2;
+
+    const itemHead = [['Sl.', 'Item No.', 'Schedule', 'Quantity', 'Agreement Rate (Rs.)', 'Amount (Rs.)']];
+    const itemBody = scheduleRows.map((row, index) => [
+      index + 1,
+      row.itemNumber,
+      row.schedule,
+      row.qty ? row.qty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : '-',
+      row.rate ? fmt(row.rate) : '-',
+      fmt(row.amount),
+    ]);
+
+    autoTable(pdf, {
+      startY: y + 2,
+      head: itemHead,
+      body: itemBody,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [20, 20, 20],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 8,
+        halign: 'center',
+        valign: 'middle',
+        cellPadding: 2.5,
+      },
+      bodyStyles: {
+        fontSize: 8,
+        cellPadding: { top: 2, right: 3, bottom: 2, left: 3 },
+        textColor: [0, 0, 0],
+        valign: 'top',
+      },
+      alternateRowStyles: { fillColor: [250, 250, 250] },
+      styles: { lineColor: [180, 180, 180], lineWidth: 0.3, font: 'helvetica', overflow: 'linebreak' },
+      margin: { left: mL, right: mR, top: mT },
+      tableWidth: contentW,
+      columnStyles: {
+        0: { cellWidth: 12, halign: 'center' },
+        1: { cellWidth: 55, halign: 'left' },
+        2: { cellWidth: 40, halign: 'left' },
+        3: { cellWidth: 45, halign: 'right' },
+        4: { cellWidth: 55, halign: 'right' },
+        5: { cellWidth: 66, halign: 'right' },
+      },
+    });
+
+    y = pdf.lastAutoTable.finalY + 6;
+
+    // ── F. BILL SCHEDULE SUMMARY ────────────────────────────────────────────
+    const scheduleTotals = new Map<string, number>();
+    for (const row of scheduleRows) {
+      scheduleTotals.set(row.schedule, (scheduleTotals.get(row.schedule) || 0) + row.amount);
+    }
+    const itemsGrossTotal = scheduleRows.reduce((sum, row) => sum + row.amount, 0);
+    // The schedule-line values (Qty x Agreement Rate) are the GROSS bill value;
+    // bill.billAmount is the payable amount, net of any rebate. When the two differ
+    // materially, the gap is the rebate — shown as a deduction so the summary
+    // reconciles to the actual Bill Amount, matching the IREPS proforma. (grossBillAmount
+    // is not relied on here because for rebate bills it is stored equal to the net.)
+    const grossTotal = itemsGrossTotal;
+    const netAmount = Number(bill.billAmount) || grossTotal;
+    const rebate = grossTotal - netAmount;
+    const showRebate = grossTotal > 0 && rebate > 0 && rebate / grossTotal > 0.005;
+    const rebatePct = grossTotal > 0 ? (rebate / grossTotal) * 100 : 0;
+
+    // Reserve room for the whole summary (title + header + one row per schedule,
+    // each of which can wrap to ~2 lines, + up to 3 total/rebate/net rows) so the
+    // block is not split across a page break.
+    ensureSpace(44 + scheduleTotals.size * 14);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('F. BILL SCHEDULE SUMMARY', mL, y);
+    y += 2;
+
+    const summaryBody: any[] = Array.from(scheduleTotals.entries()).map(([schedule, total]) => [
+      schedule,
+      { content: fmt(total), styles: { halign: 'right' as const } },
+    ]);
+    summaryBody.push([
+      { content: 'Total of Schedule Items', styles: { fontStyle: 'bold' as const } },
+      { content: fmt(grossTotal), styles: { fontStyle: 'bold' as const, halign: 'right' as const } },
+    ]);
+    if (showRebate) {
+      summaryBody.push([
+        `Less: Rebate (${rebatePct.toFixed(2)}%)`,
+        { content: '-' + fmt(rebate), styles: { halign: 'right' as const } },
+      ]);
+      summaryBody.push([
+        { content: 'Net Bill Amount (Incl. GST)', styles: { fontStyle: 'bold' as const } },
+        { content: fmt(netAmount), styles: { fontStyle: 'bold' as const, halign: 'right' as const } },
+      ]);
+    } else {
+      summaryBody.push([
+        { content: 'Bill Amount (Incl. GST)', styles: { fontStyle: 'bold' as const } },
+        { content: fmt(netAmount), styles: { fontStyle: 'bold' as const, halign: 'right' as const } },
+      ]);
+    }
+
+    autoTable(pdf, {
+      startY: y + 2,
+      head: [['Schedule', 'Amount (Rs.)']],
+      body: summaryBody,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [20, 20, 20],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 8,
+        halign: 'left',
+        valign: 'middle',
+        cellPadding: 2.5,
+      },
+      bodyStyles: {
+        fontSize: 8,
+        cellPadding: { top: 2, right: 3, bottom: 2, left: 3 },
+        textColor: [0, 0, 0],
+      },
+      styles: { lineColor: [180, 180, 180], lineWidth: 0.3, font: 'helvetica', overflow: 'linebreak' },
+      margin: { left: mL, right: mR, top: mT },
+      tableWidth: 150,
+      columnStyles: {
+        0: { cellWidth: 100, halign: 'left' },
+        1: { cellWidth: 50, halign: 'right' },
+      },
+    });
   }
 
   // ── PAGE 2: AFFECTED PRICE INDICES WITH MONTHLY BREAKDOWN ─────────────────
