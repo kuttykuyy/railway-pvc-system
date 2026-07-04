@@ -572,7 +572,13 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     const classBody = detailEntries.map((entry, index) => {
       const sub = entry.subClassification;
       const classification = sub?.code ? `${sub.code}${sub.name ? ' - ' + sub.name : ''}` : '-';
-      const justification = String(entry.classificationJustification || '').trim()
+      // The bill-entry justification may carry an appended internal "price variation"
+      // comparison (e.g. "Checking the price variation on Rs ...: 9A -> ..."). That is a
+      // working aid for the app, not part of the official record, and its ->/Rs glyphs
+      // render poorly in the PDF font — so strip it from the report justification.
+      const justification = String(entry.classificationJustification || '')
+        .replace(/\s*(Checking the price variation|PVC comparison)\b[\s\S]*$/i, '')
+        .trim()
         || String(entry.description || '').trim()
         || '-';
       const rowItemNumbers = (entry.itemRows || [])
