@@ -403,7 +403,13 @@ export function BillClassificationEntries({
                         value={currentSub && selectedGroup?.subClassifications.some(sub => sub.id === currentSub.id)
                           ? currentSub.id
                           : ''}
-                        onValueChange={subClassificationId => updateEntry(entryIndex, { subClassificationId })}
+                        onValueChange={subClassificationId => {
+                          // Ignore the spurious empty callback Radix fires when the group
+                          // changes and the previously-selected sub leaves the item list —
+                          // it would otherwise wipe the classification the user just picked.
+                          // (Clearing is done via the dedicated Clear button, not here.)
+                          if (subClassificationId) updateEntry(entryIndex, { subClassificationId });
+                        }}
                       >
                         <SelectTrigger className="h-9 bg-white text-sm">
                           <SelectValue placeholder="Select classification" />
