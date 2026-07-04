@@ -1,7 +1,7 @@
 // Service Worker for IR-PVC PWA
 // Bump CACHE_VERSION on every release to force clients to drop old cached assets
 // and pull the new build (stale cache was serving old app code after deploys).
-const CACHE_VERSION = '1.0.3';
+const CACHE_VERSION = '1.0.4';
 const CACHE_NAME = `railway-pvc-${CACHE_VERSION}`;
 
 const urlsToCache = [
@@ -40,6 +40,12 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-http(s) requests (chrome-extension, data URIs, etc.)
   if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Only GET requests are cacheable — Cache.put() throws on POST/PUT/DELETE
+  // (server actions, form submissions), so let the browser handle them natively.
+  if (request.method !== 'GET') {
     return;
   }
 

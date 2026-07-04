@@ -379,6 +379,14 @@ export function BillClassificationEntries({
                         ))}
                       </SelectContent>
                     </Select>
+                    {!currentSub && entry.subClassificationId && (
+                      // Diagnostic: the stored reference doesn't match any loaded
+                      // classification. Surface exactly what is broken instead of a
+                      // silent blank, so the user (and support) can see and fix it.
+                      <p className="text-[11px] leading-snug text-red-600">
+                        Saved classification {entry.subClassification?.code ? `"${entry.subClassification.code}"` : ''} (ref {String(entry.subClassificationId).slice(0, 8)}…) was not found in the current list — please pick a classification.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
