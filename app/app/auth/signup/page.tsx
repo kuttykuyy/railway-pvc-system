@@ -2,13 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { PasswordStrengthIndicator } from '@/components/password-strength-indicator';
+// The strength meter pulls in zxcvbn (~400 kB dictionary); load it on the client
+// on demand so it stays out of this public page's initial JS.
+const PasswordStrengthIndicator = dynamic(
+  () => import('@/components/password-strength-indicator').then(m => m.PasswordStrengthIndicator),
+  { ssr: false },
+);
 import { validatePhoneNumber } from '@/lib/phone-validation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
