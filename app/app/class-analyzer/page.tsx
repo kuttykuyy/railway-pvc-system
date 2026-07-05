@@ -16,7 +16,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { TrendingUp, TrendingDown, Calculator, AlertCircle, ChevronDown, ChevronUp, RefreshCcw, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getClientRoleInfo } from '@/lib/role-auth';
+import { getClientRoleInfo } from '@/lib/role-auth-client';
 import html2canvas from 'html2canvas';
 
 interface MainClassification {

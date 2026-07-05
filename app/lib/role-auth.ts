@@ -156,17 +156,7 @@ export async function validateAdminAccess(request: Request): Promise<{
   };
 }
 
-/**
- * Client-side role check hook data
- */
-export function getClientRoleInfo(session: any) {
-  return {
-    isAdmin: session?.user?.role === 'admin' || session?.user?.role === 'superadmin',
-    isRailwayOfficial: session?.user?.role === 'railway_official' || session?.user?.role === 'admin' || session?.user?.role === 'superadmin',
-    isContractor: session?.user?.role === 'contractor' || session?.user?.role === 'admin' || session?.user?.role === 'superadmin',
-    role: session?.user?.role || 'contractor',
-    email: session?.user?.email,
-    designation: session?.user?.designation,
-    department: session?.user?.department
-  };
-}
+// Client-side role helper moved to the pure ./role-auth-client module so client
+// components don't pull this file's prisma/next-auth imports into the browser
+// bundle. Re-exported here for any server-side importer / backward compatibility.
+export { getClientRoleInfo } from './role-auth-client';

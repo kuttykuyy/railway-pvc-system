@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertCircle, Trash2, Plus, Save, FileSpreadsheet, Loader2, Globe, Zap } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { getClientRoleInfo } from "@/lib/role-auth";
+import { getClientRoleInfo } from "@/lib/role-auth-client";
 
 interface FuelPrice {
   id?: string;

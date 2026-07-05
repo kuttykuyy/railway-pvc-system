@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { getClientRoleInfo } from '@/lib/role-auth';
+import { getClientRoleInfo } from '@/lib/role-auth-client';
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
 import { useLanguage } from '../i18n-provider';

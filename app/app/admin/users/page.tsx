@@ -10,7 +10,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Users, ShieldAlert, Sparkles, UserPlus } from 'lucide-react';
-import { getClientRoleInfo } from '@/lib/role-auth';
+import { getClientRoleInfo } from '@/lib/role-auth-client';
 
 // Import custom hooks
 import { useUsers } from './hooks/useUsers';

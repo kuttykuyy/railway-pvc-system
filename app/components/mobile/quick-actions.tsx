@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { getClientRoleInfo } from '@/lib/role-auth';
+import { getClientRoleInfo } from '@/lib/role-auth-client';
 
 interface QuickActionsProps {
   stats?: {

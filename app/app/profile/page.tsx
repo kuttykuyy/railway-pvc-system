@@ -13,7 +13,7 @@ import {
   CheckCircle, Plus, Minus, Calendar, Activity, Download, Eye,
   Receipt, Phone, Clock, FolderOpen,
 } from 'lucide-react';
-import { getClientRoleInfo } from '@/lib/role-auth';
+import { getClientRoleInfo } from '@/lib/role-auth-client';
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
 import { RailwayPostingForm } from '@/components/railway-posting-form';

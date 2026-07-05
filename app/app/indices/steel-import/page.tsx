@@ -12,7 +12,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { BackButton } from "@/components/ui/back-button";
 import { FileText, Loader2, Calculator, CheckCircle, ArrowRight, Database, Info, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { getClientRoleInfo } from "@/lib/role-auth";
+import { getClientRoleInfo } from "@/lib/role-auth-client";
 import { JPC_ITEMS, PVC_CALCULATION_ITEMS, INDEX_DISPLAY_NAMES, CATEGORY_DISPLAY_NAMES } from "@/lib/jpc-items";
 
 type ItemData = { f1: string; f2: string };

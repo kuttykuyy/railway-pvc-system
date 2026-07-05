@@ -67,7 +67,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { BackButton } from "@/components/ui/back-button";
-import { getClientRoleInfo } from "@/lib/role-auth";
+import { getClientRoleInfo } from "@/lib/role-auth-client";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 interface UploadedDocument {

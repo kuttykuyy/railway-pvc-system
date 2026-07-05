@@ -69,6 +69,30 @@ Baseline = the audit build. Every claim is measured, not estimated.
 
 **Files:** `app/api/bills/route.ts`. **Verification:** tsc clean · 68 tests pass · build succeeds · live API-shape check.
 
+## Batch 5 — Fix the `role-auth` server-chain leak (the biggest win) ✅ committed
+
+**Reason:** `getClientRoleInfo` — a pure function that just reads role flags off the session — lived in `lib/role-auth.ts`, which imports `prisma`, `next-auth`, and `authOptions`. **~18 client pages** (and `components/navigation.tsx`) imported it, dragging the entire prisma/auth chain into each of their bundles. This one leak accounted for most of the remaining heavy routes.
+
+**Fix:** moved `getClientRoleInfo` into a pure `lib/role-auth-client.ts`; `role-auth.ts` re-exports it for server callers; all client importers now import from the pure module. No server-only export was touched (verified: no client file imports anything else from `role-auth`).
+
+**Measured (−291 kB each):**
+
+| Route | Before | After |
+|---|---:|---:|
+| `/class-analyzer` | 481 kB | **187 kB** |
+| `/profile` | 477 kB | **186 kB** |
+| `/admin/users` | 471 kB | **177 kB** |
+| `/indices/detailed` | 461 kB | **170 kB** |
+| `/indices/table` | 456 kB | **165 kB** |
+| `/classifications-new` | 450 kB | **159 kB** |
+| `/admin/credit-statements` | 445 kB | **154 kB** |
+| (+ `/indices/manage`, `/monthly`, `/fuel-prices`, `/steel-import`, `/manual-import`, `/classifications`, `/admin/price-indices`, mobile nav/dashboard — same ~291 kB drop) | | |
+
+**Files:** `lib/role-auth-client.ts` (new), `lib/role-auth.ts`, + 18 importer files (import-path change only).
+**Verification:** tsc clean · 68 tests pass · production build succeeds.
+
+Four more pages used **double-quoted** `"@/lib/role-auth"` (missed by the first pass) — fixed in the same batch: `/indices/spreadsheet` **465 → 170 kB**, `/indices/steel-import` **431 → 140 kB**, `/indices/fuel-prices` **432 → 141 kB**, `/indices/component-documents` **472 → 178 kB** (this one also had pdf-lib lazy-loaded in Batch 1). In total ~22 client routes dropped ~291 kB each from this one fix.
+
 ## Running totals (measured)
 
 - `/auth/signup`: **715 kB → 146 kB (−80%)** — the public signup page, the single most important result.

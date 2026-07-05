@@ -30,7 +30,7 @@ import {
   ,Sparkles
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getClientRoleInfo } from '@/lib/role-auth';
+import { getClientRoleInfo } from '@/lib/role-auth-client';
 import { useLanguage } from '../i18n-provider';
 
 const mobileNavSections = [

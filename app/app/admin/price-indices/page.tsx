@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getClientRoleInfo } from '@/lib/role-auth';
+import { getClientRoleInfo } from '@/lib/role-auth-client';
 import { Trash2, Database, AlertTriangle, CheckCircle, CalendarX } from 'lucide-react';
 import { BackButton } from '@/components/ui/back-button';
 

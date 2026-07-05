@@ -15,7 +15,7 @@ import { BackButton } from "@/components/ui/back-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, RefreshCcw, ChevronLeft, ChevronRight, Download, Globe, Upload, FileText, Loader2, ShieldCheck, ShieldAlert, Trash2 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { getClientRoleInfo } from "@/lib/role-auth";
+import { getClientRoleInfo } from "@/lib/role-auth-client";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

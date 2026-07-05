@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { RazorpayTopupDialog } from '@/components/ui/razorpay-topup-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { getClientRoleInfo } from '@/lib/role-auth';
+import { getClientRoleInfo } from '@/lib/role-auth-client';
 import { useLanguage } from './i18n-provider';
 import { 
   Building2,
