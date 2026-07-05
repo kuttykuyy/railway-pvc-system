@@ -209,11 +209,9 @@ export async function isMyDreamsWhatsAppConfigured(): Promise<boolean> {
 /**
  * Validate phone number format
  */
-export function validatePhoneNumber(phone: string): boolean {
-  // Should contain 10-12 digits
-  const phoneRegex = /^\+?[1-9]\d{9,11}$/;
-  return phoneRegex.test(phone.replace(/\D/g, ''));
-}
+// Re-exported from the pure module so existing importers keep working while
+// client components can import it directly without this file's server deps.
+export { validatePhoneNumber } from './phone-validation';
 
 /**
  * Format bill data for WhatsApp template

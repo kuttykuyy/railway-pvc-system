@@ -2,7 +2,6 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -47,7 +46,8 @@ const ALL_COLS = [
 ];
 
 /* ── Template download ──────────────────────────────────────────────── */
-function downloadTemplate() {
+async function downloadTemplate() {
+  const XLSX = await import('xlsx'); // loaded on demand — keeps xlsx (~1 MB) out of the initial bundle
   const ws = XLSX.utils.aoa_to_sheet([
     ALL_COLS.map(c => c.label),
     ALL_COLS.map(c => c.example),
@@ -81,8 +81,9 @@ export default function ContractImportPage() {
   /* ── Parse uploaded file ────────────────────────────────────────── */
   const parseFile = useCallback((file: File) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await import('xlsx'); // on-demand — only when a file is actually picked
         const data = new Uint8Array(e.target!.result as ArrayBuffer);
         const wb = XLSX.read(data, { type: 'array', cellDates: true });
         const ws = wb.Sheets[wb.SheetNames[0]];

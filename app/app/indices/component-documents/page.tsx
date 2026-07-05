@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { PDFDocument } from "pdf-lib";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -143,6 +142,7 @@ const renderRasterPdf = async (
   quality: number,
   onProgress?: (message: string) => void
 ): Promise<Uint8Array> => {
+  const { PDFDocument } = await import('pdf-lib'); // on-demand — keeps pdf-lib out of the initial bundle
   const numPages = pdf.numPages;
   const rasterDoc = await PDFDocument.create();
   
@@ -196,6 +196,7 @@ const optimizeAndCompressPdf = async (
 ): Promise<{ file: File; originalSize: number; compressedSize: number; success: boolean }> => {
   const originalSize = file.size;
   try {
+    const { PDFDocument } = await import('pdf-lib'); // on-demand
     const arrayBuffer = await file.arrayBuffer();
     const pdfDoc = await PDFDocument.load(arrayBuffer);
     

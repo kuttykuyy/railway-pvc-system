@@ -14,11 +14,6 @@ const nextConfig = {
     ignoreBuildErrors: false,
   },
   images: { unoptimized: true },
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-  },
   poweredByHeader: false,
   async headers() {
     // ENFORCED CSP. script-src keeps 'unsafe-inline'/'unsafe-eval' (required by

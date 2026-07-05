@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { PasswordStrengthIndicator } from '@/components/password-strength-indicator';
-import { validatePhoneNumber } from '@/lib/whatsapp-mydreams';
+import { validatePhoneNumber } from '@/lib/phone-validation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 import { getOfficialRailwayEmailDomainHelp, isOfficialRailwayEmail } from '@/lib/official-email';

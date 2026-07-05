@@ -5,7 +5,14 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Building2, FileText, TrendingUp, CheckCircle, Activity, Users, Plus, RefreshCw, Eye, Calendar, Clock, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import dynamic from 'next/dynamic';
+
+// recharts is heavy; load the chart only on the client, on demand, so it stays
+// out of the dashboard's initial JS.
+const MonthlyTrendChart = dynamic(() => import('@/components/dashboard/monthly-trend-chart'), {
+  ssr: false,
+  loading: () => <div className="h-full w-full animate-pulse rounded bg-gray-100" />,
+});
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { DashboardSkeleton } from '@/components/ui/skeletons/dashboard-skeleton';
 import { ErrorDisplay } from '@/components/ui/error-display';
@@ -214,15 +221,7 @@ export default function DashboardPage() {
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">Monthly Bill Trend</h2>
           <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.monthlyTrends}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} name="Bills" dot={{ r: 3 }} activeDot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
+            <MonthlyTrendChart data={data.monthlyTrends} />
           </div>
         </div>
       )}
