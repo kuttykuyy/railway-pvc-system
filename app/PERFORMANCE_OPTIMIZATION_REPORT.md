@@ -52,6 +52,23 @@ Baseline = the audit build. Every claim is measured, not estimated.
 
 **All heavy client libraries are now lazy-loaded:** xlsx, pdf-lib, recharts (dashboard + tendering + analytics), zxcvbn.
 
+## Batch 4 — Bills-list DB: skip heavy classification relations on the general list ✅ committed
+
+**Reason:** the general bills list (`/api/bills?limit=1000`) eagerly loaded `workClassification` + the full `classificationEntries` (each with its full `classification` + `subClassification` record) for **every** bill — but no list view reads them.
+
+**Verification that it's safe (traced all 6 consumers of `/api/bills`):**
+- `bills/page`, `mobile-bills-list`, `admin/user-permissions`, `contracts/page` — **0** references to `classificationEntries`/`workClassification`.
+- `mobile-bill-form` — uses `/api/bills/[id]` (single bill), not the list.
+- `bills/new` — **does** read `previousBill.workClassification` + `previousBill.classificationEntries` (the "carry forward classification from the previous bill" feature), **but always calls `/api/bills?contractId=…`**.
+
+**Fix:** include those two relations **only when `contractId` is present**. The general list drops them; the contract-scoped path (bills/new) is byte-for-byte unchanged.
+
+**Measured:** ~1,827 bytes of classification relations per bill (DB sample; only 1.4 entries/bill — real bills with ~28 entries save far more) → **~1.74 MB of JSON removed from a 1000-bill list**, plus the joins/serialization for every entry.
+
+**Live-verified:** `GET /api/bills?limit=1000` response now has `hasClassificationEntries: false, hasWorkClassification: false` (still has `pvcCalculation`, `contract`); the `?contractId=` path is unchanged (same include as before).
+
+**Files:** `app/api/bills/route.ts`. **Verification:** tsc clean · 68 tests pass · build succeeds · live API-shape check.
+
 ## Running totals (measured)
 
 - `/auth/signup`: **715 kB → 146 kB (−80%)** — the public signup page, the single most important result.

@@ -87,6 +87,14 @@ export async function GET(request: NextRequest) {
           return NextResponse.json(createPaginatedResponse([], 0, page, limit));
         }
 
+        // The heavy per-bill relations (workClassification + full classificationEntries)
+        // are ONLY read by the new-bill "carry forward classification from the previous
+        // bill" flow, which always requests a single contract (?contractId=...). The
+        // general list (?limit=1000, no contractId — bills page, mobile list, admin
+        // permissions) never reads them, so we skip them there to avoid fetching every
+        // entry + its classification/subClassification for up to 1000 bills.
+        const includeClassificationRelations = !!contractId;
+
         // Count and fetch in parallel — single round-trip each, no ID array ping-pong
         const [total, bills] = await Promise.all([
           prisma.bill.count({ where: billsWhere }),
@@ -110,10 +118,14 @@ export async function GET(request: NextRequest) {
                   user: { select: { id: true, name: true, email: true } }
                 }
               },
-              workClassification: true,
-              classificationEntries: {
-                include: { classification: true, subClassification: true }
-              },
+              ...(includeClassificationRelations
+                ? {
+                    workClassification: true,
+                    classificationEntries: {
+                      include: { classification: true, subClassification: true },
+                    },
+                  }
+                : {}),
               pvcCalculation: true,
               billTransaction: true
             }
