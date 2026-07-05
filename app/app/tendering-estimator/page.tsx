@@ -15,10 +15,18 @@ import {
   ChevronLeft, BrainCircuit, RefreshCw, ShieldAlert, Lightbulb, Target,
   Activity, TrendingUp, ArrowRight
 } from 'lucide-react';
-import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, PieChart, Pie, Cell
-} from 'recharts';
+import dynamic from 'next/dynamic';
+
+// recharts is heavy; load the charts on the client on demand so they stay out of
+// this tool's initial JS.
+const EscalationAreaChart = dynamic(
+  () => import('@/components/tendering/estimator-charts').then(m => m.EscalationAreaChart),
+  { ssr: false, loading: () => <div className="h-full w-full animate-pulse rounded bg-slate-100" /> },
+);
+const ComponentPieChart = dynamic(
+  () => import('@/components/tendering/estimator-charts').then(m => m.ComponentPieChart),
+  { ssr: false, loading: () => <div className="h-full w-full animate-pulse rounded-full bg-slate-100" /> },
+);
 
 interface CoefficientSet {
   labor: number;
@@ -705,29 +713,7 @@ export default function TenderingEstimatorPage() {
                 <h3 className="font-bold text-slate-800 text-sm mb-1">Escalation Cash-Flow by Quarter</h3>
                 <p className="text-xs text-slate-400 mb-4">Projected PVC payouts across 3 market scenarios</p>
                 <div className="h-60">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="gBaseline" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} /><stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                        </linearGradient>
-                        <linearGradient id="gAggressive" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                        </linearGradient>
-                        <linearGradient id="gConservative" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.15} /><stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="name" stroke="#cbd5e1" fontSize={11} tickLine={false} />
-                      <YAxis stroke="#cbd5e1" fontSize={11} tickLine={false} axisLine={false} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip formatter={(v: any) => [`₹${Number(v).toLocaleString()}`, '']} labelFormatter={l => `Quarter ${l}`} />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                      <Area type="monotone" dataKey="aggressive" name="Aggressive" stroke="#10b981" strokeWidth={2} fill="url(#gAggressive)" />
-                      <Area type="monotone" dataKey="baseline" name="Baseline" stroke="#6366f1" strokeWidth={2} fill="url(#gBaseline)" />
-                      <Area type="monotone" dataKey="conservative" name="Conservative" stroke="#f59e0b" strokeWidth={2} fill="url(#gConservative)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  <EscalationAreaChart data={chartData} />
                 </div>
               </div>
 
@@ -735,14 +721,7 @@ export default function TenderingEstimatorPage() {
               <div className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col">
                 <h3 className="font-bold text-slate-800 text-sm mb-4">Component Contribution</h3>
                 <div className="h-36 relative">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={2} dataKey="value">
-                        {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip formatter={(v: any) => `₹${Number(v).toLocaleString()}`} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <ComponentPieChart data={pieData} colors={COLORS} />
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-3">
                   {pieData.map((d, i) => (

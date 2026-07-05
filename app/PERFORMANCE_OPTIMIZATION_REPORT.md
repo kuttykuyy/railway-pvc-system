@@ -38,6 +38,20 @@ Baseline = the audit build. Every claim is measured, not estimated.
 
 ---
 
+## Batch 3 — Lazy-load recharts on the remaining chart pages ✅ committed
+
+**Reason:** completes the "heavy libraries are lazy-loaded" stop-condition. Both chart blocks per page extracted into `next/dynamic({ ssr:false })` components (props are tsc-guarded — a missing variable is a compile error, so the extraction is safe).
+
+| Route | Before | After | Δ |
+|---|---:|---:|---:|
+| `/tendering-estimator` | 280 kB | **171 kB** | −109 kB |
+| `/admin/analytics` | 219 kB | **116 kB** | −103 kB |
+
+**Files:** `components/tendering/estimator-charts.tsx` (new), `app/tendering-estimator/page.tsx`, `components/admin/analytics-charts.tsx` (new), `app/admin/analytics/page.tsx`. The `.reverse()` mutation on the analytics data was preserved exactly.
+**Verification:** tsc clean · 68 tests pass · production build succeeds.
+
+**All heavy client libraries are now lazy-loaded:** xlsx, pdf-lib, recharts (dashboard + tendering + analytics), zxcvbn.
+
 ## Running totals (measured)
 
 - `/auth/signup`: **715 kB → 146 kB (−80%)** — the public signup page, the single most important result.

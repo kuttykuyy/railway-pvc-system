@@ -3,21 +3,18 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from 'recharts';
+import dynamic from 'next/dynamic';
+
+// recharts is heavy; load these admin charts on demand so they stay out of the
+// initial bundle.
+const MonthlyRevenueChart = dynamic(
+  () => import('@/components/admin/analytics-charts').then(m => m.MonthlyRevenueChart),
+  { ssr: false, loading: () => <div className="h-[300px] w-full animate-pulse rounded bg-slate-100" /> },
+);
+const WeeklyTrendChart = dynamic(
+  () => import('@/components/admin/analytics-charts').then(m => m.WeeklyTrendChart),
+  { ssr: false, loading: () => <div className="h-[300px] w-full animate-pulse rounded bg-slate-100" /> },
+);
 import { TrendingUp, Users, IndianRupee, Activity } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 
@@ -208,34 +205,7 @@ export default function AnalyticsPage() {
             <CardDescription>Checks and revenue by month</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data.monthlyData.reverse()}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" angle={-45} textAnchor="end" height={80} />
-                <YAxis yAxisId="left" />
-                <YAxis yAxisId="right" orientation="right" />
-                <Tooltip />
-                <Legend />
-                <Line
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="checks"
-                  stroke="#3b82f6"
-                  dot={false}
-                  strokeWidth={2}
-                  name="Total Checks"
-                />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#10b981"
-                  dot={false}
-                  strokeWidth={2}
-                  name="Revenue (₹)"
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <MonthlyRevenueChart data={data.monthlyData.reverse()} />
           </CardContent>
         </Card>
 
@@ -246,17 +216,7 @@ export default function AnalyticsPage() {
             <CardDescription>Checks and users by week</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data.weeklyData.reverse()}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="week" angle={-45} textAnchor="end" height={80} fontSize={12} />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="checks" fill="#3b82f6" name="Checks" />
-                <Bar dataKey="users" fill="#8b5cf6" name="Unique Users" />
-              </BarChart>
-            </ResponsiveContainer>
+            <WeeklyTrendChart data={data.weeklyData.reverse()} />
           </CardContent>
         </Card>
       </div>
