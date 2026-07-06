@@ -214,6 +214,9 @@ function NewBillPageContent() {
   const [subscribing, setSubscribing] = useState<boolean>(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState<boolean>(false);
   const [isAiUploaded, setIsAiUploaded] = useState(false);
+  // Set once the user generates a classification justification with AI on this bill.
+  // Manual bills that use it pay a ₹99 add-on (charged once at save).
+  const [aiJustificationUsed, setAiJustificationUsed] = useState(false);
   // True when an AI extraction has cement items whose derived cost has NOT yet been
   // applied. PVC check / bill creation is blocked until the user applies it.
   const [cementCostPending, setCementCostPending] = useState(false);
@@ -1227,6 +1230,7 @@ function NewBillPageContent() {
           paymentMethod: 'free',
           paymentReference: null,
           isAiUploaded,
+          aiJustificationUsed,
         }),
       });
 
@@ -1850,6 +1854,8 @@ function NewBillPageContent() {
                         contractId={formData.contractId || undefined}
                         measurementDate={formData.dateOfMeasurement || undefined}
                         lockEntries={isAiUploaded}
+                        aiJustificationFee={isAiUploaded ? 0 : 99}
+                        onAiJustificationUsed={() => setAiJustificationUsed(true)}
                       />
                     </AccordionContent>
                   </AccordionItem>
