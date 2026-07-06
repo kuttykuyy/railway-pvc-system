@@ -217,6 +217,7 @@ export async function POST(request: NextRequest) {
       nonScheduleItems = [],
       classificationEntries = [],
       isAiUploaded,
+      aiJustificationUsed = false,
     } = body;
 
     // ===== STEP 2: Payment Validation =====
@@ -385,6 +386,27 @@ export async function POST(request: NextRequest) {
           }
         }
       }
+    }
+
+    // ===== STEP 4C: AI Justification Add-on =====
+    // "Generate with AI" for classification justifications is a paid add-on on
+    // MANUAL (non-AI-uploaded) chargeable bills: ₹99 once per bill, no matter how
+    // many items used it. AI-uploaded bills already pay the AI rate, so it's free
+    // for them; free/trial/admin bills are not charged for it either.
+    const AI_JUSTIFICATION_FEE = 99;
+    if (aiJustificationUsed === true && !isBillFree && !isAiUploaded) {
+      const currentBalance = user!.customerAccount?.creditBalance || 0;
+      const totalRequired = calculatedBillCost + AI_JUSTIFICATION_FEE;
+      if (currentBalance < totalRequired) {
+        return NextResponse.json({
+          error: 'Payment required',
+          reason: `Using "Generate with AI" adds ₹${AI_JUSTIFICATION_FEE} to this bill. Required: ₹${totalRequired}, available: ₹${currentBalance}. Please add credits to continue.`,
+          requiredPayment: totalRequired,
+          isFree: false,
+        }, { status: 402 });
+      }
+      calculatedBillCost = totalRequired;
+      logger.log(`💳 AI justification add-on: +₹${AI_JUSTIFICATION_FEE} (bill fee now ₹${calculatedBillCost})`);
     }
 
     // ===== STEP 5: Validate Measurement Date =====

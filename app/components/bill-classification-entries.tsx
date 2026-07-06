@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
 import { AlertCircle, CheckCircle2, Plus, Trash2, Sparkles, Pencil, X } from 'lucide-react';
 
 import { BillAmountCalculator } from './bill-amount-calculator';
@@ -78,6 +79,12 @@ interface BillClassificationEntriesProps {
   /** When true (bill built from a PDF extraction), entries render read-only and each
    * one needs its Edit button clicked before it can be changed. */
   lockEntries?: boolean;
+  /** Extra fee (₹) added to this bill the first time "Generate with AI" is used.
+   * 0 hides the cost hint (e.g. AI-uploaded bills, where it is already included). */
+  aiJustificationFee?: number;
+  /** Called after a justification is successfully generated with AI, so the parent
+   * can flag the bill as having used the paid AI add-on. */
+  onAiJustificationUsed?: () => void;
 }
 
 const STEEL_TYPES = [
@@ -102,6 +109,8 @@ export function BillClassificationEntries({
   contractId,
   measurementDate,
   lockEntries = false,
+  aiJustificationFee = 0,
+  onAiJustificationUsed,
 }: BillClassificationEntriesProps) {
   // Fully controlled: `value` is the single source of truth (aliased to `entries` for
   // readability). Every edit goes straight to onChange, so a manual classification change
@@ -109,6 +118,8 @@ export function BillClassificationEntries({
   const entries = value;
   // Which locked entries the user has explicitly opened for editing (by index).
   const [unlockedEntries, setUnlockedEntries] = useState<Set<number>>(new Set());
+  // Per-entry state for the on-demand AI justification button.
+  const [justifyingIndex, setJustifyingIndex] = useState<number | null>(null);
   const requiredMainCode = useMemo(
     () => workDescription ? inferMainClassification(workDescription).code : '',
     [workDescription],
@@ -184,6 +195,45 @@ export function BillClassificationEntries({
       manualClassification: true,
     };
     commit(nextEntries);
+  };
+
+  // Ask the AI to write the "why this classification" justification for an item.
+  // On-demand only (button click) so it never burns AI credit on every dropdown change.
+  const generateJustification = async (entryIndex: number) => {
+    const entry = entries[entryIndex];
+    const sub = classificationGroups.flatMap(group => group.subClassifications)
+      .find(s => s.id === entry.subClassificationId) || entry.subClassification;
+    if (!sub) return;
+    const group = classificationGroups.find(g => g.id === sub.groupId);
+    setJustifyingIndex(entryIndex);
+    try {
+      const res = await fetch('/api/bills/classification-justification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemDescription: entry.description || '',
+          itemNumber: entry.itemNumber || '',
+          amount: entry.amount,
+          subCode: sub.code,
+          subName: sub.name,
+          groupCode: group?.code || '',
+          groupName: group?.name || '',
+          workDescription: workDescription || '',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.justification) {
+        toast.error(data.error || 'Could not generate a justification. Please try again.');
+        return;
+      }
+      updateEntry(entryIndex, { classificationJustification: data.justification });
+      onAiJustificationUsed?.();
+      toast.success('AI justification added to this item.');
+    } catch {
+      toast.error('The request failed. Please try again.');
+    } finally {
+      setJustifyingIndex(null);
+    }
   };
 
   const updateItemRow = (entryIndex: number, rowIndex: number, patch: Partial<ItemRow>) => {
@@ -519,7 +569,30 @@ export function BillClassificationEntries({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-600">Justification for classification</label>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-medium text-slate-600">Justification for classification</label>
+                    {selectedSub && !locked && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => generateJustification(entryIndex)}
+                        disabled={justifyingIndex === entryIndex}
+                        className="h-7 px-2 text-xs"
+                        title={aiJustificationFee > 0
+                          ? `Write this justification using AI. Adds ₹${aiJustificationFee} to this bill (charged once).`
+                          : 'Write this justification using AI.'}
+                      >
+                        <Sparkles className="mr-1 h-3.5 w-3.5" />
+                        {justifyingIndex === entryIndex ? 'Generating…' : 'Generate with AI'}
+                      </Button>
+                    )}
+                  </div>
+                  {selectedSub && !locked && aiJustificationFee > 0 && (
+                    <p className="text-[11px] text-slate-500">
+                      Generate with AI adds ₹{aiJustificationFee} to this bill (charged once, even if used on multiple items).
+                    </p>
+                  )}
                   <textarea
                     disabled={locked}
                     value={entry.classificationJustification || ''}
