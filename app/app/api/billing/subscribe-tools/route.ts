@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       prisma.creditTransaction.create({
         data: {
           userId,
-          amount: SUBSCRIPTION_COST,
+          amount: -SUBSCRIPTION_COST,
           type: 'deduct',
           reason: `Advanced Features Subscription (₹${SUBSCRIPTION_COST}/month)`,
           balanceBefore: currentBalance,

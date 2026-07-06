@@ -314,7 +314,7 @@ export async function processPaymentForBill(
       data: {
         userId,
         billId,
-        amount: paidAmount || finalAmount,
+        amount: paidAmount ?? finalAmount,
         originalAmount: baseAmount,
         discount,
         discountType,
@@ -336,7 +336,7 @@ export async function processPaymentForBill(
     });
 
     // Update user stats + deduct credits atomically to prevent partial writes
-    const chargedAmount = paidAmount || finalAmount;
+    const chargedAmount = paidAmount ?? finalAmount;
     await prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: userId },

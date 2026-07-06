@@ -167,8 +167,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const requesterRole = String((session?.user as any)?.role || '').toLowerCase();
         const isAdminRequester = requesterRole === 'admin' || requesterRole === 'superadmin';
 
-        // Check cache before running heavy PDF compiling
-        const cacheKey = `pdf-report:${billId}:${templateId || 'default'}:${pdfFormat}:${includeIndexDocs ? 'docs' : 'nodocs'}:${isAdminRequester ? 'admin' : 'standard'}`;
+        // A trial bill is watermarked "NOT FOR OFFICIAL USE" until the bill owner
+        // tops up their account. Once they have made at least one credit top-up
+        // (a CreditTransaction of type 'add'), the watermark is waived on all of
+        // their trial bills so they can download clean, official copies.
+        let trialWatermarkWaived = false;
+        if (!isAdminRequester) {
+          const trialTopupCount = await prisma.creditTransaction.count({
+            where: {
+              type: 'add',
+              user: { contracts: { some: { bills: { some: { id: billId } } } } },
+            },
+          });
+          trialWatermarkWaived = trialTopupCount > 0;
+        }
+
+        // Check cache before running heavy PDF compiling.
+        // The watermark-waiver state is part of the key so a post-top-up download
+        // regenerates a clean PDF instead of serving a stale watermarked one.
+        const cacheKey = `pdf-report:${billId}:${templateId || 'default'}:${pdfFormat}:${includeIndexDocs ? 'docs' : 'nodocs'}:${isAdminRequester ? 'admin' : 'standard'}:${trialWatermarkWaived ? 'wmoff' : 'wmon'}`;
         const cachedPdf = advancedCache.get(cacheKey);
         if (cachedPdf) {
           console.log(`[PDF Cache] Hit for: ${cacheKey}`);
@@ -709,8 +726,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
       }
 
-      // Apply trial watermark for free-trial bills only
-      if (!isAdminRequester && bill.billTransaction?.discountType === 'trial') {
+      // Apply trial watermark for free-trial bills only (waived once the owner has topped up)
+      if (!isAdminRequester && !trialWatermarkWaived && bill.billTransaction?.discountType === 'trial') {
         const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
         irFinalBytes = await applyTrialWatermark(irFinalBytes);
       }
@@ -4295,8 +4312,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       console.log('Component index documents disabled in template settings');
     }
 
-    // Apply trial watermark for free-trial bills
-    if (!isAdminRequester && bill.billTransaction?.discountType === 'trial') {
+    // Apply trial watermark for free-trial bills (waived once the owner has topped up)
+    if (!isAdminRequester && !trialWatermarkWaived && bill.billTransaction?.discountType === 'trial') {
       const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
       finalPdfBytes = await applyTrialWatermark(finalPdfBytes);
     }
