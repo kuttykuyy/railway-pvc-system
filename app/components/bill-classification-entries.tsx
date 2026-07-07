@@ -79,12 +79,9 @@ interface BillClassificationEntriesProps {
   /** When true (bill built from a PDF extraction), entries render read-only and each
    * one needs its Edit button clicked before it can be changed. */
   lockEntries?: boolean;
-  /** Extra fee (₹) added to this bill the first time "Generate with AI" is used.
-   * 0 hides the cost hint (e.g. AI-uploaded bills, where it is already included). */
+  /** Fee (₹) charged each time "Generate with AI" is used, shown as a hint.
+   * The charge itself is taken server-side when the AI runs. 0 hides the hint. */
   aiJustificationFee?: number;
-  /** Called after a justification is successfully generated with AI, so the parent
-   * can flag the bill as having used the paid AI add-on. */
-  onAiJustificationUsed?: () => void;
 }
 
 const STEEL_TYPES = [
@@ -110,7 +107,6 @@ export function BillClassificationEntries({
   measurementDate,
   lockEntries = false,
   aiJustificationFee = 0,
-  onAiJustificationUsed,
 }: BillClassificationEntriesProps) {
   // Fully controlled: `value` is the single source of truth (aliased to `entries` for
   // readability). Every edit goes straight to onChange, so a manual classification change
@@ -227,8 +223,9 @@ export function BillClassificationEntries({
         return;
       }
       updateEntry(entryIndex, { classificationJustification: data.justification });
-      onAiJustificationUsed?.();
-      toast.success('AI justification added to this item.');
+      toast.success(data.charged > 0
+        ? `AI justification added — ₹${data.charged} charged.`
+        : 'AI justification added to this item.');
     } catch {
       toast.error('The request failed. Please try again.');
     } finally {
@@ -580,7 +577,7 @@ export function BillClassificationEntries({
                         disabled={justifyingIndex === entryIndex}
                         className="h-7 px-2 text-xs"
                         title={aiJustificationFee > 0
-                          ? `Write this justification using AI. Adds ₹${aiJustificationFee} to this bill (charged once).`
+                          ? `Write this justification using AI. Charges ₹${aiJustificationFee} each time.`
                           : 'Write this justification using AI.'}
                       >
                         <Sparkles className="mr-1 h-3.5 w-3.5" />
@@ -590,7 +587,7 @@ export function BillClassificationEntries({
                   </div>
                   {selectedSub && !locked && aiJustificationFee > 0 && (
                     <p className="text-[11px] text-slate-500">
-                      Generate with AI adds ₹{aiJustificationFee} to this bill (charged once, even if used on multiple items).
+                      Generate with AI charges ₹{aiJustificationFee} each time, deducted from your credit wallet (free accounts excluded).
                     </p>
                   )}
                   <textarea
