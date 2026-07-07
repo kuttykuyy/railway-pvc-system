@@ -262,6 +262,7 @@ function EditBillPageContent() {
             contractSchedules={selectedContract?.schedules || []}
             contractId={form.contractId || undefined}
             measurementDate={form.dateOfMeasurement || undefined}
+            aiJustificationFee={99}
           />
         </div>
 
