@@ -16,6 +16,7 @@ import { Prisma } from '@prisma/client';
 import type { GuestBillDraft } from '@/try-bill/types';
 import { ValidationError } from '@/try-bill/lib/validation-error';
 import { PaymentRequiredError } from '@/try-bill/lib/payment-required-error';
+import { ConflictError } from '@/try-bill/lib/conflict-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -195,43 +196,35 @@ export async function POST(request: NextRequest) {
         requiredPayment = baseAmount;
       }
 
-      const trialClaimedAgreement =
-        isFree && freeReason === 'trial'
-          ? await tx.trialClaimedAgreement.findUnique({
-              where: { normalizedAgreementNo },
-            })
-          : null;
-
-      if (trialClaimedAgreement) {
-        isFree = false;
-        freeReason = '';
-        requiredPayment = baseAmount;
-      }
-
       if (isFree && freeReason === 'trial') {
-        const trialIncrement = await tx.user.updateMany({
-          where: { id: user.id, freeTrialUsed: { lt: freeTrialLimit } },
-          data: {
-            freeTrialUsed: { increment: 1 },
-            totalBillsProcessed: { increment: 1 },
-          },
-        });
-
-        if (trialIncrement.count === 0) {
-          isFree = false;
-          freeReason = '';
-          requiredPayment = baseAmount;
+        try {
+          await tx.trialClaimedAgreement.create({
+            data: { normalizedAgreementNo, claimedByUserId: user.id },
+          });
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            isFree = false;
+            freeReason = '';
+            requiredPayment = baseAmount;
+          } else {
+            throw error;
+          }
         }
-      }
 
-      if (!isFree) {
-        const accountUpdate = await tx.customerAccount.updateMany({
-          where: { userId: user.id, creditBalance: { gte: requiredPayment } },
-          data: { creditBalance: { decrement: requiredPayment } },
-        });
+        if (isFree && freeReason === 'trial') {
+          const trialIncrement = await tx.user.updateMany({
+            where: { id: user.id, freeTrialUsed: { lt: freeTrialLimit } },
+            data: {
+              freeTrialUsed: { increment: 1 },
+              totalBillsProcessed: { increment: 1 },
+            },
+          });
 
-        if (accountUpdate.count === 0) {
-          throw new PaymentRequiredError('Insufficient balance', requiredPayment);
+          if (trialIncrement.count === 0) {
+            isFree = false;
+            freeReason = '';
+            requiredPayment = baseAmount;
+          }
         }
       }
 
@@ -246,7 +239,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (existingContract) {
-        throw new ValidationError('Contract with this Agreement Number already exists');
+        throw new ConflictError('Contract with this Agreement Number already exists');
       }
 
       const contract = await tx.contract.create({
@@ -322,18 +315,53 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      if (!isFree) {
+        if (!freshUser.customerAccount) {
+          throw new PaymentRequiredError(
+            'No payment account found. Please add credits to continue.',
+            requiredPayment
+          );
+        }
+
+        const account = await tx.customerAccount.findUnique({
+          where: { userId: user.id },
+          select: { creditBalance: true },
+        });
+
+        const balanceBefore = account?.creditBalance ?? 0;
+        if (balanceBefore < requiredPayment) {
+          throw new PaymentRequiredError('Insufficient balance', requiredPayment);
+        }
+
+        const balanceAfter = balanceBefore - requiredPayment;
+
+        await tx.customerAccount.update({
+          where: { userId: user.id },
+          data: {
+            creditBalance: { decrement: requiredPayment },
+            currentMonthBills: { increment: 1 },
+          },
+        });
+
+        await tx.creditTransaction.create({
+          data: {
+            userId: user.id,
+            amount: -requiredPayment,
+            type: 'deduct',
+            reason: 'Bill processing fee',
+            balanceBefore,
+            balanceAfter,
+            billId: bill.id,
+          },
+        });
+      }
+
       if (isFree && freeReason === 'trial') {
         await tx.user.update({
           where: { id: user.id },
           data: {
             isTrialActive: freshUser.freeTrialUsed + 1 < freeTrialLimit,
           },
-        });
-
-        await tx.trialClaimedAgreement.upsert({
-          where: { normalizedAgreementNo },
-          create: { normalizedAgreementNo, claimedByUserId: user.id },
-          update: {},
         });
       } else {
         await tx.user.update({
@@ -353,6 +381,9 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     logger.error('[try-bill/claim] Error claiming draft:', error);
+    if (error instanceof ConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     if (error instanceof ValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
