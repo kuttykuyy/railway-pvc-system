@@ -38,7 +38,8 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith('/api/whatsapp/webhook') ||
       pathname.startsWith('/api/razorpay/webhook') ||
       pathname.startsWith('/api/cron/') ||
-      pathname.startsWith('/api/external/')) {
+      pathname.startsWith('/api/external/') ||
+      pathname.startsWith('/api/try-bill/preview')) {
     // Scheduled/cron + webhook routes authenticate themselves (CRON_SECRET / webhook
     // signatures), so they must not be bounced to the login page.
     return NextResponse.next();
@@ -61,6 +62,11 @@ export async function middleware(req: NextRequest) {
       pathname === '/manifest.json' ||
       pathname === '/sw.js' ||
       pathname.startsWith('/icons/')) {
+    return NextResponse.next();
+  }
+
+  // Allow public try-bill landing page
+  if (pathname.startsWith('/try-bill')) {
     return NextResponse.next();
   }
 
