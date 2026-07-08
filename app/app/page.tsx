@@ -81,6 +81,12 @@ export default function HomePage() {
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                 </Link>
+                <Link href="/try-bill">
+                  <Button size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-all duration-300 flex items-center gap-2">
+                    <Calculator className="w-5 h-5 text-blue-600" />
+                    Try it free — no signup
+                  </Button>
+                </Link>
                 <Link href="#tutorials">
                   <Button size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-all duration-300 flex items-center gap-2">
                     <Play className="w-5 h-5 text-blue-600 fill-blue-600" />
