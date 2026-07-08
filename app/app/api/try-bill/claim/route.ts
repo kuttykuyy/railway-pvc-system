@@ -12,6 +12,7 @@ import { validateMeasurementDateAgainstProvisionalIndices } from '@/lib/provisio
 import { checkDbRateLimit } from '@/lib/rate-limit-db';
 import { getIdentifier } from '@/lib/rate-limiter';
 import { logger } from '@/lib/logger';
+import { Prisma } from '@prisma/client';
 import type { GuestBillDraft } from '@/try-bill/types';
 import { ValidationError } from '@/try-bill/lib/validation-error';
 import { PaymentRequiredError } from '@/try-bill/lib/payment-required-error';
@@ -156,6 +157,10 @@ export async function POST(request: NextRequest) {
       components
     );
 
+    const billingSettings = await getBillingSettings();
+    const baseAmount = billingSettings.billCost || 199;
+    const freeTrialLimit = billingSettings.freeTrialBills || 1;
+
     const result = await prisma.$transaction(async (tx) => {
       const freshUser = await tx.user.findUnique({
         where: { id: user.id },
@@ -165,10 +170,6 @@ export async function POST(request: NextRequest) {
       if (!freshUser) {
         throw new ValidationError('User not found');
       }
-
-      const billingSettings = await getBillingSettings();
-      const baseAmount = billingSettings.billCost || 199;
-      const freeTrialLimit = billingSettings.freeTrialBills || 1;
 
       let isFree = false;
       let freeReason = '';
@@ -194,29 +195,17 @@ export async function POST(request: NextRequest) {
         requiredPayment = baseAmount;
       }
 
-      if (!isFree) {
-        if ((freshUser.customerAccount?.creditBalance ?? 0) < requiredPayment) {
-          throw new PaymentRequiredError('Insufficient balance', requiredPayment);
-        }
-      }
+      const existingClaim =
+        isFree && freeReason === 'trial'
+          ? await tx.trialClaimedAgreement.findUnique({
+              where: { normalizedAgreementNo },
+            })
+          : null;
 
-      if (isFree && freeReason === 'trial') {
-        const existingClaim = await tx.trialClaimedAgreement.findUnique({
-          where: { normalizedAgreementNo },
-        });
-
-        if (existingClaim) {
-          isFree = false;
-          freeReason = '';
-          requiredPayment = baseAmount;
-
-          if ((freshUser.customerAccount?.creditBalance ?? 0) < requiredPayment) {
-            throw new PaymentRequiredError(
-              'A free trial has already been used for this Agreement Number. Please add credits to continue.',
-              requiredPayment
-            );
-          }
-        }
+      if (existingClaim) {
+        isFree = false;
+        freeReason = '';
+        requiredPayment = baseAmount;
       }
 
       const existingContract = await tx.contract.findFirst({
@@ -307,34 +296,64 @@ export async function POST(request: NextRequest) {
       });
 
       if (isFree && freeReason === 'trial') {
-        await tx.user.update({
-          where: { id: user.id },
+        const trialIncrement = await tx.user.updateMany({
+          where: { id: user.id, freeTrialUsed: { lt: freeTrialLimit } },
           data: {
             freeTrialUsed: { increment: 1 },
             totalBillsProcessed: { increment: 1 },
-            isTrialActive: freshUser.freeTrialUsed + 1 < freeTrialLimit,
           },
         });
 
-        await tx.trialClaimedAgreement.upsert({
-          where: { normalizedAgreementNo },
-          create: { normalizedAgreementNo, claimedByUserId: user.id },
-          update: {},
+        if (trialIncrement.count === 0) {
+          isFree = false;
+          freeReason = '';
+          requiredPayment = baseAmount;
+
+          const accountUpdate = await tx.customerAccount.updateMany({
+            where: { userId: user.id, creditBalance: { gte: requiredPayment } },
+            data: { creditBalance: { decrement: requiredPayment } },
+          });
+
+          if (accountUpdate.count === 0) {
+            throw new PaymentRequiredError('Insufficient balance', requiredPayment);
+          }
+        } else {
+          await tx.user.update({
+            where: { id: user.id },
+            data: {
+              isTrialActive: freshUser.freeTrialUsed + 1 < freeTrialLimit,
+            },
+          });
+
+          await tx.trialClaimedAgreement.upsert({
+            where: { normalizedAgreementNo },
+            create: { normalizedAgreementNo, claimedByUserId: user.id },
+            update: {},
+          });
+        }
+      }
+
+      if (!isFree) {
+        const accountUpdate = await tx.customerAccount.updateMany({
+          where: { userId: user.id, creditBalance: { gte: requiredPayment } },
+          data: { creditBalance: { decrement: requiredPayment } },
         });
-      } else {
+
+        if (accountUpdate.count === 0) {
+          throw new PaymentRequiredError('Insufficient balance', requiredPayment);
+        }
+
         await tx.user.update({
           where: { id: user.id },
           data: {
             totalBillsProcessed: { increment: 1 },
           },
         });
-      }
-
-      if (!isFree && freshUser.customerAccount) {
-        await tx.customerAccount.update({
-          where: { userId: user.id },
+      } else if (freeReason !== 'trial') {
+        await tx.user.update({
+          where: { id: user.id },
           data: {
-            creditBalance: { decrement: requiredPayment },
+            totalBillsProcessed: { increment: 1 },
           },
         });
       }
@@ -357,8 +376,15 @@ export async function POST(request: NextRequest) {
         { status: 402 }
       );
     }
-    if (typeof error === 'object' && error !== null && (error as any).code === 'P2002') {
-      return NextResponse.json({ error: 'Contract with this Agreement Number already exists' }, { status: 409 });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const target = error.meta && Array.isArray(error.meta.target) ? error.meta.target : [];
+      if (target.includes('normalizedAgreementNo') || target.includes('agreementNo')) {
+        return NextResponse.json({ error: 'Contract with this Agreement Number already exists' }, { status: 409 });
+      }
+      if (target.includes('billId')) {
+        return NextResponse.json({ error: 'Bill transaction already exists' }, { status: 409 });
+      }
+      return NextResponse.json({ error: 'Duplicate value conflict' }, { status: 409 });
     }
     return NextResponse.json({ error: 'Failed to create bill' }, { status: 500 });
   }
