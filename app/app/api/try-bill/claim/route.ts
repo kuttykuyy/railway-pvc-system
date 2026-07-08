@@ -247,7 +247,7 @@ export async function POST(request: NextRequest) {
     const paymentResult = await processPaymentForBill(
       user.id,
       result.bill.id,
-      'free_trial',
+      paymentValidation.isFree ? 'free_account' : 'credit_balance',
       undefined,
       undefined,
       undefined,
