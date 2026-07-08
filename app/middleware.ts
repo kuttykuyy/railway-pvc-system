@@ -39,7 +39,8 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith('/api/razorpay/webhook') ||
       pathname.startsWith('/api/cron/') ||
       pathname.startsWith('/api/external/') ||
-      pathname.startsWith('/api/try-bill/preview')) {
+      pathname.startsWith('/api/try-bill/preview') ||
+      pathname.startsWith('/api/classifications/active')) {
     // Scheduled/cron + webhook routes authenticate themselves (CRON_SECRET / webhook
     // signatures), so they must not be bounced to the login page.
     return NextResponse.next();
