@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { signIn } from 'next-auth/react';
 import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,8 @@ export default function SignUpPage() {
   } | null>(null);
   
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tryBillDraftParam = searchParams?.get('tryBillDraft');
   const zoneOptions = getRailwayZoneOptions();
 
   useEffect(() => {
@@ -95,10 +98,55 @@ export default function SignUpPage() {
 
       if (response.ok) {
         if (data.requiresVerification) {
-          router.push(`/auth/verify-notice?email=${encodeURIComponent(email)}`);
-        } else {
-          router.push(`/auth/signin?registered=true&email=${encodeURIComponent(email)}`);
+          const verifyUrl = new URL('/auth/verify-notice', window.location.origin);
+          verifyUrl.searchParams.set('email', email);
+          if (tryBillDraftParam?.startsWith('local:')) {
+            verifyUrl.searchParams.set('tryBillDraft', tryBillDraftParam);
+          }
+          router.push(verifyUrl.toString());
+          return;
         }
+
+        // Sign in so the claim call is authenticated
+        const signInResult = await signIn('credentials', {
+          email,
+          password,
+          redirect: false,
+        });
+
+        if (signInResult?.error || !signInResult?.ok) {
+          const signinUrl = new URL('/auth/signin', window.location.origin);
+          signinUrl.searchParams.set('registered', 'true');
+          signinUrl.searchParams.set('email', email);
+          if (tryBillDraftParam?.startsWith('local:')) {
+            signinUrl.searchParams.set('tryBillDraft', tryBillDraftParam);
+          }
+          router.push(signinUrl.toString());
+          return;
+        }
+
+        if (tryBillDraftParam?.startsWith('local:')) {
+          try {
+            const draftJson = decodeURIComponent(tryBillDraftParam.slice(6));
+            const draft = JSON.parse(draftJson);
+            const claimRes = await fetch('/api/try-bill/claim', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ draft }),
+            });
+
+            if (claimRes.ok) {
+              const { billId } = await claimRes.json();
+              localStorage.removeItem('irpvc_guest_draft');
+              router.push(`/bills/${billId}`);
+              return;
+            }
+          } catch (claimError) {
+            console.error('Failed to claim try-bill draft:', claimError);
+          }
+        }
+
+        router.push('/contracts');
       } else {
         setError(data.error || 'An error occurred during signup');
       }
