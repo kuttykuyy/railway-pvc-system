@@ -195,17 +195,44 @@ export async function POST(request: NextRequest) {
         requiredPayment = baseAmount;
       }
 
-      const existingClaim =
+      const trialClaimedAgreement =
         isFree && freeReason === 'trial'
           ? await tx.trialClaimedAgreement.findUnique({
               where: { normalizedAgreementNo },
             })
           : null;
 
-      if (existingClaim) {
+      if (trialClaimedAgreement) {
         isFree = false;
         freeReason = '';
         requiredPayment = baseAmount;
+      }
+
+      if (isFree && freeReason === 'trial') {
+        const trialIncrement = await tx.user.updateMany({
+          where: { id: user.id, freeTrialUsed: { lt: freeTrialLimit } },
+          data: {
+            freeTrialUsed: { increment: 1 },
+            totalBillsProcessed: { increment: 1 },
+          },
+        });
+
+        if (trialIncrement.count === 0) {
+          isFree = false;
+          freeReason = '';
+          requiredPayment = baseAmount;
+        }
+      }
+
+      if (!isFree) {
+        const accountUpdate = await tx.customerAccount.updateMany({
+          where: { userId: user.id, creditBalance: { gte: requiredPayment } },
+          data: { creditBalance: { decrement: requiredPayment } },
+        });
+
+        if (accountUpdate.count === 0) {
+          throw new PaymentRequiredError('Insufficient balance', requiredPayment);
+        }
       }
 
       const existingContract = await tx.contract.findFirst({
@@ -296,60 +323,19 @@ export async function POST(request: NextRequest) {
       });
 
       if (isFree && freeReason === 'trial') {
-        const trialIncrement = await tx.user.updateMany({
-          where: { id: user.id, freeTrialUsed: { lt: freeTrialLimit } },
-          data: {
-            freeTrialUsed: { increment: 1 },
-            totalBillsProcessed: { increment: 1 },
-          },
-        });
-
-        if (trialIncrement.count === 0) {
-          isFree = false;
-          freeReason = '';
-          requiredPayment = baseAmount;
-
-          const accountUpdate = await tx.customerAccount.updateMany({
-            where: { userId: user.id, creditBalance: { gte: requiredPayment } },
-            data: { creditBalance: { decrement: requiredPayment } },
-          });
-
-          if (accountUpdate.count === 0) {
-            throw new PaymentRequiredError('Insufficient balance', requiredPayment);
-          }
-        } else {
-          await tx.user.update({
-            where: { id: user.id },
-            data: {
-              isTrialActive: freshUser.freeTrialUsed + 1 < freeTrialLimit,
-            },
-          });
-
-          await tx.trialClaimedAgreement.upsert({
-            where: { normalizedAgreementNo },
-            create: { normalizedAgreementNo, claimedByUserId: user.id },
-            update: {},
-          });
-        }
-      }
-
-      if (!isFree) {
-        const accountUpdate = await tx.customerAccount.updateMany({
-          where: { userId: user.id, creditBalance: { gte: requiredPayment } },
-          data: { creditBalance: { decrement: requiredPayment } },
-        });
-
-        if (accountUpdate.count === 0) {
-          throw new PaymentRequiredError('Insufficient balance', requiredPayment);
-        }
-
         await tx.user.update({
           where: { id: user.id },
           data: {
-            totalBillsProcessed: { increment: 1 },
+            isTrialActive: freshUser.freeTrialUsed + 1 < freeTrialLimit,
           },
         });
-      } else if (freeReason !== 'trial') {
+
+        await tx.trialClaimedAgreement.upsert({
+          where: { normalizedAgreementNo },
+          create: { normalizedAgreementNo, claimedByUserId: user.id },
+          update: {},
+        });
+      } else {
         await tx.user.update({
           where: { id: user.id },
           data: {
