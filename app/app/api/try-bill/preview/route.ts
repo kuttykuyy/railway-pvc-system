@@ -4,6 +4,7 @@ import type { GuestBillDraft } from '@/try-bill/types';
 import { checkDbRateLimit } from '@/lib/rate-limit-db';
 import { getIdentifier } from '@/lib/rate-limiter';
 import { logger } from '@/lib/logger';
+import { ValidationError } from '@/try-bill/lib/validation-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,13 +18,6 @@ const REQUIRED_FIELDS: (keyof GuestBillDraft)[] = [
   'fuelPriceType',
 ];
 
-class ValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ValidationError';
-  }
-}
-
 function isValidFuelPriceType(value: unknown): value is 'four_city_avg' | 'zone_city' {
   return value === 'four_city_avg' || value === 'zone_city';
 }
@@ -33,9 +27,15 @@ export async function POST(request: NextRequest) {
 
   try {
     body = await request.json();
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
+
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const bodyRecord = body as Record<string, unknown>;
 
   try {
     const identifier = getIdentifier(request);
@@ -49,8 +49,6 @@ export async function POST(request: NextRequest) {
         }
       );
     }
-
-    const bodyRecord = body as Record<string, unknown>;
 
     for (const field of REQUIRED_FIELDS) {
       const value = bodyRecord[field];
@@ -81,7 +79,7 @@ export async function POST(request: NextRequest) {
       fuelPriceType: fuelPriceTypeValue,
     };
 
-    if (Number.isNaN(draft.grossBillAmount) || draft.grossBillAmount <= 0) {
+    if (Number.isNaN(draft.grossBillAmount) || !Number.isFinite(draft.grossBillAmount) || draft.grossBillAmount <= 0) {
       throw new ValidationError('Gross bill amount must be greater than zero');
     }
 

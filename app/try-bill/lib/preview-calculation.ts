@@ -7,6 +7,7 @@ import { getQuarterlyAverages } from '@/lib/db-utils';
 import { getFuelIndexNameForBill, getSteelIndexNamesForZone } from '@/lib/zone-steel-city-mapping';
 import { getClassificationOrDefault } from '@/lib/classification-helper';
 import type { GuestBillDraft, GuestPreviewResult } from '@/try-bill/types';
+import { ValidationError } from './validation-error';
 
 export async function calculateGuestPreview(
   draft: GuestBillDraft
@@ -15,23 +16,23 @@ export async function calculateGuestPreview(
   const measurementDate = new Date(draft.dateOfMeasurement);
 
   if (isNaN(dateOfOpening.getTime()) || isNaN(measurementDate.getTime())) {
-    throw new Error('Invalid date format');
+    throw new ValidationError('Invalid date format');
   }
 
   const baseMonth = getBaseMonth(dateOfOpening);
 
   if (measurementDate <= baseMonth) {
-    throw new Error('Measurement date must be after the contract base month');
+    throw new ValidationError('Measurement date must be after the contract base month');
   }
 
   const grossAmount = Number(draft.grossBillAmount);
   if (!grossAmount || grossAmount <= 0) {
-    throw new Error('Gross bill amount must be greater than zero');
+    throw new ValidationError('Gross bill amount must be greater than zero');
   }
 
   const classification = await getClassificationOrDefault(draft.workClassificationCode);
   if (!classification) {
-    throw new Error('No work classification found');
+    throw new ValidationError('No work classification found');
   }
 
   const components = {

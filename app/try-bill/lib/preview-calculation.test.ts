@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { calculateGuestPreview } from './preview-calculation';
+import { ValidationError } from './validation-error';
 import { getClassificationOrDefault } from '@/lib/classification-helper';
 import type { GuestBillDraft } from '@/try-bill/types';
 
@@ -75,7 +76,7 @@ describe('calculateGuestPreview', () => {
       dateOfMeasurement: '2024-01-15',
     };
 
-    await expect(calculateGuestPreview(draft)).rejects.toThrow('after the contract base month');
+    await expect(calculateGuestPreview(draft)).rejects.toThrow(ValidationError);
   });
 
   it('throws for invalid date format', async () => {
@@ -84,7 +85,7 @@ describe('calculateGuestPreview', () => {
       dateOfOpening: 'not-a-date',
     };
 
-    await expect(calculateGuestPreview(draft)).rejects.toThrow('Invalid date format');
+    await expect(calculateGuestPreview(draft)).rejects.toThrow(ValidationError);
   });
 
   it('throws when gross bill amount is zero or negative', async () => {
@@ -93,12 +94,12 @@ describe('calculateGuestPreview', () => {
       grossBillAmount: 0,
     };
 
-    await expect(calculateGuestPreview(draft)).rejects.toThrow('Gross bill amount must be greater than zero');
+    await expect(calculateGuestPreview(draft)).rejects.toThrow(ValidationError);
   });
 
   it('throws when no work classification is found', async () => {
     vi.mocked(getClassificationOrDefault).mockResolvedValue(null);
 
-    await expect(calculateGuestPreview(baseDraft)).rejects.toThrow('No work classification found');
+    await expect(calculateGuestPreview(baseDraft)).rejects.toThrow(ValidationError);
   });
 });
