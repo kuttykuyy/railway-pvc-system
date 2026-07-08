@@ -76,12 +76,12 @@ No new Prisma models. The draft shape (TypeScript interface only):
 interface GuestBillDraft {
   agreementNo: string;
   contractorName: string;
-  baseMonth: string;       // YYYY-MM-DD
+  dateOfOpening: string;       // YYYY-MM-DD
   dateOfMeasurement: string; // YYYY-MM-DD
   grossBillAmount: number;
-  workClassificationId?: string;
+  workClassificationCode?: string;
   zone: string;
-  fuelPriceType?: 'four_city_avg' | 'zone_city';
+  fuelPriceType: 'four_city_avg' | 'zone_city';
 }
 ```
 
