@@ -17,61 +17,78 @@ const REQUIRED_FIELDS: (keyof GuestBillDraft)[] = [
   'fuelPriceType',
 ];
 
+class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
 function isValidFuelPriceType(value: unknown): value is 'four_city_avg' | 'zone_city' {
   return value === 'four_city_avg' || value === 'zone_city';
 }
 
 export async function POST(request: NextRequest) {
+  let body: unknown;
+
+  try {
+    body = await request.json();
+  } catch (error) {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
   try {
     const identifier = getIdentifier(request);
     const rateLimit = await checkDbRateLimit(`try-bill-preview:${identifier}`, 20, 60 * 60 * 1000);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many preview requests. Please try again later.' },
-        { status: 429 }
+        {
+          status: 429,
+          headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) },
+        }
       );
     }
 
-    const body = await request.json();
-
     for (const field of REQUIRED_FIELDS) {
-      const value = body[field];
+      const value = (body as Record<string, unknown>)[field];
       if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
-        return NextResponse.json(
-          { error: `${field} is required` },
-          { status: 400 }
-        );
+        throw new ValidationError(`${field} is required`);
       }
     }
 
-    if (!isValidFuelPriceType(body.fuelPriceType)) {
-      return NextResponse.json({ error: 'fuelPriceType must be four_city_avg or zone_city' }, { status: 400 });
+    if (!isValidFuelPriceType((body as Record<string, unknown>).fuelPriceType)) {
+      throw new ValidationError('fuelPriceType must be four_city_avg or zone_city');
     }
 
+    const bodyRecord = body as Record<string, unknown>;
+
     const draft: GuestBillDraft = {
-      agreementNo: String(body.agreementNo).trim(),
-      contractorName: String(body.contractorName).trim(),
-      dateOfOpening: String(body.dateOfOpening),
-      dateOfMeasurement: String(body.dateOfMeasurement),
-      grossBillAmount: Number(body.grossBillAmount),
-      workClassificationCode: body.workClassificationCode,
-      zone: String(body.zone),
-      fuelPriceType: body.fuelPriceType,
+      agreementNo: String(bodyRecord.agreementNo).trim(),
+      contractorName: String(bodyRecord.contractorName).trim(),
+      dateOfOpening: String(bodyRecord.dateOfOpening).trim(),
+      dateOfMeasurement: String(bodyRecord.dateOfMeasurement).trim(),
+      grossBillAmount: Number(bodyRecord.grossBillAmount),
+      workClassificationCode: bodyRecord.workClassificationCode as string | undefined,
+      zone: String(bodyRecord.zone).trim(),
+      fuelPriceType: bodyRecord.fuelPriceType as 'four_city_avg' | 'zone_city',
     };
 
     if (Number.isNaN(draft.grossBillAmount) || draft.grossBillAmount <= 0) {
-      return NextResponse.json({ error: 'Gross bill amount must be greater than zero' }, { status: 400 });
+      throw new ValidationError('Gross bill amount must be greater than zero');
     }
 
     const preview = await calculateGuestPreview(draft);
 
     return NextResponse.json({ preview }, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('[try-bill/preview] Error calculating preview:', error);
-    const message = error?.message || 'Failed to calculate preview';
-    const isValidationError =
-      typeof message === 'string' &&
-      (/Invalid|must be|after|required|No work classification/.test(message));
-    return NextResponse.json({ error: message }, { status: isValidationError ? 400 : 500 });
+    if (error instanceof ValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    return NextResponse.json(
+      { error: 'Failed to calculate preview' },
+      { status: 500 }
+    );
   }
 }
