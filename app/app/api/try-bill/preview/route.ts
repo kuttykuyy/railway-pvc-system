@@ -50,18 +50,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const bodyRecord = body as Record<string, unknown>;
+
     for (const field of REQUIRED_FIELDS) {
-      const value = (body as Record<string, unknown>)[field];
+      const value = bodyRecord[field];
       if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
         throw new ValidationError(`${field} is required`);
       }
     }
 
-    if (!isValidFuelPriceType((body as Record<string, unknown>).fuelPriceType)) {
+    const fuelPriceTypeValue = typeof bodyRecord.fuelPriceType === 'string'
+      ? bodyRecord.fuelPriceType.trim()
+      : bodyRecord.fuelPriceType;
+
+    if (!isValidFuelPriceType(fuelPriceTypeValue)) {
       throw new ValidationError('fuelPriceType must be four_city_avg or zone_city');
     }
-
-    const bodyRecord = body as Record<string, unknown>;
 
     const draft: GuestBillDraft = {
       agreementNo: String(bodyRecord.agreementNo).trim(),
@@ -69,9 +73,12 @@ export async function POST(request: NextRequest) {
       dateOfOpening: String(bodyRecord.dateOfOpening).trim(),
       dateOfMeasurement: String(bodyRecord.dateOfMeasurement).trim(),
       grossBillAmount: Number(bodyRecord.grossBillAmount),
-      workClassificationCode: bodyRecord.workClassificationCode as string | undefined,
+      workClassificationCode:
+        typeof bodyRecord.workClassificationCode === 'string'
+          ? bodyRecord.workClassificationCode.trim() || undefined
+          : undefined,
       zone: String(bodyRecord.zone).trim(),
-      fuelPriceType: bodyRecord.fuelPriceType as 'four_city_avg' | 'zone_city',
+      fuelPriceType: fuelPriceTypeValue,
     };
 
     if (Number.isNaN(draft.grossBillAmount) || draft.grossBillAmount <= 0) {
