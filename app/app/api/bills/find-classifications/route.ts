@@ -48,6 +48,23 @@ interface FinderResult {
 
 export async function POST(request: NextRequest) {
   try {
+    // Auth + rate limit: this endpoint spends the company's AI credit on the
+    // server key, so it must never be callable anonymously or unboundedly.
+    const { getServerSession } = await import('next-auth/next');
+    const { authOptions } = await import('@/lib/auth');
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    const { default: rateLimiter, RATE_LIMITS, getIdentifier } = await import('@/lib/rate-limiter');
+    const rl = rateLimiter.check(getIdentifier(request), RATE_LIMITS.EXPENSIVE.limit, RATE_LIMITS.EXPENSIVE.windowMs);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many requests. Please wait ${Math.ceil(rl.resetIn / 1000)}s and try again.` },
+        { status: 429, headers: { 'Retry-After': Math.ceil(rl.resetIn / 1000).toString() } },
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const mode = formData.get('mode') as string || 'extract'; // 'extract' or 'classify'

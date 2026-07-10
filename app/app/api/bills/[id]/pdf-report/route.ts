@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { checkUserBillAccess } from '@/lib/permissions';
 import { advancedCache } from '@/lib/advanced-cache';
 import { getQuarterMonths, getQuarterFromDate, calculateDedicatedCementPvcWithSteps, calculateDedicatedSteelPvcWithSteps, calculateWeightedComponents, calculatePvcComponentWithSteps } from '@/lib/pvc-calculations';
 import { format } from 'date-fns';
@@ -182,6 +183,35 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           trialWatermarkWaived = trialTopupCount > 0;
         }
 
+        // ===== ACCESS CONTROL (must run BEFORE the cache return) =====
+        // The bill PDF contains private contract/contractor data, so a caller must
+        // either present a valid public share token for THIS bill, or be a logged-in
+        // user who owns / may access it. Without this gate any id could be enumerated.
+        const publicAccess = searchParams.get('public_access');
+        const publicToken = searchParams.get('token');
+        let isPublicAccessValid = false;
+        if (publicAccess === 'true' && publicToken) {
+          try {
+            const decoded = jwt.verify(publicToken, getNextAuthSecret()) as { billId: string };
+            if (decoded.billId === billId) isPublicAccessValid = true;
+          } catch (error) {
+            console.warn('Invalid public access token:', error);
+          }
+        }
+        if (!isPublicAccessValid) {
+          if (!session?.user?.email) {
+            return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+          }
+          const requester = await prisma.user.findUnique({
+            where: { email: session.user.email },
+            select: { id: true },
+          });
+          const access = requester ? await checkUserBillAccess(requester.id, billId) : null;
+          if (!access?.canDownloadPdf) {
+            return NextResponse.json({ error: 'You do not have access to this bill.' }, { status: 403 });
+          }
+        }
+
         // Check cache before running heavy PDF compiling.
         // The watermark-waiver state is part of the key so a post-top-up download
         // regenerates a clean PDF instead of serving a stale watermarked one.
@@ -198,23 +228,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           });
         }
         
-        const publicAccess = searchParams.get('public_access');
-        const publicToken = searchParams.get('token');
-    
-    // Check if this is a public access request with valid token
-    let isPublicAccessValid = false;
-    if (publicAccess === 'true' && publicToken) {
-      try {
-        const decoded = jwt.verify(publicToken, getNextAuthSecret()) as { billId: string };
-        if (decoded.billId === billId) {
-          isPublicAccessValid = true;
-          console.log('Public access token validated for bill:', billId);
-        }
-      } catch (error) {
-        console.warn('Invalid public access token:', error);
-      }
-    }
-    
     // Get session to fetch user branding settings and template (optional for public access)
     let brandingSettings = {
       logoPath: null as string | null,

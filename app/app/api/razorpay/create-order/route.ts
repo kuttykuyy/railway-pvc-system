@@ -174,6 +174,18 @@ export async function POST(request: NextRequest) {
 
     logger.log(`[${requestId}] Amounts validated - Credit: ₹${creditAmount}, Total: ₹${totalAmount}, GST: ₹${gstAmount}, Option: ${gstOption}`);
 
+    // 🔒 SECURITY: never trust the client's totalAmount / gstAmount. The customer only
+    // chooses how many credits to buy (creditAmount) and the GST treatment (gstOption).
+    // Derive the amount actually charged from those, so a caller cannot pay ₹1 for a huge
+    // credit grant. Invariant: amount charged (serverTotalAmount) >= credits granted at
+    // redemption (which uses totalAmount for 'include', creditAmount otherwise).
+    const serverGst = calculateGst(creditAmount, false);
+    const serverGstAmount = gstOption === 'without' ? 0 : serverGst.totalGst;
+    const serverTotalAmount = gstOption === 'without' ? creditAmount : serverGst.totalAmount;
+    if (typeof totalAmount === 'number' && Math.abs(totalAmount - serverTotalAmount) > 1) {
+      logger.warn(`[${requestId}] Client totalAmount ₹${totalAmount} != server ₹${serverTotalAmount}; charging server value.`);
+    }
+
     // Step 3: Check if Razorpay is enabled
     let setting;
     try {
@@ -305,7 +317,7 @@ export async function POST(request: NextRequest) {
     
     try {
       razorpayOrder = await createRazorpayOrder({
-        amount: totalAmount,
+        amount: serverTotalAmount,
         currency: 'INR',
         receipt,
         payment_capture: 1, // Auto-capture payment
@@ -313,7 +325,7 @@ export async function POST(request: NextRequest) {
           userId: user.id,
           userEmail: user.email,
           creditAmount: creditAmount.toString(),
-          gstAmount: gstAmount.toString(),
+          gstAmount: serverGstAmount.toString(),
           gstOption: gstOption,
           requestId,
         },
@@ -350,13 +362,13 @@ export async function POST(request: NextRequest) {
           userId: user.id,
           orderId: razorpayOrder.id,
           razorpayOrderId: razorpayOrder.id,
-          amount: totalAmount,
+          amount: serverTotalAmount,
           currency: 'INR',
           status: 'created',
           receipt,
           creditAmount,
-          gstAmount: gstAmount,
-          totalAmount: totalAmount,
+          gstAmount: serverGstAmount,
+          totalAmount: serverTotalAmount,
           notes: razorpayOrder.notes as any,
         },
       });
