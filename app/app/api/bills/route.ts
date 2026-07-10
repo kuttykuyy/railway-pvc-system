@@ -344,9 +344,13 @@ export async function POST(request: NextRequest) {
 
     // ===== STEP 4B: Block trial if this agreement number already claimed globally =====
     // Only applies to actual trial users — not admins, railway officials, or free accounts
+    // A free bill for a normal user (not admin/official/free-account/₹0-fee) can only be
+    // free because of the trial. Do NOT gate on user.isTrialActive here: with the default
+    // 1-bill trial it is already false at the moment the trial is consumed, which made this
+    // whole agreement-dedup check dead code and let one agreement claim a trial from any
+    // number of accounts.
     const isActualTrialBill =
       isBillFree &&
-      user.isTrialActive &&
       user.role !== 'admin' &&
       user.role !== 'superadmin' &&
       user.role !== 'railway_official' &&

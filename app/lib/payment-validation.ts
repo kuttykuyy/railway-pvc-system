@@ -196,7 +196,75 @@ export async function processPaymentForBill(
 
 
     if (isFree) {
-      // Create free transaction
+      // ----- Trial bills: claim the slot atomically BEFORE granting anything -----
+      if (freeReason === 'trial') {
+        // A conditional updateMany guarantees at most `freeTrialLimit` free bills even
+        // under concurrent requests (fixes the read-then-write double-spend race), and a
+        // hard create on the agreement number blocks the same agreement from claiming a
+        // trial across multiple accounts. If either fails, the trial is not available.
+        let claimed = false;
+        try {
+          await prisma.$transaction(async (tx) => {
+            const res = await tx.user.updateMany({
+              where: { id: userId, freeTrialUsed: { lt: freeTrialLimit } },
+              data: { freeTrialUsed: { increment: 1 }, totalBillsProcessed: { increment: 1 } },
+            });
+            if (res.count === 0) throw new Error('TRIAL_EXHAUSTED');
+
+            if (agreementNo) {
+              const normalized = normalizeAgreementNo(agreementNo);
+              if (normalized) {
+                // Hard create (not upsert): a second account reusing the same agreement
+                // number hits the unique constraint (P2002) and is denied the free trial.
+                await tx.trialClaimedAgreement.create({
+                  data: { normalizedAgreementNo: normalized, claimedByUserId: userId },
+                });
+              }
+            }
+
+            const u = await tx.user.findUnique({ where: { id: userId }, select: { freeTrialUsed: true } });
+            await tx.user.update({
+              where: { id: userId },
+              data: { isTrialActive: (u?.freeTrialUsed ?? freeTrialLimit) < freeTrialLimit },
+            });
+            claimed = true;
+          });
+        } catch {
+          claimed = false; // TRIAL_EXHAUSTED or agreement already claimed (P2002)
+        }
+
+        if (!claimed) {
+          return {
+            success: false,
+            message: 'This free trial is no longer available — it has already been used, or this agreement number already claimed a trial. Please add credits to continue.',
+          };
+        }
+
+        const transaction = await prisma.billTransaction.create({
+          data: {
+            userId,
+            billId,
+            amount: 0,
+            originalAmount: baseAmount,
+            discount: baseAmount,
+            discountType: freeReason,
+            status: 'paid',
+            isFree: true,
+            paymentMethod: 'free_trial',
+            paidAt: new Date(),
+          },
+        });
+
+        const after = await prisma.user.findUnique({ where: { id: userId }, select: { freeTrialUsed: true } });
+        const remaining = Math.max(0, freeTrialLimit - (after?.freeTrialUsed ?? freeTrialLimit));
+        return {
+          success: true,
+          message: `Free trial bill processed (${remaining} remaining)`,
+          transaction,
+        };
+      }
+
+      // ----- Non-trial free bills (admin / superadmin / railway official / free account / ₹0 fee) -----
       const transaction = await prisma.billTransaction.create({
         data: {
           userId,
@@ -207,76 +275,32 @@ export async function processPaymentForBill(
           discountType: freeReason,
           status: 'paid',
           isFree: true,
-          paymentMethod: freeReason === 'trial' ? 'free_trial' : 'free_account',
-          paidAt: new Date()
-        }
+          paymentMethod: 'free_account',
+          paidAt: new Date(),
+        },
       });
 
-      // Update user's free trial usage only if it's a trial bill
-      if (freeReason === 'trial') {
-        // Use transaction to prevent race condition: two concurrent requests
-        // reading freeTrialUsed=0 and both getting a free trial bill
-        const updatedUser = await prisma.$transaction(async (tx) => {
-          const u = await tx.user.update({
-            where: { id: userId },
-            data: {
-              freeTrialUsed: { increment: 1 },
-              totalBillsProcessed: { increment: 1 },
-            },
-            select: { freeTrialUsed: true }
-          });
-          // Set isTrialActive based on the actual post-increment DB value
-          await tx.user.update({
-            where: { id: userId },
-            data: { isTrialActive: u.freeTrialUsed < freeTrialLimit }
-          });
+      await prisma.user.update({
+        where: { id: userId },
+        data: { totalBillsProcessed: { increment: 1 } },
+      });
 
-          // Record agreement number claim inside same transaction
-          if (agreementNo) {
-            const normalized = normalizeAgreementNo(agreementNo);
-            if (normalized) {
-              await tx.trialClaimedAgreement.upsert({
-                where: { normalizedAgreementNo: normalized },
-                create: { normalizedAgreementNo: normalized, claimedByUserId: userId },
-                update: {}
-              });
-            }
-          }
-          return u;
-        });
-
-        const freeTrialRemaining = Math.max(0, freeTrialLimit - updatedUser.freeTrialUsed);
-        return {
-          success: true,
-          message: `Free trial bill processed (${freeTrialRemaining} remaining)`,
-          transaction
-        };
-      } else {
-        // Just update total bills processed for free accounts
-        await prisma.user.update({
-          where: { id: userId },
-          data: {
-            totalBillsProcessed: { increment: 1 }
-          }
-        });
-        
-        let freeMessage = 'Free account - no processing fee charged';
-        if (freeReason === 'superadmin') {
-          freeMessage = 'Superadmin - no processing fee charged';
-        } else if (freeReason === 'admin') {
-          freeMessage = 'Admin - no processing fee charged';
-        } else if (freeReason === 'railway_official') {
-          freeMessage = 'Railway Official - no processing fee charged';
-        } else if (freeReason === 'custom_zero_fee') {
-          freeMessage = 'Custom zero fee - no processing fee charged';
-        }
-
-        return {
-          success: true,
-          message: freeMessage,
-          transaction
-        };
+      let freeMessage = 'Free account - no processing fee charged';
+      if (freeReason === 'superadmin') {
+        freeMessage = 'Superadmin - no processing fee charged';
+      } else if (freeReason === 'admin') {
+        freeMessage = 'Admin - no processing fee charged';
+      } else if (freeReason === 'railway_official') {
+        freeMessage = 'Railway Official - no processing fee charged';
+      } else if (freeReason === 'custom_zero_fee') {
+        freeMessage = 'Custom zero fee - no processing fee charged';
       }
+
+      return {
+        success: true,
+        message: freeMessage,
+        transaction,
+      };
     }
 
     // Verify Razorpay payment if provided
