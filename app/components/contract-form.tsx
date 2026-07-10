@@ -1,8 +1,9 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -164,8 +165,12 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     // Map extracted data to form fields
     if (data.agreementNo) updates.agreementNo = data.agreementNo;
     if (data.loaNo) updates.loaNo = data.loaNo;
+    if (data.loaDate) updates.loaDate = data.loaDate;
     if (data.contractorName) updates.contractorName = data.contractorName;
+    if (data.contractorPhone) updates.contractorPhone = data.contractorPhone;
     if (data.workDescription) updates.workDescription = data.workDescription;
+    // dateOfOpening carries the tender closing date, so the server derives
+    // baseMonth = one month before it (the correct PVC base month).
     if (data.dateOfOpening) updates.dateOfOpening = data.dateOfOpening;
     
     // Map financial values - tender advertised value and agreement amount
@@ -188,6 +193,41 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
       });
       return newErrors;
     });
+  };
+
+  /**
+   * Upload an agreement PDF and let AI pre-fill the form. Free, but the user
+   * reviews and edits everything before saving.
+   */
+  const agreementFileRef = useRef<HTMLInputElement>(null);
+  const [extractingAgreement, setExtractingAgreement] = useState(false);
+
+  const handleAgreementUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      toast.error('Please choose the agreement as a PDF file.');
+      return;
+    }
+    setExtractingAgreement(true);
+    const toastId = toast.loading('Reading the agreement…');
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch('/api/contracts/extract-agreement', { method: 'POST', body });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.data) {
+        toast.error(json.error || 'Could not read the agreement.', { id: toastId });
+        return;
+      }
+      handleDocumentDataExtracted(json.data);
+      toast.success('Form filled from the agreement. Please review before saving.', { id: toastId });
+    } catch {
+      toast.error('The upload failed. Please try again.', { id: toastId });
+    } finally {
+      setExtractingAgreement(false);
+    }
   };
 
   /**
@@ -378,6 +418,40 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
           title="Error"
           message={error}
         />
+      )}
+
+      {/* Auto-fill from agreement PDF (new contracts only) */}
+      {!isEdit && (
+        <div className="rounded-xl border border-dashed border-indigo-300 bg-indigo-50/60 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-indigo-900 flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4" /> Fill from agreement (AI)
+            </p>
+            <p className="text-xs text-indigo-700/80 mt-0.5">
+              Upload the railway agreement PDF and we'll fill this form for you — free. You review everything before saving.
+            </p>
+          </div>
+          <input
+            ref={agreementFileRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="hidden"
+            onChange={handleAgreementUpload}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => agreementFileRef.current?.click()}
+            disabled={extractingAgreement}
+            className="shrink-0 border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-100"
+          >
+            {extractingAgreement ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Reading…</>
+            ) : (
+              <><FileText className="mr-2 h-4 w-4" /> Upload Agreement PDF</>
+            )}
+          </Button>
+        </div>
       )}
 
       <Accordion type="multiple" defaultValue={['basic', 'financial', 'timeline', 'materials', 'covering-letter']} className="space-y-4">
