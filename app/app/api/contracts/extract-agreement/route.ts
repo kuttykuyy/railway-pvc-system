@@ -3,6 +3,12 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { recordAiUsage } from '@/lib/ai-usage';
 import rateLimiter, { RATE_LIMITS, getIdentifier } from '@/lib/rate-limiter';
+import { PDFDocument } from 'pdf-lib';
+
+// Every field we need (agreement no, LOA, contractor, work description, closing
+// date, values) is on the opening pages; a full 70+ page agreement overwhelms the
+// AI request, so we only send the first PAGES_TO_SEND pages.
+const PAGES_TO_SEND = 12;
 
 export const dynamic = 'force-dynamic';
 
@@ -50,8 +56,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File too large. Maximum size is 100MB.' }, { status: 400 });
     }
 
-    const base64 = Buffer.from(await file.arrayBuffer()).toString('base64');
-    const dataUri = `data:application/pdf;base64,${base64}`;
+    const original = Buffer.from(await file.arrayBuffer());
+    // Trim to the first few pages so the AI request stays small and reliable.
+    let pdfBytes: Uint8Array = new Uint8Array(original);
+    try {
+      const src = await PDFDocument.load(original, { ignoreEncryption: true });
+      const total = src.getPageCount();
+      if (total > PAGES_TO_SEND) {
+        const trimmed = await PDFDocument.create();
+        const pages = await trimmed.copyPages(src, Array.from({ length: PAGES_TO_SEND }, (_, i) => i));
+        pages.forEach((p) => trimmed.addPage(p));
+        pdfBytes = await trimmed.save();
+      }
+    } catch (err) {
+      console.warn('extract-agreement: could not trim PDF, sending original:', err);
+    }
+    const dataUri = `data:application/pdf;base64,${Buffer.from(pdfBytes).toString('base64')}`;
 
     const prompt = `You are extracting fields from an Indian Railway "Contract Agreement of Works" / e-tender agreement PDF to pre-fill a form. Read the whole document.
 
@@ -98,10 +118,15 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
 
     if (!response.ok) {
       const text = await response.text().catch(() => '');
+      console.error(`extract-agreement: AI HTTP ${response.status}:`, text.slice(0, 500));
       const outOfCredit = response.status === 402 || /no remaining credits|insufficient credits|credit balance/i.test(text);
       await recordAiUsage({ operation: 'agreement-extraction', success: false, errorType: outOfCredit ? 'out_of_credit' : `http_${response.status}` });
       return NextResponse.json(
-        { error: outOfCredit ? 'The AI service is out of credit. Please try again later.' : 'Could not read the agreement. Please try again.' },
+        {
+          error: outOfCredit
+            ? 'The AI service is out of credit. Please try again later.'
+            : `Could not read the agreement (AI error ${response.status}). Please try again, or fill the form manually.`,
+        },
         { status: outOfCredit ? 402 : 502 },
       );
     }
