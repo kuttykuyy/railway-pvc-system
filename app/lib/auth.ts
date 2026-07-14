@@ -185,16 +185,18 @@ export const authOptions: NextAuthOptions = {
           token.id = user.id;
           token.email = user.email;
           token.name = user.name;
-          
-          // For OAuth sign-in, fetch role from database
-          if (account?.provider === 'google') {
-            const dbUser = await prisma.user.findUnique({
-              where: { email: user.email! }
-            });
-            token.role = dbUser?.role || 'contractor';
-          } else {
-            token.role = (user as any).role;
-          }
+
+          // Fetch phone (and role for OAuth) so the token records whether the user
+          // has a mobile number — used by middleware to gate phone-less accounts
+          // (e.g. Google sign-in, which never provides a phone number).
+          const dbUser = user.email
+            ? await prisma.user.findUnique({
+                where: { email: user.email },
+                select: { role: true, phone: true },
+              })
+            : null;
+          token.role = account?.provider === 'google' ? (dbUser?.role || 'contractor') : (user as any).role;
+          token.hasPhone = !!(dbUser?.phone && String(dbUser.phone).trim());
         }
         
         // Handle session update trigger (when role is changed)
@@ -207,6 +209,7 @@ export const authOptions: NextAuthOptions = {
           if (dbUser) {
             token.role = dbUser.role || 'contractor';
             token.name = dbUser.name;
+            token.hasPhone = !!(dbUser.phone && String(dbUser.phone).trim());
           }
         }
         
