@@ -303,7 +303,7 @@ export function SignUpForm() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="whatsappNumber" className="text-sm font-semibold text-gray-700">WhatsApp Number</Label>
+                <Label htmlFor="whatsappNumber" className="text-sm font-semibold text-gray-700">WhatsApp Number <span className="text-red-500">*</span></Label>
                 <Input
                   id="whatsappNumber"
                   type="tel"

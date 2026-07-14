@@ -109,6 +109,21 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(signInUrl);
   }
 
+  // Mobile number is mandatory. Accounts created without one (e.g. Google sign-in)
+  // must add it before using the app. Gate only when the token EXPLICITLY reports
+  // no phone (hasPhone === false), so sessions issued before this rule — where the
+  // flag is undefined — are never disrupted. Staff roles are exempt.
+  const roleExempt = ['admin', 'superadmin', 'railway_official'].includes((token as any).role);
+  if ((token as any).hasPhone === false && !roleExempt && pathname !== '/api/user/complete-mobile') {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: 'A mobile number is required. Please add it to continue.', code: 'MOBILE_REQUIRED' },
+        { status: 403 },
+      );
+    }
+    return NextResponse.redirect(new URL('/auth/complete-mobile', req.url));
+  }
+
   return NextResponse.next();
 }
 
