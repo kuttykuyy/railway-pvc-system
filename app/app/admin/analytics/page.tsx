@@ -56,11 +56,30 @@ interface AnalyticsData {
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1', '#f97316', '#14b8a6', '#d946ef'];
 
+interface ActivationData {
+  total: number;
+  last7d: number;
+  stages: {
+    unverified: { count: number; pct: number };
+    verifiedNoContract: { count: number; pct: number };
+    contractNoBill: { count: number; pct: number };
+    active: { count: number; pct: number };
+  };
+}
+
 export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const [activation, setActivation] = useState<ActivationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('30d');
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/admin/analytics/activation')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && !d.error) setActivation(d); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -159,6 +178,54 @@ export default function AnalyticsPage() {
           ))}
         </div>
       </div>
+
+      {/* Activation Funnel — where new users get stuck */}
+      {activation && (
+        <Card className="border-indigo-200">
+          <CardHeader>
+            <CardTitle>New-User Activation</CardTitle>
+            <CardDescription>
+              Where contractor signups get stuck between joining and creating a bill.
+              {' '}{activation.total.toLocaleString('en-IN')} total · {activation.last7d.toLocaleString('en-IN')} in the last 7 days.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const s = activation.stages;
+              const stuck = [
+                { key: 'unverified', label: 'Never verified email', ...s.unverified, tone: 'bg-red-50 text-red-700 border-red-200' },
+                { key: 'noContract', label: 'Verified, no contract', ...s.verifiedNoContract, tone: 'bg-amber-50 text-amber-700 border-amber-200' },
+                { key: 'noBill', label: 'Contract, but no bill', ...s.contractNoBill, tone: 'bg-amber-50 text-amber-700 border-amber-200' },
+              ];
+              const biggest = [...stuck].sort((a, b) => b.count - a.count)[0];
+              return (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {stuck.map((st) => (
+                      <div key={st.key} className={`rounded-lg border p-3 ${st.tone}`}>
+                        <div className="text-2xl font-bold">{st.count.toLocaleString('en-IN')}</div>
+                        <div className="text-xs font-medium mt-0.5">{st.label}</div>
+                        <div className="text-[11px] opacity-70">{st.pct}% of signups</div>
+                      </div>
+                    ))}
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-green-700">
+                      <div className="text-2xl font-bold">{s.active.count.toLocaleString('en-IN')}</div>
+                      <div className="text-xs font-medium mt-0.5">Active (made a bill)</div>
+                      <div className="text-[11px] opacity-70">{s.active.pct}% of signups</div>
+                    </div>
+                  </div>
+                  {biggest && biggest.count > 0 && (
+                    <p className="mt-3 text-sm text-slate-600">
+                      Biggest drop-off: <span className="font-semibold text-slate-800">{biggest.label.toLowerCase()}</span>
+                      {' '}({biggest.count.toLocaleString('en-IN')} users, {biggest.pct}%). Fixing this stage will recover the most users.
+                    </p>
+                  )}
+                </>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
