@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { normalizeDsrCode, inferCementCoefficientFromMix } from '@/lib/dsr-cement-calculation';
+import { normalizeDsrCode, inferCementCoefficientFromMix, matchCementCoefficient } from '@/lib/dsr-cement-calculation';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,8 +39,10 @@ export async function POST(request: NextRequest) {
       const qty = Number(it.quantity) || 0;
       if (qty <= 0) continue;
 
-      const norm = normalizeDsrCode(it.dsrCode || '');
-      const coeff = byCode.get(norm) || inferCementCoefficientFromMix(it.description || '', it.unit || '');
+      // Same matching the PDF-upload analysis uses (exact code, then base-code
+      // fallback), so both paths agree on which items consume cement.
+      const coeff = matchCementCoefficient(byCode, it.dsrCode || '')
+        || inferCementCoefficientFromMix(it.description || '', it.unit || '');
       if (!coeff || !coeff.cementQuantityPerUnit) {
         unmatchedCount++;
         continue;

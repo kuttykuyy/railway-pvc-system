@@ -10,6 +10,7 @@ import { validateApiAccess } from '@/lib/payment-validation';
 import {
   calculateDsrCementRequirement,
   inferCementCoefficientFromMix,
+  matchCementCoefficient,
   normalizeDsrCode,
   summarizeCementCalculation,
 } from '@/lib/dsr-cement-calculation';
@@ -1574,16 +1575,9 @@ export async function POST(request: NextRequest) {
     });
     const coefficientByCode = new Map(coefficients.map(item => [normalizeDsrCode(item.dsrCode), item]));
 
-    const getCoefficient = (dsrCode: string) => {
-      const fullMatch = coefficientByCode.get(dsrCode);
-      if (fullMatch) return fullMatch;
-      // Fallback: strip suffix and check base code (digits and dots)
-      const baseMatch = dsrCode.match(/^\d+(?:\.\d+)+/);
-      if (baseMatch) {
-        return coefficientByCode.get(baseMatch[0]) || null;
-      }
-      return null;
-    };
+    // Shared with the manual "derive cement from items" path (exact code, then
+    // base-code fallback) so the two can never disagree about cement matching.
+    const getCoefficient = (dsrCode: string) => matchCementCoefficient(coefficientByCode, dsrCode);
 
     // Refine items classification and cement flags using database coefficients
     for (const item of extractedItems) {
