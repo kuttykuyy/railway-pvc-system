@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateApiAccess } from '@/lib/payment-validation';
 import { normalizeAgreementNo, parseAgreementNumber } from '@/lib/railway-division-helper';
+import { normalizeSchedules } from '@/lib/contract-schedules';
 
 export const dynamic = "force-dynamic";
 
@@ -212,7 +213,8 @@ export async function PUT(
         hasRailwaySuppliedMaterials: hasRailwaySuppliedMaterials !== undefined ? hasRailwaySuppliedMaterials : undefined,
         railwaySuppliedMaterialsNote: railwaySuppliedMaterialsNote !== undefined ? railwaySuppliedMaterialsNote : undefined,
         coveringLetterDesignation: coveringLetterDesignation !== undefined ? coveringLetterDesignation : undefined,
-        schedules: schedules !== undefined ? (Array.isArray(schedules) ? schedules.filter((s: string) => s && s.trim()) : []) : undefined,
+        // Accepts both the legacy string[] and the newer per-schedule rate objects.
+        schedules: schedules !== undefined ? normalizeSchedules(schedules) : undefined,
         ...(dateOfOpening && {
           dateOfOpening: new Date(dateOfOpening),
           baseMonth: new Date(new Date(dateOfOpening).setMonth(new Date(dateOfOpening).getMonth() - 1))

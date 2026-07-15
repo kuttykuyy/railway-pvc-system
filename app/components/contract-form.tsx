@@ -30,6 +30,7 @@ import {
 } from '@/lib/validation';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { useLanguage } from './i18n-provider';
+import { normalizeSchedules, emptySchedule, type ContractSchedule } from '@/lib/contract-schedules';
 
 interface ContractFormProps {
   initialData?: {
@@ -46,7 +47,8 @@ interface ContractFormProps {
     hasRailwaySuppliedMaterials?: boolean;
     railwaySuppliedMaterialsNote?: string;
     coveringLetterDesignation?: string;
-    schedules?: string[];
+    /** Legacy string[] or the newer ContractSchedule[]; both are read. */
+    schedules?: unknown;
   };
   isEdit?: boolean;
   contractId?: string;
@@ -78,7 +80,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     coveringLetterDesignation: initialData?.coveringLetterDesignation || ''
   });
 
-  const [schedules, setSchedules] = useState<string[]>(initialData?.schedules || []);
+  const [schedules, setSchedules] = useState<ContractSchedule[]>(normalizeSchedules(initialData?.schedules));
 
   // Check PVC eligibility when tender advertised value or duration changes
   useEffect(() => {
@@ -388,7 +390,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
         tenderAdvertisedValue: formData.tenderAdvertisedValue ? parseFloat(formData.tenderAdvertisedValue) : null,
         contractValue: formData.contractValue ? parseFloat(formData.contractValue) : null,
         completionPeriodMonths: formData.completionPeriodMonths ? parseInt(formData.completionPeriodMonths) : null,
-        schedules: schedules.filter(s => s.trim() !== ''),
+        schedules: schedules.filter(s => s.name.trim() !== ''),
       };
       
       const response = await fetch(url, {
@@ -859,37 +861,67 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setSchedules([...schedules, ''])}
+                  onClick={() => setSchedules([...schedules, emptySchedule()])}
                   className="h-8 text-xs bg-white border-slate-200 text-slate-700 hover:bg-violet-50 hover:text-violet-750 transition-colors"
                 >
                   <Plus className="h-3 w-3 mr-1" />
                   {t('form.contract.add_schedule')}
                 </Button>
               </div>
-              {schedules.map((schedule, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <span className="text-xs text-slate-550 w-6 text-right flex-shrink-0">{index + 1}.</span>
-                  <Input
-                    value={schedule}
-                    onChange={(e) => {
-                      const newSchedules = [...schedules];
-                      newSchedules[index] = e.target.value;
-                      setSchedules(newSchedules);
-                    }}
-                    placeholder={language === 'hi' ? `जैसे, अनुसूची ${String.fromCharCode(65 + index)} - मिट्टी का काम` : `e.g., Schedule ${String.fromCharCode(65 + index)} - Earthwork`}
-                    className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSchedules(schedules.filter((_, i) => i !== index))}
-                    className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+              {/* Escalation / bid rate / rebate belong to the agreement, so they are
+                  captured once here and reused by every bill's cement calculation. */}
+              {schedules.length > 0 && (
+                <p className="text-xs text-slate-500">
+                  Enter each schedule&apos;s escalation, bid rate and rebate from the agreement. Bills reuse these
+                  automatically — you won&apos;t be asked again.
+                </p>
+              )}
+              {schedules.map((schedule, index) => {
+                const update = (patch: Partial<ContractSchedule>) => {
+                  const next = [...schedules];
+                  next[index] = { ...next[index], ...patch };
+                  setSchedules(next);
+                };
+                return (
+                  <div key={index} className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-550 w-6 text-right flex-shrink-0">{index + 1}.</span>
+                      <Input
+                        value={schedule.name}
+                        onChange={(e) => update({ name: e.target.value })}
+                        placeholder={language === 'hi' ? `जैसे, अनुसूची ${String.fromCharCode(65 + index)} - मिट्टी का काम` : `e.g., A1 - All items covered by CPWD-DSR 2021`}
+                        className="bg-white border-slate-200 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSchedules(schedules.filter((_, i) => i !== index))}
+                        className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pl-8">
+                      <div>
+                        <Label className="text-xs text-slate-600">Escalation %</Label>
+                        <Input type="number" step="0.01" className="mt-1 bg-white" placeholder="e.g. -25.00"
+                          value={schedule.escalation} onChange={(e) => update({ escalation: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-600">Bid Rate % (+/-)</Label>
+                        <Input type="number" step="0.01" className="mt-1 bg-white" placeholder="e.g. 3.80"
+                          value={schedule.bidRate} onChange={(e) => update({ bidRate: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-600">Rebate %</Label>
+                        <Input type="number" step="0.01" className="mt-1 bg-white" placeholder="e.g. 0.50"
+                          value={schedule.rebate} onChange={(e) => update({ rebate: e.target.value })} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
               {schedules.length === 0 && (
                 <p className="text-xs text-slate-400 italic text-center py-2">{t('form.contract.no_schedules')}</p>
               )}
