@@ -42,6 +42,7 @@ interface ContractFormProps {
     workDescription: string;
     dateOfOpening: string;
     tenderAdvertisedValue?: number;
+    rebatePercentage?: number;
     contractValue?: number;
     completionPeriodMonths?: number;
     hasRailwaySuppliedMaterials?: boolean;
@@ -73,6 +74,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     workDescription: initialData?.workDescription || '',
     dateOfOpening: initialData?.dateOfOpening || '',
     tenderAdvertisedValue: initialData?.tenderAdvertisedValue?.toString() || '',
+    // Agreed once for the whole agreement (not per schedule).
+    rebatePercentage: initialData?.rebatePercentage?.toString() || '',
     contractValue: initialData?.contractValue?.toString() || '',
     completionPeriodMonths: initialData?.completionPeriodMonths?.toString() || '',
     hasRailwaySuppliedMaterials: initialData?.hasRailwaySuppliedMaterials || false,
@@ -388,6 +391,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
       const submitData = {
         ...formData,
         tenderAdvertisedValue: formData.tenderAdvertisedValue ? parseFloat(formData.tenderAdvertisedValue) : null,
+        rebatePercentage: formData.rebatePercentage ? parseFloat(formData.rebatePercentage) : null,
         contractValue: formData.contractValue ? parseFloat(formData.contractValue) : null,
         completionPeriodMonths: formData.completionPeriodMonths ? parseInt(formData.completionPeriodMonths) : null,
         schedules: schedules.filter(s => s.name.trim() !== ''),
@@ -679,6 +683,30 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 )}
               </div>
 
+              {/* Rebate is agreed ONCE for the whole agreement (per-schedule escalation and
+                  bid rate live in the Schedules section). Bills reuse this automatically. */}
+              <div className="space-y-2">
+                <Label htmlFor="rebatePercentage" className="text-sm font-semibold text-slate-700">
+                  Rebate %
+                </Label>
+                <Input
+                  id="rebatePercentage"
+                  name="rebatePercentage"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="99"
+                  value={formData.rebatePercentage}
+                  onChange={handleInputChange}
+                  placeholder="e.g. 30.01"
+                  className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-green-500 focus:ring-1 focus:ring-green-500 transition-all"
+                />
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  From the agreement (0 if none). Agreed once for the whole agreement — bills apply it
+                  automatically, so you won&apos;t be asked again.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="contractValue" className="text-sm font-semibold text-slate-700">
@@ -872,8 +900,9 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   captured once here and reused by every bill's cement calculation. */}
               {schedules.length > 0 && (
                 <p className="text-xs text-slate-500">
-                  Enter each schedule&apos;s escalation, bid rate and rebate from the agreement. Bills reuse these
-                  automatically — you won&apos;t be asked again.
+                  Enter each schedule&apos;s escalation and bid rate from the agreement. Bills reuse these
+                  automatically — you won&apos;t be asked again. (Rebate is agreed once for the whole agreement
+                  and is entered under Financial Details.)
                 </p>
               )}
               {schedules.map((schedule, index) => {
@@ -902,7 +931,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pl-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-8">
                       <div>
                         <Label className="text-xs text-slate-600">Escalation %</Label>
                         <Input type="number" step="0.01" className="mt-1 bg-white" placeholder="e.g. -25.00"
@@ -912,11 +941,6 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                         <Label className="text-xs text-slate-600">Bid Rate % (+/-)</Label>
                         <Input type="number" step="0.01" className="mt-1 bg-white" placeholder="e.g. 3.80"
                           value={schedule.bidRate} onChange={(e) => update({ bidRate: e.target.value })} />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-slate-600">Rebate %</Label>
-                        <Input type="number" step="0.01" className="mt-1 bg-white" placeholder="e.g. 0.50"
-                          value={schedule.rebate} onChange={(e) => update({ rebate: e.target.value })} />
                       </div>
                     </div>
                   </div>

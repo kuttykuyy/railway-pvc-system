@@ -227,6 +227,9 @@ model Contract {
   railwaySuppliedMaterialsNote String?
   tenderAdvertisedValue        Float?
   coveringLetterDesignation    String?
+  /// Rebate % is agreed once for the whole agreement (not per schedule).
+  /// Escalation % and bid rate % are per-schedule and live in `schedules`.
+  rebatePercentage             Float?
   schedules                    Json?                @default("[]")
   bills                        Bill[]
   extensions                   ContractExtension[]

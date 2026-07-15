@@ -59,7 +59,11 @@ interface Contract {
   workClassification?: string;
   dateOfOpening: string;
   baseMonth: string;
-  schedules?: string[];
+  /** Legacy string[] or ContractSchedule[] (per-schedule escalation/bid rate).
+   *  Always read via scheduleNames() / findScheduleRates(). */
+  schedules?: unknown;
+  /** Agreement-level rebate %, agreed once and reused by every bill. */
+  rebatePercentage?: number | null;
 }
 
 interface SubClassification {
@@ -236,6 +240,14 @@ function NewBillPageContent() {
   } | null>(null);
 
   const selectedContract = contracts.find(c => c.id === formData.contractId);
+
+  // The rebate is agreed once on the contract, so prefill the bill's rebate from it
+  // rather than asking again. Left editable in case a bill needs an override.
+  const contractRebate = selectedContract?.rebatePercentage;
+  useEffect(() => {
+    if (contractRebate == null) return;
+    setFormData(prev => (prev.rebatePercentage ? prev : { ...prev, rebatePercentage: String(contractRebate) }));
+  }, [contractRebate]);
 
   useEffect(() => {
     fetch('/api/user/profile')
@@ -1956,6 +1968,7 @@ function NewBillPageContent() {
                             schedules={cementSchedules}
                             contractId={formData.contractId || undefined}
                             contractSchedules={selectedContract?.schedules}
+                            contractRebate={selectedContract?.rebatePercentage}
                             onApply={(amount) => {
                               setFormData(p => ({ ...p, cementAmount: amount.toFixed(2) }));
                               toast.success(`Cement cost applied: ₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
@@ -2004,7 +2017,10 @@ function NewBillPageContent() {
                         <Label className="text-xs text-slate-600">Rebate (%) <span className="font-normal text-slate-400">— if work was awarded below the estimate</span></Label>
                         <Input type="number" step="0.01" min="0" max="99" className="mt-1 sm:max-w-[220px]" value={formData.rebatePercentage}
                           onChange={e => setFormData(p => ({ ...p, rebatePercentage: e.target.value }))} placeholder="e.g. 30.01" />
-                        <p className="text-[11px] text-slate-500 mt-1">All component amounts are scaled down by this % so PVC is calculated on the net payable value.</p>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          Filled from the agreement&apos;s rebate on the contract. All component amounts are scaled
+                          down by this % so PVC is calculated on the net payable value. Change only to override this bill.
+                        </p>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
