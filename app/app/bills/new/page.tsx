@@ -223,6 +223,8 @@ function NewBillPageContent() {
   // DSR cement derivation: schedules (with cement MT) worked out from the entered items.
   const [cementSchedules, setCementSchedules] = useState<CementSchedule[]>([]);
   const [derivingCement, setDerivingCement] = useState(false);
+  // Item numbers that had no cement coefficient — shown so the gap is actionable.
+  const [cementUnmatched, setCementUnmatched] = useState<string[]>([]);
   // True when an AI extraction has cement items whose derived cost has NOT yet been
   // applied. PVC check / bill creation is blocked until the user applies it.
   const [cementCostPending, setCementCostPending] = useState(false);
@@ -1100,13 +1102,17 @@ function NewBillPageContent() {
         toast.error(data.error || 'Could not derive cement.');
         return;
       }
+      setCementUnmatched(data.unmatchedCodes || []);
       if (!data.schedules?.length) {
         setCementSchedules([]);
-        toast('No cement-affected items found (none matched a DSR cement coefficient).', { icon: 'ℹ️' });
+        toast.error('No cement found — none of these item numbers are in the cement coefficient list.', { duration: 5000 });
         return;
       }
       setCementSchedules(data.schedules);
-      toast.success(`Found ${data.matchedCount} cement item(s) across ${data.schedules.length} schedule(s).`);
+      toast.success(
+        `Found ${data.matchedCount} cement item(s) across ${data.schedules.length} schedule(s).`
+        + (data.unmatchedCount ? ` ${data.unmatchedCount} item(s) had no coefficient.` : ''),
+      );
     } catch {
       toast.error('The request failed. Please try again.');
     } finally {
@@ -1942,6 +1948,22 @@ function NewBillPageContent() {
                             {derivingCement ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deriving…</>) : (<><ClipboardList className="mr-2 h-4 w-4" /> Derive cement from items</>)}
                           </Button>
                         </div>
+                        {cementUnmatched.length > 0 && (
+                          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs">
+                            <p className="font-semibold text-amber-900">
+                              No cement coefficient for {cementUnmatched.length} item number{cementUnmatched.length > 1 ? 's' : ''}:
+                            </p>
+                            <p className="mt-1 font-mono text-amber-800">{cementUnmatched.join(', ')}</p>
+                            <p className="mt-1.5 text-amber-700">
+                              Cement is only worked out for item numbers listed in the cement coefficient library.
+                              Add them in{' '}
+                              <Link href="/admin/dsr-cement-coefficients" target="_blank" className="underline font-medium">
+                                Admin → Cement Coefficients
+                              </Link>
+                              , then press Derive again.
+                            </p>
+                          </div>
+                        )}
                         {cementSchedules.length > 0 && (
                           <DsrCementCalculator
                             schedules={cementSchedules}
