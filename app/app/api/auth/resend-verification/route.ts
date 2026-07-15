@@ -75,14 +75,26 @@ export async function POST(request: NextRequest) {
     logger.log('[Resend Verification] Sending email to:', user.email);
     logger.log('[Resend Verification] Verification URL:', verificationUrl);
 
-    await resend.emails.send({
+    const { data, error: sendError } = await resend.emails.send({
       from: 'Railway PVC System <noreply@irpvc.in>',
       to: user.email,
       subject: 'Verify your email address — IR-PVC',
       html: getVerificationEmailHtml(verificationUrl, user.email),
     });
 
-    logger.log('✅ Verification email resent to:', user.email);
+    // Resend reports API failures in the RESPONSE, not by throwing. Without this the
+    // route told the user "sent successfully" while nothing was delivered — leaving
+    // them permanently unable to verify.
+    if (sendError) {
+      const message = (sendError as any)?.message || JSON.stringify(sendError);
+      console.error('❌ Resend verification failed for', user.email, ':', message);
+      return NextResponse.json(
+        { error: 'We could not send the verification email right now. Please try again shortly or contact support.' },
+        { status: 502 }
+      );
+    }
+
+    logger.log('✅ Verification email resent to:', user.email, data?.id ? `(id ${data.id})` : '');
 
     return NextResponse.json(
       { message: 'Verification email sent successfully' },
