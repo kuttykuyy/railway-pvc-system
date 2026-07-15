@@ -42,12 +42,11 @@ import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-di
 import { BillPdfCementAnalyzer, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
 import { useLanguage } from '@/components/i18n-provider';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
-import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr-cement-calculator';
-import { scheduleNames, findScheduleRates } from '@/lib/contract-schedules';
+import { scheduleNames } from '@/lib/contract-schedules';
 import { ContextualHelp } from '@/components/contextual-help';
 import { validateDate, validateDateForApi } from '@/lib/date-validation';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
-import { computeRebateFactor, scaleComponentsWithRebate, scaleComponentAmount } from '@/lib/rebate';
+import { computeRebateFactor, scaleComponentsWithRebate } from '@/lib/rebate';
 import { inferMainClassification } from '@/lib/work-classification';
 
 
@@ -190,7 +189,6 @@ function NewBillPageContent() {
     fuelPriceType: 'four_city_avg', // 'four_city_avg' or 'zone_city'
     isFinalPvc: false, // Is this final PVC
     dateOfCompletion: '', // Date of completion (only for final PVC)
-    rebatePercentage: '', // Manual rebate % (work awarded below estimate); scales components to the net payable
   });
   
   // Classification entries state - array of { subClassificationId, amount, description }
@@ -221,9 +219,6 @@ function NewBillPageContent() {
   const [subscribing, setSubscribing] = useState<boolean>(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState<boolean>(false);
   const [isAiUploaded, setIsAiUploaded] = useState(false);
-  // Manual DSR cement calculator: schedules (with cement MT) derived from the entered items.
-  const [cementSchedules, setCementSchedules] = useState<CementSchedule[]>([]);
-  const [derivingCement, setDerivingCement] = useState(false);
   // True when an AI extraction has cement items whose derived cost has NOT yet been
   // applied. PVC check / bill creation is blocked until the user applies it.
   const [cementCostPending, setCementCostPending] = useState(false);
@@ -240,14 +235,6 @@ function NewBillPageContent() {
   } | null>(null);
 
   const selectedContract = contracts.find(c => c.id === formData.contractId);
-
-  // The rebate is agreed once on the contract, so prefill the bill's rebate from it
-  // rather than asking again. Left editable in case a bill needs an override.
-  const contractRebate = selectedContract?.rebatePercentage;
-  useEffect(() => {
-    if (contractRebate == null) return;
-    setFormData(prev => (prev.rebatePercentage ? prev : { ...prev, rebatePercentage: String(contractRebate) }));
-  }, [contractRebate]);
 
   useEffect(() => {
     fetch('/api/user/profile')
@@ -1075,54 +1062,6 @@ function NewBillPageContent() {
       workClassification: subClassId
     }));
   };
-
-  // Derive cement-affected schedules (with cement MT) from the entered items, so the
-  // DSR cement calculator can compute the cement cost without a PDF upload.
-  const deriveCementFromItems = async () => {
-    const items: Array<{ dsrCode: string; description: string; unit: string; quantity: number; schedule: string }> = [];
-    for (const entry of classificationEntries) {
-      const schedule = entry.scheduleItem || 'Default';
-      const rows = entry.itemRows && entry.itemRows.length > 0
-        ? entry.itemRows
-        : [{ itemNumber: entry.itemNumber, quantity: entry.quantity }];
-      for (const row of rows) {
-        const qty = Number(row.quantity) || 0;
-        const code = String(row.itemNumber || '').trim();
-        if (code && qty > 0) {
-          items.push({ dsrCode: code, description: entry.description || '', unit: '', quantity: qty, schedule });
-        }
-      }
-    }
-    if (items.length === 0) {
-      toast.error('Add item numbers and quantities to your classification items first.');
-      return;
-    }
-    setDerivingCement(true);
-    try {
-      const res = await fetch('/api/bills/cement-from-items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data.error || 'Could not derive cement.');
-        return;
-      }
-      if (!data.schedules?.length) {
-        setCementSchedules([]);
-        toast('No cement-affected items found (none matched a DSR cement coefficient).', { icon: 'ℹ️' });
-        return;
-      }
-      setCementSchedules(data.schedules);
-      toast.success(`Found ${data.matchedCount} cement item(s) across ${data.schedules.length} schedule(s).`);
-    } catch {
-      toast.error('The request failed. Please try again.');
-    } finally {
-      setDerivingCement(false);
-    }
-  };
-
   const handlePreview = async () => {
     if (!formData.contractId || !formData.zone || !formData.dateOfMeasurement) {
       toast.error('Please fill Contract, Zone, and Date of Measurement before previewing');
@@ -1134,14 +1073,10 @@ function NewBillPageContent() {
     }
     setIsPreviewLoading(true);
     try {
-      // Apply the manual rebate so the preview PVC matches the bill that gets created.
-      const rebateFactor = computeRebateFactor({ rebatePercentage: parseFloat(formData.rebatePercentage) || null });
-      const scaledAmounts = scaleComponentsWithRebate(
-        classificationEntries.map(e => (e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount)),
-        rebateFactor,
-      );
-      const previewEntries = classificationEntries.map((e, i) => ({ ...e, amount: scaledAmounts[i] }));
-      const grossAmount = scaledAmounts.reduce((sum, a) => sum + (Number.isFinite(a) ? a : 0), 0);
+      const grossAmount = classificationEntries.reduce((sum, e) => {
+        const amt = e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount;
+        return sum + amt;
+      }, 0);
       const nonScheduleTotal = nonScheduleItems
         .filter(i => i.description && i.amount)
         .reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
@@ -1156,7 +1091,7 @@ function NewBillPageContent() {
           zone: formData.zone,
           fuelPriceType: formData.fuelPriceType,
           calculationMethod: (formData as any).calculationMethod || 'auto',
-          classificationEntries: previewEntries,
+          classificationEntries,
           isAiUploaded,
         }),
       });
@@ -1255,19 +1190,8 @@ function NewBillPageContent() {
           amount: parseFloat(item.amount) || 0
         }));
       
-      // Manual rebate: when work is awarded below estimate, scale every component
-      // (classification entries + dedicated cement/steel) down by the same factor so
-      // the stored amounts and per-component PVC use the post-rebate payable value —
-      // matching the AI-extraction path.
-      const rebateFactor = computeRebateFactor({ rebatePercentage: parseFloat(formData.rebatePercentage) || null });
-      const scaledEntryAmounts = scaleComponentsWithRebate(
-        cleanedEntries.map(e => (e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount)),
-        rebateFactor,
-      );
-      const scaleDedicated = (v: any) => scaleComponentAmount(parseFloat(String(v)) || 0, rebateFactor);
-
-      // Use post-rebate total classification amount as gross bill amount
-      const grossAmount = scaledEntryAmounts.reduce((sum, a) => sum + (Number.isFinite(a) ? a : 0), 0);
+      // Use total classification amount as gross bill amount
+      const grossAmount = totalClassificationAmount;
       const nonScheduleTotal = formattedNonScheduleItems.reduce((sum, item) => sum + item.amount, 0);
       const netBillAmount = grossAmount - nonScheduleTotal;
 
@@ -1281,14 +1205,13 @@ function NewBillPageContent() {
           ...formData,
           grossBillAmount: grossAmount,
           billAmount: netBillAmount, // Calculated net amount
-          cementAmount: scaleDedicated(formData.cementAmount),
-          steelTmtBarsAmount: scaleDedicated(formData.steelTmtBarsAmount),
-          steelAngleChannelAmount: scaleDedicated(formData.steelAngleChannelAmount),
-          steelPlatesAmount: scaleDedicated(formData.steelPlatesAmount),
-          steelOtherSectionsAmount: scaleDedicated(formData.steelOtherSectionsAmount),
-          classificationEntries: cleanedEntries.map((entry, index) => ({
+          classificationEntries: cleanedEntries.map(entry => ({
             subClassificationId: entry.subClassificationId,
-            amount: scaledEntryAmounts[index] ?? 0,
+            amount: entry.amount === '' || entry.amount === null || entry.amount === undefined
+              ? 0
+              : typeof entry.amount === 'string'
+                ? parseFloat(entry.amount) || 0
+                : entry.amount,
             description: entry.description || '',
             classificationJustification: entry.classificationJustification || null,
             steelTypes: entry.steelTypes || [],
@@ -1933,95 +1856,6 @@ function NewBillPageContent() {
                         lockEntries={isAiUploaded}
                         aiJustificationFee={99}
                       />
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* SECTION 2b: Dedicated Components & Rebate (manual) */}
-                  <AccordionItem value="dedicated" className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
-                    <AccordionTrigger className="px-5 py-4 hover:no-underline bg-slate-50/50 hover:bg-slate-50/80 transition-all">
-                      <div className="flex items-center gap-3 w-full">
-                        <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
-                          <Package className="h-5 w-5" />
-                        </div>
-                        <div className="text-left">
-                          <div className="font-semibold text-slate-900">Dedicated Components &amp; Rebate</div>
-                          <div className="text-xs text-slate-500">Optional — cement/steel supplied separately, and rebate if awarded below estimate</div>
-                        </div>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4 space-y-4">
-                      {/* DSR cement calculator — derive cement cost from the entered item DSR codes */}
-                      <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3 space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-700">No direct cement item? Derive it from your items.</p>
-                            <p className="text-[11px] text-slate-500">Uses the item numbers &amp; quantities entered above + DSR 2021 cement coefficients.</p>
-                          </div>
-                          <Button type="button" variant="outline" size="sm" disabled={derivingCement}
-                            onClick={deriveCementFromItems}
-                            className="border-purple-300 bg-white text-purple-700 hover:bg-purple-100">
-                            {derivingCement ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deriving…</>) : (<><ClipboardList className="mr-2 h-4 w-4" /> Derive cement from items</>)}
-                          </Button>
-                        </div>
-                        {cementSchedules.length > 0 && (
-                          <DsrCementCalculator
-                            schedules={cementSchedules}
-                            contractId={formData.contractId || undefined}
-                            contractSchedules={selectedContract?.schedules}
-                            contractRebate={selectedContract?.rebatePercentage}
-                            onApply={(amount) => {
-                              setFormData(p => ({ ...p, cementAmount: amount.toFixed(2) }));
-                              toast.success(`Cement cost applied: ₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
-                            }}
-                          />
-                        )}
-                      </div>
-
-                      <div className="rounded-lg border border-slate-200 p-3 space-y-3">
-                        <p className="text-xs font-semibold text-slate-600">Dedicated Components <span className="font-normal text-slate-400">(optional, 85% PVC)</span></p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <Label className="text-xs text-slate-600">Cement Work Amount (₹)</Label>
-                            <div className="flex gap-2 mt-1">
-                              <Input type="number" step="0.01" value={formData.cementAmount}
-                                onChange={e => setFormData(p => ({ ...p, cementAmount: e.target.value }))} placeholder="0.00" />
-                              <BillAmountCalculator onInsertTotal={t => setFormData(p => ({ ...p, cementAmount: t.toString() }))} />
-                            </div>
-                          </div>
-                          <div>
-                            <Label className="text-xs text-slate-600">Steel — TMT Bars (₹)</Label>
-                            <div className="flex gap-2 mt-1">
-                              <Input type="number" step="0.01" value={formData.steelTmtBarsAmount}
-                                onChange={e => setFormData(p => ({ ...p, steelTmtBarsAmount: e.target.value }))} placeholder="0.00" />
-                              <BillAmountCalculator onInsertTotal={t => setFormData(p => ({ ...p, steelTmtBarsAmount: t.toString() }))} />
-                            </div>
-                          </div>
-                          <div>
-                            <Label className="text-xs text-slate-600">Steel — Angle/Channel (₹)</Label>
-                            <Input type="number" step="0.01" className="mt-1" value={formData.steelAngleChannelAmount}
-                              onChange={e => setFormData(p => ({ ...p, steelAngleChannelAmount: e.target.value }))} placeholder="0.00" />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-slate-600">Steel — Plates (₹)</Label>
-                            <Input type="number" step="0.01" className="mt-1" value={formData.steelPlatesAmount}
-                              onChange={e => setFormData(p => ({ ...p, steelPlatesAmount: e.target.value }))} placeholder="0.00" />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-slate-600">Steel — Other Sections (₹)</Label>
-                            <Input type="number" step="0.01" className="mt-1" value={formData.steelOtherSectionsAmount}
-                              onChange={e => setFormData(p => ({ ...p, steelOtherSectionsAmount: e.target.value }))} placeholder="0.00" />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-slate-200 p-3">
-                        <Label className="text-xs text-slate-600">Rebate (%) <span className="font-normal text-slate-400">— if work was awarded below the estimate</span></Label>
-                        <Input type="number" step="0.01" min="0" max="99" className="mt-1 sm:max-w-[220px]" value={formData.rebatePercentage}
-                          onChange={e => setFormData(p => ({ ...p, rebatePercentage: e.target.value }))} placeholder="e.g. 30.01" />
-                        <p className="text-[11px] text-slate-500 mt-1">
-                          Filled from the agreement&apos;s rebate on the contract. All component amounts are scaled
-                          down by this % so PVC is calculated on the net payable value. Change only to override this bill.
-                        </p>
-                      </div>
                     </AccordionContent>
                   </AccordionItem>
 
