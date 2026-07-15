@@ -219,6 +219,8 @@ export async function POST(request: NextRequest) {
     });
 
     // Send verification email (only if verification is required)
+    let emailSent = false;
+    let emailErrorMessage: string | null = null;
     if (emailVerificationRequired && result.token) {
       try {
         // Get base URL with multiple fallbacks for reliability
@@ -242,17 +244,27 @@ export async function POST(request: NextRequest) {
         logger.log('[Signup] Sending verification email to:', result.user.email);
         logger.log('[Signup] Verification URL:', verificationUrl);
         
-        await resend.emails.send({
+        const { data, error } = await resend.emails.send({
           from: 'Railway PVC System <noreply@irpvc.in>',
           to: result.user.email,
           subject: 'Verify your email address',
           html: getVerificationEmailHtml(verificationUrl, result.user.email),
         });
 
-        logger.log('✅ Verification email sent to:', result.user.email);
-      } catch (emailError) {
-        console.error('❌ Failed to send verification email:', emailError);
-        // Don't fail the signup if email fails, but log it
+        // Resend reports API failures in the RESPONSE (e.g. unverified sender domain,
+        // invalid key), not by throwing — so without this check a failed send logged
+        // "sent" and the user was silently stranded: unable to verify, unable to log in.
+        if (error) {
+          throw new Error((error as any)?.message || JSON.stringify(error));
+        }
+
+        emailSent = true;
+        logger.log('✅ Verification email sent to:', result.user.email, data?.id ? `(id ${data.id})` : '');
+      } catch (emailError: any) {
+        emailErrorMessage = emailError?.message || 'Unknown email error';
+        console.error('❌ Failed to send verification email to', result.user.email, ':', emailErrorMessage);
+        // Signup still succeeds — the client is told via emailSent:false so it can
+        // prompt a resend instead of leaving the user stuck.
       }
     } else {
       logger.log('ℹ️ Email verification disabled - user auto-verified:', result.user.email);
@@ -426,13 +438,19 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { 
-        message: emailVerificationRequired 
-          ? 'User created successfully. Please check your email to verify your account.'
-          : 'User created successfully. You can now sign in to your account.', 
+      {
+        message: emailVerificationRequired
+          ? (emailSent
+              ? 'User created successfully. Please check your email to verify your account.'
+              : 'Account created, but we could not send the verification email. Please use "Resend verification email".')
+          : 'User created successfully. You can now sign in to your account.',
         userId: result.user.id,
         success: true,
-        requiresVerification: emailVerificationRequired
+        requiresVerification: emailVerificationRequired,
+        // false tells the client the verification email did NOT go out, so it can
+        // prompt a resend instead of telling the user to check an inbox that has nothing.
+        emailSent: emailVerificationRequired ? emailSent : true,
+        emailError: emailErrorMessage,
       },
       { status: 201 }
     );

@@ -100,6 +100,11 @@ export function SignUpForm() {
         if (data.requiresVerification) {
           const verifyUrl = new URL('/auth/verify-notice', window.location.origin);
           verifyUrl.searchParams.set('email', email);
+          // The verification email failed to send — tell the notice page so it prompts
+          // a resend instead of asking the user to check an inbox with nothing in it.
+          if (data.emailSent === false) {
+            verifyUrl.searchParams.set('sent', '0');
+          }
           if (tryBillDraftParam?.startsWith('local:')) {
             verifyUrl.searchParams.set('tryBillDraft', tryBillDraftParam);
           }

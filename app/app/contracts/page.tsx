@@ -608,11 +608,27 @@ export default function ContractsPage() {
               : 'Try adjusting the search or filters.'}
           </p>
           {contracts.length === 0 ? (
-            <Button asChild className="mt-6">
-              <Link href="/contracts/new">
-                <Plus className="mr-2 h-4 w-4" /> Create first contract
+            <div className="mt-6 flex w-full max-w-md flex-col items-center gap-3 px-4">
+              {/* Lead with the agreement auto-fill: typing a contract by hand is the step
+                  most new users stall on, and the AI upload removes almost all of it. */}
+              <div className="w-full rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 text-left">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-indigo-900">
+                  <FileText className="h-4 w-4" /> Fastest way — upload your agreement
+                </p>
+                <p className="mt-1 text-xs text-indigo-700/80">
+                  Upload the railway agreement PDF and we&apos;ll fill in the agreement number, contractor,
+                  dates and values for you — free. You just review and save.
+                </p>
+              </div>
+              <Button asChild className="w-full sm:w-auto">
+                <Link href="/contracts/new">
+                  <FileText className="mr-2 h-4 w-4" /> Upload agreement &amp; auto-fill
+                </Link>
+              </Button>
+              <Link href="/contracts/new" className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700">
+                or enter the details manually
               </Link>
-            </Button>
+            </div>
           ) : (
             <Button variant="outline" onClick={resetFilters} className="mt-6">
               Clear filters
