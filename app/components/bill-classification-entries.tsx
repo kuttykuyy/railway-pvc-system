@@ -91,6 +91,10 @@ const STEEL_TYPES = [
   { value: 'OTHER_SECTIONS', label: 'Other' },
 ];
 
+// Mirrors GST_RATE in lib/billing. Defined locally on purpose: lib/billing imports
+// prisma, and importing it here would pull the server DB chain into the client bundle.
+const AGREEMENT_GST_RATE = 0.18;
+
 function formatMoney(value: number) {
   return value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -116,6 +120,8 @@ export function BillClassificationEntries({
   const [unlockedEntries, setUnlockedEntries] = useState<Set<number>>(new Set());
   // Per-entry state for the on-demand AI justification button.
   const [justifyingIndex, setJustifyingIndex] = useState<number | null>(null);
+  // Whether the entered agreement rates already include GST (varies by agreement).
+  const [ratesIncludeGst, setRatesIncludeGst] = useState(false);
   const requiredMainCode = useMemo(
     () => workDescription ? inferMainClassification(workDescription).code : '',
     [workDescription],
@@ -141,9 +147,30 @@ export function BillClassificationEntries({
     return [{ itemNumber: '', quantity: '', agreementRate: '' }];
   };
 
-  const rowsTotal = (rows: ItemRow[]) => Math.round(rows.reduce((sum, row) => (
-    sum + (Number(row.quantity) || 0) * (Number(row.agreementRate) || 0)
-  ), 0) * 100) / 100;
+  // Agreement rates are quoted either with or without GST depending on the agreement.
+  // PVC must be computed on the work value EXCLUDING GST, so when the rates include
+  // it, strip GST back out of the row total.
+  const rowsTotal = (rows: ItemRow[], includeGst: boolean = ratesIncludeGst) => {
+    const gross = rows.reduce((sum, row) => (
+      sum + (Number(row.quantity) || 0) * (Number(row.agreementRate) || 0)
+    ), 0);
+    const net = includeGst ? gross / (1 + AGREEMENT_GST_RATE) : gross;
+    return Math.round(net * 100) / 100;
+  };
+
+  // Switching the GST basis re-derives every amount from its rows, so the toggle is
+  // lossless — the raw entered rates never change and it can be flipped back. Entries
+  // whose amount was typed directly (no quantity x rate) are left untouched.
+  const applyGstBasis = (nextIncludeGst: boolean) => {
+    setRatesIncludeGst(nextIncludeGst);
+    const nextEntries = entries.map(entry => {
+      const rows = getRows(entry);
+      const derivable = rows.some(r => (Number(r.quantity) || 0) > 0 && (Number(r.agreementRate) || 0) > 0);
+      if (!derivable) return entry;
+      return { ...entry, amount: rowsTotal(rows, nextIncludeGst) };
+    });
+    commit(nextEntries);
+  };
 
   const updateEntry = (entryIndex: number, patch: Partial<ClassificationEntry>) => {
     const nextEntries = [...entries];
@@ -301,6 +328,32 @@ export function BillClassificationEntries({
             <div className="font-semibold text-slate-800">{requiredGroup.code} - {requiredGroup.name}</div>
           </div>
         )}
+      </div>
+
+      {/* Some agreements quote rates with GST, some without. PVC needs the GST-free value. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+        <span className="text-xs font-medium text-slate-600">Agreement rate:</span>
+        <div className="flex overflow-hidden rounded-md border border-slate-300">
+          <button
+            type="button"
+            onClick={() => applyGstBasis(false)}
+            className={`px-3 py-1 text-xs font-medium transition-colors ${!ratesIncludeGst ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
+          >
+            Excluding GST
+          </button>
+          <button
+            type="button"
+            onClick={() => applyGstBasis(true)}
+            className={`px-3 py-1 text-xs font-medium transition-colors ${ratesIncludeGst ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
+          >
+            Including GST
+          </button>
+        </div>
+        <span className="text-[11px] text-slate-500">
+          {ratesIncludeGst
+            ? `Rates include ${(AGREEMENT_GST_RATE * 100).toFixed(0)}% GST — amounts below are the GST-free value used for PVC.`
+            : 'Rates are GST-free — amounts below are used for PVC as entered.'}
+        </span>
       </div>
 
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-slate-200 bg-slate-200 text-sm md:grid-cols-3">
@@ -646,7 +699,8 @@ export function BillClassificationEntries({
                   </div>
 
                   {rows.map((row, rowIndex) => {
-                    const calculated = Math.round((Number(row.quantity) || 0) * (Number(row.agreementRate) || 0) * 100) / 100;
+                    // Show the same GST basis as the entry amount, so the row maths ties out.
+                    const calculated = rowsTotal([row]);
                     return (
                       <div key={rowIndex} className="grid gap-2 sm:grid-cols-[minmax(90px,0.7fr)_minmax(100px,1fr)_24px_minmax(120px,1fr)_minmax(110px,0.8fr)_32px] sm:items-center">
                         <Input
