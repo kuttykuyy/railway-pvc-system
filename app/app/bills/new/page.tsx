@@ -45,7 +45,7 @@ import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { ContextualHelp } from '@/components/contextual-help';
 import { validateDate, validateDateForApi } from '@/lib/date-validation';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
-import { computeRebateFactor, scaleComponentsWithRebate } from '@/lib/rebate';
+import { computeRebateFactor, scaleComponentsWithRebate, scaleComponentAmount } from '@/lib/rebate';
 import { inferMainClassification } from '@/lib/work-classification';
 
 
@@ -184,6 +184,7 @@ function NewBillPageContent() {
     fuelPriceType: 'four_city_avg', // 'four_city_avg' or 'zone_city'
     isFinalPvc: false, // Is this final PVC
     dateOfCompletion: '', // Date of completion (only for final PVC)
+    rebatePercentage: '', // Manual rebate % (work awarded below estimate); scales components to the net payable
   });
   
   // Classification entries state - array of { subClassificationId, amount, description }
@@ -1069,10 +1070,14 @@ function NewBillPageContent() {
     }
     setIsPreviewLoading(true);
     try {
-      const grossAmount = classificationEntries.reduce((sum, e) => {
-        const amt = e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount;
-        return sum + amt;
-      }, 0);
+      // Apply the manual rebate so the preview PVC matches the bill that gets created.
+      const rebateFactor = computeRebateFactor({ rebatePercentage: parseFloat(formData.rebatePercentage) || null });
+      const scaledAmounts = scaleComponentsWithRebate(
+        classificationEntries.map(e => (e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount)),
+        rebateFactor,
+      );
+      const previewEntries = classificationEntries.map((e, i) => ({ ...e, amount: scaledAmounts[i] }));
+      const grossAmount = scaledAmounts.reduce((sum, a) => sum + (Number.isFinite(a) ? a : 0), 0);
       const nonScheduleTotal = nonScheduleItems
         .filter(i => i.description && i.amount)
         .reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
@@ -1087,7 +1092,7 @@ function NewBillPageContent() {
           zone: formData.zone,
           fuelPriceType: formData.fuelPriceType,
           calculationMethod: (formData as any).calculationMethod || 'auto',
-          classificationEntries,
+          classificationEntries: previewEntries,
           isAiUploaded,
         }),
       });
@@ -1186,11 +1191,22 @@ function NewBillPageContent() {
           amount: parseFloat(item.amount) || 0
         }));
       
-      // Use total classification amount as gross bill amount
-      const grossAmount = totalClassificationAmount;
+      // Manual rebate: when work is awarded below estimate, scale every component
+      // (classification entries + dedicated cement/steel) down by the same factor so
+      // the stored amounts and per-component PVC use the post-rebate payable value —
+      // matching the AI-extraction path.
+      const rebateFactor = computeRebateFactor({ rebatePercentage: parseFloat(formData.rebatePercentage) || null });
+      const scaledEntryAmounts = scaleComponentsWithRebate(
+        cleanedEntries.map(e => (e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount)),
+        rebateFactor,
+      );
+      const scaleDedicated = (v: any) => scaleComponentAmount(parseFloat(String(v)) || 0, rebateFactor);
+
+      // Use post-rebate total classification amount as gross bill amount
+      const grossAmount = scaledEntryAmounts.reduce((sum, a) => sum + (Number.isFinite(a) ? a : 0), 0);
       const nonScheduleTotal = formattedNonScheduleItems.reduce((sum, item) => sum + item.amount, 0);
       const netBillAmount = grossAmount - nonScheduleTotal;
-      
+
       // Submit bill with classification entries
       const response = await fetch('/api/bills', {
         method: 'POST',
@@ -1201,13 +1217,14 @@ function NewBillPageContent() {
           ...formData,
           grossBillAmount: grossAmount,
           billAmount: netBillAmount, // Calculated net amount
-          classificationEntries: cleanedEntries.map(entry => ({
+          cementAmount: scaleDedicated(formData.cementAmount),
+          steelTmtBarsAmount: scaleDedicated(formData.steelTmtBarsAmount),
+          steelAngleChannelAmount: scaleDedicated(formData.steelAngleChannelAmount),
+          steelPlatesAmount: scaleDedicated(formData.steelPlatesAmount),
+          steelOtherSectionsAmount: scaleDedicated(formData.steelOtherSectionsAmount),
+          classificationEntries: cleanedEntries.map((entry, index) => ({
             subClassificationId: entry.subClassificationId,
-            amount: entry.amount === '' || entry.amount === null || entry.amount === undefined 
-              ? 0 
-              : typeof entry.amount === 'string' 
-                ? parseFloat(entry.amount) || 0 
-                : entry.amount,
+            amount: scaledEntryAmounts[index] ?? 0,
             description: entry.description || '',
             classificationJustification: entry.classificationJustification || null,
             steelTypes: entry.steelTypes || [],
@@ -1852,6 +1869,65 @@ function NewBillPageContent() {
                         lockEntries={isAiUploaded}
                         aiJustificationFee={99}
                       />
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* SECTION 2b: Dedicated Components & Rebate (manual) */}
+                  <AccordionItem value="dedicated" className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
+                    <AccordionTrigger className="px-5 py-4 hover:no-underline bg-slate-50/50 hover:bg-slate-50/80 transition-all">
+                      <div className="flex items-center gap-3 w-full">
+                        <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
+                          <Package className="h-5 w-5" />
+                        </div>
+                        <div className="text-left">
+                          <div className="font-semibold text-slate-900">Dedicated Components &amp; Rebate</div>
+                          <div className="text-xs text-slate-500">Optional — cement/steel supplied separately, and rebate if awarded below estimate</div>
+                        </div>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4 space-y-4">
+                      <div className="rounded-lg border border-slate-200 p-3 space-y-3">
+                        <p className="text-xs font-semibold text-slate-600">Dedicated Components <span className="font-normal text-slate-400">(optional, 85% PVC)</span></p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs text-slate-600">Cement Work Amount (₹)</Label>
+                            <div className="flex gap-2 mt-1">
+                              <Input type="number" step="0.01" value={formData.cementAmount}
+                                onChange={e => setFormData(p => ({ ...p, cementAmount: e.target.value }))} placeholder="0.00" />
+                              <BillAmountCalculator onInsertTotal={t => setFormData(p => ({ ...p, cementAmount: t.toString() }))} />
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-slate-600">Steel — TMT Bars (₹)</Label>
+                            <div className="flex gap-2 mt-1">
+                              <Input type="number" step="0.01" value={formData.steelTmtBarsAmount}
+                                onChange={e => setFormData(p => ({ ...p, steelTmtBarsAmount: e.target.value }))} placeholder="0.00" />
+                              <BillAmountCalculator onInsertTotal={t => setFormData(p => ({ ...p, steelTmtBarsAmount: t.toString() }))} />
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-slate-600">Steel — Angle/Channel (₹)</Label>
+                            <Input type="number" step="0.01" className="mt-1" value={formData.steelAngleChannelAmount}
+                              onChange={e => setFormData(p => ({ ...p, steelAngleChannelAmount: e.target.value }))} placeholder="0.00" />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-slate-600">Steel — Plates (₹)</Label>
+                            <Input type="number" step="0.01" className="mt-1" value={formData.steelPlatesAmount}
+                              onChange={e => setFormData(p => ({ ...p, steelPlatesAmount: e.target.value }))} placeholder="0.00" />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-slate-600">Steel — Other Sections (₹)</Label>
+                            <Input type="number" step="0.01" className="mt-1" value={formData.steelOtherSectionsAmount}
+                              onChange={e => setFormData(p => ({ ...p, steelOtherSectionsAmount: e.target.value }))} placeholder="0.00" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 p-3">
+                        <Label className="text-xs text-slate-600">Rebate (%) <span className="font-normal text-slate-400">— if work was awarded below the estimate</span></Label>
+                        <Input type="number" step="0.01" min="0" max="99" className="mt-1 sm:max-w-[220px]" value={formData.rebatePercentage}
+                          onChange={e => setFormData(p => ({ ...p, rebatePercentage: e.target.value }))} placeholder="e.g. 30.01" />
+                        <p className="text-[11px] text-slate-500 mt-1">All component amounts are scaled down by this % so PVC is calculated on the net payable value.</p>
+                      </div>
                     </AccordionContent>
                   </AccordionItem>
 
