@@ -158,7 +158,8 @@ export async function PUT(
       hasRailwaySuppliedMaterials,
       railwaySuppliedMaterialsNote,
       coveringLetterDesignation,
-      schedules
+      schedules,
+      rebatePercentage
     } = body;
     
     agreementNoForError = agreementNo || 'unknown';
@@ -215,6 +216,10 @@ export async function PUT(
         coveringLetterDesignation: coveringLetterDesignation !== undefined ? coveringLetterDesignation : undefined,
         // Accepts both the legacy string[] and the newer per-schedule rate objects.
         schedules: schedules !== undefined ? normalizeSchedules(schedules) : undefined,
+        // Rebate is agreed once for the whole agreement.
+        rebatePercentage: rebatePercentage !== undefined
+          ? (rebatePercentage === null || rebatePercentage === '' ? null : Number(rebatePercentage))
+          : undefined,
         ...(dateOfOpening && {
           dateOfOpening: new Date(dateOfOpening),
           baseMonth: new Date(new Date(dateOfOpening).setMonth(new Date(dateOfOpening).getMonth() - 1))

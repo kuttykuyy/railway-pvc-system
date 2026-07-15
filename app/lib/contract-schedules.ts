@@ -1,9 +1,10 @@
 /**
  * Contract schedules and their rate settings.
  *
- * Escalation %, bid rate % and rebate % are properties of the AGREEMENT (each
- * schedule is awarded at its own escalation/bid/rebate), not of an individual
- * bill — so they are captured once on the contract and reused by every bill.
+ * Escalation % and bid rate % are agreed PER SCHEDULE, so they live here on each
+ * schedule. The rebate % is agreed ONCE for the whole agreement and lives on
+ * Contract.rebatePercentage — not here. None of them belong on an individual bill:
+ * they are captured on the contract and reused by every bill.
  *
  * Storage note: Contract.schedules is a Json column that historically held a
  * plain string[] of schedule names. It now holds ContractSchedule objects. These
@@ -23,14 +24,12 @@ export type ContractSchedule = {
   /** Percentages kept as strings so an empty box stays empty (not 0). */
   escalation: string;
   bidRate: string;
-  rebate: string;
 };
 
 export const emptySchedule = (name = ''): ContractSchedule => ({
   name,
   escalation: '',
   bidRate: '',
-  rebate: '',
 });
 
 const asPercentString = (v: unknown): string =>
@@ -48,7 +47,6 @@ export function normalizeSchedules(raw: unknown): ContractSchedule[] {
           name: String(o.name ?? ''),
           escalation: asPercentString(o.escalation),
           bidRate: asPercentString(o.bidRate),
-          rebate: asPercentString(o.rebate),
         };
       }
       return emptySchedule();
@@ -85,5 +83,5 @@ export function findScheduleRates(raw: unknown, label: string): ContractSchedule
 
 /** True when any schedule carries a rate setting worth reusing on a bill. */
 export function hasScheduleRates(raw: unknown): boolean {
-  return normalizeSchedules(raw).some((s) => s.escalation || s.bidRate || s.rebate);
+  return normalizeSchedules(raw).some((s) => s.escalation || s.bidRate);
 }

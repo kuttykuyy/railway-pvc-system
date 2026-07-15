@@ -145,9 +145,10 @@ export async function POST(request: NextRequest) {
       hasRailwaySuppliedMaterials,
       railwaySuppliedMaterialsNote,
       coveringLetterDesignation,
-      schedules
+      schedules,
+      rebatePercentage
     } = body;
-    
+
     // Store for error handling
     agreementNoForError = agreementNo;
 
@@ -252,9 +253,11 @@ export async function POST(request: NextRequest) {
         hasRailwaySuppliedMaterials: hasRailwaySuppliedMaterials || false,
         railwaySuppliedMaterialsNote: railwaySuppliedMaterialsNote || null,
         coveringLetterDesignation: coveringLetterDesignation || null,
-        // Schedules now carry per-schedule escalation/bid/rebate. normalizeSchedules
-        // accepts both the legacy string[] and the object form.
+        // Schedules carry per-schedule escalation/bid rate. normalizeSchedules accepts
+        // both the legacy string[] and the object form.
         schedules: normalizeSchedules(schedules),
+        // Rebate is agreed once for the whole agreement.
+        rebatePercentage: rebatePercentage != null && rebatePercentage !== '' ? Number(rebatePercentage) : null,
         userId: user.id
       },
       include: {
