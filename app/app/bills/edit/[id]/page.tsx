@@ -14,6 +14,7 @@ import { toast } from 'react-hot-toast';
 import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
+import { scheduleNames } from '@/lib/contract-schedules';
 
 interface ClassificationEntry {
   subClassificationId: string;
@@ -259,7 +260,7 @@ function EditBillPageContent() {
             onChange={setClassificationEntries}
             classificationGroups={classificationGroups}
             workDescription={selectedContract?.workDescription}
-            contractSchedules={selectedContract?.schedules || []}
+            contractSchedules={scheduleNames(selectedContract?.schedules)}
             contractId={form.contractId || undefined}
             measurementDate={form.dateOfMeasurement || undefined}
             aiJustificationFee={99}

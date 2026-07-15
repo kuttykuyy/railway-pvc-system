@@ -5,6 +5,7 @@ import { validateApiAccess } from '@/lib/payment-validation';
 import { getBaseMonth } from '@/lib/pvc-calculations';
 import { getUserAccessibleContracts } from '@/lib/permissions';
 import { checkPvcEligibility, generateEligibilityNote } from '@/lib/gcc-compliance';
+import { normalizeSchedules } from '@/lib/contract-schedules';
 import { normalizeAgreementNo } from '@/lib/railway-division-helper';
 
 // Helper function to ensure base month values are available
@@ -251,7 +252,9 @@ export async function POST(request: NextRequest) {
         hasRailwaySuppliedMaterials: hasRailwaySuppliedMaterials || false,
         railwaySuppliedMaterialsNote: railwaySuppliedMaterialsNote || null,
         coveringLetterDesignation: coveringLetterDesignation || null,
-        schedules: Array.isArray(schedules) ? schedules.filter((s: string) => s && s.trim()) : [],
+        // Schedules now carry per-schedule escalation/bid/rebate. normalizeSchedules
+        // accepts both the legacy string[] and the object form.
+        schedules: normalizeSchedules(schedules),
         userId: user.id
       },
       include: {

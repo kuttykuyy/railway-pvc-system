@@ -43,6 +43,7 @@ import { BillPdfCementAnalyzer, type CementAnalysisData, type ExtractedBillItem 
 import { useLanguage } from '@/components/i18n-provider';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr-cement-calculator';
+import { scheduleNames, findScheduleRates } from '@/lib/contract-schedules';
 import { ContextualHelp } from '@/components/contextual-help';
 import { validateDate, validateDateForApi } from '@/lib/date-validation';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
@@ -577,7 +578,7 @@ function NewBillPageContent() {
 
         if (cementSub) {
           const scheduleItem = matchExtractedSchedule(
-            selectedContract?.schedules || [],
+            scheduleNames(selectedContract?.schedules),
             [item.schedule, item.scheduleGroup, item.chapter],
           );
 
@@ -646,7 +647,7 @@ function NewBillPageContent() {
               : item.description || ''),
           steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
           scheduleItem: matchExtractedSchedule(
-            selectedContract?.schedules || [],
+            scheduleNames(selectedContract?.schedules),
             [item.schedule, item.scheduleGroup, item.chapter],
           ),
           itemNumber: item.itemNo || '',
@@ -1914,7 +1915,7 @@ function NewBillPageContent() {
                         onChange={handleClassificationEntriesChange}
                         classificationGroups={classificationGroups}
                         workDescription={selectedContract?.workDescription}
-                        contractSchedules={selectedContract?.schedules || []}
+                        contractSchedules={scheduleNames(selectedContract?.schedules)}
                         contractId={formData.contractId || undefined}
                         measurementDate={formData.dateOfMeasurement || undefined}
                         lockEntries={isAiUploaded}
@@ -1954,6 +1955,7 @@ function NewBillPageContent() {
                           <DsrCementCalculator
                             schedules={cementSchedules}
                             contractId={formData.contractId || undefined}
+                            contractSchedules={selectedContract?.schedules}
                             onApply={(amount) => {
                               setFormData(p => ({ ...p, cementAmount: amount.toFixed(2) }));
                               toast.success(`Cement cost applied: ₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);

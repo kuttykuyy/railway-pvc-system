@@ -16,6 +16,7 @@ import { toast } from 'react-hot-toast';
 import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-dialog';
 import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
+import { scheduleNames } from '@/lib/contract-schedules';
 import { BillPdfCementAnalyzer, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
@@ -419,7 +420,7 @@ export default function BulkBillCreationPage() {
           description: groupName || item.description || '',
           steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
           scheduleItem: matchExtractedSchedule(
-            selectedContract?.schedules || [],
+            scheduleNames(selectedContract?.schedules),
             [item.schedule, item.scheduleGroup, item.chapter],
           ),
           itemNumber,
@@ -994,7 +995,7 @@ export default function BulkBillCreationPage() {
               onChange={(entries) => updateClassificationEntries(editingBillId, entries)}
               classificationGroups={classificationGroups}
               workDescription={selectedContract?.workDescription}
-              contractSchedules={selectedContract?.schedules || []}
+              contractSchedules={scheduleNames(selectedContract?.schedules)}
               contractId={selectedContract?.id}
               measurementDate={getEditingBill()?.dateOfMeasurement || undefined}
               lockEntries={!!getEditingBill()?.isAiUploaded}

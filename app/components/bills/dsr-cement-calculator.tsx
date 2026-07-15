@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FileText, RotateCcw } from 'lucide-react';
+import { findScheduleRates } from '@/lib/contract-schedules';
 
 export interface CementSchedule {
   name: string;
@@ -33,10 +34,13 @@ const money = (n: number) =>
 export function DsrCementCalculator({
   schedules,
   contractId,
+  contractSchedules,
   onApply,
 }: {
   schedules: CementSchedule[];
   contractId?: string;
+  /** Raw Contract.schedules — supplies the agreed escalation/bid/rebate per schedule. */
+  contractSchedules?: unknown;
   onApply: (amount: number) => void;
 }) {
   const [baseRate, setBaseRate] = useState(DEFAULT_DSR_BASE_RATE);
@@ -58,16 +62,25 @@ export function DsrCementCalculator({
     }
   }, [storageKey]);
 
-  // Ensure every schedule has an entry.
+  // Ensure every schedule has an entry, prefilled from the rates agreed on the CONTRACT.
+  // Escalation/bid/rebate belong to the agreement, so the user enters them once there;
+  // anything typed here is only a per-bill override (and is remembered locally).
   useEffect(() => {
     setSettings((prev) => {
       const next = { ...prev };
       for (const s of schedules) {
-        if (!next[s.name]) next[s.name] = { escalation: '', bidRate: '', rebate: '' };
+        const existing = next[s.name];
+        const isEmpty = !existing || (!existing.escalation && !existing.bidRate && !existing.rebate);
+        if (isEmpty) {
+          const agreed = findScheduleRates(contractSchedules, s.name);
+          next[s.name] = agreed
+            ? { escalation: agreed.escalation, bidRate: agreed.bidRate, rebate: agreed.rebate }
+            : { escalation: '', bidRate: '', rebate: '' };
+        }
       }
       return next;
     });
-  }, [schedules]);
+  }, [schedules, contractSchedules]);
 
   const persist = (nextBase: number, nextSettings: Record<string, ScheduleSetting>) => {
     try {
@@ -119,6 +132,7 @@ export function DsrCementCalculator({
       <p className="text-xs text-slate-500">
         When there is no direct cement-supply item, the cement rate is derived from DSR 2021 item 5.35
         (base ₹{DEFAULT_DSR_BASE_RATE}/quintal) adjusted for contract escalation, bid rate, and rebate.
+        These come from the contract&apos;s schedules — change them here only to override this bill.
       </p>
 
       <div className="max-w-[220px]">
