@@ -45,6 +45,31 @@ export function normalizeDsrCode(code: string): string {
   return match ? match[0].toUpperCase() : normalized.toUpperCase();
 }
 
+/**
+ * Finds the cement coefficient for an item's DSR code.
+ *
+ * Shared by BOTH the PDF-upload analysis and the manual "derive cement from items"
+ * path so they can never disagree about which items consume cement:
+ *  1. exact match on the normalized code
+ *  2. fall back to the BASE code — a bill item like "5.35.2" is covered by the
+ *     coefficient stored for "5.35"
+ *
+ * `byNormalizedCode` must be keyed by normalizeDsrCode(row.dsrCode).
+ */
+export function matchCementCoefficient<T>(
+  byNormalizedCode: Map<string, T>,
+  dsrCode: string,
+): T | null {
+  const normalized = normalizeDsrCode(dsrCode);
+  if (!normalized) return null;
+
+  const exact = byNormalizedCode.get(normalized);
+  if (exact) return exact;
+
+  const base = normalized.match(/^\d+(?:\.\d+)+/);
+  return (base && byNormalizedCode.get(base[0])) || null;
+}
+
 export function inferCementCoefficientFromMix(
   description: string,
   unit: string,
