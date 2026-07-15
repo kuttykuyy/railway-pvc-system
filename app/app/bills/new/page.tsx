@@ -43,6 +43,7 @@ import { BillPdfCementAnalyzer, type CementAnalysisData, type ExtractedBillItem 
 import { useLanguage } from '@/components/i18n-provider';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { scheduleNames } from '@/lib/contract-schedules';
+import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr-cement-calculator';
 import { ContextualHelp } from '@/components/contextual-help';
 import { validateDate, validateDateForApi } from '@/lib/date-validation';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
@@ -219,6 +220,9 @@ function NewBillPageContent() {
   const [subscribing, setSubscribing] = useState<boolean>(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState<boolean>(false);
   const [isAiUploaded, setIsAiUploaded] = useState(false);
+  // DSR cement derivation: schedules (with cement MT) worked out from the entered items.
+  const [cementSchedules, setCementSchedules] = useState<CementSchedule[]>([]);
+  const [derivingCement, setDerivingCement] = useState(false);
   // True when an AI extraction has cement items whose derived cost has NOT yet been
   // applied. PVC check / bill creation is blocked until the user applies it.
   const [cementCostPending, setCementCostPending] = useState(false);
@@ -1062,6 +1066,54 @@ function NewBillPageContent() {
       workClassification: subClassId
     }));
   };
+  // Work out the cement-affected schedules (and their cement MT) from the item numbers
+  // and quantities already entered, so the DSR calculator can derive the cement cost
+  // without needing a PDF upload or a hand-typed quantity.
+  const deriveCementFromItems = async () => {
+    const items: Array<{ dsrCode: string; description: string; unit: string; quantity: number; schedule: string }> = [];
+    for (const entry of classificationEntries) {
+      const schedule = entry.scheduleItem || 'Default';
+      const rows = entry.itemRows && entry.itemRows.length > 0
+        ? entry.itemRows
+        : [{ itemNumber: entry.itemNumber, quantity: entry.quantity }];
+      for (const row of rows) {
+        const qty = Number(row.quantity) || 0;
+        const code = String(row.itemNumber || '').trim();
+        if (code && qty > 0) {
+          items.push({ dsrCode: code, description: entry.description || '', unit: '', quantity: qty, schedule });
+        }
+      }
+    }
+    if (items.length === 0) {
+      toast.error('Add item numbers and quantities to your classification items first.');
+      return;
+    }
+    setDerivingCement(true);
+    try {
+      const res = await fetch('/api/bills/cement-from-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'Could not derive cement.');
+        return;
+      }
+      if (!data.schedules?.length) {
+        setCementSchedules([]);
+        toast('No cement-affected items found (none matched a DSR cement coefficient).', { icon: 'ℹ️' });
+        return;
+      }
+      setCementSchedules(data.schedules);
+      toast.success(`Found ${data.matchedCount} cement item(s) across ${data.schedules.length} schedule(s).`);
+    } catch {
+      toast.error('The request failed. Please try again.');
+    } finally {
+      setDerivingCement(false);
+    }
+  };
+
   const handlePreview = async () => {
     if (!formData.contractId || !formData.zone || !formData.dateOfMeasurement) {
       toast.error('Please fill Contract, Zone, and Date of Measurement before previewing');
@@ -1856,6 +1908,58 @@ function NewBillPageContent() {
                         lockEntries={isAiUploaded}
                         aiJustificationFee={99}
                       />
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* SECTION 2b: Cement (derived from the entered items via DSR) */}
+                  <AccordionItem value="cement" className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
+                    <AccordionTrigger className="px-5 py-4 hover:no-underline bg-slate-50/50 hover:bg-slate-50/80 transition-all">
+                      <div className="flex items-center gap-3 w-full">
+                        <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
+                          <Package className="h-5 w-5" />
+                        </div>
+                        <div className="text-left">
+                          <div className="font-semibold text-slate-900">Cement</div>
+                          <div className="text-xs text-slate-500">Optional — derive the cement cost from your items (no direct cement supply item)</div>
+                        </div>
+                        {Number(formData.cementAmount) > 0 && (
+                          <Badge variant="secondary" className="ml-auto bg-emerald-100 text-emerald-700 border-emerald-200">
+                            ₹{Number(formData.cementAmount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                          </Badge>
+                        )}
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4 space-y-4">
+                      <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-700">No direct cement item? Derive it from your items.</p>
+                            <p className="text-[11px] text-slate-500">Uses the item numbers &amp; quantities entered above + DSR 2021 cement coefficients.</p>
+                          </div>
+                          <Button type="button" variant="outline" size="sm" disabled={derivingCement}
+                            onClick={deriveCementFromItems}
+                            className="border-purple-300 bg-white text-purple-700 hover:bg-purple-100">
+                            {derivingCement ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deriving…</>) : (<><ClipboardList className="mr-2 h-4 w-4" /> Derive cement from items</>)}
+                          </Button>
+                        </div>
+                        {cementSchedules.length > 0 && (
+                          <DsrCementCalculator
+                            schedules={cementSchedules}
+                            contractId={formData.contractId || undefined}
+                            contractSchedules={selectedContract?.schedules}
+                            contractRebate={selectedContract?.rebatePercentage}
+                            onApply={(amount) => {
+                              setFormData(p => ({ ...p, cementAmount: amount.toFixed(2) }));
+                              toast.success(`Cement cost applied: ₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
+                            }}
+                          />
+                        )}
+                      </div>
+                      {Number(formData.cementAmount) > 0 && (
+                        <p className="text-xs text-emerald-700">
+                          Applied cement amount: <strong>₹{Number(formData.cementAmount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong> — included in this bill&apos;s PVC.
+                        </p>
+                      )}
                     </AccordionContent>
                   </AccordionItem>
 
