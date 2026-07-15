@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
     const byCode = new Map(coeffs.map((c) => [normalizeDsrCode(c.dsrCode), c]));
 
     const bySchedule = new Map<string, { affectedItemCount: number; cementQtyMT: number }>();
+    const unmatchedCodes = new Set<string>();
     let matchedCount = 0;
     let unmatchedCount = 0;
 
@@ -45,6 +46,10 @@ export async function POST(request: NextRequest) {
         || inferCementCoefficientFromMix(it.description || '', it.unit || '');
       if (!coeff || !coeff.cementQuantityPerUnit) {
         unmatchedCount++;
+        // Report what we actually looked for, so the user can add it rather than
+        // being told only that "nothing was found".
+        const shown = String(it.dsrCode || '').trim();
+        if (shown) unmatchedCodes.add(shown);
         continue;
       }
 
@@ -62,7 +67,16 @@ export async function POST(request: NextRequest) {
       .sort((a, b) => a.name.localeCompare(b.name));
     const totalCementQtyMT = Math.round(schedules.reduce((s, x) => s + x.cementQtyMT, 0) * 1000) / 1000;
 
-    return NextResponse.json({ schedules, totalCementQtyMT, matchedCount, unmatchedCount });
+    return NextResponse.json({
+      schedules,
+      totalCementQtyMT,
+      matchedCount,
+      unmatchedCount,
+      unmatchedCodes: Array.from(unmatchedCodes).slice(0, 25),
+      // The manual form has no unit column, so the mix-ratio fallback (MIX-1:2:4 etc.)
+      // that the PDF path relies on cannot fire here. Surfaced so the UI can say so.
+      mixInferenceUnavailable: items.every((i) => !String(i.unit || '').trim()),
+    });
   } catch (error) {
     console.error('cement-from-items error:', error);
     return NextResponse.json({ error: 'Could not derive cement from items.' }, { status: 500 });
