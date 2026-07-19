@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { validateAdminAccess } from '@/lib/role-auth';
 import { advancedCache } from '@/lib/advanced-cache';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
@@ -60,6 +61,9 @@ function parseMonthFromFormat(monthStr: string): Date | null {
 // POST /api/indices/import - Import indices from file
 export async function POST(request: NextRequest) {
   try {
+    const { authorized, message } = await validateAdminAccess(request);
+    if (!authorized) return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
     

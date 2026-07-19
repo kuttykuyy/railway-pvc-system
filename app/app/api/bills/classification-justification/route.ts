@@ -23,18 +23,19 @@ const AI_JUSTIFICATION_FEE = 99;
  */
 export async function POST(request: NextRequest) {
   try {
-    // Rate-limit to blunt credit-burning by repeated calls.
-    const rl = rateLimiter.check(getIdentifier(request), RATE_LIMITS.EXPENSIVE.limit, RATE_LIMITS.EXPENSIVE.windowMs);
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Rate-limit to blunt credit-burning by repeated calls. Key on the authenticated
+    // user, not the spoofable X-Forwarded-For IP.
+    const rl = rateLimiter.check(getIdentifier(request, session.user.email), RATE_LIMITS.EXPENSIVE.limit, RATE_LIMITS.EXPENSIVE.windowMs);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: `Too many requests. Please wait ${Math.ceil(rl.resetIn / 1000)}s and try again.` },
         { status: 429, headers: { 'Retry-After': Math.ceil(rl.resetIn / 1000).toString() } },
       );
-    }
-
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
     const apiKey = process.env.ABACUSAI_API_KEY;

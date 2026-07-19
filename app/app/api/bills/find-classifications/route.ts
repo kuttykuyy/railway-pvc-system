@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
     const { default: rateLimiter, RATE_LIMITS, getIdentifier } = await import('@/lib/rate-limiter');
-    const rl = rateLimiter.check(getIdentifier(request), RATE_LIMITS.EXPENSIVE.limit, RATE_LIMITS.EXPENSIVE.windowMs);
+    const rl = rateLimiter.check(getIdentifier(request, session.user.email), RATE_LIMITS.EXPENSIVE.limit, RATE_LIMITS.EXPENSIVE.windowMs);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: `Too many requests. Please wait ${Math.ceil(rl.resetIn / 1000)}s and try again.` },

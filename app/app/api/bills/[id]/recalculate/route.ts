@@ -8,6 +8,9 @@ import { recalculateCumulativePvcForContract } from '@/lib/recalculateCumulative
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
 import { advancedCache } from '@/lib/advanced-cache';
 import { resolveBillClassificationPolicy } from '@/lib/bill-classification-policy';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { checkUserBillAccess } from '@/lib/permissions';
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +21,19 @@ export async function POST(
   const { id } = await params;
   try {
     const billId = id;
-    
+
+    // Ownership: recalculation mutates the bill + its PVC, so the caller must own it
+    // (or be an admin). Without this any logged-in user could recalc another's bill.
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    const requester = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
+    const access = requester ? await checkUserBillAccess(requester.id, billId) : null;
+    if (!access?.canEdit) {
+      return NextResponse.json({ error: 'You do not have access to this bill.' }, { status: 403 });
+    }
+
     // Get the bill with related data
     const bill = await prisma.bill.findUnique({
       where: { id: billId },

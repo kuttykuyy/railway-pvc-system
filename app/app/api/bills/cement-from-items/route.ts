@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
     const items: Array<{ dsrCode?: string; description?: string; unit?: string; quantity?: number | string; schedule?: string }> =
-      Array.isArray(body?.items) ? body.items : [];
+      (Array.isArray(body?.items) ? body.items : []).slice(0, 500); // cap payload to bound work per request
     if (items.length === 0) {
       return NextResponse.json({ schedules: [], totalCementQtyMT: 0, matchedCount: 0, unmatchedCount: 0 });
     }

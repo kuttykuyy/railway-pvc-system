@@ -1,6 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { validateAdminAccess } from '@/lib/role-auth';
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,9 @@ export async function PUT(
 ) {
   const { id } = await params;
   try {
+    const { authorized, message } = await validateAdminAccess(request);
+    if (!authorized) return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
+
     const body = await request.json();
     const { value, isProvisional } = body;
     if (value === undefined || isNaN(parseFloat(value))) {
@@ -60,6 +64,9 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
+    const { authorized, message } = await validateAdminAccess(request);
+    if (!authorized) return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
+
     await prisma.monthlyIndexValue.delete({
       where: { id }
     });

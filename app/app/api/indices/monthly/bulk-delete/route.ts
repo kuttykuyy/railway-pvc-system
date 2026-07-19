@@ -1,12 +1,16 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { validateAdminAccess } from '@/lib/role-auth';
 
 export const dynamic = "force-dynamic";
 
 // DELETE /api/indices/monthly/bulk-delete - Delete multiple monthly index values
 export async function DELETE(request: NextRequest) {
   try {
+    const { authorized, message } = await validateAdminAccess(request);
+    if (!authorized) return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
+
     const body = await request.json();
     const { ids } = body;
     

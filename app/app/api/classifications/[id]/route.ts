@@ -1,5 +1,6 @@
 ﻿import { prisma } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateAdminAccess } from '@/lib/role-auth';
 
 
 
@@ -39,6 +40,9 @@ export async function PUT(
 ) {
   const { id } = await params;
   try {
+    const { authorized, message } = await validateAdminAccess(request);
+    if (!authorized) return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
+
     const body = await request.json();
     const {
       code,
@@ -131,6 +135,9 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
+    const { authorized, message } = await validateAdminAccess(request);
+    if (!authorized) return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
+
     // Check if classification exists and is not default
     const classification = await prisma.classification.findUnique({
       where: { id: id }

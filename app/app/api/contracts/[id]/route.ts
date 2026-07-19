@@ -216,9 +216,13 @@ export async function PUT(
         coveringLetterDesignation: coveringLetterDesignation !== undefined ? coveringLetterDesignation : undefined,
         // Accepts both the legacy string[] and the newer per-schedule rate objects.
         schedules: schedules !== undefined ? normalizeSchedules(schedules) : undefined,
-        // Rebate is agreed once for the whole agreement.
+        // Rebate is agreed once for the whole agreement; clamp to 0–100 (or null).
         rebatePercentage: rebatePercentage !== undefined
-          ? (rebatePercentage === null || rebatePercentage === '' ? null : Number(rebatePercentage))
+          ? (() => {
+              if (rebatePercentage === null || rebatePercentage === '') return null;
+              const n = Number(rebatePercentage);
+              return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+            })()
           : undefined,
         ...(dateOfOpening && {
           dateOfOpening: new Date(dateOfOpening),
