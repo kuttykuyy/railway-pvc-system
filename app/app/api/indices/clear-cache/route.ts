@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { advancedCache } from '@/lib/advanced-cache';
+import { validateAdminAccess } from '@/lib/role-auth';
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,9 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: NextRequest) {
   try {
+    const { authorized, message } = await validateAdminAccess(request);
+    if (!authorized) return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
+
     // Revalidate all relevant paths
     revalidatePath('/api/bills');
     revalidatePath('/api/indices');
