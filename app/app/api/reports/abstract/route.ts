@@ -6,6 +6,9 @@ import { getQuarterFromDate, calculateClassificationEntryPvc } from '@/lib/pvc-c
 import { getQuarterlyAverages } from '@/lib/db-utils';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
 import { format } from 'date-fns';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { checkUserContractAccess } from '@/lib/permissions';
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +51,12 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    const requester = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
+    const access = requester ? await checkUserContractAccess(requester.id, contractId) : null;
+    if (!access?.canView) return NextResponse.json({ error: 'You do not have access to this contract.' }, { status: 403 });
 
     // Get contract details
     const contract = await prisma.contract.findUnique({
