@@ -4,6 +4,9 @@ import { prisma } from '@/lib/db';
 import { getQuarterlyAverages } from '@/lib/db-utils';
 import { getQuarterFromDate } from '@/lib/pvc-calculations';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { checkUserBillAccess, checkUserContractAccess } from '@/lib/permissions';
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0; // Disable caching completely
@@ -24,7 +27,18 @@ export async function GET(request: NextRequest) {
         error: 'Provide either billId or both contractId and measurementDate'
       }, { status: 400 });
     }
-    
+
+    // Ownership: this endpoint dumps another user's contract/bill figures by id.
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    const requester = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
+    const access = requester
+      ? (billId
+          ? await checkUserBillAccess(requester.id, billId)
+          : await checkUserContractAccess(requester.id, contractId!))
+      : null;
+    if (!access?.canView) return NextResponse.json({ error: 'You do not have access to this record.' }, { status: 403 });
+
     let bill: any = null;
     let contract: any;
     let quarter: string;
