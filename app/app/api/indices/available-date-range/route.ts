@@ -13,7 +13,12 @@ export async function GET(request: NextRequest) {
     const isFinal = searchParams.get('isFinal') === 'true';
     const debug = searchParams.get('debug') === 'true';
 
-    const cacheKey = `available-date-range:${isFinal}:${debug}`;
+    // The selectable range depends on the provisional setting, so it's part of the key.
+    const { getBillingSettings } = await import('@/lib/admin-settings');
+    const settings = await getBillingSettings();
+    const allowProvisional = !isFinal && settings.provisionalIndicesCheckEnabled;
+
+    const cacheKey = `available-date-range:${isFinal}:${debug}:${allowProvisional}`;
     const cachedResult = advancedCache.get(cacheKey);
     if (cachedResult) {
       return NextResponse.json(cachedResult);
@@ -73,24 +78,33 @@ export async function GET(request: NextRequest) {
       monthIndexMap.get(monthKey)!.add(mv.priceIndexId);
     }
 
-    // Filter months that have ALL indices (10 distinct priceIndexIds)
-    const availableMonths: string[] = [];
+    // When provisional indices are allowed, a bill can be created for a month that has
+    // only SOME indices (the rest are borrowed) — so the selectable date range should
+    // reach those partial months, not just fully-complete ones. Otherwise the picker
+    // stops at the last month that has all 10, blocking provisional bills.
+    const completeMonths: string[] = [];   // has ALL indices
+    const partialMonths: string[] = [];    // has at least one index
     const incompleteMonths: { month: string; count: number; missing: string[] }[] = [];
-    
+
     const sortedMonths = Array.from(monthIndexMap.keys()).sort();
-    
+
     for (const month of sortedMonths) {
       const indexIds = monthIndexMap.get(month)!;
       if (indexIds.size >= totalIndicesCount) {
-        availableMonths.push(month);
-      } else if (debug) {
-        // Find missing indices for debugging
-        const missingIndices = priceIndices
-          .filter(pi => !indexIds.has(pi.id))
-          .map(pi => pi.name);
-        incompleteMonths.push({ month, count: indexIds.size, missing: missingIndices });
+        completeMonths.push(month);
+        partialMonths.push(month);
+      } else if (indexIds.size >= 1) {
+        partialMonths.push(month);
+        if (debug) {
+          const missingIndices = priceIndices.filter(pi => !indexIds.has(pi.id)).map(pi => pi.name);
+          incompleteMonths.push({ month, count: indexIds.size, missing: missingIndices });
+        }
       }
     }
+
+    // Months a date can be selected for. lastCompleteMonth drives the "all up to date" note.
+    const availableMonths = allowProvisional ? partialMonths : completeMonths;
+    const lastCompleteMonth = completeMonths.length ? completeMonths[completeMonths.length - 1] : null;
 
     if (availableMonths.length === 0) {
       const response: any = {
@@ -118,9 +132,18 @@ export async function GET(request: NextRequest) {
     const lastDay = new Date(maxYear, maxMonthNum, 0).getDate();
     const maxDate = `${maxMonth}-${lastDay.toString().padStart(2, '0')}`;
 
+    // Last day of the last FULLY-complete month (for the "all indices up to date" note).
+    let lastCompleteDate: string | null = null;
+    if (lastCompleteMonth) {
+      const [cy, cm] = lastCompleteMonth.split('-').map(Number);
+      lastCompleteDate = `${lastCompleteMonth}-${new Date(cy, cm, 0).getDate().toString().padStart(2, '0')}`;
+    }
+
     const response: any = {
       minDate,
       maxDate,
+      lastCompleteDate,
+      allowProvisional,
       availableMonths,
       totalIndicesRequired: totalIndicesCount,
       availableMonthsCount: availableMonths.length,
