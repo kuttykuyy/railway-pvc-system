@@ -14,32 +14,13 @@ export async function isBillUsingProvisionalIndices(
   baseMonth: Date
 ): Promise<{ isProvisional: boolean; provisionalCount: number; totalCount: number }> {
   try {
-    // Parse the quarter to get the months
-    const months = getQuarterMonthsFromQuarter(quarter, baseMonth);
-    
-    if (months.length === 0) {
-      return { isProvisional: false, provisionalCount: 0, totalCount: 0 };
-    }
-    
-    // Get all index values for these months
-    const indexValues = await prisma.monthlyIndexValue.findMany({
-      where: {
-        month: {
-          in: months
-        }
-      },
-      select: {
-        isProvisional: true
-      }
-    });
-    
-    const provisionalCount = indexValues.filter(iv => iv.isProvisional).length;
-    const totalCount = indexValues.length;
-    
+    // Delegate to getBillIndicesStatus so both use the same rule: a bill is provisional
+    // when a value is flagged provisional OR a required month index is missing (borrowed).
+    const status = await getBillIndicesStatus(quarter, baseMonth);
     return {
-      isProvisional: provisionalCount > 0,
-      provisionalCount,
-      totalCount
+      isProvisional: status.isProvisional,
+      provisionalCount: status.provisionalIndices.length,
+      totalCount: status.provisionalIndices.length + status.finalIndices.length,
     };
   } catch (error) {
     console.error('Error checking provisional status:', error);
@@ -280,26 +261,55 @@ export async function getBillIndicesStatus(
       }
     });
     
-    const provisionalIndices = indexValues
+    const flaggedProvisional = indexValues
       .filter(iv => iv.isProvisional)
       .map(iv => iv.priceIndex.name);
-    
+
     const finalIndices = indexValues
       .filter(iv => !iv.isProvisional)
       .map(iv => iv.priceIndex.name);
-    
+
+    // A month that is MISSING an index (its value gets borrowed from a nearby month at
+    // calc time) is just as provisional as one flagged provisional — but the old check
+    // only saw flagged values, so bills with a not-yet-published month showed as "Final".
+    // Detect any core index that is present in some quarter month but absent in another.
+    const citySpecific = / - (Delhi|Mumbai|Chennai|Kolkata)$/;
+    const idToName = new Map<string, string>();
+    const expected = new Set<string>();
+    const presentByMonth = new Map<string, Set<string>>();
+    for (const iv of indexValues) {
+      if (citySpecific.test(iv.priceIndex.name)) continue; // core indices only
+      idToName.set(iv.priceIndexId, iv.priceIndex.name);
+      expected.add(iv.priceIndexId);
+      const mk = new Date(iv.month).toISOString().slice(0, 7);
+      if (!presentByMonth.has(mk)) presentByMonth.set(mk, new Set());
+      presentByMonth.get(mk)!.add(iv.priceIndexId);
+    }
+    const borrowedIndices = new Set<string>();
+    for (const m of months) {
+      const mk = new Date(m).toISOString().slice(0, 7);
+      const present = presentByMonth.get(mk) || new Set<string>();
+      for (const id of expected) {
+        if (!present.has(id)) borrowedIndices.add(idToName.get(id)!);
+      }
+    }
+
+    const provisionalIndices = Array.from(new Set([...flaggedProvisional, ...borrowedIndices]));
     const isProvisional = provisionalIndices.length > 0;
-    
+
     let details = '';
     if (isProvisional) {
-      details = `Using provisional indices for: ${provisionalIndices.join(', ')}`;
+      const parts: string[] = [];
+      if (flaggedProvisional.length) parts.push(`provisional: ${Array.from(new Set(flaggedProvisional)).join(', ')}`);
+      if (borrowedIndices.size) parts.push(`not yet published (borrowed): ${Array.from(borrowedIndices).join(', ')}`);
+      details = `Provisional — ${parts.join('; ')}`;
     } else {
       details = 'All indices are final';
     }
-    
+
     return {
       isProvisional,
-      provisionalIndices: Array.from(new Set(provisionalIndices)),
+      provisionalIndices,
       finalIndices: Array.from(new Set(finalIndices)),
       details
     };
