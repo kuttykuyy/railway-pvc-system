@@ -111,7 +111,7 @@ interface IRStandardReportOptions {
   steelIndexNames?: string[];
   isProvisional?: boolean;
   provisionalIndices?: string[];
-  allHistoricalMonthlyData?: { indexName: string; month: string; value: number }[];
+  allHistoricalMonthlyData?: { indexName: string; month: string; value: number; isProvisional?: boolean }[];
   previousCumulativePvc?: number;
   steelBreakdown?: SteelBreakdownSection[];
 }
@@ -1334,12 +1334,18 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       // Collect all months in order
       const allHistMonths = Array.from(new Set(histFiltered.map(d => d.month))).sort();
 
-      // Build lookup: indexName → month → value
+      // Build lookup: indexName → month → value, and which of those are provisional.
       const histLookup = new Map<string, Map<string, number>>();
+      const provLookup = new Map<string, Set<string>>(); // indexName → set of provisional months
       for (const d of histFiltered) {
         if (!histLookup.has(d.indexName)) histLookup.set(d.indexName, new Map());
         histLookup.get(d.indexName)!.set(d.month, d.value);
+        if (d.isProvisional) {
+          if (!provLookup.has(d.indexName)) provLookup.set(d.indexName, new Set());
+          provLookup.get(d.indexName)!.add(d.month);
+        }
       }
+      const isProvCell = (n: string, mk: string) => provLookup.get(n)?.has(mk) === true;
 
       // Build base values from quarterlyAverages
       const baseValLookup = new Map(affectedAverages.map(qa => [qa.indexName, qa.baseValue]));
@@ -1427,11 +1433,16 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
             { content: mLabel, styles: { fillColor: isAffectedQuarter ? affectedMonthFill : undefined } },
             ...orderedIdxNames.map(n => {
               const v = histLookup.get(n)?.get(mk);
+              const prov = v !== undefined && isProvCell(n, mk);
               return {
-                content: v !== undefined ? fmtIdx(v) : '-',
+                // Provisional values get a "P" suffix and an amber tint so they stand
+                // out from final figures in the table.
+                content: v !== undefined ? (prov ? `${fmtIdx(v)} P` : fmtIdx(v)) : '-',
                 styles: {
                   halign: 'center' as const,
-                  fillColor: isAffectedQuarter ? affectedMonthFill : undefined,
+                  fontStyle: (prov ? 'bold' : 'normal') as 'bold' | 'normal',
+                  textColor: (prov ? [180, 83, 9] : [0, 0, 0]) as [number, number, number],
+                  fillColor: prov ? [254, 243, 199] as [number, number, number] : (isAffectedQuarter ? affectedMonthFill : undefined),
                 },
               };
             })
@@ -1490,6 +1501,18 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         tableWidth: contentW,
         columnStyles: histColStyles,
       });
+
+      // Legend for the "P" markers — show whenever any cell in the table is provisional,
+      // even if the bill-level flag didn't catch it.
+      if (isProvisional || provLookup.size > 0) {
+        const afterY = ((pdf as any).lastAutoTable?.finalY ?? y) + 5;
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'italic');
+        pdf.setTextColor(180, 83, 9);
+        pdf.text('P = provisional index (temporary — figures shaded amber will be revised when the final index is published).', mL, afterY);
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFont('helvetica', 'normal');
+      }
     }
   }
 
