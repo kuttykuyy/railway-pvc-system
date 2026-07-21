@@ -114,6 +114,13 @@ interface IRStandardReportOptions {
   allHistoricalMonthlyData?: { indexName: string; month: string; value: number; isProvisional?: boolean; isBorrowed?: boolean }[];
   previousCumulativePvc?: number;
   steelBreakdown?: SteelBreakdownSection[];
+  /** Which sections to render (from the chosen report template). Omitted keys default to shown. */
+  sections?: {
+    contractDetails?: boolean;
+    workClassification?: boolean;
+    monthlyIndices?: boolean;
+    showCalculationSteps?: boolean;
+  };
 }
 
 // jsPDF Helvetica does not support Rs. symbol, use "Rs." instead
@@ -241,7 +248,14 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     allHistoricalMonthlyData = [],
     previousCumulativePvc,
     steelBreakdown = [],
+    sections = {},
   } = opts;
+
+  // Section visibility from the report template — default to shown when not specified.
+  const showContract = sections.contractDetails !== false;
+  const showClassification = sections.workClassification !== false;
+  const showMonthlyIndices = sections.monthlyIndices !== false;
+  const showCalcSteps = sections.showCalculationSteps !== false;
 
   // A4 Landscape: 297 x 210 mm
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -325,6 +339,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   y += 4;
 
   // ── A. CONTRACT & B. BILL DETAILS in a single info table ──────────────────
+  if (showContract) {
   // Column widths: label(52) | value(84) | label(52) | value(85) = 273mm
   const C0 = 52;   // label
   const C1 = 84;   // value (left pair)
@@ -393,6 +408,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   pdf.setLineWidth(0.3);
   pdf.line(mL, y, pageW - mR, y);
   y += 4;
+  }
 
   // ── C. PVC COMPUTATION TABLE ───────────────────────────────────────────────
   ensureSpace(60);
@@ -619,6 +635,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   pdf.setPage(pagesAfterSummary);
 
   // ── D. WORK CLASSIFICATION & JUSTIFICATION ────────────────────────────────
+  if (showClassification) {
   const detailEntries = entries.filter(entry =>
     (Number(entry.amount) || 0) !== 0 || entry.classificationJustification || entry.description);
   if (detailEntries.length > 0) {
@@ -1052,7 +1069,10 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     });
   }
 
+  }
+
   // ── G. STATUTORY ESCALATION FRAMEWORK & CALCULATIONS ──────────────────────
+  if (showCalcSteps) {
   // Per-component statutory escalation (GCC Clause 46A): each cost component's
   // price variation = its weighted amount x [(I1 - I0) / I0]; dedicated cement
   // and dedicated steel apply the 85% variable factor. Mirrors the on-screen
@@ -1195,7 +1215,10 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     }
   }
 
+  }
+
   // ── PAGE 2: AFFECTED PRICE INDICES WITH MONTHLY BREAKDOWN ─────────────────
+  if (showMonthlyIndices) {
   // Build set of index names actually used in this PVC calculation
   const usedIndexNames = new Set<string>();
   for (const c of allComponents) {
@@ -1829,6 +1852,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
 
       renderAvgCalc([fuelIndexName], () => `Diesel Rate — ${cityLabel}`);
     }
+  }
   }
 
   // ── PROVISIONAL WATERMARK on page 1 ──────────────────────────────────────

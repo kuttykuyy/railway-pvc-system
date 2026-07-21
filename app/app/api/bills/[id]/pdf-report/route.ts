@@ -739,11 +739,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         provisionalIndices: indicesStatusForIR.provisionalIndices,
         allHistoricalMonthlyData,
         previousCumulativePvc: cumulativeSummary?.previousPvcTotal ?? 0,
+        // Let the chosen report template hide sections of the IR-standard report.
+        sections: {
+          contractDetails: templateSettings.sections?.contractDetails,
+          workClassification: templateSettings.sections?.workClassification,
+          monthlyIndices: templateSettings.sections?.monthlyIndices,
+          showCalculationSteps: templateSettings.fields?.pvcCalculation?.showCalculationSteps,
+        },
       });
 
       // Append index documents (same as detailed format) unless the caller opted out
+      // or the chosen template hides the component index documents section.
       let irFinalBytes: Uint8Array = irPdfBytes;
-      if (includeIndexDocs) {
+      if (includeIndexDocs && templateSettings.sections?.componentIndexDocuments !== false) {
         try {
           const irComponentTypes = billHasSteel(bill) ? undefined : NON_STEEL_COMPONENT_TYPES;
           irFinalBytes = await embedComponentIndicesRange(new Uint8Array(irPdfBytes), {
