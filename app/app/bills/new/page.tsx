@@ -27,6 +27,8 @@ import {
   Info,
   ChevronRight,
   ArrowRight,
+  Edit,
+  Sparkles,
   Loader2
 } from 'lucide-react';
 import Link from 'next/link';
@@ -209,6 +211,8 @@ function NewBillPageContent() {
   const [openAccordion, setOpenAccordion] = useState<string[]>(['basic']);
   // Horizontal tabs for the bill form sections.
   const [activeBillTab, setActiveBillTab] = useState('basic');
+  // How the user wants to create the bill: pick first, then show the form.
+  const [billMode, setBillMode] = useState<'choose' | 'manual' | 'ai'>('choose');
 
   // Insufficient credit dialog state
   const [showInsufficientCredit, setShowInsufficientCredit] = useState(false);
@@ -1461,7 +1465,77 @@ function NewBillPageContent() {
         </div>
       )}
 
+      {/* Step 0 — choose how to create the bill */}
+      {billMode === 'choose' && (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8">
+          <h2 className="text-lg font-bold text-slate-900 text-center">
+            {language === 'hi' ? 'बिल कैसे बनाना है?' : 'How do you want to create this bill?'}
+          </h2>
+          <p className="text-sm text-slate-500 text-center mt-1">
+            {language === 'hi' ? 'एक विकल्प चुनें। आप बाद में बदल सकते हैं।' : 'Pick one option. You can change it later.'}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 max-w-3xl mx-auto">
+            <button
+              type="button"
+              onClick={() => setBillMode('manual')}
+              className="text-left rounded-2xl border-2 border-slate-200 hover:border-purple-400 hover:bg-purple-50/40 transition-all p-5 group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-slate-100 group-hover:bg-purple-100 text-slate-600 group-hover:text-purple-600 p-2.5 rounded-xl transition-colors">
+                  <Edit className="h-6 w-6" />
+                </div>
+                <div className="font-bold text-slate-900">
+                  {language === 'hi' ? 'मैन्युअल रूप से भरें' : 'Enter details manually'}
+                </div>
+              </div>
+              <p className="text-sm text-slate-500 mt-3">
+                {language === 'hi'
+                  ? 'फ़ॉर्म को चरण-दर-चरण स्वयं भरें।'
+                  : 'Fill the form yourself, step by step.'}
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setBillMode('ai')}
+              className="text-left rounded-2xl border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 transition-all p-5 group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-50 group-hover:bg-blue-100 text-blue-600 p-2.5 rounded-xl transition-colors">
+                  <Sparkles className="h-6 w-6" />
+                </div>
+                <div className="font-bold text-slate-900">
+                  {language === 'hi' ? 'साइन किया हुआ बिल PDF अपलोड करें' : 'Upload signed bill PDF'}
+                </div>
+              </div>
+              <p className="text-sm text-slate-500 mt-3">
+                {language === 'hi'
+                  ? 'AI PDF पढ़कर फ़ॉर्म भर देगा। सहेजने पर ही AI दर लगेगी।'
+                  : 'Let AI read the PDF and fill the form. Charged the AI rate only when you save.'}
+              </p>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {billMode !== 'choose' && (
+        <div className="flex items-center justify-between bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-2.5">
+          <span className="text-sm text-slate-600">
+            {language === 'hi' ? 'तरीका: ' : 'Method: '}
+            <span className="font-semibold text-slate-900">
+              {billMode === 'ai'
+                ? (language === 'hi' ? 'PDF अपलोड (AI)' : 'PDF upload (AI)')
+                : (language === 'hi' ? 'मैन्युअल' : 'Manual')}
+            </span>
+          </span>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setBillMode('choose')} className="text-slate-500 hover:text-slate-700">
+            {language === 'hi' ? 'बदलें' : 'Change'}
+          </Button>
+        </div>
+      )}
+
       {/* Progress indicator */}
+      {billMode !== 'choose' && (
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-6">
         <div className="flex items-center justify-between text-sm overflow-x-auto gap-4">
           <div className={`flex items-center gap-2 flex-shrink-0 ${formData.contractId && formData.billNo && formData.zone && formData.dateOfMeasurement ? 'text-green-600 font-semibold' : 'text-slate-400'}`}>
@@ -1493,11 +1567,10 @@ function NewBillPageContent() {
           </div>
         </div>
       </div>
-
-
+      )}
 
       {/* Contract and Quarter Info Cards - Displayed at top when selected */}
-      {(selectedContract || formData.dateOfMeasurement) && (
+      {billMode !== 'choose' && (selectedContract || formData.dateOfMeasurement) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           {/* Contract Info */}
           {selectedContract && (
@@ -1557,6 +1630,7 @@ function NewBillPageContent() {
       )}
 
       {/* Bill Form - Full Width */}
+      {billMode !== 'choose' && (
       <div className="grid grid-cols-1 gap-6">
         <div className="w-full">
           <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
@@ -1581,11 +1655,13 @@ function NewBillPageContent() {
                   </div>
                 )}
 
-                <BillPdfCementAnalyzer
-                  title="Direct PDF Bill Extraction"
-                  contractId={formData.contractId}
-                  onApplyBillDetails={applyExtractedBillDetails}
-                />
+                {billMode === 'ai' && (
+                  <BillPdfCementAnalyzer
+                    title="Direct PDF Bill Extraction"
+                    contractId={formData.contractId}
+                    onApplyBillDetails={applyExtractedBillDetails}
+                  />
+                )}
 
                 {/* Accordion for organized sections */}
                 <div className="overflow-x-auto -mx-1 px-1 mb-4">
@@ -2172,6 +2248,7 @@ function NewBillPageContent() {
           </Card>
         </div>
       </div>
+      )}
 
       {/* Bill Confirmation Dialog */}
       {showConfirmDialog && (
