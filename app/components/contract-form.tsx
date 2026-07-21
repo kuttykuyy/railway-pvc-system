@@ -15,12 +15,6 @@ import { Calendar, Save, AlertTriangle, CheckCircle2, Info, FileText, IndianRupe
 import { checkPvcEligibility, formatContractValue, GCC_PVC_MINIMUM_VALUE, GCC_PVC_MINIMUM_MONTHS } from '@/lib/gcc-compliance';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
-import {
   validateContractDate,
   validateAmount,
   validatePvcEligibility,
@@ -64,6 +58,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [agreementAvailability, setAgreementAvailability] = useState<'idle' | 'checking' | 'available' | 'duplicate' | 'error'>('idle');
+  // Horizontal tabs: the form is split into sections shown one at a time.
+  const [activeTab, setActiveTab] = useState('basic');
   const { t, language } = useLanguage();
   const [formData, setFormData] = useState({
     agreementNo: initialData?.agreementNo || '',
@@ -361,6 +357,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     setValidationErrors(allErrors);
     setValidationWarnings(allWarnings);
     setFieldErrors(newFieldErrors);
+    if (allErrors.length > 0) jumpToFirstError(newFieldErrors);
 
     return allErrors.length === 0;
   };
@@ -422,8 +419,30 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     }
   };
 
+  // Tab definitions for the horizontal section navigation.
+  const TABS = [
+    { id: 'basic', label: t('form.contract.basic_info'), icon: FileText, color: 'blue' },
+    { id: 'financial', label: t('form.contract.financial_details'), icon: IndianRupee, color: 'emerald' },
+    { id: 'timeline', label: t('form.contract.timeline'), icon: Clock, color: 'purple' },
+    { id: 'schedules', label: t('form.contract.schedules'), icon: ListOrdered, color: 'violet' },
+    { id: 'covering-letter', label: t('form.contract.covering_letter'), icon: Mail, color: 'teal' },
+    { id: 'materials', label: language === 'hi' ? 'रेलवे सामग्री' : 'Railway Materials', icon: Package, color: 'orange' },
+  ];
+  const activeIndex = Math.max(0, TABS.findIndex(tb => tb.id === activeTab));
+  const panelCls = (id: string) =>
+    `border border-slate-200 bg-white rounded-xl shadow-sm px-5 py-5 ${activeTab === id ? 'block' : 'hidden'}`;
+  // Which tab each validated field lives on, so a failed submit jumps to it.
+  const fieldTab: Record<string, string> = {
+    agreementNo: 'basic', contractorName: 'basic', workDescription: 'basic',
+    dateOfOpening: 'timeline', tenderAdvertisedValue: 'financial', contractValue: 'financial',
+  };
+  const jumpToFirstError = (errs: Record<string, string>) => {
+    const first = Object.keys(errs).find(k => fieldTab[k]);
+    if (first) setActiveTab(fieldTab[first]);
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6" noValidate>
       {/* Validation Errors */}
       {validationErrors.length > 0 && (
         <ValidationMessage
@@ -483,21 +502,40 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
         </div>
       )}
 
-      <Accordion type="multiple" defaultValue={['basic', 'financial', 'timeline', 'materials', 'covering-letter']} className="space-y-4">
+      {/* Horizontal tab strip */}
+      <div className="overflow-x-auto -mx-1 px-1">
+        <div className="flex gap-1 border-b border-slate-200 min-w-max">
+          {TABS.map((tb) => {
+            const Icon = tb.icon;
+            const isActive = activeTab === tb.id;
+            return (
+              <button
+                key={tb.id}
+                type="button"
+                onClick={() => setActiveTab(tb.id)}
+                className={`flex items-center gap-2 whitespace-nowrap px-3.5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  isActive
+                    ? 'border-blue-600 text-blue-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {tb.label}
+                {tb.id === 'schedules' && schedules.length > 0 && (
+                  <span className="ml-1 text-xs bg-violet-50 text-violet-750 px-1.5 py-0.5 rounded-full font-semibold border border-violet-100">
+                    {schedules.length}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-4">
         {/* Basic Information Section */}
-        <AccordionItem value="basic" className="border border-slate-200 bg-white rounded-xl shadow-sm hover:shadow transition-all duration-200 px-5">
-          <AccordionTrigger className="hover:no-underline py-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg">
-                <FileText className="h-5 w-5" />
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-slate-800 text-base">{t('form.contract.basic_info')}</h3>
-                <p className="text-xs text-slate-500 font-normal mt-0.5">{t('form.contract.basic_info_desc')}</p>
-              </div>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="pt-2 pb-5 space-y-5">
+        <div className={panelCls('basic')}>
+          <div className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="agreementNo" className="text-sm font-semibold text-slate-700">
@@ -618,23 +656,12 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.workDescription}</p>
               )}
             </div>
-          </AccordionContent>
-        </AccordionItem>
+          </div>
+        </div>
 
         {/* Financial Details Section */}
-        <AccordionItem value="financial" className="border border-slate-200 bg-white rounded-xl shadow-sm hover:shadow transition-all duration-200 px-5">
-          <AccordionTrigger className="hover:no-underline py-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg">
-                <IndianRupee className="h-5 w-5" />
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-slate-800 text-base">{t('form.contract.financial_details')}</h3>
-                <p className="text-xs text-slate-500 font-normal mt-0.5">{t('form.contract.financial_details_desc')}</p>
-              </div>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="pt-2 pb-5 space-y-5">
+        <div className={panelCls('financial')}>
+          <div className="space-y-5">
             <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4">
               <div className="flex items-start gap-2.5">
                 <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
@@ -785,23 +812,12 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 </div>
               </div>
             )}
-          </AccordionContent>
-        </AccordionItem>
+          </div>
+        </div>
 
         {/* Project Timeline Section */}
-        <AccordionItem value="timeline" className="border border-slate-200 bg-white rounded-xl shadow-sm hover:shadow transition-all duration-200 px-5">
-          <AccordionTrigger className="hover:no-underline py-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-50 text-purple-600 border border-purple-100 rounded-lg">
-                <Clock className="h-5 w-5" />
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-slate-800 text-base">{t('form.contract.timeline')}</h3>
-                <p className="text-xs text-slate-500 font-normal mt-0.5">{t('form.contract.timeline_desc')}</p>
-              </div>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="pt-2 pb-5 space-y-4">
+        <div className={panelCls('timeline')}>
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="completionPeriodMonths" className="text-sm font-semibold text-slate-700">
                 {t('form.contract.completion_period')} <span className="text-xs font-normal text-slate-500">({language === 'hi' ? 'वैकल्पिक' : 'Optional'})</span>
@@ -850,28 +866,12 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 </p>
               </div>
             </div>
-          </AccordionContent>
-        </AccordionItem>
+          </div>
+        </div>
 
         {/* Schedules Section */}
-        <AccordionItem value="schedules" className="border border-slate-200 bg-white rounded-xl shadow-sm hover:shadow transition-all duration-200 px-5">
-          <AccordionTrigger className="hover:no-underline py-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-violet-50 text-violet-600 border border-violet-100 rounded-lg">
-                <ListOrdered className="h-5 w-5" />
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-slate-800 text-base">{t('form.contract.schedules')}</h3>
-                <p className="text-xs text-slate-500 font-normal mt-0.5">{t('form.contract.schedules_desc')}</p>
-              </div>
-              {schedules.length > 0 && (
-                <span className="ml-auto mr-2 text-xs bg-violet-50 text-violet-750 px-2.5 py-0.5 rounded-full font-semibold border border-violet-100">
-                  {language === 'hi' ? `${schedules.length} आइटम` : `${schedules.length} items`}
-                </span>
-              )}
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="pt-2 pb-5 space-y-6">
+        <div className={panelCls('schedules')}>
+          <div className="space-y-6">
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mb-2">
               <div className="flex items-start gap-2.5">
                 <Info className="h-5 w-5 text-violet-600 mt-0.5 flex-shrink-0" />
@@ -950,23 +950,12 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 <p className="text-xs text-slate-400 italic text-center py-2">{t('form.contract.no_schedules')}</p>
               )}
             </div>
-          </AccordionContent>
-        </AccordionItem>
+          </div>
+        </div>
 
         {/* Covering Letter Details Section */}
-        <AccordionItem value="covering-letter" className="border border-slate-200 bg-white rounded-xl shadow-sm hover:shadow transition-all duration-200 px-5">
-          <AccordionTrigger className="hover:no-underline py-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-teal-50 text-teal-600 border border-teal-100 rounded-lg">
-                <Mail className="h-5 w-5" />
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-slate-800 text-base">{t('form.contract.covering_letter')}</h3>
-                <p className="text-xs text-slate-500 font-normal mt-0.5">{t('form.contract.covering_letter_desc')}</p>
-              </div>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="pt-2 pb-5 space-y-4">
+        <div className={panelCls('covering-letter')}>
+          <div className="space-y-4">
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mb-4">
               <div className="flex items-start gap-2.5">
                 <Info className="h-5 w-5 text-teal-600 mt-0.5 flex-shrink-0" />
@@ -1013,23 +1002,12 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 </p>
               </div>
             </div>
-          </AccordionContent>
-        </AccordionItem>
+          </div>
+        </div>
 
         {/* Railway Materials & Compliance Section */}
-        <AccordionItem value="materials" className="border border-slate-200 bg-white rounded-xl shadow-sm hover:shadow transition-all duration-200 px-5">
-          <AccordionTrigger className="hover:no-underline py-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-50 text-orange-600 border border-orange-100 rounded-lg">
-                <Package className="h-5 w-5" />
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-slate-800 text-base">{language === 'hi' ? 'रेलवे सामग्री और अनुपालन' : 'Railway Materials & Compliance'}</h3>
-                <p className="text-xs text-slate-500 font-normal mt-0.5">{language === 'hi' ? 'रेलवे द्वारा आपूर्ति की गई सामग्री' : 'Materials supplied by Railway'}</p>
-              </div>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="pt-2 pb-5 space-y-4">
+        <div className={panelCls('materials')}>
+          <div className="space-y-4">
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mb-4">
               <div className="flex items-start gap-2.5">
                 <Info className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
@@ -1076,9 +1054,41 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 </div>
               )}
             </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+          </div>
+        </div>
+      </div>
+
+      {/* Tab step navigation */}
+      <div className="flex items-center justify-between">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setActiveTab(TABS[Math.max(0, activeIndex - 1)].id)}
+          disabled={activeIndex === 0}
+          className="border-slate-250 text-slate-600 hover:bg-slate-50 rounded-xl px-5"
+        >
+          {language === 'hi' ? 'पिछला' : 'Back'}
+        </Button>
+        <div className="flex items-center gap-1.5">
+          {TABS.map((tb, i) => (
+            <span
+              key={tb.id}
+              className={`h-1.5 rounded-full transition-all ${i === activeIndex ? 'w-5 bg-blue-600' : 'w-1.5 bg-slate-300'}`}
+            />
+          ))}
+        </div>
+        {activeIndex < TABS.length - 1 ? (
+          <Button
+            type="button"
+            onClick={() => setActiveTab(TABS[Math.min(TABS.length - 1, activeIndex + 1)].id)}
+            className="bg-slate-800 hover:bg-slate-900 text-white rounded-xl px-5"
+          >
+            {language === 'hi' ? 'अगला' : 'Next'}
+          </Button>
+        ) : (
+          <span className="w-[72px]" />
+        )}
+      </div>
 
       {/* Submit Buttons */}
       <div className="flex justify-end space-x-4 pt-6 border-t border-slate-100">
