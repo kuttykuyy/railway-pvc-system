@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { BackButton } from "@/components/ui/back-button";
+import ProvisionalToggle from "@/components/settings/provisional-toggle";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, RefreshCcw, ChevronLeft, ChevronRight, Download, Globe, Upload, FileText, Loader2, ShieldCheck, ShieldAlert, Trash2 } from "lucide-react";
 import { toast } from "react-hot-toast";
@@ -92,6 +93,8 @@ export default function SpreadsheetPage() {
   const { isAdmin } = getClientRoleInfo(session);
 
   const [year, setYear] = useState(new Date().getFullYear());
+  // Current "Allow Provisional Indices" setting — loaded so the toggle shows its real state.
+  const [allowProvisional, setAllowProvisional] = useState<boolean | null>(null);
   const [data, setData] = useState<MonthRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [priceIndices, setPriceIndices] = useState<any[]>([]);
@@ -171,6 +174,13 @@ export default function SpreadsheetPage() {
   const [steelCityView, setSteelCityView] = useState<'all' | SteelCity>('Default');
   
   // PDF extraction state
+
+  useEffect(() => {
+    fetch('/api/settings/provisional-indices')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && typeof d.value === 'boolean') setAllowProvisional(d.value); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -1595,6 +1605,18 @@ export default function SpreadsheetPage() {
           </Dialog>
         </div>
       </div>
+
+      {/* Provisional indices control — lets bills be created before final numbers publish */}
+      {allowProvisional !== null && (
+        <div className="mb-4 flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <ProvisionalToggle initialValue={allowProvisional} />
+          <p className="text-xs text-slate-500 sm:max-w-md">
+            When ON, bills can be created before a month&apos;s numbers are final — the bill is marked
+            &quot;Provisional&quot; and any missing month borrows a nearby one. When OFF, such bills are blocked
+            until every number is entered and final.
+          </p>
+        </div>
+      )}
 
       {/* Steel City Filter */}
       <div className="flex items-center gap-3 mb-3">
