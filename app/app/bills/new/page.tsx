@@ -1387,7 +1387,7 @@ function NewBillPageContent() {
         <BackButton href="/bills" label={t('form.bill.back')} variant="outline" />
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <FileText className="h-8 w-8 text-purple-600" />
+            <FileText className="h-8 w-8 text-emerald-600" />
             {t('form.bill.add_title')}
           </h1>
           <p className="text-gray-600 mt-2">
@@ -1478,10 +1478,10 @@ function NewBillPageContent() {
             <button
               type="button"
               onClick={() => setBillMode('manual')}
-              className="text-left rounded-2xl border-2 border-slate-200 hover:border-purple-400 hover:bg-purple-50/40 transition-all p-5 group"
+              className="text-left rounded-2xl border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 transition-all p-5 group"
             >
               <div className="flex items-center gap-3">
-                <div className="bg-slate-100 group-hover:bg-purple-100 text-slate-600 group-hover:text-purple-600 p-2.5 rounded-xl transition-colors">
+                <div className="bg-slate-100 group-hover:bg-emerald-100 text-slate-600 group-hover:text-emerald-600 p-2.5 rounded-xl transition-colors">
                   <Edit className="h-6 w-6" />
                 </div>
                 <div className="font-bold text-slate-900">
@@ -1498,10 +1498,10 @@ function NewBillPageContent() {
             <button
               type="button"
               onClick={() => setBillMode('ai')}
-              className="text-left rounded-2xl border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 transition-all p-5 group"
+              className="text-left rounded-2xl border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 transition-all p-5 group"
             >
               <div className="flex items-center gap-3">
-                <div className="bg-blue-50 group-hover:bg-blue-100 text-blue-600 p-2.5 rounded-xl transition-colors">
+                <div className="bg-emerald-50 group-hover:bg-emerald-100 text-emerald-600 p-2.5 rounded-xl transition-colors">
                   <Sparkles className="h-6 w-6" />
                 </div>
                 <div className="font-bold text-slate-900">
@@ -1577,7 +1577,7 @@ function NewBillPageContent() {
             <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
               <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-5">
                 <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-purple-600" />
+                  <Building2 className="h-4 w-4 text-emerald-600" />
                   {language === 'hi' ? 'चयनित अनुबंध' : 'Selected Contract'}
                 </CardTitle>
               </CardHeader>
@@ -1636,7 +1636,7 @@ function NewBillPageContent() {
           <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
             <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-6">
               <CardTitle className="flex items-center gap-3 text-lg font-bold text-slate-900">
-                <div className="bg-purple-50 p-2 rounded-xl text-purple-600">
+                <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600">
                   <FileText className="h-6 w-6" />
                 </div>
                 {language === 'hi' ? 'बिल विवरण' : 'Bill Details'}
@@ -1676,7 +1676,7 @@ function NewBillPageContent() {
                           onClick={() => setActiveBillTab(tb.id)}
                           className={`flex items-center gap-2 whitespace-nowrap px-3.5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                             isActive
-                              ? 'border-purple-600 text-purple-700'
+                              ? 'border-emerald-600 text-emerald-700'
                               : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                           }`}
                         >
@@ -1763,7 +1763,7 @@ function NewBillPageContent() {
                                 <AccordionItem value="previous-bills" className="border-0">
                                   <AccordionTrigger className="px-3 py-2 hover:no-underline text-xs">
                                     <div className="flex items-center gap-2">
-                                      <FileText className="h-3 w-3 text-blue-600" />
+                                      <FileText className="h-3 w-3 text-emerald-600" />
                                       <span className="font-medium">{t('form.bill.prev_bills')} ({previousBills.length})</span>
                                     </div>
                                   </AccordionTrigger>
@@ -1808,15 +1808,15 @@ function NewBillPageContent() {
                         </Label>
                         {roQuota?.applicable && roQuota.zone ? (
                           // Railway Official — zone is locked to their account zone
-                          <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
-                            <svg className="h-4 w-4 shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                            <svg className="h-4 w-4 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                             </svg>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-blue-900">
+                              <p className="text-sm font-semibold text-emerald-900">
                                 {getRailwayZoneOptions().find((z) => z.value === roQuota.zone)?.label ?? roQuota.zone}
                               </p>
-                              <p className="text-xs text-blue-600">{t('form.bill.zone_locked')}</p>
+                              <p className="text-xs text-emerald-600">{t('form.bill.zone_locked')}</p>
                             </div>
                           </div>
                         ) : (
@@ -1886,15 +1886,15 @@ function NewBillPageContent() {
                           {t('form.bill.date_measurement_desc')}
                         </p>
                         {availableDateRange && availableDateRange.minDate && availableDateRange.maxDate ? (
-                          <p className="text-xs text-blue-600 font-bold flex items-center gap-1.5 animate-blink mt-1">
-                            <Info className="h-3.5 w-3.5 text-blue-500 animate-pulse flex-shrink-0" />
+                          <p className="text-xs text-emerald-600 font-bold flex items-center gap-1.5 animate-blink mt-1">
+                            <Info className="h-3.5 w-3.5 text-emerald-500 animate-pulse flex-shrink-0" />
                             <span>
                               {language === 'hi' ? 'सूचकांक उपलब्ध हैं ' : 'Indices available from '}
                               {new Date(availableDateRange.minDate).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-GB', { timeZone: 'Asia/Kolkata' })}
                               {language === 'hi' ? ' से ' : ' to '}
                               {new Date(availableDateRange.maxDate).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-GB', { timeZone: 'Asia/Kolkata' })}
                               {availableDateRange.lastCompleteDate && (
-                                <span className="ml-1.5 bg-blue-50 border border-blue-150 text-blue-700 px-1.5 py-0.5 rounded font-black whitespace-nowrap">
+                                <span className="ml-1.5 bg-emerald-50 border border-emerald-150 text-emerald-700 px-1.5 py-0.5 rounded font-black whitespace-nowrap">
                                   ({language === 'hi' ? 'सभी सूचकांक अद्यतित हैं: ' : 'All indices final up to: '}
                                   {new Date(availableDateRange.lastCompleteDate).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-GB', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })})
                                 </span>
@@ -1926,7 +1926,7 @@ function NewBillPageContent() {
                             id="isFinalPvc"
                             checked={formData.isFinalPvc}
                             onChange={(e) => setFormData(prev => ({ ...prev, isFinalPvc: e.target.checked }))}
-                            className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                            className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                           />
                           <Label htmlFor="isFinalPvc" className="cursor-pointer font-medium">
                             {t('form.bill.final_pvc')}
@@ -1969,10 +1969,10 @@ function NewBillPageContent() {
                       </p>
                       {/* Fetch Previous Classification Button */}
                       {formData.contractId && previousBills.length > 0 && (
-                        <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200 mb-4">
+                        <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-200 mb-4">
                           <div className="flex items-center gap-2">
-                            <Info className="h-4 w-4 text-blue-600" />
-                            <span className="text-sm text-blue-900">
+                            <Info className="h-4 w-4 text-emerald-600" />
+                            <span className="text-sm text-emerald-900">
                               {t('form.bill.load_prev_classification')}
                             </span>
                           </div>
@@ -1982,7 +1982,7 @@ function NewBillPageContent() {
                             size="sm"
                             onClick={fetchPreviousBillClassification}
                             disabled={isFetchingClassification}
-                            className="bg-white hover:bg-blue-100"
+                            className="bg-white hover:bg-emerald-100"
                           >
                             {isFetchingClassification ? (
                               <LoadingSpinner size="sm" text={language === 'hi' ? 'लोड हो रहा है...' : 'Loading...'} />
@@ -2014,7 +2014,7 @@ function NewBillPageContent() {
                   {/* SECTION 2b: Cement (derived from the entered items via DSR) */}
                   <div className={billPanelCls('cement')}>
                     <div className="border border-slate-200 rounded-xl bg-white px-4 py-4 space-y-4">
-                      <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3 space-y-3">
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
                             <p className="text-xs font-semibold text-slate-700">No direct cement item? Derive it from your items.</p>
@@ -2022,7 +2022,7 @@ function NewBillPageContent() {
                           </div>
                           <Button type="button" variant="outline" size="sm" disabled={derivingCement}
                             onClick={deriveCementFromItems}
-                            className="border-purple-300 bg-white text-purple-700 hover:bg-purple-100">
+                            className="border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100">
                             {derivingCement ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deriving…</>) : (<><ClipboardList className="mr-2 h-4 w-4" /> Derive cement from items</>)}
                           </Button>
                         </div>
@@ -2171,7 +2171,7 @@ function NewBillPageContent() {
                     {BILL_TABS.map((tb, i) => (
                       <span
                         key={tb.id}
-                        className={`h-1.5 rounded-full transition-all ${i === billTabIndex ? 'w-5 bg-purple-600' : 'w-1.5 bg-slate-300'}`}
+                        className={`h-1.5 rounded-full transition-all ${i === billTabIndex ? 'w-5 bg-emerald-600' : 'w-1.5 bg-slate-300'}`}
                       />
                     ))}
                   </div>
@@ -2230,7 +2230,7 @@ function NewBillPageContent() {
                       type="submit"
                       disabled={isSaving || !formData.contractId || !formData.billNo || !formData.zone || !formData.dateOfMeasurement || (roQuota?.applicable === true && roQuota.postingComplete === false)}
                       title={roQuota?.applicable && roQuota.postingComplete === false ? (language === 'hi' ? 'पहले अपनी रेलवे पोस्टिंग विवरण पूरा करें' : 'Complete your Railway Posting Details first') : undefined}
-                      className="bg-purple-600 hover:bg-purple-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-purple-500/10 font-semibold h-10 disabled:opacity-50"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-emerald-500/10 font-semibold h-10 disabled:opacity-50"
                     >
                       {isSaving ? (
                         <LoadingSpinner size="sm" text={t('form.bill.processing')} />
@@ -2293,7 +2293,7 @@ function NewBillPageContent() {
               </button>
               <button
                 onClick={handleConfirmAndSubmit}
-                className="flex-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2.5 transition-colors"
+                className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold py-2.5 transition-colors"
               >
                 {t('form.bill.yes_submit')}
               </button>
@@ -2353,7 +2353,7 @@ function NewBillPageContent() {
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden my-4">
             {/* SAMPLE watermark header */}
-            <div className="relative bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-5 text-white">
+            <div className="relative bg-gradient-to-r from-emerald-600 to-emerald-600 px-6 py-5 text-white">
               <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none select-none">
                 <span className="text-6xl font-black tracking-widest rotate-[-20deg] text-white">{language === 'hi' ? 'नमूना' : 'SAMPLE'}</span>
               </div>
@@ -2442,7 +2442,7 @@ function NewBillPageContent() {
                 {language === 'hi' ? 'बिल संपादित करें' : 'Edit Bill'}
               </Button>
               <Button
-                className="flex-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold"
+                className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
                 onClick={() => { setShowPreviewModal(false); (document.querySelector('form') as HTMLFormElement)?.requestSubmit(); }}
               >
                 <Save className="h-4 w-4 mr-2" />

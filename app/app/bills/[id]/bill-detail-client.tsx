@@ -205,12 +205,12 @@ function DetailedMonthlyIndicesTable({
         <table className="w-full border-collapse text-sm">
           <thead>
             {steelColumnsCount > 0 && (
-              <tr className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white">
+              <tr className="bg-gradient-to-r from-slate-900 to-emerald-950 text-white">
                 <th className="border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 text-left font-bold sticky left-0 bg-slate-900 z-10"></th>
                 {usedComponents.map(({ indexName }) => {
                   if (steelComponents.includes(indexName)) {
                     return (
-                      <th key={`zone-${indexName}`} className="border-b border-slate-200 dark:border-slate-800 px-3 py-2 text-center text-xs font-bold uppercase tracking-wider text-indigo-200">
+                      <th key={`zone-${indexName}`} className="border-b border-slate-200 dark:border-slate-800 px-3 py-2 text-center text-xs font-bold uppercase tracking-wider text-emerald-200">
                         Steel Component
                       </th>
                     );
@@ -249,12 +249,12 @@ function DetailedMonthlyIndicesTable({
                 );
               } else if (row.type === 'base') {
                 return (
-                  <tr key="base" className="bg-indigo-50/30 dark:bg-indigo-950/10 font-medium">
-                    <td className="px-4 py-3 font-semibold text-indigo-700 dark:text-indigo-400 sticky left-0 bg-indigo-50/30 dark:bg-indigo-950/10 backdrop-blur-sm">
+                  <tr key="base" className="bg-emerald-50/30 dark:bg-emerald-950/10 font-medium">
+                    <td className="px-4 py-3 font-semibold text-emerald-700 dark:text-emerald-400 sticky left-0 bg-emerald-50/30 dark:bg-emerald-950/10 backdrop-blur-sm">
                       {row.label}
                     </td>
                     {usedComponents.map(({ indexName }) => (
-                      <td key={indexName} className="px-3 py-3 text-center font-semibold text-indigo-600 dark:text-indigo-400">
+                      <td key={indexName} className="px-3 py-3 text-center font-semibold text-emerald-600 dark:text-emerald-400">
                         {row.values[indexName] != null ? row.values[indexName].toFixed(2) : '-'}
                       </td>
                     ))}
@@ -275,8 +275,8 @@ function DetailedMonthlyIndicesTable({
                 );
               } else if (row.type === 'month') {
                 return (
-                  <tr key={`month-${idx}`} className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${row.isMeasurementQuarter ? 'bg-blue-500/5 dark:bg-blue-500/5' : ''}`}>
-                    <td className={`px-4 py-3 sticky left-0 bg-white dark:bg-slate-900 ${row.isMeasurementQuarter ? 'font-medium text-blue-700 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                  <tr key={`month-${idx}`} className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${row.isMeasurementQuarter ? 'bg-emerald-500/5 dark:bg-emerald-500/5' : ''}`}>
+                    <td className={`px-4 py-3 sticky left-0 bg-white dark:bg-slate-900 ${row.isMeasurementQuarter ? 'font-medium text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
                       {row.label}{row.isMeasurementQuarter ? ' [Meas. Month]' : ''}
                     </td>
                     {usedComponents.map(({ indexName }) => (
@@ -578,7 +578,7 @@ function ComponentPvcTable({
           <div key={entry.id || entryIndex} className="border border-slate-150 dark:border-slate-800 rounded-2xl p-5 bg-slate-50/50 dark:bg-slate-900/40 backdrop-blur-sm shadow-sm transition-all duration-300 hover:shadow-md">
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 pb-3 border-b border-slate-200/60 dark:border-slate-800 gap-3">
               <div className="flex items-center gap-3">
-                <div className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 p-2 rounded-xl text-xs font-bold">
+                <div className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 p-2 rounded-xl text-xs font-bold">
                   #{entryIndex + 1}
                 </div>
                 <div>
@@ -619,7 +619,7 @@ function ComponentPvcTable({
                     <td colSpan={2} className="px-4 py-3 text-right text-xs uppercase tracking-wider">
                       Classification {classCode} Subtotal:
                     </td>
-                    <td className={`px-4 py-3 text-right font-mono text-sm ${classificationTotal < 0 ? 'text-rose-700 dark:text-rose-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
+                    <td className={`px-4 py-3 text-right font-mono text-sm ${classificationTotal < 0 ? 'text-rose-700 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                       {classificationTotal < 0 ? '-' : ''}₹{Math.abs(classificationTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
@@ -631,8 +631,8 @@ function ComponentPvcTable({
       })}
 
       {classificationEntries.length > 1 && (
-        <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl p-4 shadow-md flex justify-between items-center mt-6">
-          <span className="text-xs uppercase tracking-widest text-indigo-300 font-bold">Sum of Classifications:</span>
+        <div className="bg-gradient-to-r from-slate-900 to-emerald-950 text-white rounded-2xl p-4 shadow-md flex justify-between items-center mt-6">
+          <span className="text-xs uppercase tracking-widest text-emerald-300 font-bold">Sum of Classifications:</span>
           <span className="font-mono font-bold text-lg text-emerald-400">
             {grandTotalPvc < 0 ? '-' : ''}₹{Math.abs(grandTotalPvc).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
@@ -745,7 +745,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
               <BillStatusBadge status={bill.status} size="lg" />
             </div>
             <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 font-medium flex items-center gap-2 flex-wrap min-w-0">
-              <Briefcase size={14} className="text-indigo-500 flex-shrink-0" />
+              <Briefcase size={14} className="text-emerald-500 flex-shrink-0" />
               <span className="font-semibold text-slate-700 dark:text-slate-300 flex-shrink-0">{bill.contract.agreementNo}</span>
               <span className="text-slate-300 dark:text-slate-700 flex-shrink-0">•</span>
               <span className="truncate max-w-[200px] md:max-w-md">{bill.contract.workDescription}</span>
@@ -790,13 +790,13 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
       {/* 2. Premium Hero Overview Cards (Visual Centerpiece) */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Total PVC Hero Card - Dark Glowing Gradient */}
-        <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 text-white rounded-3xl p-6 shadow-2xl relative overflow-hidden group hover:scale-[1.02] transition-all duration-300">
+        <div className="bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-950 text-white rounded-3xl p-6 shadow-2xl relative overflow-hidden group hover:scale-[1.02] transition-all duration-300">
           {/* Ambient Glow */}
-          <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full blur-3xl opacity-25 group-hover:opacity-40 transition-opacity duration-300"></div>
+          <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full blur-3xl opacity-25 group-hover:opacity-40 transition-opacity duration-300"></div>
           
           <div className="flex justify-between items-start relative z-10">
             <div className="space-y-1">
-              <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest">
+              <span className="text-xs font-bold text-emerald-300 uppercase tracking-widest">
                 Net Price Variation (PVC)
               </span>
               <h2 className={`text-3xl md:text-4xl font-extrabold font-mono tracking-tight flex items-baseline gap-1 mt-2 ${isPvcNegative ? 'text-rose-400' : 'text-emerald-400'}`}>
@@ -810,7 +810,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
 
           <div className="mt-8 flex items-center justify-between text-xs text-slate-400 border-t border-white/5 pt-4 relative z-10">
             <span className="font-semibold flex items-center gap-1">
-              <Clock size={12} className="text-indigo-400" />
+              <Clock size={12} className="text-emerald-400" />
               Escalation Rate:
             </span>
             <span className="font-mono text-white font-bold">
@@ -832,14 +832,14 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                 ₹{bill.billAmount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
               </h2>
             </div>
-            <div className="p-3.5 rounded-2xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-400">
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 text-emerald-500 dark:text-emerald-400">
               <IndianRupee size={22} />
             </div>
           </div>
 
           <div className="mt-8 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 dark:border-slate-800 pt-4">
             <span className="font-semibold flex items-center gap-1">
-              <Layers size={12} className="text-indigo-500" />
+              <Layers size={12} className="text-emerald-500" />
               Agreement Value:
             </span>
             <span className="font-mono text-slate-800 dark:text-slate-200 font-bold">
@@ -892,7 +892,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
       <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
         <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800/80 px-6 py-4">
           <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
-            <ShieldCheck size={18} className="text-indigo-500" />
+            <ShieldCheck size={18} className="text-emerald-500" />
             Verification & Approval Pipeline
           </CardTitle>
         </CardHeader>
@@ -948,7 +948,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
         <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden flex flex-col justify-between">
           <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800/80 px-6 py-4">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
-              <FileText size={18} className="text-indigo-500" />
+              <FileText size={18} className="text-emerald-500" />
               Bill Record Specifications
             </CardTitle>
           </CardHeader>
@@ -994,7 +994,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
         <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden flex flex-col justify-between">
           <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800/80 px-6 py-4">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
-              <Building size={18} className="text-indigo-500" />
+              <Building size={18} className="text-emerald-500" />
               Executing Agency Details
             </CardTitle>
           </CardHeader>
@@ -1059,7 +1059,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
       <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
         <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800/80 px-6 py-4">
           <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
-            <Briefcase size={18} className="text-indigo-500" />
+            <Briefcase size={18} className="text-emerald-500" />
             Underlying Agreement Parameters
           </CardTitle>
         </CardHeader>
@@ -1086,7 +1086,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
 
             <div className="bg-slate-50 dark:bg-slate-800/20 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs text-muted-foreground font-bold uppercase tracking-wide">Executing Firm</p>
-              <p className="text-base font-extrabold text-indigo-600 dark:text-indigo-400 mt-1.5 truncate">
+              <p className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 mt-1.5 truncate">
                 {bill.contract.contractorName || 'N/A'}
               </p>
             </div>
@@ -1099,7 +1099,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
         <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
           <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800/80 px-6 py-4">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
-              <Layers size={18} className="text-indigo-500" />
+              <Layers size={18} className="text-emerald-500" />
               Bill Schedule Items
             </CardTitle>
           </CardHeader>
@@ -1113,7 +1113,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                       <div className="flex-1 space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap text-sm font-bold text-slate-800 dark:text-slate-200">
                           {entry.itemNumber && (
-                            <span className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-lg text-xs font-mono font-bold">
+                            <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-lg text-xs font-mono font-bold">
                               Item {entry.itemNumber}
                             </span>
                           )}
@@ -1121,9 +1121,9 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                         </div>
                         
                         {entry.scheduleItem && (
-                          <p className="text-xs text-violet-600 dark:text-violet-400 font-semibold flex items-center gap-1">
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
                             <span>📋 Schedule:</span>
-                            <span className="font-mono bg-violet-500/5 px-1.5 py-0.5 rounded">{entry.scheduleItem}</span>
+                            <span className="font-mono bg-emerald-500/5 px-1.5 py-0.5 rounded">{entry.scheduleItem}</span>
                           </p>
                         )}
                         
@@ -1149,7 +1149,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                               return (
                                 <div key={rIdx} className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 py-1 px-2 hover:bg-slate-50/50 rounded-lg">
                                   <div className="flex items-center gap-2">
-                                    {row.itemNumber && <span className="font-mono text-blue-600 bg-blue-500/5 px-1 rounded">[{row.itemNumber}]</span>}
+                                    {row.itemNumber && <span className="font-mono text-emerald-600 bg-emerald-500/5 px-1 rounded">[{row.itemNumber}]</span>}
                                     <span>Qty: <strong className="text-slate-700 dark:text-slate-300 font-mono">{rQty.toLocaleString('en-IN', { maximumFractionDigits: 4 })}</strong></span>
                                     <span className="text-slate-300">•</span>
                                     <span>Rate: <strong className="text-slate-700 dark:text-slate-300 font-mono">₹{rRate.toLocaleString('en-IN', { maximumFractionDigits: 5 })}</strong></span>
@@ -1201,7 +1201,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
         <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
           <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800/80 px-6 py-4">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
-              <TrendingUp size={18} className="text-indigo-500" />
+              <TrendingUp size={18} className="text-emerald-500" />
               Statutory Escalate Framework & Calculations
             </CardTitle>
           </CardHeader>
@@ -1298,14 +1298,14 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                 (bill.pvcCalculation?.dedicatedSteelPlatesPvc != null && bill.pvcCalculation.dedicatedSteelPlatesPvc !== 0) ||
                 (bill.pvcCalculation?.dedicatedSteelOtherSectionsPvc != null && bill.pvcCalculation.dedicatedSteelOtherSectionsPvc !== 0)
               ) && indicesData && (
-                <div className="border border-violet-200 dark:border-violet-800/40 bg-violet-50/10 dark:bg-violet-950/5 p-5 rounded-2xl space-y-3">
-                  <h4 className="text-sm font-bold text-violet-700 dark:text-violet-400 uppercase tracking-wider flex items-center gap-1.5">
+                <div className="border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/10 dark:bg-emerald-950/5 p-5 rounded-2xl space-y-3">
+                  <h4 className="text-sm font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
                     <CheckCircle size={16} /> Dedicated Steel Formula (85% escalation factor)
                   </h4>
-                  <div className="overflow-x-auto border border-violet-250 dark:border-violet-850 rounded-xl bg-white dark:bg-slate-900">
+                  <div className="overflow-x-auto border border-emerald-250 dark:border-emerald-850 rounded-xl bg-white dark:bg-slate-900">
                     <table className="w-full border-collapse">
                       <thead>
-                        <tr className="bg-violet-500/5 text-slate-800 dark:text-slate-200 text-xs border-b border-violet-100 dark:border-violet-900 font-semibold">
+                        <tr className="bg-emerald-500/5 text-slate-800 dark:text-slate-200 text-xs border-b border-emerald-100 dark:border-emerald-900 font-semibold">
                           <th className="px-4 py-2.5 text-left">Steel Component Type</th>
                           <th className="px-4 py-2.5 text-left">Statutory Escalate Formula</th>
                           <th className="px-4 py-2.5 text-right">Escalation Amount</th>
@@ -1320,7 +1320,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                             <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 break-all max-w-[400px]">
                               {bill.steelTmtBarsAmount?.toLocaleString('en-IN')} × [({indicesData.current['Steel TMT Bars']?.toFixed(2)} - {indicesData.base['Steel TMT Bars']?.toFixed(2)}) ÷ {indicesData.base['Steel TMT Bars']?.toFixed(2)}] × 85%
                             </td>
-                            <td className="px-4 py-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                               ₹{bill.pvcCalculation.dedicatedSteelTmtBarsPvc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>
@@ -1334,7 +1334,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                             <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 break-all max-w-[400px]">
                               {bill.steelAngleChannelAmount?.toLocaleString('en-IN')} × [({indicesData.current['Steel Angle/Channel']?.toFixed(2)} - {indicesData.base['Steel Angle/Channel']?.toFixed(2)}) ÷ {indicesData.base['Steel Angle/Channel']?.toFixed(2)}] × 85%
                             </td>
-                            <td className="px-4 py-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                               ₹{bill.pvcCalculation.dedicatedSteelAngleChannelPvc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>
@@ -1348,7 +1348,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                             <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 break-all max-w-[400px]">
                               {bill.steelPlatesAmount?.toLocaleString('en-IN')} × [({indicesData.current['Steel Plates']?.toFixed(2)} - {indicesData.base['Steel Plates']?.toFixed(2)}) ÷ {indicesData.base['Steel Plates']?.toFixed(2)}] × 85%
                             </td>
-                            <td className="px-4 py-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                               ₹{bill.pvcCalculation.dedicatedSteelPlatesPvc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>
@@ -1362,7 +1362,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                             <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 break-all max-w-[400px]">
                               {bill.steelOtherSectionsAmount?.toLocaleString('en-IN')} × [({indicesData.current['Steel Other Sections']?.toFixed(2)} - {indicesData.base['Steel Other Sections']?.toFixed(2)}) ÷ {indicesData.base['Steel Other Sections']?.toFixed(2)}] × 85%
                             </td>
-                            <td className="px-4 py-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                               ₹{bill.pvcCalculation.dedicatedSteelOtherSectionsPvc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>
@@ -1377,7 +1377,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
               {detailedMonthlyData && (
                 <div className="space-y-4 pt-5 border-t border-slate-100 dark:border-slate-850">
                   <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                    <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                       <FileSpreadsheet size={16} />
                     </div>
                     <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
@@ -1394,9 +1394,9 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
               )}
 
               {/* Grand summary box */}
-              <div className="flex justify-between items-center p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-950 text-white rounded-2xl border-2 border-indigo-500/20 shadow-md">
+              <div className="flex justify-between items-center p-5 bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-950 text-white rounded-2xl border-2 border-emerald-500/20 shadow-md">
                 <div className="space-y-0.5">
-                  <span className="text-xs uppercase tracking-widest text-indigo-300 font-bold">Grand Escalation Total:</span>
+                  <span className="text-xs uppercase tracking-widest text-emerald-300 font-bold">Grand Escalation Total:</span>
                   <p className="text-[10px] text-slate-400">Aggregate of schedule subclassifications and dedicated 85% materials</p>
                 </div>
                 <span className={`font-mono font-extrabold text-xl ${isPvcNegative ? 'text-rose-400' : 'text-emerald-400'}`}>

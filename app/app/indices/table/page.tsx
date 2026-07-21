@@ -501,7 +501,7 @@ export default function IndicesTablePage() {
                     </Badge>
                   )}
                   {showOnlyCompleteMonths && (
-                    <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-800">
                       Complete Months Only
                     </Badge>
                   )}
@@ -509,7 +509,7 @@ export default function IndicesTablePage() {
                     Showing {filteredAndSortedIndices.length} of {indices.length} indices
                   </Badge>
                   {showOnlyCompleteMonths && (
-                    <Badge variant="outline" className="border-blue-300">
+                    <Badge variant="outline" className="border-emerald-300">
                       {months.length} complete month(s)
                     </Badge>
                   )}
@@ -530,7 +530,7 @@ export default function IndicesTablePage() {
             <Button 
               onClick={handleSave} 
               disabled={isSaving}
-              className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
             >
               {isSaving ? (
                 <LoadingSpinner size="sm" text="Saving..." />
@@ -651,9 +651,9 @@ export default function IndicesTablePage() {
         </CardContent>
       </Card>
 
-      <Card className="border-0 shadow-lg bg-gradient-to-r from-indigo-50 to-purple-50">
+      <Card className="border-0 shadow-lg bg-gradient-to-r from-emerald-50 to-emerald-50">
         <CardHeader>
-          <CardTitle className="text-xl text-indigo-900">Legend</CardTitle>
+          <CardTitle className="text-xl text-emerald-900">Legend</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

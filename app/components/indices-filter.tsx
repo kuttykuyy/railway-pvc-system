@@ -115,7 +115,7 @@ export default function IndicesFilter({ indices }: IndicesFilterProps) {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <SlidersHorizontal className="h-5 w-5 text-indigo-600" />
+                <SlidersHorizontal className="h-5 w-5 text-emerald-600" />
                 Filter & Sort
               </CardTitle>
               <CardDescription className="mt-1">
@@ -162,7 +162,7 @@ export default function IndicesFilter({ indices }: IndicesFilterProps) {
                     placeholder="Search by name..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+                    className="pl-10 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                   />
                 </div>
               </div>
@@ -173,7 +173,7 @@ export default function IndicesFilter({ indices }: IndicesFilterProps) {
                   Data Status
                 </Label>
                 <Select value={filterType} onValueChange={setFilterType}>
-                  <SelectTrigger id="status-filter" className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
+                  <SelectTrigger id="status-filter" className="border-gray-300 focus:border-emerald-500 focus:ring-emerald-500">
                     <SelectValue placeholder="All Indices" />
                   </SelectTrigger>
                   <SelectContent>
@@ -192,7 +192,7 @@ export default function IndicesFilter({ indices }: IndicesFilterProps) {
                 </Label>
                 <div className="flex gap-2">
                   <Select value={sortBy} onValueChange={setSortBy}>
-                    <SelectTrigger id="sort-by" className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
+                    <SelectTrigger id="sort-by" className="border-gray-300 focus:border-emerald-500 focus:ring-emerald-500">
                       <SelectValue placeholder="Sort by..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -221,12 +221,12 @@ export default function IndicesFilter({ indices }: IndicesFilterProps) {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium text-gray-700">Active Filters:</span>
                   {searchQuery && (
-                    <Badge variant="secondary" className="bg-indigo-100 text-indigo-900">
+                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-900">
                       Search: {searchQuery}
                     </Badge>
                   )}
                   {filterType !== 'all' && (
-                    <Badge variant="secondary" className="bg-purple-100 text-purple-900">
+                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-900">
                       Status: {filterType}
                     </Badge>
                   )}
@@ -292,11 +292,11 @@ export default function IndicesFilter({ indices }: IndicesFilterProps) {
             
             return (
               <Card key={index.id} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 group overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 via-blue-500 to-purple-500"></div>
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 via-emerald-500 to-emerald-500"></div>
                 
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-base font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                    <CardTitle className="text-base font-bold text-gray-900 group-hover:text-emerald-600 transition-colors">
                       {index.name}
                     </CardTitle>
                     {latestValue?.isProvisional && (
@@ -321,7 +321,7 @@ export default function IndicesFilter({ indices }: IndicesFilterProps) {
                   {hasData ? (
                     <>
                       {/* Latest Value with Trend */}
-                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100">
+                      <div className="bg-gradient-to-br from-emerald-50 to-emerald-50 p-4 rounded-xl border border-emerald-100">
                         <div className="flex items-center justify-between mb-2">
                           <p className="text-xs font-medium text-gray-600">Latest Value</p>
                           <p className="text-xs text-gray-600">
@@ -329,7 +329,7 @@ export default function IndicesFilter({ indices }: IndicesFilterProps) {
                           </p>
                         </div>
                         <div className="flex items-end justify-between">
-                          <p className="text-3xl font-bold text-blue-900">
+                          <p className="text-3xl font-bold text-emerald-900">
                             {latestValue?.value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </p>
                           {previousValue && (

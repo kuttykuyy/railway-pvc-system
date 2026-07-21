@@ -54,17 +54,17 @@ const StepCard = ({
   actionLink?: string;
   icon: React.ElementType;
 }) => (
-  <Card className="border-l-4 border-l-blue-500 hover:shadow-lg transition-all duration-300">
+  <Card className="border-l-4 border-l-emerald-500 hover:shadow-lg transition-all duration-300">
     <CardHeader className="pb-3">
       <div className="flex items-start gap-4">
         <div className="flex-shrink-0">
-          <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-            <span className="text-xl font-bold text-blue-600">{stepNumber}</span>
+          <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
+            <span className="text-xl font-bold text-emerald-600">{stepNumber}</span>
           </div>
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <Icon className="h-5 w-5 text-blue-600" />
+            <Icon className="h-5 w-5 text-emerald-600" />
             <CardTitle className="text-lg">{title}</CardTitle>
           </div>
           <CardDescription className="text-sm leading-relaxed">{description}</CardDescription>
@@ -116,9 +116,9 @@ const FeatureCard = ({
   color?: string;
 }) => {
   const colorClasses = {
-    blue: 'bg-blue-100 text-blue-600',
+    blue: 'bg-emerald-100 text-emerald-600',
     green: 'bg-green-100 text-green-600',
-    purple: 'bg-purple-100 text-purple-600',
+    purple: 'bg-emerald-100 text-emerald-600',
     orange: 'bg-orange-100 text-orange-600',
     red: 'bg-red-100 text-red-600',
   };
@@ -156,12 +156,12 @@ const WorkflowStep = ({
       isCompleted 
         ? 'bg-green-500 text-white' 
         : isActive 
-          ? 'bg-blue-500 text-white' 
+          ? 'bg-emerald-500 text-white' 
           : 'bg-gray-200 text-gray-600'
     }`}>
       {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : step}
     </div>
-    <span className={`text-sm ${isActive ? 'font-semibold text-blue-600' : 'text-gray-600'}`}>
+    <span className={`text-sm ${isActive ? 'font-semibold text-emerald-600' : 'text-gray-600'}`}>
       {title}
     </span>
   </div>
@@ -176,8 +176,8 @@ export default function GettingStartedPage() {
       <div className="mb-8">
         <BackButton href="/dashboard" />
         <div className="flex items-center gap-3 mt-4 mb-2">
-          <div className="p-3 bg-blue-100 rounded-xl">
-            <BookOpen className="h-8 w-8 text-blue-600" />
+          <div className="p-3 bg-emerald-100 rounded-xl">
+            <BookOpen className="h-8 w-8 text-emerald-600" />
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Getting Started Guide</h1>
@@ -225,10 +225,10 @@ export default function GettingStartedPage() {
         {/* Overview Tab */}
         <TabsContent value="overview" className="mt-6 space-y-8">
           {/* What is IR-PVC */}
-          <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+          <Card className="bg-gradient-to-br from-emerald-50 to-emerald-50 border-emerald-200">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-blue-600" />
+                <Shield className="h-5 w-5 text-emerald-600" />
                 What is IR-PVC System?
               </CardTitle>
             </CardHeader>
@@ -245,12 +245,12 @@ export default function GettingStartedPage() {
                   <p className="text-xs text-muted-foreground">No manual calculations needed</p>
                 </div>
                 <div className="bg-white/80 rounded-lg p-4 text-center">
-                  <FileText className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                  <FileText className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
                   <h4 className="font-semibold text-sm">Professional Reports</h4>
                   <p className="text-xs text-muted-foreground">Railway-compliant PDF reports</p>
                 </div>
                 <div className="bg-white/80 rounded-lg p-4 text-center">
-                  <TrendingUp className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                  <TrendingUp className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
                   <h4 className="font-semibold text-sm">Latest Price Indices</h4>
                   <p className="text-xs text-muted-foreground">Updated monthly indices</p>
                 </div>
@@ -262,7 +262,7 @@ export default function GettingStartedPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <ClipboardList className="h-5 w-5 text-blue-600" />
+                <ClipboardList className="h-5 w-5 text-emerald-600" />
                 Your Workflow at a Glance
               </CardTitle>
               <CardDescription>Follow these steps to generate your first PVC bill</CardDescription>
@@ -284,7 +284,7 @@ export default function GettingStartedPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Menu className="h-5 w-5 text-blue-600" />
+                <Menu className="h-5 w-5 text-emerald-600" />
                 Navigating the System
               </CardTitle>
             </CardHeader>
@@ -292,7 +292,7 @@ export default function GettingStartedPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="border rounded-lg p-4">
                   <h4 className="font-semibold flex items-center gap-2 mb-2">
-                    <MousePointerClick className="h-4 w-4 text-blue-500" />
+                    <MousePointerClick className="h-4 w-4 text-emerald-500" />
                     Desktop Navigation
                   </h4>
                   <p className="text-sm text-muted-foreground">
@@ -301,7 +301,7 @@ export default function GettingStartedPage() {
                 </div>
                 <div className="border rounded-lg p-4">
                   <h4 className="font-semibold flex items-center gap-2 mb-2">
-                    <Menu className="h-4 w-4 text-blue-500" />
+                    <Menu className="h-4 w-4 text-emerald-500" />
                     Mobile Navigation
                   </h4>
                   <p className="text-sm text-muted-foreground">
@@ -310,11 +310,11 @@ export default function GettingStartedPage() {
                 </div>
               </div>
               
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-semibold text-blue-800 mb-2">Main Menu Sections</h4>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                <h4 className="font-semibold text-emerald-800 mb-2">Main Menu Sections</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                   <div className="flex items-start gap-2">
-                    <Building2 className="h-4 w-4 text-blue-600 mt-0.5" />
+                    <Building2 className="h-4 w-4 text-emerald-600 mt-0.5" />
                     <div>
                       <p className="font-medium">Contract Management</p>
                       <p className="text-xs text-muted-foreground">Contracts, Bills, Classifications</p>
@@ -328,7 +328,7 @@ export default function GettingStartedPage() {
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <Settings className="h-4 w-4 text-purple-600 mt-0.5" />
+                    <Settings className="h-4 w-4 text-emerald-600 mt-0.5" />
                     <div>
                       <p className="font-medium">Settings</p>
                       <p className="text-xs text-muted-foreground">Profile, Billing, Help</p>
@@ -342,9 +342,9 @@ export default function GettingStartedPage() {
           {/* Quick Start Buttons */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Link href="/contracts/new">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-dashed border-blue-300 bg-blue-50/50">
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-dashed border-emerald-300 bg-emerald-50/50">
                 <CardContent className="p-6 text-center">
-                  <Building2 className="h-10 w-10 text-blue-600 mx-auto mb-3" />
+                  <Building2 className="h-10 w-10 text-emerald-600 mx-auto mb-3" />
                   <h3 className="font-semibold text-lg mb-1">Create Your First Contract</h3>
                   <p className="text-sm text-muted-foreground">Start by adding your contract details</p>
                   <Button className="mt-4 gap-2">
@@ -370,13 +370,13 @@ export default function GettingStartedPage() {
 
         {/* Contracts Tab */}
         <TabsContent value="contracts" className="mt-6 space-y-6">
-          <Card className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+          <Card className="bg-gradient-to-r from-emerald-600 to-emerald-600 text-white">
             <CardContent className="p-6">
               <div className="flex items-center gap-3 mb-3">
                 <Building2 className="h-8 w-8" />
                 <div>
                   <h2 className="text-xl font-bold">Creating & Managing Contracts</h2>
-                  <p className="text-blue-100">Your contract is the foundation of all PVC calculations</p>
+                  <p className="text-emerald-100">Your contract is the foundation of all PVC calculations</p>
                 </div>
               </div>
             </CardContent>
@@ -523,28 +523,28 @@ export default function GettingStartedPage() {
           </div>
 
           {/* PVC Calculation Explanation */}
-          <Card className="border-2 border-blue-200">
-            <CardHeader className="bg-blue-50">
-              <CardTitle className="text-blue-800 flex items-center gap-2">
+          <Card className="border-2 border-emerald-200">
+            <CardHeader className="bg-emerald-50">
+              <CardTitle className="text-emerald-800 flex items-center gap-2">
                 <Calculator className="h-5 w-5" />
                 How PVC is Calculated
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-3">
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
+                <div className="w-8 h-8 bg-emerald-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
                 <div className="flex-1">
                   <p className="text-sm"><strong>Net Bill Amount</strong> = Gross Bill Amount - Non-Scheduled Items</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
+                <div className="w-8 h-8 bg-emerald-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
                 <div className="flex-1">
                   <p className="text-sm"><strong>For each classification:</strong> Calculate variation % using current vs base month indices</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
+                <div className="w-8 h-8 bg-emerald-500 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
                 <div className="flex-1">
                   <p className="text-sm"><strong>PVC Amount</strong> = Classification Amount × Variation %</p>
                 </div>
@@ -561,22 +561,22 @@ export default function GettingStartedPage() {
 
         {/* Reports Tab */}
         <TabsContent value="reports" className="mt-6 space-y-6">
-          <Card className="bg-gradient-to-r from-purple-600 to-pink-600 text-white">
+          <Card className="bg-gradient-to-r from-emerald-600 to-pink-600 text-white">
             <CardContent className="p-6">
               <div className="flex items-center gap-3 mb-3">
                 <FileText className="h-8 w-8" />
                 <div>
                   <h2 className="text-xl font-bold">Generating Reports</h2>
-                  <p className="text-purple-100">Download professional PDFs for submission to Indian Railways</p>
+                  <p className="text-emerald-100">Download professional PDFs for submission to Indian Railways</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <Card className="border-2 border-blue-200">
-              <CardHeader className="bg-blue-50">
-                <CardTitle className="text-blue-800 flex items-center gap-2">
+            <Card className="border-2 border-emerald-200">
+              <CardHeader className="bg-emerald-50">
+                <CardTitle className="text-emerald-800 flex items-center gap-2">
                   <FileText className="h-5 w-5" />
                   Full Bill Report
                 </CardTitle>
@@ -648,14 +648,14 @@ export default function GettingStartedPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Download className="h-5 w-5 text-blue-600" />
+                <Download className="h-5 w-5 text-emerald-600" />
                 Downloading Reports - Step by Step
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div className="flex gap-4 items-start p-4 bg-gray-50 rounded-lg">
-                  <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold shrink-0">1</div>
+                  <div className="w-8 h-8 bg-emerald-500 text-white rounded-full flex items-center justify-center text-sm font-bold shrink-0">1</div>
                   <div>
                     <h4 className="font-semibold">For Full Bill Report</h4>
                     <p className="text-sm text-muted-foreground">Navigate to Bills → Find your bill in the list → Click the 'PDF' button (or 'View' then 'Download')</p>

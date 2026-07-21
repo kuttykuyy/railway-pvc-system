@@ -149,11 +149,11 @@ export function CreditTopupDialog({ currentBalance, children }: CreditTopupDialo
             </div>
 
             {/* Support Contact Info */}
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-              <div className="text-sm font-medium text-blue-900 mb-1">
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+              <div className="text-sm font-medium text-emerald-900 mb-1">
                 📞 Contact Information
               </div>
-              <div className="text-xs text-blue-700 space-y-1">
+              <div className="text-xs text-emerald-700 space-y-1">
                  <div>📧 Email: admin@illall.in</div>
                 <div>💬 WhatsApp: +91 9944776689</div>
               </div>

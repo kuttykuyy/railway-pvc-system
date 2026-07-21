@@ -68,7 +68,7 @@ export default function RailwayOfficialSettingsPage() {
   if (loading) {
     return (
       <div className="flex min-h-[300px] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
       </div>
     );
   }
@@ -78,8 +78,8 @@ export default function RailwayOfficialSettingsPage() {
       <BackButton href="/admin/users" className="mb-6" />
 
       <div className="mb-6 flex items-center gap-3">
-        <div className="rounded-xl bg-blue-100 p-2.5">
-          <ShieldCheck className="h-6 w-6 text-blue-700" />
+        <div className="rounded-xl bg-emerald-100 p-2.5">
+          <ShieldCheck className="h-6 w-6 text-emerald-700" />
         </div>
         <div>
           <h1 className="text-xl font-bold text-slate-900">Railway Official Limits</h1>
@@ -118,9 +118,9 @@ export default function RailwayOfficialSettingsPage() {
           </div>
 
           {/* Info box */}
-          <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+          <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
             <p className="font-semibold mb-1">Who is affected?</p>
-            <p>Only users with the <code className="rounded bg-blue-100 px-1 py-0.5 text-xs">railway_official</code> role are subject to these limits. Admin, superadmin, and regular contractor accounts are not affected.</p>
+            <p>Only users with the <code className="rounded bg-emerald-100 px-1 py-0.5 text-xs">railway_official</code> role are subject to these limits. Admin, superadmin, and regular contractor accounts are not affected.</p>
           </div>
         </CardContent>
       </Card>

@@ -116,14 +116,14 @@ export const metadata: Metadata = {
     'apple-mobile-web-app-status-bar-style': 'default',
     'apple-mobile-web-app-title': 'Railway PVC',
     'application-name': 'Railway PVC',
-    'msapplication-TileColor': '#7c3aed',
+    'msapplication-TileColor': '#059669',
     'msapplication-TileImage': '/icons/icon-144x144.png',
-    'theme-color': '#7c3aed',
+    'theme-color': '#059669',
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#7c3aed',
+  themeColor: '#059669',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
@@ -143,7 +143,7 @@ export default function RootLayout({
           {`(function(){var o=console.error;console.error=function(){var a=[].slice.call(arguments).join(' ');if(a.indexOf('CLIENT_FETCH_ERROR')!==-1||a.indexOf('next-auth')!==-1&&a.indexOf('error')!==-1)return;o.apply(console,arguments)};})();`}
         </Script>
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#7c3aed" />
+        <meta name="theme-color" content="#059669" />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
         <StructuredData />
       </head>

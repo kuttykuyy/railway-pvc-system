@@ -111,7 +111,7 @@ export default function CreditBalance() {
             </>
           ) : (
             <>
-              <CreditCard className="h-4 w-4 text-blue-600" />
+              <CreditCard className="h-4 w-4 text-emerald-600" />
               <span>Account Balance</span>
             </>
           )}
@@ -151,7 +151,7 @@ export default function CreditBalance() {
           </div>
         ) : (
           <div className="space-y-2">
-            <div className="text-xl font-bold text-blue-600">
+            <div className="text-xl font-bold text-emerald-600">
               ₹{balance.toFixed(2)}
             </div>
             <div className="text-xs text-gray-600">Available balance</div>

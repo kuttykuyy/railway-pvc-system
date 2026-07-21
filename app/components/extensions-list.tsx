@@ -211,20 +211,20 @@ export function ExtensionsList({
                     </div>
 
                     <div className="flex items-start gap-2">
-                      <Calendar className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <Calendar className="h-4 w-4 text-emerald-600 mt-0.5 flex-shrink-0" />
                       <div>
                         <p className="text-xs text-gray-500">Extended To</p>
-                        <p className="text-sm font-medium text-blue-700">
+                        <p className="text-sm font-medium text-emerald-700">
                           {format(new Date(extension.extendedCompletionDate), 'dd MMM yyyy')}
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-start gap-2">
-                      <Clock className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                      <Clock className="h-4 w-4 text-emerald-600 mt-0.5 flex-shrink-0" />
                       <div>
                         <p className="text-xs text-gray-500">Duration</p>
-                        <p className="text-sm font-medium text-purple-700">
+                        <p className="text-sm font-medium text-emerald-700">
                           {extension.extensionDuration} days
                         </p>
                       </div>

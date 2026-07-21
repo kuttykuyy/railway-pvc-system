@@ -165,8 +165,8 @@ export function SignUpForm() {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4 relative overflow-hidden">
       <div className="absolute inset-0 bg-grid-slate-200/50 [mask-image:linear-gradient(to_bottom,white,transparent)] pointer-events-none" />
-      <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200/20 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute bottom-20 right-10 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
+      <div className="absolute top-20 left-10 w-72 h-72 bg-emerald-200/20 rounded-full blur-3xl animate-pulse" />
+      <div className="absolute bottom-20 right-10 w-96 h-96 bg-emerald-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
 
       <div className="w-full max-w-md mx-auto relative z-10">
         <Card className="w-full shadow-2xl border-0 bg-white/95 backdrop-blur-sm mt-12 mb-12">
@@ -214,7 +214,7 @@ export function SignUpForm() {
                     }}
                     className={`cursor-pointer p-3 rounded-lg border text-center transition-all ${
                       accountType === 'contractor'
-                        ? 'border-blue-600 bg-blue-50/50 text-blue-700 font-semibold shadow-sm'
+                        ? 'border-emerald-600 bg-emerald-50/50 text-emerald-700 font-semibold shadow-sm'
                         : 'border-gray-200 hover:border-gray-300 text-gray-600 bg-gray-50'
                     }`}
                   >
@@ -224,7 +224,7 @@ export function SignUpForm() {
                     onClick={() => setAccountType('railway_official')}
                     className={`cursor-pointer p-3 rounded-lg border text-center transition-all ${
                       accountType === 'railway_official'
-                        ? 'border-blue-600 bg-blue-50/50 text-blue-700 font-semibold shadow-sm'
+                        ? 'border-emerald-600 bg-emerald-50/50 text-emerald-700 font-semibold shadow-sm'
                         : 'border-gray-200 hover:border-gray-300 text-gray-600 bg-gray-50'
                     }`}
                   >
@@ -347,7 +347,7 @@ export function SignUpForm() {
 
               <Button
                 type="submit"
-                className="w-full h-12 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:via-indigo-700 hover:to-blue-800 text-white font-semibold shadow-lg shadow-blue-500/30 transition-all duration-200 hover:shadow-xl hover:shadow-blue-500/40"
+                className="w-full h-12 bg-gradient-to-r from-emerald-600 via-emerald-600 to-emerald-700 hover:from-emerald-700 hover:via-emerald-700 hover:to-emerald-800 text-white font-semibold shadow-lg shadow-emerald-500/30 transition-all duration-200 hover:shadow-xl hover:shadow-emerald-500/40"
                 disabled={loading}
               >
                 {loading ? (
@@ -376,7 +376,7 @@ export function SignUpForm() {
             <div className="text-center">
               <Link
                 href="/auth/signin"
-                className="inline-flex items-center justify-center space-x-2 text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors"
+                className="inline-flex items-center justify-center space-x-2 text-emerald-600 hover:text-emerald-700 font-semibold text-sm transition-colors"
               >
                 <span>Sign in instead</span>
                 <ArrowRight className="h-4 w-4" />

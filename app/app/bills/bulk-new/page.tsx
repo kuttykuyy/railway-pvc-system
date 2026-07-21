@@ -780,10 +780,10 @@ export default function BulkBillCreationPage() {
                 <button
                   type="button"
                   onClick={() => setBillMode('manual')}
-                  className="text-left rounded-2xl border-2 border-slate-200 hover:border-purple-400 hover:bg-purple-50/40 transition-all p-5 group"
+                  className="text-left rounded-2xl border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 transition-all p-5 group"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="bg-slate-100 group-hover:bg-purple-100 text-slate-600 group-hover:text-purple-600 p-2.5 rounded-xl transition-colors">
+                    <div className="bg-slate-100 group-hover:bg-emerald-100 text-slate-600 group-hover:text-emerald-600 p-2.5 rounded-xl transition-colors">
                       <Edit className="h-6 w-6" />
                     </div>
                     <div className="font-bold text-slate-900">Enter details manually</div>
@@ -794,10 +794,10 @@ export default function BulkBillCreationPage() {
                 <button
                   type="button"
                   onClick={() => setBillMode('ai')}
-                  className="text-left rounded-2xl border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 transition-all p-5 group"
+                  className="text-left rounded-2xl border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 transition-all p-5 group"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="bg-blue-50 group-hover:bg-blue-100 text-blue-600 p-2.5 rounded-xl transition-colors">
+                    <div className="bg-emerald-50 group-hover:bg-emerald-100 text-emerald-600 p-2.5 rounded-xl transition-colors">
                       <Sparkles className="h-6 w-6" />
                     </div>
                     <div className="font-bold text-slate-900">Upload signed bill PDF</div>
@@ -896,8 +896,8 @@ export default function BulkBillCreationPage() {
                 </div>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
-                <p className="text-sm text-blue-900">
+              <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg">
+                <p className="text-sm text-emerald-900">
                   <strong>Processing Fee:</strong> {processingFee} credits per manually entered bill;
                   AI-extracted bills are charged the AI extraction rate. The exact total is deducted on submit.
                 </p>

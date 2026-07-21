@@ -16,7 +16,7 @@ export function MonthlyRevenueChart({ data }: { data: any[] }) {
         <YAxis yAxisId="right" orientation="right" />
         <Tooltip />
         <Legend />
-        <Line yAxisId="left" type="monotone" dataKey="checks" stroke="#3b82f6" dot={false} strokeWidth={2} name="Total Checks" />
+        <Line yAxisId="left" type="monotone" dataKey="checks" stroke="#10b981" dot={false} strokeWidth={2} name="Total Checks" />
         <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10b981" dot={false} strokeWidth={2} name="Revenue (₹)" />
       </LineChart>
     </ResponsiveContainer>
@@ -32,8 +32,8 @@ export function WeeklyTrendChart({ data }: { data: any[] }) {
         <YAxis />
         <Tooltip />
         <Legend />
-        <Bar dataKey="checks" fill="#3b82f6" name="Checks" />
-        <Bar dataKey="users" fill="#8b5cf6" name="Unique Users" />
+        <Bar dataKey="checks" fill="#10b981" name="Checks" />
+        <Bar dataKey="users" fill="#10b981" name="Unique Users" />
       </BarChart>
     </ResponsiveContainer>
   );

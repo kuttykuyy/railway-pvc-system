@@ -113,16 +113,16 @@ export default function CreditStatementsPage() {
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <TrendingUp className="h-5 w-5 text-blue-600 mx-auto mb-1" />
+              <TrendingUp className="h-5 w-5 text-emerald-600 mx-auto mb-1" />
               <p className="text-xs text-slate-500">Net Revenue</p>
-              <p className="text-lg font-bold text-blue-700">{formatCurrency(summary.totalTopups - summary.totalUsage)}</p>
+              <p className="text-lg font-bold text-emerald-700">{formatCurrency(summary.totalTopups - summary.totalUsage)}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <Wallet className="h-5 w-5 text-purple-600 mx-auto mb-1" />
+              <Wallet className="h-5 w-5 text-emerald-600 mx-auto mb-1" />
               <p className="text-xs text-slate-500">Total Transactions</p>
-              <p className="text-lg font-bold text-purple-700">{summary.topupCount + summary.usageCount}</p>
+              <p className="text-lg font-bold text-emerald-700">{summary.topupCount + summary.usageCount}</p>
             </CardContent>
           </Card>
         </div>

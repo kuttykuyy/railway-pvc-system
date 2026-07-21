@@ -146,8 +146,8 @@ export default function WhatsAppLogsPage() {
       sent: { variant: 'default', icon: CheckCircle2, className: 'bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900 dark:text-green-200' },
       failed: { variant: 'destructive', icon: XCircle },
       pending: { variant: 'secondary', icon: Clock },
-      delivered: { variant: 'default', icon: CheckCircle2, className: 'bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-200' },
-      read: { variant: 'default', icon: CheckCircle2, className: 'bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-900 dark:text-purple-200' },
+      delivered: { variant: 'default', icon: CheckCircle2, className: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-900 dark:text-emerald-200' },
+      read: { variant: 'default', icon: CheckCircle2, className: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-900 dark:text-emerald-200' },
     };
 
     const config = statusConfig[status] || statusConfig.pending;
@@ -242,7 +242,7 @@ export default function WhatsAppLogsPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Delivered</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.delivered}</div>
+            <div className="text-2xl font-bold text-emerald-600">{stats.delivered}</div>
           </CardContent>
         </Card>
         <Card>
@@ -250,7 +250,7 @@ export default function WhatsAppLogsPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Read</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-purple-600">{stats.read}</div>
+            <div className="text-2xl font-bold text-emerald-600">{stats.read}</div>
           </CardContent>
         </Card>
       </div>

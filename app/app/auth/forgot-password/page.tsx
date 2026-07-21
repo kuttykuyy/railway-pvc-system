@@ -49,8 +49,8 @@ export default function ForgotPasswordPage() {
         <div className="absolute inset-0 bg-grid-slate-200/50 [mask-image:linear-gradient(to_bottom,white,transparent)] pointer-events-none" />
         
         {/* Floating Elements */}
-        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
+        <div className="absolute top-20 left-10 w-72 h-72 bg-emerald-200/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-emerald-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
         
         <div className="w-full max-w-md mx-auto relative z-10">
           <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
@@ -67,8 +67,8 @@ export default function ForgotPasswordPage() {
             </CardHeader>
             
             <CardContent className="px-8 pb-8">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <p className="text-sm text-blue-800">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-6">
+                <p className="text-sm text-emerald-800">
                   <strong>Important:</strong> The reset link will expire in 1 hour for security reasons.
                 </p>
               </div>
@@ -88,7 +88,7 @@ export default function ForgotPasswordPage() {
                   Didn't receive the email?
                   <button
                     onClick={() => setSuccess(false)}
-                    className="ml-1 text-blue-600 hover:text-blue-700 font-semibold"
+                    className="ml-1 text-emerald-600 hover:text-emerald-700 font-semibold"
                   >
                     Try again
                   </button>
@@ -107,8 +107,8 @@ export default function ForgotPasswordPage() {
       <div className="absolute inset-0 bg-grid-slate-200/50 [mask-image:linear-gradient(to_bottom,white,transparent)] pointer-events-none" />
       
       {/* Floating Elements */}
-      <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200/20 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute bottom-20 right-10 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
+      <div className="absolute top-20 left-10 w-72 h-72 bg-emerald-200/20 rounded-full blur-3xl animate-pulse" />
+      <div className="absolute bottom-20 right-10 w-96 h-96 bg-emerald-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
       
       <div className="w-full max-w-md mx-auto relative z-10">
         <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
@@ -149,7 +149,7 @@ export default function ForgotPasswordPage() {
 
               <Button 
                 type="submit" 
-                className="w-full h-12 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:via-indigo-700 hover:to-blue-800 text-white font-semibold shadow-lg shadow-blue-500/30 transition-all duration-200 hover:shadow-xl hover:shadow-blue-500/40"
+                className="w-full h-12 bg-gradient-to-r from-emerald-600 via-emerald-600 to-emerald-700 hover:from-emerald-700 hover:via-emerald-700 hover:to-emerald-800 text-white font-semibold shadow-lg shadow-emerald-500/30 transition-all duration-200 hover:shadow-xl hover:shadow-emerald-500/40"
                 disabled={loading}
               >
                 {loading ? (
@@ -168,7 +168,7 @@ export default function ForgotPasswordPage() {
               <div className="text-center pt-4">
                 <Link 
                   href="/auth/signin" 
-                  className="inline-flex items-center justify-center space-x-2 text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors"
+                  className="inline-flex items-center justify-center space-x-2 text-emerald-600 hover:text-emerald-700 font-semibold text-sm transition-colors"
                 >
                   <ArrowLeft className="h-4 w-4" />
                   <span>Back to Sign In</span>

@@ -15,7 +15,7 @@ export function Footer() {
           {/* Company Info */}
           <div>
             <div className="flex items-center space-x-3 mb-4">
-              <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-3 rounded-lg">
+              <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 p-3 rounded-lg">
                 <Building2 className="h-6 w-6 text-white" />
               </div>
               <div>
@@ -32,22 +32,22 @@ export function Footer() {
             <h4 className="text-lg font-semibold mb-4 text-white">Quick Links</h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link href="/about" className="text-gray-300 hover:text-blue-400 transition-colors">
+                <Link href="/about" className="text-gray-300 hover:text-emerald-400 transition-colors">
                   About Us
                 </Link>
               </li>
               <li>
-                <Link href="/pricing" className="text-gray-300 hover:text-blue-400 transition-colors">
+                <Link href="/pricing" className="text-gray-300 hover:text-emerald-400 transition-colors">
                   Pricing
                 </Link>
               </li>
               <li>
-                <Link href="/contact" className="text-gray-300 hover:text-blue-400 transition-colors">
+                <Link href="/contact" className="text-gray-300 hover:text-emerald-400 transition-colors">
                   Contact
                 </Link>
               </li>
               <li>
-                <Link href="/help" className="text-gray-300 hover:text-blue-400 transition-colors">
+                <Link href="/help" className="text-gray-300 hover:text-emerald-400 transition-colors">
                   Help & Support
                 </Link>
               </li>
@@ -59,30 +59,30 @@ export function Footer() {
             <h4 className="text-lg font-semibold mb-4 text-white">Contact Us</h4>
             <ul className="space-y-3 text-sm">
               <li className="flex items-start space-x-2">
-                <Mail className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                <Mail className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
                 <a 
                   href="mailto:admin@illall.in" 
-                  className="text-gray-300 hover:text-blue-400 transition-colors break-all"
+                  className="text-gray-300 hover:text-emerald-400 transition-colors break-all"
                 >
                   admin@illall.in
                 </a>
               </li>
               <li className="flex items-start space-x-2">
-                <Phone className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                <Phone className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
                 <a 
                   href="tel:+919944776689" 
-                  className="text-gray-300 hover:text-blue-400 transition-colors"
+                  className="text-gray-300 hover:text-emerald-400 transition-colors"
                 >
                   +91 9944776689
                 </a>
               </li>
               <li className="flex items-start space-x-2">
-                <Globe className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                <Globe className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
                 <a 
                   href="https://irpvc.in" 
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-gray-300 hover:text-blue-400 transition-colors"
+                  className="text-gray-300 hover:text-emerald-400 transition-colors"
                 >
                   irpvc.in
                 </a>
@@ -108,19 +108,19 @@ export function Footer() {
             <div className="flex space-x-6 text-sm">
               <Link 
                 href="/privacy" 
-                className="text-gray-400 hover:text-blue-400 transition-colors"
+                className="text-gray-400 hover:text-emerald-400 transition-colors"
               >
                 Privacy Policy
               </Link>
               <Link 
                 href="/terms" 
-                className="text-gray-400 hover:text-blue-400 transition-colors"
+                className="text-gray-400 hover:text-emerald-400 transition-colors"
               >
                 Terms of Service
               </Link>
               <Link 
                 href="/refund" 
-                className="text-gray-400 hover:text-blue-400 transition-colors"
+                className="text-gray-400 hover:text-emerald-400 transition-colors"
               >
                 Refund Policy
               </Link>

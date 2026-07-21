@@ -118,7 +118,7 @@ export default function DashboardPage() {
 
       {/* New user welcome */}
       {isNewUser && !hasFreeTrial && (
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800">
           <p className="font-semibold mb-1">Getting started</p>
           <p>Add your first contract, then create a bill under it. The system will automatically calculate PVC using the latest price indices.</p>
         </div>
@@ -126,7 +126,7 @@ export default function DashboardPage() {
 
       {/* Quick actions */}
       <div className="flex flex-wrap gap-2">
-        <Link href="/bills/new" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+        <Link href="/bills/new" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
           <Plus className="h-4 w-4" /> Create Bill
         </Link>
         <Link href="/contracts/new" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700">
@@ -142,9 +142,9 @@ export default function DashboardPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div onClick={() => router.push('/contracts')} className="bg-white border border-gray-200 rounded-lg px-4 py-3 cursor-pointer hover:shadow-sm transition-shadow border-l-4 border-l-blue-500">
+        <div onClick={() => router.push('/contracts')} className="bg-white border border-gray-200 rounded-lg px-4 py-3 cursor-pointer hover:shadow-sm transition-shadow border-l-4 border-l-emerald-500">
           <div className="flex items-center gap-1.5 mb-1">
-            <Building2 className="h-4 w-4 text-blue-500" />
+            <Building2 className="h-4 w-4 text-emerald-500" />
             <span className="text-xs text-gray-400 uppercase tracking-wide">Contracts</span>
           </div>
           <p className="text-2xl font-bold text-gray-900">{data.overview.totalContracts}</p>
@@ -176,9 +176,9 @@ export default function DashboardPage() {
           <p className="text-xs text-gray-400 mt-0.5">Avg: {formatCurrency(data.pvc.averagePvc)}</p>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 border-l-4 border-l-purple-500">
+        <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 border-l-4 border-l-emerald-500">
           <div className="flex items-center gap-1.5 mb-1">
-            <Activity className="h-4 w-4 text-purple-500" />
+            <Activity className="h-4 w-4 text-emerald-500" />
             <span className="text-xs text-gray-400 uppercase tracking-wide">This Month</span>
           </div>
           <p className="text-2xl font-bold text-gray-900">{data.overview.currentMonthBills}</p>
@@ -191,7 +191,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
             <div className="flex items-center gap-1.5 mb-1">
-              <Users className="h-4 w-4 text-cyan-500" />
+              <Users className="h-4 w-4 text-emerald-500" />
               <span className="text-xs text-gray-400 uppercase tracking-wide">Total Users</span>
             </div>
             <p className="text-2xl font-bold text-gray-900">{data.userStats.totalUsers}</p>
@@ -231,7 +231,7 @@ export default function DashboardPage() {
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <h2 className="font-semibold text-gray-900 text-sm">Top Contracts</h2>
-            <Link href="/contracts" className="text-xs text-blue-600 hover:underline">View all →</Link>
+            <Link href="/contracts" className="text-xs text-emerald-600 hover:underline">View all →</Link>
           </div>
           {data.topContracts.length > 0 ? (
             <div className="divide-y divide-gray-100">
@@ -239,13 +239,13 @@ export default function DashboardPage() {
                 <div key={c.id} onClick={() => router.push(`/contracts/${c.id}`)}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer">
                   <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                    i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-100 text-gray-600' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-blue-50 text-blue-600'
+                    i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-100 text-gray-600' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-emerald-50 text-emerald-600'
                   }`}>{i + 1}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{c.contractorName}</p>
                     <p className="text-xs text-gray-400 truncate">{c.agreementNo}</p>
                   </div>
-                  <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium shrink-0">
+                  <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium shrink-0">
                     {c.billCount} bill{c.billCount !== 1 ? 's' : ''}
                   </span>
                 </div>
@@ -260,7 +260,7 @@ export default function DashboardPage() {
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <h2 className="font-semibold text-gray-900 text-sm">Recent Bills</h2>
-            <Link href="/bills" className="text-xs text-blue-600 hover:underline">View all →</Link>
+            <Link href="/bills" className="text-xs text-emerald-600 hover:underline">View all →</Link>
           </div>
           {data.recentActivity.length > 0 ? (
             <div className="divide-y divide-gray-100">
@@ -292,21 +292,21 @@ export default function DashboardPage() {
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">More Tools for Railway Contractors</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <a href="https://primerp.in?ref=irpvc" target="_blank" rel="noopener noreferrer"
-            className="group bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-5 hover:shadow-md hover:border-blue-200 transition-all">
+            className="group bg-gradient-to-br from-emerald-50 to-emerald-50 border border-emerald-100 rounded-xl p-5 hover:shadow-md hover:border-emerald-200 transition-all">
             <div className="flex items-start gap-4">
-              <div className="bg-blue-600 text-white rounded-lg p-2.5 font-bold text-xs shrink-0">ERP</div>
+              <div className="bg-emerald-600 text-white rounded-lg p-2.5 font-bold text-xs shrink-0">ERP</div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-gray-900 text-sm group-hover:text-blue-700 transition-colors">PRIME ERP</h3>
+                <h3 className="font-bold text-gray-900 text-sm group-hover:text-emerald-700 transition-colors">PRIME ERP</h3>
                 <p className="text-xs text-gray-600 mt-1 leading-relaxed">Complete project management — USSOR/DSR billing, measurements, deviation statements, labour attendance & 30+ reports.</p>
                 <div className="flex items-center gap-2 mt-3">
                   <span className="text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">14-Day Free Trial</span>
-                  <span className="text-[10px] text-blue-600 font-medium group-hover:underline">Try PRIME ERP →</span>
+                  <span className="text-[10px] text-emerald-600 font-medium group-hover:underline">Try PRIME ERP →</span>
                 </div>
               </div>
             </div>
           </a>
           <a href="https://irwcms.primerp.in?ref=irpvc" target="_blank" rel="noopener noreferrer"
-            className="group bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-xl p-5 hover:shadow-md hover:border-emerald-200 transition-all">
+            className="group bg-gradient-to-br from-emerald-50 to-emerald-50 border border-emerald-100 rounded-xl p-5 hover:shadow-md hover:border-emerald-200 transition-all">
             <div className="flex items-start gap-4">
               <div className="bg-emerald-600 text-white rounded-lg p-2.5 font-bold text-xs shrink-0">eMB</div>
               <div className="flex-1 min-w-0">

@@ -296,7 +296,7 @@ function FullPvcReportContent() {
   return (
     <div className="bg-white">
       {/* Enhanced Print/Download Controls - Hidden in print */}
-      <div className="no-print bg-gradient-to-r from-gray-50 via-blue-50 to-purple-50 border-b border-gray-200 p-6">
+      <div className="no-print bg-gradient-to-r from-gray-50 via-emerald-50 to-emerald-50 border-b border-gray-200 p-6">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <BackButton href="/reports" label="Back to Reports" variant="outline" size="lg" className="hover:bg-white" />
           
@@ -312,7 +312,7 @@ function FullPvcReportContent() {
             <div className="flex gap-2">
               <Button 
                 onClick={handlePrint}
-                className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg"
                 size="lg"
               >
                 <Printer className="h-5 w-5 mr-2" />
@@ -338,12 +338,12 @@ function FullPvcReportContent() {
         
         {/* Report Header */}
         <div className="text-center mb-8 print:mb-6">
-          <div className="bg-blue-600 text-white py-4 px-6 rounded-lg mb-4 print:bg-blue-600 print:rounded-none print:mb-2">
+          <div className="bg-emerald-600 text-white py-4 px-6 rounded-lg mb-4 print:bg-emerald-600 print:rounded-none print:mb-2">
             <h1 className="text-2xl font-bold print:text-xl">INDIAN RAILWAY</h1>
             <h2 className="text-xl font-semibold print:text-lg">PRICE VARIATION CALCULATION (PVC) REPORT</h2>
             <h3 className="text-lg print:text-base">FULL DETAILED REPORT</h3>
           </div>
-          <div className="bg-blue-500 text-white py-2 px-4 rounded print:bg-blue-500 print:rounded-none">
+          <div className="bg-emerald-500 text-white py-2 px-4 rounded print:bg-emerald-500 print:rounded-none">
             <h4 className="font-bold">Bill No: {detailedReport.bill.billNo} | Quarter: {detailedReport.bill.quarter}</h4>
           </div>
         </div>
@@ -401,7 +401,7 @@ function FullPvcReportContent() {
               </div>
               <div className="flex justify-between">
                 <span className="font-medium">Cumulative PVC:</span>
-                <span className="font-bold text-blue-600">₹{detailedReport.pvcCalculation.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                <span className="font-bold text-emerald-600">₹{detailedReport.pvcCalculation.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
               </div>
               {(detailedReport.bill.cementAmount && detailedReport.bill.cementAmount > 0) && (
                 <div className="flex justify-between">
@@ -412,7 +412,7 @@ function FullPvcReportContent() {
               {(detailedReport.bill.steelAmount && detailedReport.bill.steelAmount > 0) && (
                 <div className="flex justify-between">
                   <span className="font-medium">Steel Amount:</span>
-                  <span className="font-bold text-blue-700">₹{detailedReport.bill.steelAmount.toLocaleString('en-IN')}</span>
+                  <span className="font-bold text-emerald-700">₹{detailedReport.bill.steelAmount.toLocaleString('en-IN')}</span>
                 </div>
               )}
               {detailedReport.bill.isFinalPvc && detailedReport.bill.dateOfCompletion && (
@@ -428,7 +428,7 @@ function FullPvcReportContent() {
         {/* Sub-Classifications Section */}
         {detailedReport.bill.subClassifications && detailedReport.bill.subClassifications.length > 0 && (
           <div className="mb-8 print:mb-6">
-            <div className="bg-blue-50 p-6 rounded-lg print:bg-white print:border print:border-gray-300 print:rounded-none print:p-4">
+            <div className="bg-emerald-50 p-6 rounded-lg print:bg-white print:border print:border-gray-300 print:rounded-none print:p-4">
               <h3 className="text-lg font-bold mb-4 text-gray-900">Sub-Classifications</h3>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-300">
@@ -633,7 +633,7 @@ function FullPvcReportContent() {
                   Object.entries(calculationSteps.calculationSteps)
                     .filter(([key, stepData]) => stepData.componentName.toLowerCase().includes('steel'))
                     .map(([key, stepData]) => (
-                      <tr key={key} className="bg-blue-50 print:bg-gray-50">
+                      <tr key={key} className="bg-emerald-50 print:bg-gray-50">
                         <td className="border border-gray-300 p-3 font-medium">
                           Steel Component ({stepData.componentPercentage}%) (As per Classification {detailedReport.workClassification?.code || ''})
                         </td>
@@ -664,7 +664,7 @@ function FullPvcReportContent() {
 
                 {/* Dedicated Steel (if applicable) */}
                 {(detailedReport.bill.steelAmount && detailedReport.bill.steelAmount > 0) && (
-                  <tr className="bg-blue-100 print:bg-gray-100">
+                  <tr className="bg-emerald-100 print:bg-gray-100">
                     <td className="border border-gray-300 p-3 font-medium">
                       Dedicated Steel Component (85%)
                     </td>
@@ -701,7 +701,7 @@ function FullPvcReportContent() {
           <div className="overflow-x-auto">
             <table className="w-full border-collapse border border-gray-300 text-sm">
               <thead>
-                <tr className="bg-blue-100 print:bg-gray-100">
+                <tr className="bg-emerald-100 print:bg-gray-100">
                   <th className="border border-gray-300 p-3 text-left font-semibold">Component</th>
                   <th className="border border-gray-300 p-3 text-right font-semibold">Percentage</th>
                   <th className="border border-gray-300 p-3 text-right font-semibold">PVC Amount (₹)</th>
@@ -785,8 +785,8 @@ function FullPvcReportContent() {
             </div>
 
             {/* Steel Total */}
-            <div className="bg-blue-50 p-6 rounded-lg print:bg-white print:border print:border-gray-300 print:rounded-none print:p-4">
-              <h4 className="text-lg font-bold mb-3 text-blue-800">Steel</h4>
+            <div className="bg-emerald-50 p-6 rounded-lg print:bg-white print:border print:border-gray-300 print:rounded-none print:p-4">
+              <h4 className="text-lg font-bold mb-3 text-emerald-800">Steel</h4>
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span>Classification-based:</span>
@@ -798,7 +798,7 @@ function FullPvcReportContent() {
                 </div>
                 <div className="border-t pt-2 flex justify-between font-bold text-lg">
                   <span>Total Steel:</span>
-                  <span className="text-blue-700">₹{(calculationSteps.summary.steelPvc + calculationSteps.summary.dedicatedSteelPvc).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                  <span className="text-emerald-700">₹{(calculationSteps.summary.steelPvc + calculationSteps.summary.dedicatedSteelPvc).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
@@ -854,7 +854,7 @@ function FullPvcReportContent() {
           <div className="overflow-x-auto">
             <table className="w-full border-collapse border border-gray-300 text-sm">
               <thead>
-                <tr className="bg-blue-600 text-white print:bg-blue-600 print:text-white">
+                <tr className="bg-emerald-600 text-white print:bg-emerald-600 print:text-white">
                   <th className="border border-gray-300 p-3 text-left font-semibold">Price Index</th>
                   <th className="border border-gray-300 p-3 text-center font-semibold">Base Index<br/>({detailedReport.reportMetadata.baseMonth})</th>
                   <th className="border border-gray-300 p-3 text-center font-semibold">Quarterly Average<br/>({detailedReport.reportMetadata.quarter})</th>
@@ -864,9 +864,9 @@ function FullPvcReportContent() {
               </thead>
               <tbody>
                 {detailedReport.quarterlyBreakdown.map((qData, index) => (
-                  <tr key={`enhanced-${index}`} className={`${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'} print:bg-white hover:bg-blue-50`}>
+                  <tr key={`enhanced-${index}`} className={`${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'} print:bg-white hover:bg-emerald-50`}>
                     <td className="border border-gray-300 p-3 font-medium">{qData.indexName}</td>
-                    <td className="border border-gray-300 p-3 text-center font-bold text-blue-700">
+                    <td className="border border-gray-300 p-3 text-center font-bold text-emerald-700">
                       {qData.baseValue?.toFixed(2) || '0.00'}
                     </td>
                     <td className="border border-gray-300 p-3 text-center font-bold">
@@ -919,13 +919,13 @@ function FullPvcReportContent() {
                     <tr 
                       key={`month-${monthIndex}`} 
                       className={`${
-                        isBaseMonth ? 'bg-blue-50 print:bg-gray-100' : 
+                        isBaseMonth ? 'bg-emerald-50 print:bg-gray-100' : 
                         isCurrentQuarterMonth ? 'bg-green-50 print:bg-gray-50' : 
                         'bg-white print:bg-white'
                       }`}
                     >
                       <td className={`border border-gray-300 p-2 font-medium ${
-                        isBaseMonth ? 'text-blue-800 font-bold' :
+                        isBaseMonth ? 'text-emerald-800 font-bold' :
                         isCurrentQuarterMonth ? 'text-green-800 font-bold' :
                         'text-gray-700'
                       }`}>
@@ -959,7 +959,7 @@ function FullPvcReportContent() {
           <div className="mt-2 text-xs text-gray-600">
             <div className="flex flex-wrap gap-4">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-blue-50 border border-blue-300"></div>
+                <div className="w-4 h-4 bg-emerald-50 border border-emerald-300"></div>
                 <span>Base Month</span>
               </div>
               <div className="flex items-center gap-2">
@@ -978,7 +978,7 @@ function FullPvcReportContent() {
         <div className="print:break-before-page mt-12 print:mt-8">
           <h3 className="text-xl font-bold mb-6 text-gray-900 text-center">PVC CALCULATION SUMMARY</h3>
           
-          <div className="bg-gradient-to-r from-blue-50 to-green-50 p-6 rounded-lg mb-8 print:bg-gray-100 print:rounded-none">
+          <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-6 rounded-lg mb-8 print:bg-gray-100 print:rounded-none">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Left Column */}
               <div className="space-y-3">
@@ -1006,7 +1006,7 @@ function FullPvcReportContent() {
                   <div className="text-lg font-bold text-green-700 border-t pt-2">
                     <strong>Total PVC:</strong> ₹{calculationSteps.summary.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                   </div>
-                  <div className="text-lg font-bold text-blue-700">
+                  <div className="text-lg font-bold text-emerald-700">
                     <strong>Cumulative PVC:</strong> ₹{detailedReport.pvcCalculation.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                   </div>
                 </div>
@@ -1024,15 +1024,15 @@ function FullPvcReportContent() {
               </div>
               <div className="bg-white p-3 border border-gray-300 text-center">
                 <div className="font-medium">Plant Machinery & Spares</div>
-                <div className="text-blue-700 font-bold">₹{calculationSteps.summary.plantMachineryPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+                <div className="text-emerald-700 font-bold">₹{calculationSteps.summary.plantMachineryPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
               </div>
               <div className="bg-white p-3 border border-gray-300 text-center">
                 <div className="font-medium">Fuel & Lubricants</div>
-                <div className="text-purple-700 font-bold">₹{calculationSteps.summary.fuelPowerPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+                <div className="text-emerald-700 font-bold">₹{calculationSteps.summary.fuelPowerPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
               </div>
               <div className="bg-white p-3 border border-gray-300 text-center">
                 <div className="font-medium">Other Materials</div>
-                <div className="text-indigo-700 font-bold">₹{calculationSteps.summary.otherMaterialsPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+                <div className="text-emerald-700 font-bold">₹{calculationSteps.summary.otherMaterialsPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
               </div>
               <div className="bg-white p-3 border border-gray-300 text-center">
                 <div className="font-medium">Cement</div>
@@ -1040,7 +1040,7 @@ function FullPvcReportContent() {
               </div>
               <div className="bg-white p-3 border border-gray-300 text-center">
                 <div className="font-medium">Steel</div>
-                <div className="text-blue-800 font-bold">₹{(calculationSteps.summary.steelPvc + calculationSteps.summary.dedicatedSteelPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+                <div className="text-emerald-800 font-bold">₹{(calculationSteps.summary.steelPvc + calculationSteps.summary.dedicatedSteelPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
               </div>
               <div className="bg-white p-3 border border-gray-300 text-center">
                 <div className="font-medium">Explosives</div>
@@ -1144,15 +1144,15 @@ export default function FullPvcReportPage() {
               color-adjust: exact !important;
             }
             
-            .print\\:bg-blue-600 {
-              background-color: #2563eb !important;
+            .print\\:bg-emerald-600 {
+              background-color: #059669 !important;
               color: white !important;
               -webkit-print-color-adjust: exact !important;
               color-adjust: exact !important;
             }
             
-            .print\\:bg-blue-500 {
-              background-color: #3b82f6 !important;
+            .print\\:bg-emerald-500 {
+              background-color: #10b981 !important;
               color: white !important;
               -webkit-print-color-adjust: exact !important;
               color-adjust: exact !important;
@@ -1214,8 +1214,8 @@ export default function FullPvcReportPage() {
             }
             
             /* Preserve important colors for print */
-            .bg-blue-600,
-            .bg-blue-500,
+            .bg-emerald-600,
+            .bg-emerald-500,
             .bg-gray-800 {
               background-color: #1f2937 !important;
               color: white !important;
@@ -1244,7 +1244,7 @@ export default function FullPvcReportPage() {
           /* Print-specific button styling */
           @media screen {
             .print-button {
-              background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+              background: linear-gradient(135deg, #10b981, #047857);
               color: white;
               border: none;
               padding: 12px 24px;
@@ -1256,7 +1256,7 @@ export default function FullPvcReportPage() {
             }
             
             .print-button:hover {
-              background: linear-gradient(135deg, #1d4ed8, #1e40af);
+              background: linear-gradient(135deg, #047857, #1e40af);
               transform: translateY(-2px);
               box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
             }

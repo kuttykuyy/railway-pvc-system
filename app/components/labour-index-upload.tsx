@@ -488,7 +488,7 @@ export function LabourIndexUpload({
               <div className="space-y-2">
                 <div className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 p-3">
                   <div className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-blue-600" />
+                    <FileText className="h-5 w-5 text-emerald-600" />
                     <div>
                       <p className="text-sm font-medium">{selectedFile.name}</p>
                       <p className="text-xs text-gray-500">
@@ -509,7 +509,7 @@ export function LabourIndexUpload({
                   <div className="space-y-1">
                     <div className="h-2 w-full rounded-full bg-gray-200">
                       <div
-                        className="h-2 rounded-full bg-blue-600 transition-all duration-200"
+                        className="h-2 rounded-full bg-emerald-600 transition-all duration-200"
                         style={{ width: `${uploadProgress}%` }}
                       />
                     </div>

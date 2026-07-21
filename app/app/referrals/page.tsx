@@ -130,7 +130,7 @@ export default function ReferralsPage() {
               <p className="text-xs font-medium text-slate-500">Invited</p>
               <p className="mt-1 text-2xl font-bold text-slate-900">{data.stats.totalInvited}</p>
             </div>
-            <Users className="h-5 w-5 text-blue-600" />
+            <Users className="h-5 w-5 text-emerald-600" />
           </CardContent>
         </Card>
         <Card>
@@ -157,7 +157,7 @@ export default function ReferralsPage() {
               <p className="text-xs font-medium text-slate-500">Credits Earned</p>
               <p className="mt-1 text-2xl font-bold text-slate-900">{currency(data.stats.totalEarned)}</p>
             </div>
-            <IndianRupee className="h-5 w-5 text-violet-600" />
+            <IndianRupee className="h-5 w-5 text-emerald-600" />
           </CardContent>
         </Card>
       </section>

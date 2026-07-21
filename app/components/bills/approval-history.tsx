@@ -33,8 +33,8 @@ const actionConfig = {
   submitted: {
     label: 'Submitted for Approval',
     icon: Send,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-100'
+    color: 'text-emerald-600',
+    bgColor: 'bg-emerald-100'
   },
   approved: {
     label: 'Approved',

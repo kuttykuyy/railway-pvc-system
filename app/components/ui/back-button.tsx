@@ -52,10 +52,10 @@ export function BackButton({
   const buttonClasses = cn(
     'group font-medium transition-all duration-200',
     'hover:shadow-md hover:scale-105',
-    'focus:ring-2 focus:ring-offset-2 focus:ring-blue-500',
-    variant === 'default' && 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white',
-    variant === 'ghost' && 'hover:bg-blue-50 hover:text-blue-700',
-    variant === 'outline' && 'border-2 hover:bg-blue-50 hover:border-blue-500 hover:text-blue-700',
+    'focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500',
+    variant === 'default' && 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white',
+    variant === 'ghost' && 'hover:bg-emerald-50 hover:text-emerald-700',
+    variant === 'outline' && 'border-2 hover:bg-emerald-50 hover:border-emerald-500 hover:text-emerald-700',
     className
   );
 

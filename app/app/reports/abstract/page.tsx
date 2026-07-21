@@ -179,7 +179,7 @@ function AbstractPageContent() {
           <p className="text-sm text-gray-500 mt-0.5">Quarterly PVC breakdown by component</p>
         </div>
         {abstractData && (
-          <Button onClick={handleDownloadPDF} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Button onClick={handleDownloadPDF} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
             <Download className="h-4 w-4 mr-1.5" />
             Download PDF
           </Button>
@@ -377,9 +377,9 @@ function AbstractPageContent() {
                 ₹{fmt(abstractData.grandTotal)}
               </p>
             </div>
-            <div className="border border-blue-200 rounded-lg px-6 py-4 bg-blue-50 text-right min-w-40">
-              <p className="text-xs text-blue-500 uppercase tracking-wide">Say</p>
-              <p className={`text-xl font-bold ${abstractData.totalSay < 0 ? 'text-red-600' : 'text-blue-700'}`}>
+            <div className="border border-emerald-200 rounded-lg px-6 py-4 bg-emerald-50 text-right min-w-40">
+              <p className="text-xs text-emerald-500 uppercase tracking-wide">Say</p>
+              <p className={`text-xl font-bold ${abstractData.totalSay < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
                 ₹{fmt(abstractData.totalSay, 0)}
               </p>
             </div>

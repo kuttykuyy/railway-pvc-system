@@ -128,8 +128,8 @@ export default function TouchOptimizedTable({
         )}
         
         {selectedItems.size > 0 && (
-          <div className="flex items-center justify-between bg-blue-50 rounded-lg p-2 mt-3">
-            <span className="text-sm text-blue-800">
+          <div className="flex items-center justify-between bg-emerald-50 rounded-lg p-2 mt-3">
+            <span className="text-sm text-emerald-800">
               {selectedItems.size} item{selectedItems.size > 1 ? 's' : ''} selected
             </span>
             <div className="flex space-x-2">
@@ -161,7 +161,7 @@ export default function TouchOptimizedTable({
                 key={item.id}
                 className={cn(
                   "flex items-center p-4 transition-colors",
-                  selectedItems.has(item.id) ? "bg-blue-50" : "hover:bg-gray-50",
+                  selectedItems.has(item.id) ? "bg-emerald-50" : "hover:bg-gray-50",
                   "active:bg-gray-100" // Touch feedback
                 )}
               >

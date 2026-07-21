@@ -136,7 +136,7 @@ function getContractStatus(contract: Contract): StatusType {
 const STATUS_CONFIG: Record<StatusType, { label: string; dot: string; badge: string; border: string }> = {
   'pvc-ready':  { label: 'PVC Ready',    dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', border: 'border-l-emerald-400' },
   'pvc-pending':{ label: 'PVC Pending',  dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',       border: 'border-l-amber-400'   },
-  'active':     { label: 'Billing',      dot: 'bg-sky-400',     badge: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200',             border: 'border-l-sky-400'     },
+  'active':     { label: 'Billing',      dot: 'bg-emerald-400',     badge: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',             border: 'border-l-emerald-400'     },
   'setup':      { label: 'Setup',        dot: 'bg-slate-300',   badge: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',      border: 'border-l-slate-200'   },
 };
 
@@ -225,7 +225,7 @@ function BillsDialog({ contract }: { contract: Contract }) {
                       </td>
                       <td className="px-3 py-2.5 text-xs text-slate-500">{dateLabel(bill.dateOfMeasurement)}</td>
                       <td className="px-3 py-2.5 text-right">
-                        <Link href={`/bills/${bill.id}`} className="inline-flex rounded-lg p-1.5 text-slate-400 hover:bg-sky-50 hover:text-sky-700">
+                        <Link href={`/bills/${bill.id}`} className="inline-flex rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-700">
                           <Eye className="h-4 w-4" />
                         </Link>
                       </td>
@@ -236,7 +236,7 @@ function BillsDialog({ contract }: { contract: Contract }) {
             </div>
             {contract._count.bills > 10 && (
               <div className="pt-2 text-center">
-                <Link href={`/contracts/${contract.id}`} className="text-sm font-medium text-sky-700 hover:underline">
+                <Link href={`/contracts/${contract.id}`} className="text-sm font-medium text-emerald-700 hover:underline">
                   View all {contract._count.bills} bills →
                 </Link>
               </div>
@@ -419,11 +419,11 @@ export default function ContractsPage() {
         <div className={`mt-4 rounded-xl border px-4 py-3 ${
           !roContractQuota.contracts.allowed ? 'border-red-200 bg-red-50'
           : roContractQuota.contracts.remaining <= 1 ? 'border-amber-200 bg-amber-50'
-          : 'border-blue-100 bg-blue-50/50'
+          : 'border-emerald-100 bg-emerald-50/50'
         }`}>
           <div className="flex items-center gap-3">
-            <div className={`shrink-0 rounded-full p-2 ${!roContractQuota.contracts.allowed ? 'bg-red-100' : roContractQuota.contracts.remaining <= 1 ? 'bg-amber-100' : 'bg-blue-100'}`}>
-              <FolderOpen className={`h-4 w-4 ${!roContractQuota.contracts.allowed ? 'text-red-600' : roContractQuota.contracts.remaining <= 1 ? 'text-amber-600' : 'text-blue-600'}`} />
+            <div className={`shrink-0 rounded-full p-2 ${!roContractQuota.contracts.allowed ? 'bg-red-100' : roContractQuota.contracts.remaining <= 1 ? 'bg-amber-100' : 'bg-emerald-100'}`}>
+              <FolderOpen className={`h-4 w-4 ${!roContractQuota.contracts.allowed ? 'text-red-600' : roContractQuota.contracts.remaining <= 1 ? 'text-amber-600' : 'text-emerald-600'}`} />
             </div>
             <div className="flex-1 min-w-0">
               <p className={`text-sm font-semibold ${!roContractQuota.contracts.allowed ? 'text-red-800' : roContractQuota.contracts.remaining <= 1 ? 'text-amber-800' : 'text-slate-800'}`}>
@@ -436,7 +436,7 @@ export default function ContractsPage() {
               </p>
             </div>
             <div className="shrink-0 text-right">
-              <p className={`text-xl font-black ${!roContractQuota.contracts.allowed ? 'text-red-700' : roContractQuota.contracts.remaining <= 1 ? 'text-amber-700' : 'text-blue-700'}`}>
+              <p className={`text-xl font-black ${!roContractQuota.contracts.allowed ? 'text-red-700' : roContractQuota.contracts.remaining <= 1 ? 'text-amber-700' : 'text-emerald-700'}`}>
                 {roContractQuota.contracts.used}<span className="text-base font-medium text-slate-400">/{roContractQuota.contracts.limit}</span>
               </p>
             </div>
@@ -478,8 +478,8 @@ export default function ContractsPage() {
           {[
             { label: 'Total', value: stats.total, sub: `${stats.active} active`, color: 'text-slate-900' },
             { label: 'Portfolio', value: fmtCurrency(stats.totalValue) === '—' ? 'Not set' : fmtCurrency(stats.totalValue), sub: 'Contract value', color: 'text-emerald-700' },
-            { label: 'Bills', value: stats.totalBills, sub: 'Across all contracts', color: 'text-sky-700' },
-            { label: 'PVC Ready', value: stats.pvcDone, sub: 'With calculations', color: 'text-violet-700' },
+            { label: 'Bills', value: stats.totalBills, sub: 'Across all contracts', color: 'text-emerald-700' },
+            { label: 'PVC Ready', value: stats.pvcDone, sub: 'With calculations', color: 'text-emerald-700' },
             { label: 'Action needed', value: stats.needsAction, sub: 'Missing data', color: stats.needsAction > 0 ? 'text-amber-600' : 'text-slate-400' },
           ].map(({ label, value, sub, color }) => (
             <div key={label} className="flex flex-1 flex-col items-center gap-0.5 bg-white px-5 py-4 text-center min-w-[100px]">
@@ -587,7 +587,7 @@ export default function ContractsPage() {
             : <><strong className="text-slate-800">{filtered.length}</strong> of {contracts.length} contracts</>}
         </span>
         {hasFilters && (
-          <button onClick={resetFilters} className="flex items-center gap-1 rounded-md px-2 py-1 font-medium text-sky-700 hover:bg-sky-50">
+          <button onClick={resetFilters} className="flex items-center gap-1 rounded-md px-2 py-1 font-medium text-emerald-700 hover:bg-emerald-50">
             <X className="h-3.5 w-3.5" /> Clear filters
           </button>
         )}
@@ -611,11 +611,11 @@ export default function ContractsPage() {
             <div className="mt-6 flex w-full max-w-md flex-col items-center gap-3 px-4">
               {/* Lead with the agreement auto-fill: typing a contract by hand is the step
                   most new users stall on, and the AI upload removes almost all of it. */}
-              <div className="w-full rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 text-left">
-                <p className="flex items-center gap-1.5 text-sm font-semibold text-indigo-900">
+              <div className="w-full rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-left">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-900">
                   <FileText className="h-4 w-4" /> Fastest way — upload your agreement
                 </p>
-                <p className="mt-1 text-xs text-indigo-700/80">
+                <p className="mt-1 text-xs text-emerald-700/80">
                   Upload the railway agreement PDF and we&apos;ll fill in the agreement number, contractor,
                   dates and values for you — free. You just review and save.
                 </p>
@@ -657,7 +657,7 @@ export default function ContractsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
                         href={`/contracts/${contract.id}`}
-                        className="text-base font-bold text-slate-900 hover:text-sky-700 transition-colors"
+                        className="text-base font-bold text-slate-900 hover:text-emerald-700 transition-colors"
                       >
                         {contract.agreementNo}
                       </Link>
@@ -692,7 +692,7 @@ export default function ContractsPage() {
                   {/* Pills row */}
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <BillsDialog contract={contract} />
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-700">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700">
                       <TrendingUp className="h-3.5 w-3.5" />
                       {contract._count.pvcCalculations} PVC
                     </span>
@@ -729,7 +729,7 @@ export default function ContractsPage() {
                       </Link>
                       <Link
                         href={`/contracts/${contract.id}`}
-                        className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-sky-50 hover:text-sky-700"
+                        className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
                         aria-label="View"
                       >
                         <Eye className="h-4 w-4" />
@@ -772,7 +772,7 @@ export default function ContractsPage() {
                     <tr key={contract.id} className="group hover:bg-slate-50/70">
                       <td className="px-4 py-3.5">
                         <div className={`mb-1 inline-block h-1 w-8 rounded-full ${cfg.dot}`} />
-                        <Link href={`/contracts/${contract.id}`} className="block font-bold text-slate-900 hover:text-sky-700">
+                        <Link href={`/contracts/${contract.id}`} className="block font-bold text-slate-900 hover:text-emerald-700">
                           {contract.agreementNo}
                         </Link>
                         <p className="mt-0.5 max-w-[220px] truncate text-xs text-slate-500">{contract.workDescription}</p>
@@ -798,7 +798,7 @@ export default function ContractsPage() {
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center justify-end gap-1">
-                          <Link href={`/contracts/${contract.id}`} className="rounded-lg p-2 text-slate-400 hover:bg-sky-50 hover:text-sky-700" aria-label="View">
+                          <Link href={`/contracts/${contract.id}`} className="rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-700" aria-label="View">
                             <Eye className="h-4 w-4" />
                           </Link>
                           <Link href={`/contracts/${contract.id}/edit`} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Edit">

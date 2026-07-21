@@ -230,7 +230,7 @@ export default function AdminGstInvoicesPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Loading GST invoices...</p>
           </div>
         </div>
@@ -243,7 +243,7 @@ export default function AdminGstInvoicesPage() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
-          <FileText className="h-8 w-8 text-blue-600" />
+          <FileText className="h-8 w-8 text-emerald-600" />
           <h1 className="text-3xl font-bold text-gray-900">GST Invoices Review</h1>
         </div>
         <p className="text-gray-600">
@@ -261,7 +261,7 @@ export default function AdminGstInvoicesPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-blue-600" />
+              <Receipt className="h-5 w-5 text-emerald-600" />
               <span className="text-2xl font-bold text-gray-900">
                 {filteredInvoices.length}
               </span>
@@ -573,7 +573,7 @@ export default function AdminGstInvoicesPage() {
                       )}
                       <div className="text-sm">
                         <span className="text-gray-600">Total: </span>
-                        <span className="font-bold text-blue-600 text-base">
+                        <span className="font-bold text-emerald-600 text-base">
                           {formatCurrency(invoice.totalAmount)}
                         </span>
                       </div>

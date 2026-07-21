@@ -755,8 +755,8 @@ export default function ComponentDocumentsPage() {
   const getSortIcon = (field: SortField) => {
     if (sortField !== field) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 opacity-40" />;
     return sortOrder === "asc" ? 
-      <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-blue-600" /> : 
-      <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-blue-600 rotate-180" />;
+      <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-emerald-600" /> : 
+      <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-emerald-600 rotate-180" />;
   };
 
   // Stats Card Calculations
@@ -783,7 +783,7 @@ export default function ComponentDocumentsPage() {
             <BackButton href="/indices" />
             <div>
               <h1 className="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-                <FileText className="h-6 w-6 text-blue-600" />
+                <FileText className="h-6 w-6 text-emerald-600" />
                 Component Index Documents
               </h1>
               <p className="text-sm text-gray-500">
@@ -792,18 +792,18 @@ export default function ComponentDocumentsPage() {
             </div>
           </div>
           
-          <Button onClick={() => setUploadDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm gap-2">
+          <Button onClick={() => setUploadDialogOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm gap-2">
             <Upload className="h-4 w-4" />
             Upload Document
           </Button>
         </div>
 
         {/* Info Box */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 flex gap-3 shadow-sm">
-          <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+        <div className="bg-gradient-to-r from-emerald-50 to-emerald-50 border border-emerald-100 rounded-xl p-4 flex gap-3 shadow-sm">
+          <Info className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <h4 className="text-sm font-bold text-blue-900">Automatic PDF Attachment Flow</h4>
-            <p className="text-xs text-blue-800 leading-relaxed">
+            <h4 className="text-sm font-bold text-emerald-900">Automatic PDF Attachment Flow</h4>
+            <p className="text-xs text-emerald-800 leading-relaxed">
               When printing a PVC bill, the system searches these documents for matched components (e.g. Labour, Cement) and applicable billing calendar months. Matched index sheets are automatically appended to the final output PDF as supporting verification schedules.
             </p>
           </div>
@@ -812,10 +812,10 @@ export default function ComponentDocumentsPage() {
         {/* Stats Strip */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: "Total Documents", value: statsTotal, desc: "Uploaded index sheets", icon: FileText, color: "text-blue-600 bg-blue-100/50" },
+            { label: "Total Documents", value: statsTotal, desc: "Uploaded index sheets", icon: FileText, color: "text-emerald-600 bg-emerald-100/50" },
             { label: "Provisional (P)", value: statsProvisional, desc: "Awaiting final bulletin", icon: FileCheck2, color: "text-amber-600 bg-amber-100/50" },
             { label: "Final Release", value: statsFinal, desc: "Verified records", icon: CheckCircle, color: "text-emerald-600 bg-emerald-100/50" },
-            { label: "Active Year Range", value: statsLatestYear, desc: `Latest data uploaded`, icon: Calendar, color: "text-purple-600 bg-purple-100/50" },
+            { label: "Active Year Range", value: statsLatestYear, desc: `Latest data uploaded`, icon: Calendar, color: "text-emerald-600 bg-emerald-100/50" },
           ].map((stat, idx) => (
             <Card key={idx} className="border border-gray-200/80 shadow-sm hover:shadow-md transition-shadow">
               <CardContent className="p-4 flex items-center gap-4">
@@ -940,12 +940,12 @@ export default function ComponentDocumentsPage() {
                   return (
                     <div 
                       key={doc.id}
-                      className="group bg-white border border-gray-200/80 rounded-xl p-5 hover:border-blue-300 hover:shadow-md transition-all duration-300 flex flex-col justify-between relative"
+                      className="group bg-white border border-gray-200/80 rounded-xl p-5 hover:border-emerald-300 hover:shadow-md transition-all duration-300 flex flex-col justify-between relative"
                     >
                       <div>
                         {/* Upper Badge Line */}
                         <div className="flex items-start justify-between gap-2 mb-3">
-                          <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 font-bold px-2 py-0.5 text-[10px]">
+                          <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-100 font-bold px-2 py-0.5 text-[10px]">
                             {getComponentLabel(doc.componentType)}
                           </Badge>
                           {doc.isProvisional ? (
@@ -999,7 +999,7 @@ export default function ComponentDocumentsPage() {
                             href={downloadUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-1.5 rounded-lg border border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 text-gray-500 transition-colors"
+                            className="p-1.5 rounded-lg border border-gray-200 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 text-gray-500 transition-colors"
                             title="View PDF Document"
                           >
                             <Eye className="h-4 w-4" />
@@ -1113,7 +1113,7 @@ export default function ComponentDocumentsPage() {
                             </div>
                           </TableCell>
                           <TableCell className="max-w-[220px] truncate font-medium" title={doc.fileName}>
-                            <a href={downloadUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                            <a href={downloadUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline">
                               {doc.fileName}
                             </a>
                             {doc.remarks && <p className="text-[10px] text-gray-400 truncate mt-0.5">{doc.remarks}</p>}
@@ -1128,7 +1128,7 @@ export default function ComponentDocumentsPage() {
                                 href={downloadUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600 transition-colors"
+                                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-emerald-600 transition-colors"
                               >
                                 <Eye className="h-4 w-4" />
                               </a>
@@ -1170,7 +1170,7 @@ export default function ComponentDocumentsPage() {
           <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Upload className="h-5 w-5 text-blue-600" />
+                <Upload className="h-5 w-5 text-emerald-600" />
                 Upload Index Document
               </DialogTitle>
               <DialogDescription>
@@ -1185,7 +1185,7 @@ export default function ComponentDocumentsPage() {
                 <Label className="text-xs font-bold text-gray-500 uppercase tracking-wider">PDF File</Label>
                 <div
                   className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-300 ${
-                    dragActive ? "border-blue-500 bg-blue-50/50" : "border-gray-200 hover:border-blue-400 bg-gray-50/30"
+                    dragActive ? "border-emerald-500 bg-emerald-50/50" : "border-gray-200 hover:border-emerald-400 bg-gray-50/30"
                   }`}
                   onDragEnter={() => setDragActive(true)}
                   onDragLeave={() => setDragActive(false)}
@@ -1219,7 +1219,7 @@ export default function ComponentDocumentsPage() {
                     </div>
                   ) : (
                     <div className="flex flex-col items-center">
-                      <Upload className="h-10 w-10 text-blue-500 mb-2" />
+                      <Upload className="h-10 w-10 text-emerald-500 mb-2" />
                       <p className="text-sm font-bold text-gray-700">Drag & drop your PDF document here, or browse</p>
                       <p className="text-xs text-gray-400 mt-1">PDF format only (Max 100MB)</p>
                     </div>
@@ -1235,7 +1235,7 @@ export default function ComponentDocumentsPage() {
                     <button 
                       type="button" 
                       onClick={() => setSelectedComponentTypes(["TMT_BARS", "ANGLE_CHANNEL", "PLATES", "OTHER_SECTIONS"])} 
-                      className="text-[10px] text-blue-600 hover:underline font-bold"
+                      className="text-[10px] text-emerald-600 hover:underline font-bold"
                     >
                       Select All Steel
                     </button>
@@ -1243,7 +1243,7 @@ export default function ComponentDocumentsPage() {
                     <button 
                       type="button" 
                       onClick={() => setSelectedComponentTypes(COMPONENT_TYPES.map(c => c.value))} 
-                      className="text-[10px] text-blue-600 hover:underline font-bold"
+                      className="text-[10px] text-emerald-600 hover:underline font-bold"
                     >
                       Select All
                     </button>
@@ -1251,7 +1251,7 @@ export default function ComponentDocumentsPage() {
                     <button 
                       type="button" 
                       onClick={() => setSelectedComponentTypes([])} 
-                      className="text-[10px] text-blue-600 hover:underline font-bold"
+                      className="text-[10px] text-emerald-600 hover:underline font-bold"
                     >
                       Clear
                     </button>
@@ -1267,7 +1267,7 @@ export default function ComponentDocumentsPage() {
                         onClick={() => toggleComponentType(c.value)}
                         className={`py-1.5 px-3 text-left text-xs font-semibold rounded-lg border transition-all duration-200 flex items-center justify-between ${
                           isSelected
-                            ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                            ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
                             : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
                         }`}
                       >
@@ -1299,9 +1299,9 @@ export default function ComponentDocumentsPage() {
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Applicable Months</Label>
                   <div className="flex gap-2">
-                    <button type="button" onClick={selectAllMonths} className="text-[10px] text-blue-600 hover:underline font-semibold">Select All</button>
+                    <button type="button" onClick={selectAllMonths} className="text-[10px] text-emerald-600 hover:underline font-semibold">Select All</button>
                     <span className="text-gray-300 text-[10px]">|</span>
-                    <button type="button" onClick={deselectAllMonths} className="text-[10px] text-blue-600 hover:underline font-semibold">Clear All</button>
+                    <button type="button" onClick={deselectAllMonths} className="text-[10px] text-emerald-600 hover:underline font-semibold">Clear All</button>
                   </div>
                 </div>
 
@@ -1315,7 +1315,7 @@ export default function ComponentDocumentsPage() {
                         onClick={() => toggleMonth(m.value)}
                         className={`py-1.5 text-xs font-bold rounded-lg border transition-all duration-200 ${
                           isSelected
-                            ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                            ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
                             : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
                         }`}
                       >
@@ -1362,7 +1362,7 @@ export default function ComponentDocumentsPage() {
               <Button 
                 onClick={handleUpload} 
                 disabled={isUploading || !selectedFile || selectedMonths.length === 0 || selectedComponentTypes.length === 0}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
               >
                 {isUploading ? (
                   <>
@@ -1405,9 +1405,9 @@ export default function ComponentDocumentsPage() {
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Applicable Months</Label>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => setEditMonths(MONTHS.map(m=>m.value))} className="text-[10px] text-blue-600 hover:underline font-semibold">Select All</button>
+                      <button type="button" onClick={() => setEditMonths(MONTHS.map(m=>m.value))} className="text-[10px] text-emerald-600 hover:underline font-semibold">Select All</button>
                       <span className="text-gray-300 text-[10px]">|</span>
-                      <button type="button" onClick={() => setEditMonths([])} className="text-[10px] text-blue-600 hover:underline font-semibold">Clear All</button>
+                      <button type="button" onClick={() => setEditMonths([])} className="text-[10px] text-emerald-600 hover:underline font-semibold">Clear All</button>
                     </div>
                   </div>
 
@@ -1421,7 +1421,7 @@ export default function ComponentDocumentsPage() {
                           onClick={() => toggleEditMonth(m.value)}
                           className={`py-1.5 text-xs font-bold rounded-lg border transition-all duration-200 ${
                             isSelected
-                              ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                              ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
                               : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
                           }`}
                         >
@@ -1454,7 +1454,7 @@ export default function ComponentDocumentsPage() {
               <Button 
                 onClick={handleUpdate} 
                 disabled={isUpdating || editMonths.length === 0}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
               >
                 {isUpdating ? (
                   <>

@@ -34,9 +34,9 @@ export function HelpTooltip({
             type="button"
             className={cn(
               "inline-flex items-center justify-center rounded-full",
-              "text-blue-600 hover:text-blue-700 hover:bg-blue-50",
+              "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50",
               "transition-colors duration-200",
-              "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
+              "focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2",
               "cursor-help",
               className
             )}

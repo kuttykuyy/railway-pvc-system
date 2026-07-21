@@ -113,8 +113,8 @@ function ResetPasswordForm() {
         <div className="absolute inset-0 bg-grid-slate-200/50 [mask-image:linear-gradient(to_bottom,white,transparent)] pointer-events-none" />
         
         {/* Floating Elements */}
-        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
+        <div className="absolute top-20 left-10 w-72 h-72 bg-emerald-200/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-emerald-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
         
         <div className="w-full max-w-md mx-auto relative z-10">
           <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
@@ -151,7 +151,7 @@ function ResetPasswordForm() {
                 <Button
                   type="button"
                   onClick={() => window.location.href = '/auth/signin'}
-                  className="w-full h-12 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:via-indigo-700 hover:to-blue-800 text-white font-semibold"
+                  className="w-full h-12 bg-gradient-to-r from-emerald-600 via-emerald-600 to-emerald-700 hover:from-emerald-700 hover:via-emerald-700 hover:to-emerald-800 text-white font-semibold"
                   disabled={isRedirecting}
                 >
                   {isRedirecting ? (
@@ -180,8 +180,8 @@ function ResetPasswordForm() {
       <div className="absolute inset-0 bg-grid-slate-200/50 [mask-image:linear-gradient(to_bottom,white,transparent)] pointer-events-none" />
       
       {/* Floating Elements */}
-      <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200/20 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute bottom-20 right-10 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
+      <div className="absolute top-20 left-10 w-72 h-72 bg-emerald-200/20 rounded-full blur-3xl animate-pulse" />
+      <div className="absolute bottom-20 right-10 w-96 h-96 bg-emerald-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
       
       <div className="w-full max-w-md mx-auto relative z-10">
         <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
@@ -258,7 +258,7 @@ function ResetPasswordForm() {
 
               <Button 
                 type="submit" 
-                className="w-full h-12 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:via-indigo-700 hover:to-blue-800 text-white font-semibold shadow-lg shadow-blue-500/30 transition-all duration-200 hover:shadow-xl hover:shadow-blue-500/40"
+                className="w-full h-12 bg-gradient-to-r from-emerald-600 via-emerald-600 to-emerald-700 hover:from-emerald-700 hover:via-emerald-700 hover:to-emerald-800 text-white font-semibold shadow-lg shadow-emerald-500/30 transition-all duration-200 hover:shadow-xl hover:shadow-emerald-500/40"
                 disabled={loading || !token}
               >
                 {loading ? (
@@ -277,7 +277,7 @@ function ResetPasswordForm() {
               <div className="text-center pt-4">
                 <Link 
                   href="/auth/signin" 
-                  className="text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors"
+                  className="text-emerald-600 hover:text-emerald-700 font-semibold text-sm transition-colors"
                 >
                   Back to Sign In
                 </Link>
@@ -295,7 +295,7 @@ export default function ResetPasswordPage() {
     <Suspense fallback={
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>

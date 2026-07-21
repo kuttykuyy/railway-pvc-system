@@ -48,9 +48,9 @@ function QuickAction({ icon: Icon, label, href }: { icon: any; label: string; hr
   return (
     <Link
       href={href}
-      className="flex flex-col items-center justify-center p-3 bg-white rounded-2xl border border-slate-100 hover:border-violet-100 hover:bg-violet-50/30 transition-all duration-200 shadow-[0_2px_8px_rgba(0,0,0,0.02)]"
+      className="flex flex-col items-center justify-center p-3 bg-white rounded-2xl border border-slate-100 hover:border-emerald-100 hover:bg-emerald-50/30 transition-all duration-200 shadow-[0_2px_8px_rgba(0,0,0,0.02)]"
     >
-      <div className="h-10 w-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center mb-1.5">
+      <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1.5">
         <Icon className="h-5 w-5" strokeWidth={2} />
       </div>
       <span className="text-[10px] font-semibold text-slate-700 text-center tracking-tight leading-none">
@@ -267,14 +267,14 @@ export default function MobileDashboard() {
             {session?.user?.name || session?.user?.email?.split('@')[0] || (language === 'hi' ? 'उपयोगकर्ता' : 'User')}
           </h1>
         </div>
-        <div className="h-10 w-10 rounded-full bg-violet-600 text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-violet-100">
+        <div className="h-10 w-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-emerald-100">
           {initial}
         </div>
       </div>
 
       {/* 3. Credit balance gradient card */}
-      <div className="rounded-2xl bg-gradient-to-br from-violet-600 to-violet-700 p-5 text-white shadow-lg shadow-violet-200">
-        <p className="text-xs text-violet-100 font-semibold tracking-wide">{t('dash.available_credits')}</p>
+      <div className="rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 p-5 text-white shadow-lg shadow-emerald-200">
+        <p className="text-xs text-emerald-100 font-semibold tracking-wide">{t('dash.available_credits')}</p>
         <p className="text-3xl font-extrabold mt-1">₹{creditBalance.toLocaleString('en-IN')}</p>
         <div className="flex gap-3 mt-4">
           <Button size="sm" variant="secondary" className="flex-1 bg-white/20 text-white hover:bg-white/30 border-0 rounded-xl h-9 text-xs font-semibold" asChild>
@@ -295,12 +295,12 @@ export default function MobileDashboard() {
       </div>
 
       {/* Tendering Estimator Promotion Banner */}
-      <Card className="rounded-2xl border-indigo-100 bg-gradient-to-r from-indigo-50/50 to-blue-50/30 p-4 shadow-sm relative overflow-hidden group hover:border-indigo-200 transition-colors">
-        <div className="absolute top-0 right-0 bg-indigo-600 text-[9px] text-white font-extrabold px-2.5 py-0.5 rounded-bl-xl tracking-wider uppercase">
+      <Card className="rounded-2xl border-emerald-100 bg-gradient-to-r from-emerald-50/50 to-emerald-50/30 p-4 shadow-sm relative overflow-hidden group hover:border-emerald-200 transition-colors">
+        <div className="absolute top-0 right-0 bg-emerald-600 text-[9px] text-white font-extrabold px-2.5 py-0.5 rounded-bl-xl tracking-wider uppercase">
           New
         </div>
         <div className="flex items-start gap-3.5">
-          <div className="p-3 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-xl shrink-0">
+          <div className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-xl shrink-0">
             <BarChart3 className="h-5 w-5" />
           </div>
           <div className="space-y-1">
@@ -310,7 +310,7 @@ export default function MobileDashboard() {
             <p className="text-xs text-slate-500 font-light leading-relaxed">
               Calculate projected escalations & loading margins for new railway tenders.
             </p>
-            <Link href="/tendering-estimator" className="inline-flex items-center text-xs font-bold text-indigo-600 hover:text-indigo-700 mt-1">
+            <Link href="/tendering-estimator" className="inline-flex items-center text-xs font-bold text-emerald-600 hover:text-emerald-700 mt-1">
               Start simulation
               <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
             </Link>
@@ -329,10 +329,10 @@ export default function MobileDashboard() {
         <CardHeader className="pb-3 pt-4 px-4">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-bold flex items-center text-slate-800">
-              <Activity className="h-4.5 w-4.5 mr-2 text-violet-600" />
+              <Activity className="h-4.5 w-4.5 mr-2 text-emerald-600" />
               {t('dash.recent_activity')}
             </CardTitle>
-            <Button variant="ghost" size="sm" className="text-xs text-violet-600 hover:text-violet-700 hover:bg-violet-50/50 h-7 px-2 rounded-lg" asChild>
+            <Button variant="ghost" size="sm" className="text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50/50 h-7 px-2 rounded-lg" asChild>
               <Link href="/activity">{t('dash.view_all')}</Link>
             </Button>
           </div>
@@ -401,7 +401,7 @@ export default function MobileDashboard() {
           <CardContent className="p-0">
             <Button asChild variant="ghost" className="w-full justify-between h-12 px-4 rounded-none hover:bg-slate-50 text-slate-700 text-xs font-bold">
               <Link href="/admin" className="flex items-center">
-                <Building2 className="h-4 w-4 mr-2 text-violet-600" />
+                <Building2 className="h-4 w-4 mr-2 text-emerald-600" />
                 {t('dash.admin_panel')}
                 <ChevronRight className="h-4 w-4 ml-auto text-slate-400" />
               </Link>

@@ -40,7 +40,7 @@ export default function HomePage() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-white">
         <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto" />
           <p className="text-slate-500 font-medium tracking-wide">Loading IR-PVC...</p>
         </div>
       </div>
@@ -48,26 +48,26 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-white font-sans text-slate-800 selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen bg-white font-sans text-slate-800 selection:bg-emerald-100 selection:text-emerald-900">
 
       {/* --- HERO SECTION --- */}
       <section className="relative w-full overflow-hidden border-b border-slate-100 bg-white">
-        <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-blue-50/30 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-[30rem] h-[30rem] bg-indigo-50/30 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/4 pointer-events-none" />
+        <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-emerald-50/30 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-[30rem] h-[30rem] bg-emerald-50/30 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/4 pointer-events-none" />
 
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl relative pt-20 pb-28 lg:pt-32 lg:pb-40">
           <div className="flex flex-col lg:flex-row items-center gap-16 lg:gap-24">
 
             {/* Left Content */}
             <div className="flex-1 space-y-8 text-center lg:text-left z-10">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 border border-indigo-200 text-sm font-semibold text-indigo-700 shadow-sm hover:shadow transition-shadow">
-                <Sparkles className="h-4 w-4 text-indigo-600" />
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-200 text-sm font-semibold text-emerald-700 shadow-sm hover:shadow transition-shadow">
+                <Sparkles className="h-4 w-4 text-emerald-600" />
                 New: AI PDF Bill Extraction
               </div>
 
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight text-slate-900 leading-[1.1]">
                 Upload the bill PDF. <br className="hidden lg:block"/>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Get a ready PVC bill.</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-emerald-600">Get a ready PVC bill.</span>
               </h1>
 
               <p className="text-lg sm:text-xl text-slate-600 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-light">
@@ -76,31 +76,31 @@ export default function HomePage() {
 
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
                 <Link href="/auth/signin?mode=signup">
-                  <Button size="lg" className="h-14 px-8 text-lg font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-600/20 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300">
+                  <Button size="lg" className="h-14 px-8 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg shadow-emerald-600/20 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300">
                     Get Started Now
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                 </Link>
                 <Link href="/try-bill">
                   <Button size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-all duration-300 flex items-center gap-2">
-                    <Calculator className="w-5 h-5 text-blue-600" />
+                    <Calculator className="w-5 h-5 text-emerald-600" />
                     Try it free — no signup
                   </Button>
                 </Link>
                 <Link href="#tutorials">
                   <Button size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-all duration-300 flex items-center gap-2">
-                    <Play className="w-5 h-5 text-blue-600 fill-blue-600" />
+                    <Play className="w-5 h-5 text-emerald-600 fill-emerald-600" />
                     Watch Tutorials
                   </Button>
                 </Link>
               </div>
 
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-5 pt-6 text-sm text-slate-500 font-medium">
-                <span className="flex items-center gap-2"><ScanSearch className="w-5 h-5 text-indigo-500" /> AI PDF Extraction</span>
+                <span className="flex items-center gap-2"><ScanSearch className="w-5 h-5 text-emerald-500" /> AI PDF Extraction</span>
                 <span className="flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-500" /> Auto Indices</span>
-                <span className="flex items-center gap-2"><FileText className="w-5 h-5 text-blue-500" /> IR Standard PDF</span>
-                <span className="flex items-center gap-2"><Layers className="w-5 h-5 text-purple-500" /> Bulk Bills</span>
-                <span className="flex items-center gap-2"><Users className="w-5 h-5 text-indigo-500" /> Bilingual (English / हिन्दी)</span>
+                <span className="flex items-center gap-2"><FileText className="w-5 h-5 text-emerald-500" /> IR Standard PDF</span>
+                <span className="flex items-center gap-2"><Layers className="w-5 h-5 text-emerald-500" /> Bulk Bills</span>
+                <span className="flex items-center gap-2"><Users className="w-5 h-5 text-emerald-500" /> Bilingual (English / हिन्दी)</span>
               </div>
             </div>
 
@@ -110,8 +110,8 @@ export default function HomePage() {
                 {/* Product window mockup */}
                 <div className="relative bg-white rounded-3xl border border-slate-200 shadow-2xl shadow-slate-300/40 overflow-hidden">
                   {/* Subtle AI scan sweep */}
-                  <div aria-hidden="true" className="animate-scan pointer-events-none absolute inset-x-0 z-20 h-16 bg-gradient-to-b from-transparent via-indigo-400/15 to-transparent">
-                    <div className="absolute inset-x-0 bottom-0 h-px bg-indigo-400/70 shadow-[0_0_8px_1px_rgba(99,102,241,0.5)]" />
+                  <div aria-hidden="true" className="animate-scan pointer-events-none absolute inset-x-0 z-20 h-16 bg-gradient-to-b from-transparent via-emerald-400/15 to-transparent">
+                    <div className="absolute inset-x-0 bottom-0 h-px bg-emerald-400/70 shadow-[0_0_8px_1px_rgba(99,102,241,0.5)]" />
                   </div>
                   {/* Window bar */}
                   <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100 bg-slate-50/80">
@@ -131,7 +131,7 @@ export default function HomePage() {
                         <p className="truncate text-sm font-semibold text-slate-800">Signed Bill (16).pdf</p>
                         <p className="text-xs text-slate-400">28 pages · uploaded</p>
                       </div>
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-2.5 py-1 text-[11px] font-bold text-white">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white">
                         <ScanSearch className="h-3 w-3" /> AI reading
                       </span>
                     </div>
@@ -156,7 +156,7 @@ export default function HomePage() {
                           <span className="col-span-4 truncate text-slate-500">{row.d}</span>
                           <span className="col-span-2 text-right font-medium text-slate-700">{row.q}</span>
                           <span className="col-span-2 text-right font-medium text-slate-700">{row.r}</span>
-                          <span className="col-span-2 text-right"><span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">{row.c}</span></span>
+                          <span className="col-span-2 text-right"><span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">{row.c}</span></span>
                         </div>
                       ))}
                     </div>
@@ -170,8 +170,8 @@ export default function HomePage() {
                 </div>
 
                 {/* Floating badge */}
-                <div className="absolute -top-4 -right-2 hidden sm:flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 shadow-lg ring-1 ring-slate-100">
-                  <Sparkles className="h-3.5 w-3.5 text-indigo-500" /> Powered by AI
+                <div className="absolute -top-4 -right-2 hidden sm:flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 shadow-lg ring-1 ring-slate-100">
+                  <Sparkles className="h-3.5 w-3.5 text-emerald-500" /> Powered by AI
                 </div>
 
                 {/* SRCA / ILLALL credit */}
@@ -181,7 +181,7 @@ export default function HomePage() {
                   </div>
                   <p className="text-xs text-slate-400 leading-tight">
                     Developed for <span className="font-semibold text-slate-500">Southern Railway Contractors Association</span>, Tiruchirappalli Division
-                    · Powered by <strong className="font-semibold text-indigo-600">ILLALL TECH</strong>
+                    · Powered by <strong className="font-semibold text-emerald-600">ILLALL TECH</strong>
                   </p>
                 </div>
               </div>
@@ -200,7 +200,7 @@ export default function HomePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
-            <div className="group relative bg-gradient-to-br from-indigo-600 to-blue-700 rounded-3xl p-8 lg:p-10 border border-indigo-500 shadow-2xl shadow-indigo-900/20 hover:-translate-y-1 transition-all duration-500 flex flex-col justify-between md:col-span-2 lg:col-span-1 overflow-hidden">
+            <div className="group relative bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-3xl p-8 lg:p-10 border border-emerald-500 shadow-2xl shadow-emerald-900/20 hover:-translate-y-1 transition-all duration-500 flex flex-col justify-between md:col-span-2 lg:col-span-1 overflow-hidden">
               <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-2xl -translate-y-1/3 translate-x-1/3 pointer-events-none" />
               <div className="relative">
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 text-white text-[11px] font-bold uppercase tracking-wider mb-5">
@@ -210,15 +210,15 @@ export default function HomePage() {
                   <ScanSearch className="h-7 w-7" />
                 </div>
                 <h3 className="text-2xl font-bold text-white mb-3 tracking-tight">AI PDF Bill Extraction</h3>
-                <p className="text-blue-100 leading-relaxed font-light">
+                <p className="text-emerald-100 leading-relaxed font-light">
                   Upload your signed railway bill PDF and let AI read it — schedules, current quantities, agreement rates, work classifications, and cement/steel calculations, all laid out for a quick review. Works for single bills and bulk uploads. Extraction and preview are free.
                 </p>
               </div>
             </div>
 
-            <div className="group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-blue-100 hover:shadow-2xl hover:shadow-blue-900/5 transition-all duration-500 flex flex-col justify-between">
+            <div className="group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-emerald-100 hover:shadow-2xl hover:shadow-emerald-900/5 transition-all duration-500 flex flex-col justify-between">
               <div>
-                <div className="w-14 h-14 rounded-2xl bg-blue-600 text-white flex items-center justify-center mb-6 shadow-lg shadow-blue-600/20">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center mb-6 shadow-lg shadow-emerald-600/20">
                   <FileText className="h-7 w-7" />
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900 mb-3 tracking-tight">Automated PVC Bills</h3>
@@ -243,14 +243,14 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-purple-100 hover:shadow-2xl hover:shadow-purple-900/5 transition-all duration-500 flex flex-col justify-between">
+            <div className="group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-emerald-100 hover:shadow-2xl hover:shadow-emerald-900/5 transition-all duration-500 flex flex-col justify-between">
               <div>
-                <div className="w-14 h-14 rounded-2xl bg-purple-600 text-white flex items-center justify-center mb-6 shadow-lg shadow-purple-600/20">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center mb-6 shadow-lg shadow-emerald-600/20">
                   <Layers className="h-7 w-7" />
                 </div>
                 <div className="flex items-center gap-3 mb-3">
                   <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Bulk Bill Creation</h3>
-                  <span className="px-2.5 py-1 text-xs font-bold bg-purple-100 text-purple-700 rounded-full">NEW</span>
+                  <span className="px-2.5 py-1 text-xs font-bold bg-emerald-100 text-emerald-700 rounded-full">NEW</span>
                 </div>
                 <p className="text-slate-600 leading-relaxed font-light">
                   Submit multiple bills in one shot. Set zone and fuel basis once for all bills, enter classification-based amounts per row, and download individual or combined PDF reports in Detailed or IR Standard format.
@@ -272,12 +272,12 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-cyan-100 hover:shadow-2xl hover:shadow-cyan-900/5 transition-all duration-500 flex flex-col justify-between overflow-hidden relative">
+            <div className="group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-emerald-100 hover:shadow-2xl hover:shadow-emerald-900/5 transition-all duration-500 flex flex-col justify-between overflow-hidden relative">
               <div className="absolute right-0 bottom-0 opacity-5 w-64 h-64 translate-x-1/4 translate-y-1/4 group-hover:scale-110 transition-transform duration-700">
-                <LineChart className="w-full h-full text-cyan-600" />
+                <LineChart className="w-full h-full text-emerald-600" />
               </div>
               <div className="relative z-10">
-                <div className="w-14 h-14 rounded-2xl bg-cyan-600 text-white flex items-center justify-center mb-6 shadow-lg shadow-cyan-600/20">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center mb-6 shadow-lg shadow-emerald-600/20">
                   <LineChart className="h-7 w-7" />
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900 mb-3 tracking-tight">Index Tracking</h3>
@@ -287,9 +287,9 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-indigo-100 hover:shadow-2xl hover:shadow-indigo-900/5 transition-all duration-500 flex flex-col justify-between">
+            <div className="group bg-slate-50 rounded-3xl p-8 lg:p-10 border border-slate-100 hover:bg-white hover:border-emerald-100 hover:shadow-2xl hover:shadow-emerald-900/5 transition-all duration-500 flex flex-col justify-between">
               <div>
-                <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center mb-6 shadow-lg shadow-indigo-600/20">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center mb-6 shadow-lg shadow-emerald-600/20">
                   <CalendarDays className="h-7 w-7" />
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900 mb-3 tracking-tight">Extension Compliance</h3>
@@ -329,11 +329,11 @@ export default function HomePage() {
                 { step: '03', title: 'Auto Calculation', desc: 'Our engine fetches current indices from official sources and computes PVC per GCC Clause 17 instantly — no manual lookups.', icon: <Calculator className="w-6 h-6" /> },
                 { step: '04', title: 'Export PDF', desc: 'Download in Detailed Report or IR Standard Format (GCC Cl.17 proforma with monthly indices, formula, and fixed component row). Share via WhatsApp.', icon: <Download className="w-6 h-6" /> },
               ].map((item) => (
-                <div key={item.step} className="group relative p-8 rounded-3xl bg-slate-50 border border-slate-100 hover:bg-white hover:border-blue-100 hover:shadow-xl hover:shadow-blue-900/5 transition-all duration-300">
-                  <div className="absolute top-8 right-8 text-4xl font-black text-slate-200/50 group-hover:text-blue-500/10 transition-colors">
+                <div key={item.step} className="group relative p-8 rounded-3xl bg-slate-50 border border-slate-100 hover:bg-white hover:border-emerald-100 hover:shadow-xl hover:shadow-emerald-900/5 transition-all duration-300">
+                  <div className="absolute top-8 right-8 text-4xl font-black text-slate-200/50 group-hover:text-emerald-500/10 transition-colors">
                     {item.step}
                   </div>
-                  <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-6">
                     {item.icon}
                   </div>
                   <h3 className="text-xl font-bold mb-3 text-slate-900">{item.title}</h3>
@@ -351,7 +351,7 @@ export default function HomePage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
           <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-sm font-semibold text-slate-600 shadow-sm">
-              <Play className="w-4 h-4 text-blue-600 fill-blue-600" />
+              <Play className="w-4 h-4 text-emerald-600 fill-emerald-600" />
               Video Tutorials
             </div>
             <h2 className="text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight">Get Up and Running in Minutes</h2>
@@ -369,7 +369,7 @@ export default function HomePage() {
                 href={`https://youtu.be/${video.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group block bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-blue-100 transition-all duration-300"
+                className="group block bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-emerald-100 transition-all duration-300"
               >
                 <div className="relative aspect-video bg-slate-100 overflow-hidden">
                   <Image
@@ -380,7 +380,7 @@ export default function HomePage() {
                   />
                   <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors flex items-center justify-center">
                     <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform duration-300">
-                      <Play className="w-7 h-7 text-blue-600 fill-blue-600 ml-1" />
+                      <Play className="w-7 h-7 text-emerald-600 fill-emerald-600 ml-1" />
                     </div>
                   </div>
                   {video.badge && (
@@ -390,7 +390,7 @@ export default function HomePage() {
                   )}
                 </div>
                 <div className="p-5">
-                  <h4 className="font-bold text-slate-900 mb-1 group-hover:text-blue-600 transition-colors">{video.title}</h4>
+                  <h4 className="font-bold text-slate-900 mb-1 group-hover:text-emerald-600 transition-colors">{video.title}</h4>
                   <p className="text-sm text-slate-500 font-light">{video.desc}</p>
                 </div>
               </a>
@@ -449,11 +449,11 @@ export default function HomePage() {
 
           {/* Main pricing card */}
           <div className="max-w-4xl mx-auto mb-12">
-            <div className="bg-white rounded-3xl border-2 border-blue-500 shadow-2xl shadow-blue-900/10 overflow-hidden">
+            <div className="bg-white rounded-3xl border-2 border-emerald-500 shadow-2xl shadow-emerald-900/10 overflow-hidden">
               <div className="grid grid-cols-1 md:grid-cols-2">
                 {/* Left: price */}
                 <div className="p-10 lg:p-12 flex flex-col justify-center border-b md:border-b-0 md:border-r border-slate-100">
-                  <p className="text-sm font-semibold text-blue-600 uppercase tracking-widest mb-3">Per Bill Credit Cost</p>
+                  <p className="text-sm font-semibold text-emerald-600 uppercase tracking-widest mb-3">Per Bill Credit Cost</p>
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div className="rounded-2xl border border-slate-200 bg-white p-4">
                       <p className="text-[11px] font-semibold text-slate-600 mb-1">Manual entry</p>
@@ -462,10 +462,10 @@ export default function HomePage() {
                         <span className="text-slate-500 text-xs pb-1">/ bill</span>
                       </div>
                     </div>
-                    <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
-                      <p className="text-[11px] font-semibold text-indigo-600 mb-1">AI PDF auto-extract</p>
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
+                      <p className="text-[11px] font-semibold text-emerald-600 mb-1">AI PDF auto-extract</p>
                       <div className="flex items-end gap-1">
-                        <span className="text-4xl font-black text-indigo-700">₹{pricing.aiBillCost}</span>
+                        <span className="text-4xl font-black text-emerald-700">₹{pricing.aiBillCost}</span>
                         <span className="text-slate-500 text-xs pb-1">/ bill</span>
                       </div>
                     </div>
@@ -499,11 +499,11 @@ export default function HomePage() {
                     </div>
                     <div className="flex items-center justify-between py-3">
                       <span className="text-slate-700 font-medium">Credits expire</span>
-                      <span className="font-semibold text-blue-600">Never</span>
+                      <span className="font-semibold text-emerald-600">Never</span>
                     </div>
                   </div>
                   <Link href="/auth/signin?mode=signup" className="mt-6 block">
-                    <Button className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-600/20">
+                    <Button className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/20">
                       Get Started — First Bill Free <ArrowRight className="ml-2 w-4 h-4" />
                     </Button>
                   </Link>
@@ -514,13 +514,13 @@ export default function HomePage() {
 
           {/* Advanced Tools Add-on */}
           <div className="mt-12 max-w-4xl mx-auto">
-            <div className="relative overflow-hidden bg-gradient-to-r from-blue-50 via-indigo-50/50 to-purple-50 border border-indigo-100 rounded-3xl p-8 lg:p-10 flex flex-col md:flex-row items-center justify-between gap-8 hover:shadow-xl hover:border-indigo-200 transition-all duration-300">
-              <div className="absolute top-0 right-0 bg-indigo-600 text-[10px] text-white font-extrabold px-4 py-1 rounded-bl-2xl tracking-widest uppercase">
+            <div className="relative overflow-hidden bg-gradient-to-r from-emerald-50 via-emerald-50/50 to-emerald-50 border border-emerald-100 rounded-3xl p-8 lg:p-10 flex flex-col md:flex-row items-center justify-between gap-8 hover:shadow-xl hover:border-emerald-200 transition-all duration-300">
+              <div className="absolute top-0 right-0 bg-emerald-600 text-[10px] text-white font-extrabold px-4 py-1 rounded-bl-2xl tracking-widest uppercase">
                 Add-on Subscription
               </div>
               <div className="space-y-4 text-center md:text-left">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-indigo-200 text-xs font-semibold text-indigo-700">
-                  <Gift className="w-3.5 h-3.5 text-indigo-600" />
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-emerald-200 text-xs font-semibold text-emerald-700">
+                  <Gift className="w-3.5 h-3.5 text-emerald-600" />
                   Advanced Contractor Tools
                 </div>
                 <h3 className="text-2xl font-black text-slate-900 tracking-tight">
@@ -530,14 +530,14 @@ export default function HomePage() {
                   Unlock unlimited access to the dynamic <strong>PVC Check tool</strong> and <strong>Classification Comparison Analyzer</strong>. Run unlimited checks with zero per-event fees!
                 </p>
               </div>
-              <div className="text-center shrink-0 space-y-3 bg-white/80 backdrop-blur-md border border-indigo-50 p-6 rounded-2xl min-w-[200px] shadow-sm">
+              <div className="text-center shrink-0 space-y-3 bg-white/80 backdrop-blur-md border border-emerald-50 p-6 rounded-2xl min-w-[200px] shadow-sm">
                 <div className="flex items-baseline justify-center gap-0.5">
-                  <span className="text-4xl font-black text-indigo-600">₹99</span>
+                  <span className="text-4xl font-black text-emerald-600">₹99</span>
                   <span className="text-slate-500 font-medium text-xs">/ month</span>
                 </div>
                 <p className="text-xs text-slate-400 font-medium">Charged from credit wallet</p>
                 <Link href="/auth/signin?mode=signup" className="block">
-                  <Button size="sm" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-md shadow-indigo-600/10">
+                  <Button size="sm" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-md shadow-emerald-600/10">
                     Get Started Now
                   </Button>
                 </Link>
@@ -558,7 +558,7 @@ export default function HomePage() {
           </p>
           <div className="flex flex-col items-center justify-center">
             <Link href="/auth/signin?mode=signup" className="inline-block">
-              <Button size="lg" className="h-16 px-10 text-xl font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-xl shadow-blue-600/20 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+              <Button size="lg" className="h-16 px-10 text-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl shadow-xl shadow-emerald-600/20 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
                 Create Your Account
                 <ArrowRight className="ml-3 w-6 h-6" />
               </Button>
@@ -578,7 +578,7 @@ export default function HomePage() {
 function MiniFeature({ icon, title, desc, badge }: { icon: React.ReactNode; title: string; desc: string; badge?: string }) {
   return (
     <div className="group flex items-start gap-4 p-6 rounded-2xl border border-transparent hover:border-slate-100 hover:bg-slate-50 transition-all duration-300">
-      <div className="shrink-0 w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-blue-100 transition-transform duration-300">
+      <div className="shrink-0 w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-emerald-100 transition-transform duration-300">
         {icon}
       </div>
       <div>

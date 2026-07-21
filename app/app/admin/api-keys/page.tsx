@@ -285,7 +285,7 @@ export default function ApiKeysPage() {
         <CardContent>
           {loading ? (
             <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
               <p className="mt-4 text-muted-foreground">Loading API keys...</p>
             </div>
           ) : apiKeys.length === 0 ? (
@@ -455,12 +455,12 @@ export default function ApiKeysPage() {
                 </div>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-semibold text-blue-900 mb-2">How to use this API key:</h4>
-                <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                <h4 className="font-semibold text-emerald-900 mb-2">How to use this API key:</h4>
+                <ol className="text-sm text-emerald-800 space-y-1 list-decimal list-inside">
                   <li>Store the API key securely in your application</li>
-                  <li>Include it in the Authorization header: <code className="bg-blue-100 px-1 rounded">Bearer YOUR_API_KEY</code></li>
-                  <li>Or use the X-API-Key header: <code className="bg-blue-100 px-1 rounded">X-API-Key: YOUR_API_KEY</code></li>
+                  <li>Include it in the Authorization header: <code className="bg-emerald-100 px-1 rounded">Bearer YOUR_API_KEY</code></li>
+                  <li>Or use the X-API-Key header: <code className="bg-emerald-100 px-1 rounded">X-API-Key: YOUR_API_KEY</code></li>
                   <li>Make requests to endpoints starting with /api/v1/</li>
                 </ol>
               </div>

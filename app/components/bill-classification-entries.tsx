@@ -419,7 +419,7 @@ export function BillClassificationEntries({
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-semibold text-slate-800">Entry {entryIndex + 1}</h3>
                     {entry.aiReviewed ? (
-                      <Badge variant="outline" className="border-purple-300 bg-purple-50 text-purple-700 text-[10px]">
+                      <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 text-[10px]">
                         <Sparkles className="mr-1 h-3 w-3" /> AI-reviewed
                       </Badge>
                     ) : (
@@ -428,7 +428,7 @@ export function BillClassificationEntries({
                       </Badge>
                     )}
                     {lockEntries && !locked && (
-                      <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700 text-[10px]">
+                      <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 text-[10px]">
                         Editing
                       </Badge>
                     )}
@@ -757,7 +757,7 @@ export function BillClassificationEntries({
                       size="sm"
                       disabled={locked}
                       onClick={() => addItemRow(entryIndex)}
-                      className="h-8 px-2 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-40"
+                      className="h-8 px-2 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-40"
                     >
                       <Plus className="mr-1 h-3.5 w-3.5" />
                       Add another item

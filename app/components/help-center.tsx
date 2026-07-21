@@ -208,11 +208,11 @@ export default function HelpCenter() {
     <div className="space-y-6">
       <BackButton href="/dashboard" className="mb-4" />
       {/* Header */}
-      <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white">
+      <Card className="border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-white">
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center">
-            <div className="bg-blue-100 p-4 rounded-full">
-              <HelpCircle className="h-12 w-12 text-blue-600" />
+            <div className="bg-emerald-100 p-4 rounded-full">
+              <HelpCircle className="h-12 w-12 text-emerald-600" />
             </div>
           </div>
           <div>
@@ -315,7 +315,7 @@ export default function HelpCenter() {
       </Card>
 
       {/* Quick Contact */}
-      <Card className="bg-gradient-to-r from-green-50 to-blue-50 border-2">
+      <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-2">
         <CardHeader>
           <CardTitle className="text-xl flex items-center gap-2">
             <MessageCircle className="h-6 w-6 text-green-600" />
@@ -332,7 +332,7 @@ export default function HelpCenter() {
               </div>
             </div>
             <div className="flex items-start gap-3 p-3 bg-white rounded-lg">
-              <Mail className="h-5 w-5 text-blue-600 mt-1" />
+              <Mail className="h-5 w-5 text-emerald-600 mt-1" />
               <div>
                 <div className="font-semibold">Email Support</div>
                 <div className="text-sm text-gray-600">Response within 24 hours</div>
@@ -353,7 +353,7 @@ export default function HelpCenter() {
                   <TabsTrigger 
                     key={key} 
                     value={key}
-                    className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-3 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-blue-700"
+                    className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-3 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-emerald-700"
                   >
                     <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                     <span className="text-center">{section.title}</span>
@@ -365,11 +365,11 @@ export default function HelpCenter() {
             {Object.entries(filteredSections).map(([key, section]) => (
               <TabsContent key={key} value={key} className="mt-6">
                 <div className="space-y-4">
-                  <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-                    <h3 className="text-xl font-semibold text-blue-900 mb-2">
+                  <div className="bg-emerald-50 border-l-4 border-emerald-500 p-4 rounded">
+                    <h3 className="text-xl font-semibold text-emerald-900 mb-2">
                       {section.title}
                     </h3>
-                    <p className="text-sm text-blue-800">
+                    <p className="text-sm text-emerald-800">
                       {section.faqs.length} frequently asked question{section.faqs.length !== 1 ? 's' : ''} in this section
                     </p>
                   </div>
@@ -383,7 +383,7 @@ export default function HelpCenter() {
                       >
                         <AccordionTrigger className="text-left text-base sm:text-lg font-medium hover:no-underline py-4">
                           <div className="flex gap-3 items-start">
-                            <HelpCircle className="h-5 w-5 text-blue-600 mt-1 flex-shrink-0" />
+                            <HelpCircle className="h-5 w-5 text-emerald-600 mt-1 flex-shrink-0" />
                             <span className="pr-4">{faq.question}</span>
                           </div>
                         </AccordionTrigger>

@@ -12,7 +12,7 @@ export default function MonthlyTrendChart({ data }: { data: Array<{ month: strin
         <XAxis dataKey="month" tick={{ fontSize: 11 }} />
         <YAxis tick={{ fontSize: 11 }} />
         <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-        <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} name="Bills" dot={{ r: 3 }} activeDot={{ r: 5 }} />
+        <Line type="monotone" dataKey="count" stroke="#10b981" strokeWidth={2} name="Bills" dot={{ r: 3 }} activeDot={{ r: 5 }} />
       </LineChart>
     </ResponsiveContainer>
   );

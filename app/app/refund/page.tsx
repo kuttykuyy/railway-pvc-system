@@ -6,19 +6,19 @@ import { RefreshCw, Sparkles, Building2, Mail, Phone, Calendar, Info } from 'luc
 
 export default function RefundPolicyPage() {
   return (
-    <div className="relative min-h-screen pb-16 space-y-8 overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
+    <div className="relative min-h-screen pb-16 space-y-8 overflow-hidden bg-gradient-to-br from-slate-50 via-emerald-50/30 to-emerald-50/50">
       {/* Decorative Light Backdrops */}
-      <div className="absolute top-0 right-10 w-96 h-96 bg-blue-300/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute top-1/3 -left-20 w-80 h-80 bg-indigo-300/10 blur-[100px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-10 right-20 w-[450px] h-[450px] bg-purple-300/5 blur-[150px] rounded-full pointer-events-none" />
+      <div className="absolute top-0 right-10 w-96 h-96 bg-emerald-300/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute top-1/3 -left-20 w-80 h-80 bg-emerald-300/10 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-10 right-20 w-[450px] h-[450px] bg-emerald-300/5 blur-[150px] rounded-full pointer-events-none" />
 
       <div className="container mx-auto px-4 py-8 max-w-4xl relative z-10 space-y-8">
         <BackButton href="/" variant="outline" className="mb-4 border-slate-200/80 bg-white/80 hover:bg-slate-50 text-slate-600 hover:text-slate-800" />
         
         <Card className="border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl overflow-hidden">
-          <CardHeader className="p-8 sm:p-10 border-b border-slate-100 bg-gradient-to-r from-blue-500/5 to-indigo-500/5">
+          <CardHeader className="p-8 sm:p-10 border-b border-slate-100 bg-gradient-to-r from-emerald-500/5 to-emerald-500/5">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-50 border border-blue-100 rounded-2xl text-blue-600">
+              <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-600">
                 <RefreshCw className="h-7 w-7 animate-spin-slow" />
               </div>
               <div>
@@ -36,7 +36,7 @@ export default function RefundPolicyPage() {
           <CardContent className="p-8 sm:p-10 prose prose-slate max-w-none space-y-8 text-slate-600 leading-relaxed text-sm sm:text-base">
             <section className="space-y-3">
               <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
-                <span className="w-1 h-5 bg-blue-500 rounded-full" />
+                <span className="w-1 h-5 bg-emerald-500 rounded-full" />
                 1. Service Nature
               </h3>
               <p>
@@ -46,7 +46,7 @@ export default function RefundPolicyPage() {
 
             <section className="space-y-3">
               <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
-                <span className="w-1 h-5 bg-blue-500 rounded-full" />
+                <span className="w-1 h-5 bg-emerald-500 rounded-full" />
                 2. No Cancellation After Processing
               </h3>
               <p>
@@ -62,7 +62,7 @@ export default function RefundPolicyPage() {
 
             <section className="space-y-3">
               <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
-                <span className="w-1 h-5 bg-blue-500 rounded-full" />
+                <span className="w-1 h-5 bg-emerald-500 rounded-full" />
                 3. Credit Purchases and Top-ups
               </h3>
               <p>
@@ -77,7 +77,7 @@ export default function RefundPolicyPage() {
 
             <section className="space-y-4">
               <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
-                <span className="w-1 h-5 bg-blue-500 rounded-full" />
+                <span className="w-1 h-5 bg-emerald-500 rounded-full" />
                 4. Refund Eligibility
               </h3>
               <p>
@@ -87,7 +87,7 @@ export default function RefundPolicyPage() {
               <div className="grid md:grid-cols-2 gap-6 pt-2">
                 <div className="p-5 bg-slate-50/60 border border-slate-100 rounded-2xl space-y-2">
                   <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                    <Info className="h-4 w-4 text-blue-500" /> Technical Glitches
+                    <Info className="h-4 w-4 text-emerald-500" /> Technical Glitches
                   </h4>
                   <ul className="list-disc pl-4 space-y-1 text-xs text-slate-500">
                     <li>System crash leading to double credit deduction.</li>
@@ -98,7 +98,7 @@ export default function RefundPolicyPage() {
 
                 <div className="p-5 bg-slate-50/60 border border-slate-100 rounded-2xl space-y-2">
                   <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                    <Info className="h-4 w-4 text-indigo-500" /> Payment Discrepancies
+                    <Info className="h-4 w-4 text-emerald-500" /> Payment Discrepancies
                   </h4>
                   <ul className="list-disc pl-4 space-y-1 text-xs text-slate-500">
                     <li>Double payment for the exact same credit bundle.</li>
@@ -111,7 +111,7 @@ export default function RefundPolicyPage() {
 
             <section className="space-y-3">
               <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
-                <span className="w-1 h-5 bg-blue-500 rounded-full" />
+                <span className="w-1 h-5 bg-emerald-500 rounded-full" />
                 5. Non-Refundable Scenarios
               </h3>
               <p>
@@ -121,7 +121,7 @@ export default function RefundPolicyPage() {
 
             <section className="space-y-3">
               <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
-                <span className="w-1 h-5 bg-blue-500 rounded-full" />
+                <span className="w-1 h-5 bg-emerald-500 rounded-full" />
                 6. Refund & Dispute Process
               </h3>
               <p>
@@ -131,7 +131,7 @@ export default function RefundPolicyPage() {
 
             <section className="space-y-4">
               <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
-                <span className="w-1 h-5 bg-blue-500 rounded-full" />
+                <span className="w-1 h-5 bg-emerald-500 rounded-full" />
                 7. Contact Information
               </h3>
               <p>
@@ -140,7 +140,7 @@ export default function RefundPolicyPage() {
               
               <div className="p-6 bg-slate-50/60 border border-slate-100 rounded-2xl max-w-md space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
+                  <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
                     <Building2 className="h-4.5 w-4.5" />
                   </div>
                   <div>
@@ -150,12 +150,12 @@ export default function RefundPolicyPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
+                  <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
                     <Phone className="h-4.5 w-4.5" />
                   </div>
                   <div>
                     <p className="text-xs text-slate-400 font-light">Official Phone</p>
-                    <a href="tel:+919944776689" className="text-sm font-bold text-indigo-600 hover:underline">+91 9944776689</a>
+                    <a href="tel:+919944776689" className="text-sm font-bold text-emerald-600 hover:underline">+91 9944776689</a>
                   </div>
                 </div>
 

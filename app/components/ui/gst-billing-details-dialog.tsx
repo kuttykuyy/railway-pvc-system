@@ -138,7 +138,7 @@ export function GstBillingDetailsDialog({
       <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-blue-600" />
+            <FileText className="h-5 w-5 text-emerald-600" />
             GST Invoice Billing Details
           </DialogTitle>
           <DialogDescription>
@@ -222,7 +222,7 @@ export function GstBillingDetailsDialog({
             </div>
 
             {/* Invoice Info */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-700">Invoice Number:</span>
                 <span className="font-medium">{invoiceNumber}</span>
@@ -235,9 +235,9 @@ export function GstBillingDetailsDialog({
                 <span className="text-gray-700">GST (18%):</span>
                 <span className="font-medium">₹{(creditAmount * 0.18).toFixed(2)}</span>
               </div>
-              <div className="border-t border-blue-300 pt-1 flex justify-between text-base font-semibold">
+              <div className="border-t border-emerald-300 pt-1 flex justify-between text-base font-semibold">
                 <span className="text-gray-900">Total:</span>
-                <span className="text-blue-600">₹{(creditAmount * 1.18).toFixed(2)}</span>
+                <span className="text-emerald-600">₹{(creditAmount * 1.18).toFixed(2)}</span>
               </div>
             </div>
           </div>

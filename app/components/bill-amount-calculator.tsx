@@ -73,7 +73,7 @@ export function BillAmountCalculator({ onInsertTotal, label = "Bill Amount Calcu
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
           "h-8 w-8 transition-colors",
-          isOpen && "bg-purple-50 border-purple-300"
+          isOpen && "bg-emerald-50 border-emerald-300"
         )}
         title="Quick Calculator"
         disabled={disabled}
@@ -90,7 +90,7 @@ export function BillAmountCalculator({ onInsertTotal, label = "Bill Amount Calcu
           />
           
           {/* Calculator Modal */}
-          <Card className="fixed inset-0 m-auto w-[90vw] max-w-md h-fit shadow-xl border-2 border-purple-200 bg-white z-[100]">
+          <Card className="fixed inset-0 m-auto w-[90vw] max-w-md h-fit shadow-xl border-2 border-emerald-200 bg-white z-[100]">
             <CardHeader className="pb-3 pt-3 px-4 flex flex-row items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
                 <Calculator className="h-4 w-4" />
@@ -157,7 +157,7 @@ export function BillAmountCalculator({ onInsertTotal, label = "Bill Amount Calcu
             <div className="pt-3 border-t">
               <div className="flex justify-between items-center mb-3">
                 <span className="font-semibold">Total:</span>
-                <span className="text-xl font-bold text-purple-600">
+                <span className="text-xl font-bold text-emerald-600">
                   ₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
@@ -176,7 +176,7 @@ export function BillAmountCalculator({ onInsertTotal, label = "Bill Amount Calcu
                 <Button
                   type="button"
                   onClick={handleInsertTotal}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700"
                   disabled={total === 0}
                 >
                   Insert Total

@@ -362,7 +362,7 @@ export default function ClassificationsNewPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading classifications...</p>
         </div>
       </div>
@@ -398,29 +398,29 @@ export default function ClassificationsNewPage() {
       {/* Stats Cards */}
       {mainClassifications.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+          <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-blue-900">Main Categories</p>
-                  <p className="text-3xl font-bold text-blue-600 mt-1">{stats.totalMain}</p>
+                  <p className="text-sm font-medium text-emerald-900">Main Categories</p>
+                  <p className="text-3xl font-bold text-emerald-600 mt-1">{stats.totalMain}</p>
                 </div>
-                <div className="w-12 h-12 bg-blue-200 rounded-full flex items-center justify-center">
-                  <Folder className="h-6 w-6 text-blue-600" />
+                <div className="w-12 h-12 bg-emerald-200 rounded-full flex items-center justify-center">
+                  <Folder className="h-6 w-6 text-emerald-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+          <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-purple-900">Sub-Classifications</p>
-                  <p className="text-3xl font-bold text-purple-600 mt-1">{stats.totalSub}</p>
+                  <p className="text-sm font-medium text-emerald-900">Sub-Classifications</p>
+                  <p className="text-3xl font-bold text-emerald-600 mt-1">{stats.totalSub}</p>
                 </div>
-                <div className="w-12 h-12 bg-purple-200 rounded-full flex items-center justify-center">
-                  <BarChart3 className="h-6 w-6 text-purple-600" />
+                <div className="w-12 h-12 bg-emerald-200 rounded-full flex items-center justify-center">
+                  <BarChart3 className="h-6 w-6 text-emerald-600" />
                 </div>
               </div>
             </CardContent>
@@ -565,9 +565,9 @@ export default function ClassificationsNewPage() {
                     {/* Category Icon */}
                     <div className="flex-shrink-0 mt-0.5">
                       {expandedMain.has(main.id) ? (
-                        <FolderOpen className="h-6 w-6 text-blue-600" />
+                        <FolderOpen className="h-6 w-6 text-emerald-600" />
                       ) : (
-                        <Folder className="h-6 w-6 text-blue-500" />
+                        <Folder className="h-6 w-6 text-emerald-500" />
                       )}
                     </div>
 
@@ -625,7 +625,7 @@ export default function ClassificationsNewPage() {
                       </div>
                     ) : (
                       main.subClassifications.map((sub) => (
-                        <Card key={sub.id} className={`border-l-4 ${sub.isDefault ? 'border-l-blue-500' : 'border-l-gray-300'} ${!sub.isActive ? 'opacity-60' : ''}`}>
+                        <Card key={sub.id} className={`border-l-4 ${sub.isDefault ? 'border-l-emerald-500' : 'border-l-gray-300'} ${!sub.isActive ? 'opacity-60' : ''}`}>
                           <CardHeader className="pb-2">
                             <div className="flex items-start justify-between gap-4">
                               <div className="flex-1 min-w-0">
@@ -700,10 +700,10 @@ export default function ClassificationsNewPage() {
                                     <div 
                                       className={`h-1.5 rounded-full transition-all duration-300 ${
                                         key === 'fixed' ? 'bg-gray-500' :
-                                        key === 'labour' ? 'bg-blue-500' :
+                                        key === 'labour' ? 'bg-emerald-500' :
                                         key === 'steel' ? 'bg-orange-500' :
                                         key === 'cement' ? 'bg-green-500' :
-                                        key === 'plantMachinery' ? 'bg-purple-500' :
+                                        key === 'plantMachinery' ? 'bg-emerald-500' :
                                         key === 'fuel' ? 'bg-red-500' :
                                         key === 'otherMaterials' ? 'bg-yellow-500' :
                                         key === 'explosives' ? 'bg-pink-500' : 'bg-gray-400'

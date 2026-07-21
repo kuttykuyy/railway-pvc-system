@@ -888,7 +888,7 @@ export default function SpreadsheetPage() {
               {wpiPreview && (
                 <div className="space-y-4">
                   <p className="text-sm text-gray-600">
-                    Data source: <a href={wpiPreview.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                    Data source: <a href={wpiPreview.url} target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline">
                       {wpiPreview.url?.split('/').pop()}
                     </a>
                   </p>
@@ -958,19 +958,19 @@ export default function SpreadsheetPage() {
                 <DialogTitle>Import Labour Index (CPI-IW) Data</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-sm text-blue-800">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                  <p className="text-sm text-emerald-800">
                     <strong>Step 1:</strong> Download CSV from{" "}
                     <a 
                       href="https://labourbureau.gov.in/all-india-index" 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="text-blue-600 underline"
+                      className="text-emerald-600 underline"
                     >
                       labourbureau.gov.in/all-india-index
                     </a>
                   </p>
-                  <p className="text-xs text-blue-700 mt-1">
+                  <p className="text-xs text-emerald-700 mt-1">
                     Click the "CSV" button on that page to download the All India CPI-IW data.
                   </p>
                 </div>
@@ -1080,11 +1080,11 @@ export default function SpreadsheetPage() {
                 <DialogTitle>Import Steel Indices (JPC Data)</DialogTitle>
               </DialogHeader>
               <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-sm text-blue-800">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                  <p className="text-sm text-emerald-800">
                     <strong>Source:</strong> JPC (Joint Plant Committee) Retail Market Prices
                   </p>
-                  <p className="text-xs text-blue-700 mt-1">
+                  <p className="text-xs text-emerald-700 mt-1">
                     Enter prices from JPC bulletin for TMT Bars, Angle/Channel, Plates, and Other Sections.
                   </p>
                 </div>
@@ -1156,7 +1156,7 @@ export default function SpreadsheetPage() {
                           </div>
                           <div className="w-20 text-right">
                             <Label className="text-[10px] text-gray-500">Avg</Label>
-                            <div className="font-mono text-xs h-8 flex items-center justify-end text-blue-600 font-semibold">
+                            <div className="font-mono text-xs h-8 flex items-center justify-end text-emerald-600 font-semibold">
                               {avgs.tmt.mm10 > 0 ? avgs.tmt.mm10.toLocaleString() : '-'}
                             </div>
                           </div>
@@ -1178,7 +1178,7 @@ export default function SpreadsheetPage() {
                           </div>
                           <div className="w-20 text-right">
                             <Label className="text-[10px] text-gray-500">Avg</Label>
-                            <div className="font-mono text-xs h-8 flex items-center justify-end text-blue-600 font-semibold">
+                            <div className="font-mono text-xs h-8 flex items-center justify-end text-emerald-600 font-semibold">
                               {avgs.tmt.mm25 > 0 ? avgs.tmt.mm25.toLocaleString() : '-'}
                             </div>
                           </div>
@@ -1187,10 +1187,10 @@ export default function SpreadsheetPage() {
                         <div className="mt-2 pt-2 border-t text-xs text-gray-600 space-y-1">
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <span className="text-gray-500">10mm:</span> ({steelExcelData.tmt.mm10_f1 || '?'} + {steelExcelData.tmt.mm10_f2 || '?'}) ÷ 2 = <span className="text-blue-600 font-semibold">{avgs.tmt.mm10 || '?'}</span>
+                              <span className="text-gray-500">10mm:</span> ({steelExcelData.tmt.mm10_f1 || '?'} + {steelExcelData.tmt.mm10_f2 || '?'}) ÷ 2 = <span className="text-emerald-600 font-semibold">{avgs.tmt.mm10 || '?'}</span>
                             </div>
                             <div>
-                              <span className="text-gray-500">25mm:</span> ({steelExcelData.tmt.mm25_f1 || '?'} + {steelExcelData.tmt.mm25_f2 || '?'}) ÷ 2 = <span className="text-blue-600 font-semibold">{avgs.tmt.mm25 || '?'}</span>
+                              <span className="text-gray-500">25mm:</span> ({steelExcelData.tmt.mm25_f1 || '?'} + {steelExcelData.tmt.mm25_f2 || '?'}) ÷ 2 = <span className="text-emerald-600 font-semibold">{avgs.tmt.mm25 || '?'}</span>
                             </div>
                           </div>
                           <div className="text-center pt-1 border-t border-dashed">
@@ -1226,7 +1226,7 @@ export default function SpreadsheetPage() {
                           </div>
                           <div className="w-20 text-right">
                             <Label className="text-[10px] text-gray-500">Avg</Label>
-                            <div className="font-mono text-xs h-8 flex items-center justify-end text-blue-600 font-semibold">
+                            <div className="font-mono text-xs h-8 flex items-center justify-end text-emerald-600 font-semibold">
                               {avgs.angle.isa75 > 0 ? avgs.angle.isa75.toLocaleString() : '-'}
                             </div>
                           </div>
@@ -1248,7 +1248,7 @@ export default function SpreadsheetPage() {
                           </div>
                           <div className="w-20 text-right">
                             <Label className="text-[10px] text-gray-500">Avg</Label>
-                            <div className="font-mono text-xs h-8 flex items-center justify-end text-blue-600 font-semibold">
+                            <div className="font-mono text-xs h-8 flex items-center justify-end text-emerald-600 font-semibold">
                               {avgs.angle.msPlate > 0 ? avgs.angle.msPlate.toLocaleString() : '-'}
                             </div>
                           </div>
@@ -1270,7 +1270,7 @@ export default function SpreadsheetPage() {
                           </div>
                           <div className="w-20 text-right">
                             <Label className="text-[10px] text-gray-500">Avg</Label>
-                            <div className="font-mono text-xs h-8 flex items-center justify-end text-blue-600 font-semibold">
+                            <div className="font-mono text-xs h-8 flex items-center justify-end text-emerald-600 font-semibold">
                               {avgs.angle.ismc150 > 0 ? avgs.angle.ismc150.toLocaleString() : '-'}
                             </div>
                           </div>
@@ -1279,13 +1279,13 @@ export default function SpreadsheetPage() {
                         <div className="mt-2 pt-2 border-t text-xs text-gray-600 space-y-1">
                           <div className="space-y-0.5">
                             <div>
-                              <span className="text-gray-500">ISA 75x6:</span> ({steelExcelData.angleChannel.isa75_f1 || '?'} + {steelExcelData.angleChannel.isa75_f2 || '?'}) ÷ 2 = <span className="text-blue-600 font-semibold">{avgs.angle.isa75 || '?'}</span>
+                              <span className="text-gray-500">ISA 75x6:</span> ({steelExcelData.angleChannel.isa75_f1 || '?'} + {steelExcelData.angleChannel.isa75_f2 || '?'}) ÷ 2 = <span className="text-emerald-600 font-semibold">{avgs.angle.isa75 || '?'}</span>
                             </div>
                             <div>
-                              <span className="text-gray-500">MS Plate:</span> ({steelExcelData.angleChannel.msPlate10_f1 || '?'} + {steelExcelData.angleChannel.msPlate10_f2 || '?'}) ÷ 2 = <span className="text-blue-600 font-semibold">{avgs.angle.msPlate || '?'}</span>
+                              <span className="text-gray-500">MS Plate:</span> ({steelExcelData.angleChannel.msPlate10_f1 || '?'} + {steelExcelData.angleChannel.msPlate10_f2 || '?'}) ÷ 2 = <span className="text-emerald-600 font-semibold">{avgs.angle.msPlate || '?'}</span>
                             </div>
                             <div>
-                              <span className="text-gray-500">ISMC 150:</span> ({steelExcelData.angleChannel.ismc150_f1 || '?'} + {steelExcelData.angleChannel.ismc150_f2 || '?'}) ÷ 2 = <span className="text-blue-600 font-semibold">{avgs.angle.ismc150 || '?'}</span>
+                              <span className="text-gray-500">ISMC 150:</span> ({steelExcelData.angleChannel.ismc150_f1 || '?'} + {steelExcelData.angleChannel.ismc150_f2 || '?'}) ÷ 2 = <span className="text-emerald-600 font-semibold">{avgs.angle.ismc150 || '?'}</span>
                             </div>
                           </div>
                           <div className="text-center pt-1 border-t border-dashed">
@@ -1321,7 +1321,7 @@ export default function SpreadsheetPage() {
                           </div>
                           <div className="w-20 text-right">
                             <Label className="text-[10px] text-gray-500">Avg</Label>
-                            <div className="font-mono text-xs h-8 flex items-center justify-end text-blue-600 font-semibold">
+                            <div className="font-mono text-xs h-8 flex items-center justify-end text-emerald-600 font-semibold">
                               {avgs.plates.mm10 > 0 ? avgs.plates.mm10.toLocaleString() : '-'}
                             </div>
                           </div>
@@ -1343,7 +1343,7 @@ export default function SpreadsheetPage() {
                           </div>
                           <div className="w-20 text-right">
                             <Label className="text-[10px] text-gray-500">Avg</Label>
-                            <div className="font-mono text-xs h-8 flex items-center justify-end text-blue-600 font-semibold">
+                            <div className="font-mono text-xs h-8 flex items-center justify-end text-emerald-600 font-semibold">
                               {avgs.plates.mm25 > 0 ? avgs.plates.mm25.toLocaleString() : '-'}
                             </div>
                           </div>
@@ -1352,10 +1352,10 @@ export default function SpreadsheetPage() {
                         <div className="mt-2 pt-2 border-t text-xs text-gray-600 space-y-1">
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <span className="text-gray-500">10mm:</span> ({steelExcelData.plates.msPlate10_f1 || '?'} + {steelExcelData.plates.msPlate10_f2 || '?'}) ÷ 2 = <span className="text-blue-600 font-semibold">{avgs.plates.mm10 || '?'}</span>
+                              <span className="text-gray-500">10mm:</span> ({steelExcelData.plates.msPlate10_f1 || '?'} + {steelExcelData.plates.msPlate10_f2 || '?'}) ÷ 2 = <span className="text-emerald-600 font-semibold">{avgs.plates.mm10 || '?'}</span>
                             </div>
                             <div>
-                              <span className="text-gray-500">25mm:</span> ({steelExcelData.plates.msPlate25_f1 || '?'} + {steelExcelData.plates.msPlate25_f2 || '?'}) ÷ 2 = <span className="text-blue-600 font-semibold">{avgs.plates.mm25 || '?'}</span>
+                              <span className="text-gray-500">25mm:</span> ({steelExcelData.plates.msPlate25_f1 || '?'} + {steelExcelData.plates.msPlate25_f2 || '?'}) ÷ 2 = <span className="text-emerald-600 font-semibold">{avgs.plates.mm25 || '?'}</span>
                             </div>
                           </div>
                           <div className="text-center pt-1 border-t border-dashed">
@@ -1672,9 +1672,9 @@ export default function SpreadsheetPage() {
                           key={group.city} 
                           colSpan={group.cols.length} 
                           className={`border px-2 py-1 text-center text-xs font-bold ${
-                            group.city === 'Default (Chennai)' ? 'bg-blue-100 text-blue-800' :
+                            group.city === 'Default (Chennai)' ? 'bg-emerald-100 text-emerald-800' :
                             group.city === 'Delhi' ? 'bg-orange-100 text-orange-800' :
-                            group.city === 'Mumbai' ? 'bg-purple-100 text-purple-800' :
+                            group.city === 'Mumbai' ? 'bg-emerald-100 text-emerald-800' :
                             group.city === 'Chennai' ? 'bg-green-100 text-green-800' :
                             'bg-red-100 text-red-800'
                           }`}
@@ -1697,9 +1697,9 @@ export default function SpreadsheetPage() {
                         key={col.key} 
                         className={`border px-1 py-2 text-center font-semibold text-xs ${
                           steelCityView === 'all' ? (
-                            col.city === 'Default' ? 'bg-blue-50' :
+                            col.city === 'Default' ? 'bg-emerald-50' :
                             col.city === 'Delhi' ? 'bg-orange-50' :
-                            col.city === 'Mumbai' ? 'bg-purple-50' :
+                            col.city === 'Mumbai' ? 'bg-emerald-50' :
                             col.city === 'Chennai' ? 'bg-green-50' :
                             'bg-red-50'
                           ) : ''
@@ -1758,9 +1758,9 @@ export default function SpreadsheetPage() {
                       return (
                         <th key={col.key} className={`border px-0.5 py-0.5 text-center ${
                           steelCityView === 'all' ? (
-                            col.city === 'Default' ? 'bg-blue-50/50' :
+                            col.city === 'Default' ? 'bg-emerald-50/50' :
                             col.city === 'Delhi' ? 'bg-orange-50/50' :
-                            col.city === 'Mumbai' ? 'bg-purple-50/50' :
+                            col.city === 'Mumbai' ? 'bg-emerald-50/50' :
                             col.city === 'Chennai' ? 'bg-green-50/50' :
                             'bg-red-50/50'
                           ) : ''
@@ -1865,13 +1865,13 @@ export default function SpreadsheetPage() {
                             className={`border px-1 py-2 text-center text-xs ${
                               cell?.isProvisional ? "bg-amber-50" : 
                               steelCityView === 'all' ? (
-                                col.city === 'Default' ? 'bg-blue-50/30' :
+                                col.city === 'Default' ? 'bg-emerald-50/30' :
                                 col.city === 'Delhi' ? 'bg-orange-50/30' :
-                                col.city === 'Mumbai' ? 'bg-purple-50/30' :
+                                col.city === 'Mumbai' ? 'bg-emerald-50/30' :
                                 col.city === 'Chennai' ? 'bg-green-50/30' :
                                 'bg-red-50/30'
                               ) : ''
-                            } ${hasDetail ? "cursor-pointer hover:bg-blue-100/50" : hasValue && cell?.formula ? "cursor-help" : ""}`}
+                            } ${hasDetail ? "cursor-pointer hover:bg-emerald-100/50" : hasValue && cell?.formula ? "cursor-help" : ""}`}
                             title={!hasDetail && hasValue && cell?.formula ? cell.formula : hasDetail ? "Click to view breakdown" : undefined}
                             onClick={hasDetail ? (e) => {
                               const rect = (e.target as HTMLElement).getBoundingClientRect();
@@ -1948,7 +1948,7 @@ export default function SpreadsheetPage() {
                 <p className="text-xs text-gray-500">{steelPopover.city} JPC Rates</p>
               </div>
               <div className="text-right">
-                <span className="text-lg font-bold text-blue-600">{steelPopover.value.toFixed(0)}</span>
+                <span className="text-lg font-bold text-emerald-600">{steelPopover.value.toFixed(0)}</span>
                 <p className="text-[10px] text-gray-400">₹/MT</p>
               </div>
             </div>

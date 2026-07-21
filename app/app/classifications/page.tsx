@@ -27,10 +27,10 @@ interface ClassificationGroup {
 
 const COMPONENTS: { key: keyof SubClassification; label: string; color: string }[] = [
   { key: 'fixed',          label: 'Fixed',         color: 'bg-gray-400' },
-  { key: 'labour',         label: 'Labour',        color: 'bg-blue-500' },
+  { key: 'labour',         label: 'Labour',        color: 'bg-emerald-500' },
   { key: 'steel',          label: 'Steel',         color: 'bg-orange-500' },
   { key: 'cement',         label: 'Cement',        color: 'bg-green-500' },
-  { key: 'plantMachinery', label: 'Plant',         color: 'bg-purple-500' },
+  { key: 'plantMachinery', label: 'Plant',         color: 'bg-emerald-500' },
   { key: 'fuel',           label: 'Fuel',          color: 'bg-red-500' },
   { key: 'otherMaterials', label: 'Materials',     color: 'bg-yellow-500' },
   { key: 'explosives',     label: 'Explosives',    color: 'bg-pink-500' },
@@ -116,7 +116,7 @@ export default function ClassificationsPage() {
     refresh();
   };
 
-  if (loading) return <div className="flex justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
+  if (loading) return <div className="flex justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" /></div>;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
@@ -129,7 +129,7 @@ export default function ClassificationsPage() {
         </div>
         <button
           onClick={() => { setEditingGroup(null); setGroupForm({ code: '', name: '', description: '' }); setGroupDialog(true); }}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
         >
           <Plus className="h-4 w-4" /> Add Group
         </button>
@@ -140,7 +140,7 @@ export default function ClassificationsPage() {
         <div className="text-center py-16 border border-dashed border-gray-200 rounded-lg">
           <p className="font-medium text-gray-600">No classification groups yet</p>
           <button onClick={() => { setEditingGroup(null); setGroupForm({ code: '', name: '', description: '' }); setGroupDialog(true); }}
-            className="mt-3 inline-flex items-center gap-1 text-sm text-blue-600 hover:underline">
+            className="mt-3 inline-flex items-center gap-1 text-sm text-emerald-600 hover:underline">
             <Plus className="h-4 w-4" /> Add first group
           </button>
         </div>
@@ -168,7 +168,7 @@ export default function ClassificationsPage() {
                       <Plus className="h-3.5 w-3.5" /> Add Sub
                     </button>
                     <button onClick={() => { setEditingGroup(group); setGroupForm({ code: group.code, name: group.name, description: group.description || '' }); setGroupDialog(true); }}
-                      className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50">
+                      className="p-1.5 rounded text-gray-400 hover:text-emerald-600 hover:bg-emerald-50">
                       <Edit2 className="h-4 w-4" />
                     </button>
                     <AlertDialog>
@@ -196,7 +196,7 @@ export default function ClassificationsPage() {
                       <div className="px-4 py-6 text-center text-sm text-gray-400">
                         No sub-classifications yet.{' '}
                         <button onClick={() => { setEditingSubClass(null); setSelectedGroupId(group.id); setSubForm(DEFAULT_FORM); setSubDialog(true); }}
-                          className="text-blue-600 hover:underline">Add one</button>
+                          className="text-emerald-600 hover:underline">Add one</button>
                       </div>
                     ) : (
                       <table className="w-full text-sm">
@@ -231,7 +231,7 @@ export default function ClassificationsPage() {
                                     setEditingSubClass(sub); setSelectedGroupId(sub.groupId);
                                     setSubForm({ code: sub.code, name: sub.name, description: sub.description || '', fixed: sub.fixed, labour: sub.labour, steel: sub.steel, cement: sub.cement, plantMachinery: sub.plantMachinery, fuel: sub.fuel, otherMaterials: sub.otherMaterials, explosives: sub.explosives });
                                     setSubDialog(true);
-                                  }} className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50">
+                                  }} className="p-1.5 rounded text-gray-400 hover:text-emerald-600 hover:bg-emerald-50">
                                     <Edit2 className="h-3.5 w-3.5" />
                                   </button>
                                   <AlertDialog>

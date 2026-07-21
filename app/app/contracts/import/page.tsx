@@ -205,8 +205,8 @@ export default function ContractImportPage() {
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="rounded-xl bg-blue-100 p-2.5">
-          <FileSpreadsheet className="h-6 w-6 text-blue-700" />
+        <div className="rounded-xl bg-emerald-100 p-2.5">
+          <FileSpreadsheet className="h-6 w-6 text-emerald-700" />
         </div>
         <div>
           <h1 className="text-xl font-bold text-slate-900">Import Contracts</h1>
@@ -218,7 +218,7 @@ export default function ContractImportPage() {
       <div className="flex items-center gap-2 text-xs font-semibold">
         {(['upload', 'preview', 'result'] as const).map((s, i) => (
           <div key={s} className="flex items-center gap-2">
-            <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${step === s ? 'bg-blue-600 text-white' : i < ['upload', 'preview', 'result'].indexOf(step) ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+            <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${step === s ? 'bg-emerald-600 text-white' : i < ['upload', 'preview', 'result'].indexOf(step) ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
               {i + 1}
             </div>
             <span className={step === s ? 'text-slate-800' : 'text-slate-400'}>
@@ -273,7 +273,7 @@ export default function ContractImportPage() {
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-colors ${dragging ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'}`}
+            className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-colors ${dragging ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-emerald-300 hover:bg-slate-50'}`}
           >
             <FileUp className="h-10 w-10 mx-auto text-slate-300 mb-3" />
             <p className="text-sm font-semibold text-slate-700 text-center">Drop your Excel or CSV file here</p>
@@ -344,7 +344,7 @@ export default function ContractImportPage() {
             <Button
               onClick={handleImport}
               disabled={importing || validRows.length === 0}
-              className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white gap-2"
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
             >
               {importing ? <><Loader2 className="h-4 w-4 animate-spin" />Importing…</> : <>{`Import ${validRows.length} Contract${validRows.length !== 1 ? 's' : ''}`}</>}
             </Button>
@@ -398,7 +398,7 @@ export default function ContractImportPage() {
                 Import Again
               </Button>
             )}
-            <Button onClick={() => router.push('/contracts')} className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white">
+            <Button onClick={() => router.push('/contracts')} className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white">
               View Contracts
             </Button>
           </div>

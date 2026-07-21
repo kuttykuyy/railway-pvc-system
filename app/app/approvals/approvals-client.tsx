@@ -96,7 +96,7 @@ export function ApprovalsPageClient({ bills, counts, user }: ApprovalsPageClient
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <Clock className="text-blue-600" size={20} />
+              <Clock className="text-emerald-600" size={20} />
               <span className="text-2xl font-bold">{counts.submitted}</span>
             </div>
           </CardContent>
@@ -246,7 +246,7 @@ export function ApprovalsPageClient({ bills, counts, user }: ApprovalsPageClient
                     {bill.pvcCalculation?.totalPvcAmount != null && (
                       <div className="text-right space-y-1">
                         <p className="text-sm text-muted-foreground">PVC Amount</p>
-                        <p className="text-lg font-semibold text-blue-600 flex items-center gap-1">
+                        <p className="text-lg font-semibold text-emerald-600 flex items-center gap-1">
                           <IndianRupee size={16} />
                           {typeof bill.pvcCalculation.totalPvcAmount === 'number' 
                             ? bill.pvcCalculation.totalPvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 }) 

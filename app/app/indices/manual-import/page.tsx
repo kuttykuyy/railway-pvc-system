@@ -250,7 +250,7 @@ export default function ManualImportPage() {
           <BackButton href="/indices" label="Back to Price Indices" variant="outline" />
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <Save className="h-8 w-8 text-blue-600" />
+              <Save className="h-8 w-8 text-emerald-600" />
               Manual Indices Entry
             </h1>
             <p className="text-gray-600 mt-2">
@@ -385,7 +385,7 @@ export default function ManualImportPage() {
                         type="button"
                         onClick={processUploadedFile}
                         disabled={isUploading || !uploadedFile || (uploadedFile?.name.toLowerCase().endsWith('.csv') && !selectedMonth)}
-                        className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700"
+                        className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700"
                       >
                         {isUploading ? (
                           <LoadingSpinner size="sm" text="Processing..." />
@@ -444,7 +444,7 @@ export default function ManualImportPage() {
                   <Button
                     type="submit"
                     disabled={isSaving || !selectedMonth}
-                    className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700"
+                    className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700"
                   >
                     {isSaving ? (
                       <LoadingSpinner size="sm" text="Saving..." />
@@ -484,7 +484,7 @@ export default function ManualImportPage() {
           </Card>
 
           {/* Import Guidelines */}
-          <Card className="border-0 shadow-lg bg-gradient-to-r from-blue-50 to-green-50">
+          <Card className="border-0 shadow-lg bg-gradient-to-r from-emerald-50 to-green-50">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />

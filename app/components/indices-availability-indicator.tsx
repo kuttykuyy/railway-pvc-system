@@ -53,13 +53,13 @@ export function IndicesAvailabilityIndicator() {
 
   if (loading) {
     return (
-      <Card className="border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+      <Card className="border-2 border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-50">
         <CardContent className="p-3">
           <div className="flex items-center gap-3">
-            <div className="animate-pulse h-9 w-9 bg-blue-200 rounded-full flex-shrink-0" />
+            <div className="animate-pulse h-9 w-9 bg-emerald-200 rounded-full flex-shrink-0" />
             <div className="flex-1 space-y-1.5">
-              <div className="h-3 bg-blue-200 rounded animate-pulse w-1/2" />
-              <div className="h-2.5 bg-blue-100 rounded animate-pulse w-1/3" />
+              <div className="h-3 bg-emerald-200 rounded animate-pulse w-1/2" />
+              <div className="h-2.5 bg-emerald-100 rounded animate-pulse w-1/3" />
             </div>
           </div>
         </CardContent>

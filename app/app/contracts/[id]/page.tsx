@@ -85,9 +85,9 @@ export default async function ContractDetailPage({ params }: Props) {
       {/* Stats strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Contractor', value: contract.contractorName, icon: User, color: 'text-blue-600' },
+          { label: 'Contractor', value: contract.contractorName, icon: User, color: 'text-emerald-600' },
           { label: 'Base Month', value: format(new Date(contract.baseMonth), 'MMM yyyy'), icon: Calendar, color: 'text-green-600' },
-          { label: 'Total Bills', value: `₹${totalBillAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, icon: FileText, color: 'text-purple-600' },
+          { label: 'Total Bills', value: `₹${totalBillAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, icon: FileText, color: 'text-emerald-600' },
           { label: 'Total PVC', value: `₹${totalPvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, icon: Calculator, color: 'text-orange-600' },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-white border border-gray-200 rounded-lg px-4 py-3">
@@ -159,7 +159,7 @@ export default async function ContractDetailPage({ params }: Props) {
         {/* Right: GCC 46A.1 + values */}
         <div className="bg-white border border-gray-200 rounded-lg p-5 space-y-4">
           <div className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-blue-500" />
+            <Info className="h-4 w-4 text-emerald-500" />
             <h2 className="text-sm font-semibold text-gray-700">GCC 46A.1 — PVC Applicability</h2>
           </div>
 
@@ -231,7 +231,7 @@ export default async function ContractDetailPage({ params }: Props) {
             <p className="text-xs text-gray-400 mt-0.5">Running account bills with PVC calculations</p>
           </div>
           <Link href={`/bills/new?contractId=${contract.id}`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
             <Plus className="h-4 w-4" /> Add Bill
           </Link>
         </div>
@@ -242,7 +242,7 @@ export default async function ContractDetailPage({ params }: Props) {
             <p className="font-medium text-gray-600 mx-auto max-w-none">No bills yet</p>
             <p className="text-sm mt-1 mx-auto max-w-none">Add your first running account bill to start PVC calculations.</p>
             <Link href={`/bills/new?contractId=${contract.id}`}
-              className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
               <Plus className="h-4 w-4" /> Add First Bill
             </Link>
           </div>
@@ -288,7 +288,7 @@ export default async function ContractDetailPage({ params }: Props) {
                       </td>
                       <td className="px-4 py-3">
                         <Link href={`/bills/${bill.id}`}
-                          className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors inline-flex">
+                          className="p-1.5 rounded text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors inline-flex">
                           <Eye className="h-4 w-4" />
                         </Link>
                       </td>
@@ -300,7 +300,7 @@ export default async function ContractDetailPage({ params }: Props) {
             {contract.bills.length > 10 && (
               <div className="px-5 py-3 border-t border-gray-100 text-center">
                 <Link href={`/bills?contractId=${contract.id}`}
-                  className="text-sm text-blue-600 hover:underline">
+                  className="text-sm text-emerald-600 hover:underline">
                   View all {contract.bills.length} bills →
                 </Link>
               </div>

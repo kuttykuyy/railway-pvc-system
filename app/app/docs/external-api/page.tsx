@@ -21,26 +21,26 @@ export default function ExternalApiDocsPage() {
       </div>
       
       {/* Quick Start */}
-      <Card className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-blue-200 dark:border-blue-800">
+      <Card className="mb-8 bg-gradient-to-r from-emerald-50 to-emerald-50 dark:from-emerald-950 dark:to-emerald-950 border-emerald-200 dark:border-emerald-800">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-blue-600" />
+            <Zap className="h-5 w-5 text-emerald-600" />
             Quick Start
           </CardTitle>
         </CardHeader>
         <CardContent>
           <ol className="space-y-3">
             <li className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">1</span>
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">1</span>
               <div>
                 <span className="font-medium">Create an API Key</span>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Go to <Link href="/settings/api-keys" className="text-blue-600 hover:underline">Settings → API Keys</Link> and create a new key
+                  Go to <Link href="/settings/api-keys" className="text-emerald-600 hover:underline">Settings → API Keys</Link> and create a new key
                 </p>
               </div>
             </li>
             <li className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">2</span>
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">2</span>
               <div>
                 <span className="font-medium">Configure Your External App</span>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -49,7 +49,7 @@ export default function ExternalApiDocsPage() {
               </div>
             </li>
             <li className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">3</span>
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">3</span>
               <div>
                 <span className="font-medium">Start Making API Calls</span>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -384,7 +384,7 @@ Content-Type: application/json
               </CardHeader>
               <CardContent>
                 <p className="mb-4">
-                  API keys can be managed from the <Link href="/settings/api-keys" className="text-blue-600 hover:underline">Settings → API Keys</Link> page.
+                  API keys can be managed from the <Link href="/settings/api-keys" className="text-emerald-600 hover:underline">Settings → API Keys</Link> page.
                 </p>
                 <h4 className="font-semibold mb-2">Available Scopes</h4>
                 <ul className="space-y-2 text-sm">
@@ -455,7 +455,7 @@ Content-Type: application/json
               </p>
             </div>
             <Link href="/contact">
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+              <button className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2">
                 Contact Support
                 <ArrowRight className="h-4 w-4" />
               </button>

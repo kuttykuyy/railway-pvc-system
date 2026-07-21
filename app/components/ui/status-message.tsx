@@ -26,10 +26,10 @@ const typeConfig = {
   },
   info: {
     icon: Info,
-    bgColor: "bg-blue-50",
-    borderColor: "border-blue-200",
-    textColor: "text-blue-900",
-    iconColor: "text-blue-600"
+    bgColor: "bg-emerald-50",
+    borderColor: "border-emerald-200",
+    textColor: "text-emerald-900",
+    iconColor: "text-emerald-600"
   },
   warning: {
     icon: AlertTriangle,
