@@ -11,6 +11,7 @@ import { resolveBillClassificationPolicy } from '@/lib/bill-classification-polic
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { checkUserBillAccess } from '@/lib/permissions';
+import { isBillUsingProvisionalIndices } from '@/lib/index-status';
 
 export const dynamic = "force-dynamic";
 
@@ -490,7 +491,10 @@ export async function POST(
           : null,
         originalPvcAmount: adjustedOriginalPvcAmount,
         restrictedPvcAmount: adjustedRestrictedPvcAmount,
-        pvcSavingsDueToRestriction: adjustedSavings
+        pvcSavingsDueToRestriction: adjustedSavings,
+        // Re-evaluate provisional status against the live indices. If the month has since
+        // been published as final, this flips to false and the "Regenerate" action drops off.
+        usedProvisionalIndices: (await isBillUsingProvisionalIndices(correctQuarter, bill.contract.baseMonth)).isProvisional
       }
     });
     

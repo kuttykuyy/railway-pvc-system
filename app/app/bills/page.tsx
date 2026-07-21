@@ -64,6 +64,7 @@ interface PvcCalculation {
   isIndexCapped?: boolean;
   originalPvcAmount?: number;
   restrictedPvcAmount?: number;
+  usedProvisionalIndices?: boolean;
 }
 
 interface BillTransaction {
@@ -2195,6 +2196,34 @@ export default function BillsPage() {
                       <Phone className="h-4 w-4 text-emerald-600" />
                       <span>WhatsApp</span>
                     </Button>
+
+                    {/* Regenerate — only for bills whose numbers were computed with provisional
+                        (borrowed) indices. Stays disabled until the real index for the month is
+                        published (indicesStatus becomes final), then lights up so one click
+                        refreshes the bill with the final figures. */}
+                    {bill.pvcCalculation?.usedProvisionalIndices && (() => {
+                      const nowFinal = bill.indicesStatus?.isProvisional === false;
+                      const busy = recalculating === bill.id;
+                      return (
+                        <Button
+                          onClick={() => recalculateBill(bill.id)}
+                          disabled={!nowFinal || busy}
+                          variant="outline"
+                          size="default"
+                          title={nowFinal
+                            ? 'The final index is now published — click to regenerate this bill with the final figures.'
+                            : 'Waiting for the final index of this month to be published. You can regenerate once it is available.'}
+                          className={`w-full font-semibold rounded-xl h-10 gap-2 transition-all duration-200 ${
+                            nowFinal
+                              ? 'border-amber-200 hover:border-amber-300 bg-amber-50/60 hover:bg-amber-100/60 dark:border-amber-900/50 dark:bg-amber-950/20 dark:hover:bg-amber-950/40 text-amber-800 dark:text-amber-300'
+                              : 'border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20 text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                          }`}
+                        >
+                          {busy ? <LoadingSpinner /> : <Calculator className="h-4 w-4" />}
+                          <span>{nowFinal ? 'Regenerate (final ready)' : 'Regenerate (awaiting final)'}</span>
+                        </Button>
+                      );
+                    })()}
 
                     {/* Edit & Delete Action Grid */}
                     <div className="grid grid-cols-2 gap-2 w-full">

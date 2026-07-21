@@ -147,8 +147,25 @@ export async function GET(request: NextRequest) {
             });
           })
         );
+        // Latch the sticky provisional flag for bills whose numbers were computed before this
+        // column existed (or before it was set): if the quarter is provisional right now, record
+        // it so the "Regenerate" action survives once the real index is later published.
+        const idsToLatch = bills
+          .filter(b => b.pvcCalculation && !(b.pvcCalculation as any).usedProvisionalIndices
+            && statusByKey.get(`${b.quarter}::${b.contract.baseMonth.toISOString()}`)?.isProvisional)
+          .map(b => b.pvcCalculation!.id);
+        if (idsToLatch.length > 0) {
+          await prisma.pvcCalculation.updateMany({
+            where: { id: { in: idsToLatch } },
+            data: { usedProvisionalIndices: true },
+          });
+        }
+        const latched = new Set(idsToLatch);
         const billsWithStatus = bills.map(bill => ({
           ...bill,
+          pvcCalculation: bill.pvcCalculation && latched.has(bill.pvcCalculation.id)
+            ? { ...bill.pvcCalculation, usedProvisionalIndices: true }
+            : bill.pvcCalculation,
           indicesStatus: statusByKey.get(`${bill.quarter}::${bill.contract.baseMonth.toISOString()}`)
             ?? { isProvisional: false, provisionalCount: 0, totalCount: 0 }
         }));
@@ -741,7 +758,10 @@ export async function POST(request: NextRequest) {
           : null,
         originalPvcAmount: extensionCompliantResult.appliedRestrictions.originalPvcAmount,
         restrictedPvcAmount: extensionCompliantResult.appliedRestrictions.restrictedPvcAmount,
-        pvcSavingsDueToRestriction: extensionCompliantResult.appliedRestrictions.savingsAmount || 0
+        pvcSavingsDueToRestriction: extensionCompliantResult.appliedRestrictions.savingsAmount || 0,
+        // Sticky flag: remember that this bill's numbers were computed with provisional/
+        // borrowed indices, so the list can keep offering "Regenerate" until it is recalculated.
+        usedProvisionalIndices: indicesCheck.isProvisional === true
       }
     });
     
