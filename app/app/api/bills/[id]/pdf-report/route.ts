@@ -677,12 +677,28 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         },
         include: { priceIndex: true }
       });
-      const allHistoricalMonthlyData = irHistoricalRaw.map((mv: any) => ({
-        indexName: mv.priceIndex.name,
-        month: new Date(mv.month).toISOString().slice(0, 7),
-        value: mv.value,
-        isProvisional: !!mv.isProvisional,
-      }));
+      const allHistoricalMonthlyData: { indexName: string; month: string; value: number; isProvisional?: boolean; isBorrowed?: boolean }[] =
+        irHistoricalRaw.map((mv: any) => ({
+          indexName: mv.priceIndex.name,
+          month: new Date(mv.month).toISOString().slice(0, 7),
+          value: mv.value,
+          isProvisional: !!mv.isProvisional,
+        }));
+
+      // For months missing an index, the PVC calc borrows the last available value
+      // (provisional-fallback) and averages it in. Surface those borrowed numbers so the
+      // table shows the real figure behind the average instead of a blank, and so the
+      // displayed quarter average matches the value actually used.
+      const realKeys = new Set(allHistoricalMonthlyData.map(d => `${d.indexName}|${d.month}`));
+      for (const qa of (irQuarterlyAverages as any[])) {
+        for (const mv of (qa.monthlyValues || [])) {
+          const key = `${qa.indexName}|${mv.month}`;
+          if (!realKeys.has(key)) {
+            allHistoricalMonthlyData.push({ indexName: qa.indexName, month: mv.month, value: mv.value, isProvisional: true, isBorrowed: true });
+            realKeys.add(key);
+          }
+        }
+      }
 
       // Per-item JPC steel readings (fortnightly F1/F2 per size) for the bill's
       // steel city, so the AVERAGE JPC STEEL INDICES page can show how each
