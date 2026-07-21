@@ -680,7 +680,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const allHistoricalMonthlyData = irHistoricalRaw.map((mv: any) => ({
         indexName: mv.priceIndex.name,
         month: new Date(mv.month).toISOString().slice(0, 7),
-        value: mv.value
+        value: mv.value,
+        isProvisional: !!mv.isProvisional,
       }));
 
       // Per-item JPC steel readings (fortnightly F1/F2 per size) for the bill's
