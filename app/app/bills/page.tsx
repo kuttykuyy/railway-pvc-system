@@ -1205,21 +1205,6 @@ export default function BillsPage() {
         </CardHeader>
         {showFilters && (
         <CardContent className="p-5 sm:p-6 pt-2 space-y-4">
-          {/* Bill Type Tabs - Styled as slate switcher inside filters card */}
-          <Tabs value={billTypeFilter} onValueChange={(val) => setBillTypeFilter(val as 'all' | 'single' | 'bulk')} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 h-11 bg-slate-100/80 border border-slate-200/50 p-1 rounded-xl">
-              <TabsTrigger value="all" className="data-[state=active]:bg-white data-[state=active]:text-purple-600 data-[state=active]:shadow-sm font-semibold text-xs sm:text-sm px-1 sm:px-3 text-slate-500 hover:text-slate-800 rounded-lg">
-                All Bills
-              </TabsTrigger>
-              <TabsTrigger value="single" className="data-[state=active]:bg-white data-[state=active]:text-purple-600 data-[state=active]:shadow-sm font-semibold text-xs sm:text-sm px-1 sm:px-3 text-slate-500 hover:text-slate-800 rounded-lg">
-                Single Bills
-              </TabsTrigger>
-              <TabsTrigger value="bulk" className="data-[state=active]:bg-white data-[state=active]:text-purple-600 data-[state=active]:shadow-sm font-semibold text-xs sm:text-sm px-1 sm:px-3 text-slate-500 hover:text-slate-800 rounded-lg">
-                Bulk Bills
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-
           {/* Primary and Advanced Filters Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {/* Search */}
@@ -1413,6 +1398,21 @@ export default function BillsPage() {
         </CardContent>
         )}
       </Card>
+
+      {/* Single vs Bulk bill tabs — always visible */}
+      <Tabs value={billTypeFilter === 'approvals' ? 'all' : billTypeFilter} onValueChange={(val) => setBillTypeFilter(val as 'all' | 'single' | 'bulk')} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 h-12 bg-slate-100/80 border border-slate-200/50 p-1 rounded-xl">
+          <TabsTrigger value="all" className="data-[state=active]:bg-white data-[state=active]:text-purple-600 data-[state=active]:shadow-sm font-semibold text-sm text-slate-500 hover:text-slate-800 rounded-lg">
+            All Bills
+          </TabsTrigger>
+          <TabsTrigger value="single" className="data-[state=active]:bg-white data-[state=active]:text-purple-600 data-[state=active]:shadow-sm font-semibold text-sm text-slate-500 hover:text-slate-800 rounded-lg gap-2">
+            <FileText className="h-4 w-4" /> Single Bills
+          </TabsTrigger>
+          <TabsTrigger value="bulk" className="data-[state=active]:bg-white data-[state=active]:text-purple-600 data-[state=active]:shadow-sm font-semibold text-sm text-slate-500 hover:text-slate-800 rounded-lg gap-2">
+            <Layers className="h-4 w-4" /> Bulk Bills
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Summary Stats - High Contrast, Clean White Theme */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
