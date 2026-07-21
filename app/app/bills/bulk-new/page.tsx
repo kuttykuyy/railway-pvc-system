@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Trash2, Save, AlertCircle, Edit, Upload, Download } from 'lucide-react';
+import { Plus, Trash2, Save, AlertCircle, Edit, Upload, Download, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-dialog';
@@ -100,6 +100,8 @@ export default function BulkBillCreationPage() {
   // Global zone and fuel — selected once for all bills
   const [globalZone, setGlobalZone] = useState<string>('');
   const [globalFuelPriceType, setGlobalFuelPriceType] = useState<string>('four_city_avg');
+  // How the user wants to build the bills: pick first, then show the rest.
+  const [billMode, setBillMode] = useState<'choose' | 'manual' | 'ai'>('choose');
 
   const [billRows, setBillRows] = useState<BillRow[]>([
     {
@@ -539,6 +541,24 @@ export default function BulkBillCreationPage() {
 
   const applyExtractedBillDetailsToBulkRow = async (data: CementAnalysisData) => {
     const billDetails = data.billDetails;
+
+    // Auto-select the contract from the extracted Agreement No. when none is chosen yet
+    // (parity with the single-bill form, so bulk fills the contract for you).
+    const extractedAgreementNo = (billDetails?.agreementNo || '').trim();
+    if (extractedAgreementNo && !selectedContract) {
+      const normalize = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const target = normalize(extractedAgreementNo);
+      const matchedContract = contracts.find(contract => normalize(contract.agreementNo) === target)
+        || contracts.find(contract => {
+          const code = normalize(contract.agreementNo);
+          return code.length > 0 && (code.includes(target) || target.includes(code));
+        });
+      if (matchedContract) {
+        setSelectedContract(matchedContract);
+        toast.success(`Matched contract ${matchedContract.agreementNo} from the bill`, { icon: '🔗' });
+      }
+    }
+
     let mappedEntries = buildClassificationEntriesFromExtractedBill(data);
     mappedEntries = await applyPvcComparisonToEntries(
       mappedEntries,
@@ -751,6 +771,54 @@ export default function BulkBillCreationPage() {
             </div>
           )}
 
+          {/* Step 0 — choose how to build the bills */}
+          {billMode === 'choose' && (
+            <div className="py-2">
+              <h2 className="text-lg font-bold text-slate-900 text-center">How do you want to create these bills?</h2>
+              <p className="text-sm text-muted-foreground text-center mt-1">Pick one option. You can change it later.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 max-w-3xl mx-auto">
+                <button
+                  type="button"
+                  onClick={() => setBillMode('manual')}
+                  className="text-left rounded-2xl border-2 border-slate-200 hover:border-purple-400 hover:bg-purple-50/40 transition-all p-5 group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="bg-slate-100 group-hover:bg-purple-100 text-slate-600 group-hover:text-purple-600 p-2.5 rounded-xl transition-colors">
+                      <Edit className="h-6 w-6" />
+                    </div>
+                    <div className="font-bold text-slate-900">Enter details manually</div>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-3">Add rows yourself or import an Excel sheet.</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBillMode('ai')}
+                  className="text-left rounded-2xl border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 transition-all p-5 group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="bg-blue-50 group-hover:bg-blue-100 text-blue-600 p-2.5 rounded-xl transition-colors">
+                      <Sparkles className="h-6 w-6" />
+                    </div>
+                    <div className="font-bold text-slate-900">Upload signed bill PDF</div>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-3">Let AI read each PDF and fill the row. Charged the AI rate only when you save.</p>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {billMode !== 'choose' && (
+            <div className="flex items-center justify-between rounded-xl border bg-muted/40 px-4 py-2.5">
+              <span className="text-sm text-muted-foreground">
+                Method: <span className="font-semibold text-slate-900">{billMode === 'ai' ? 'PDF upload (AI)' : 'Manual'}</span>
+              </span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setBillMode('choose')}>Change</Button>
+            </div>
+          )}
+
+          {billMode !== 'choose' && (
+          <>
           {/* Contract Selection */}
           <div className="space-y-2">
             <Label>Select Contract *</Label>
@@ -835,12 +903,13 @@ export default function BulkBillCreationPage() {
                 </p>
               </div>
 
-              <BillPdfCementAnalyzer
-                compact
-                disabled={isSaving}
-                title="AI PDF Bill Extraction"
-                onApplyBillDetails={applyExtractedBillDetailsToBulkRow}
-              />
+              {billMode === 'ai' && (
+                <BillPdfCementAnalyzer
+                  disabled={isSaving}
+                  title="AI PDF Bill Extraction"
+                  onApplyBillDetails={applyExtractedBillDetailsToBulkRow}
+                />
+              )}
 
               <div className="border rounded-lg overflow-hidden">
                 <div className="overflow-x-auto">
@@ -969,6 +1038,8 @@ export default function BulkBillCreationPage() {
                 </div>
               </div>
             </div>
+          )}
+          </>
           )}
         </CardContent>
       </Card>
