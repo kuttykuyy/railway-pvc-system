@@ -207,6 +207,8 @@ function NewBillPageContent() {
   
   // Accordion state - start with basic info open
   const [openAccordion, setOpenAccordion] = useState<string[]>(['basic']);
+  // Horizontal tabs for the bill form sections.
+  const [activeBillTab, setActiveBillTab] = useState('basic');
 
   // Insufficient credit dialog state
   const [showInsufficientCredit, setShowInsufficientCredit] = useState(false);
@@ -1366,6 +1368,15 @@ function NewBillPageContent() {
     );
   }
 
+  const BILL_TABS = [
+    { id: 'basic', label: t('form.bill.basic_info'), icon: Building2 },
+    { id: 'classification', label: t('form.bill.classifications'), icon: ClipboardList },
+    { id: 'cement', label: language === 'hi' ? 'सीमेंट' : 'Cement', icon: Package },
+    { id: 'optional', label: t('form.bill.non_schedule'), icon: Layers },
+  ];
+  const billTabIndex = Math.max(0, BILL_TABS.findIndex(tb => tb.id === activeBillTab));
+  const billPanelCls = (id: string) => (activeBillTab === id ? 'block' : 'hidden');
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -1577,25 +1588,35 @@ function NewBillPageContent() {
                 />
 
                 {/* Accordion for organized sections */}
-                <Accordion type="multiple" value={openAccordion} onValueChange={setOpenAccordion} className="space-y-4">
+                <div className="overflow-x-auto -mx-1 px-1 mb-4">
+                  <div className="flex gap-1 border-b border-slate-200 min-w-max">
+                    {BILL_TABS.map((tb) => {
+                      const Icon = tb.icon;
+                      const isActive = activeBillTab === tb.id;
+                      return (
+                        <button
+                          key={tb.id}
+                          type="button"
+                          onClick={() => setActiveBillTab(tb.id)}
+                          className={`flex items-center gap-2 whitespace-nowrap px-3.5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                            isActive
+                              ? 'border-purple-600 text-purple-700'
+                              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                          }`}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {tb.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
                   
                   {/* SECTION 1: Basic Information */}
-                  <AccordionItem value="basic" className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
-                    <AccordionTrigger className="px-5 py-4 hover:no-underline bg-slate-50/50 hover:bg-slate-50/80 transition-all">
-                      <div className="flex items-center gap-3 w-full">
-                        <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
-                          <Building2 className="h-5 w-5" />
-                        </div>
-                        <div className="text-left">
-                          <div className="font-semibold text-slate-900">{t('form.bill.basic_info')}</div>
-                          <div className="text-xs text-slate-500">{t('form.bill.basic_info_desc')}</div>
-                        </div>
-                        {formData.contractId && formData.billNo && formData.zone && (
-                          <CheckCircle2 className="h-5 w-5 text-green-600 ml-auto" />
-                        )}
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4 space-y-4">
+                  <div className={billPanelCls('basic')}>
+                    <div className="border border-slate-200 rounded-xl bg-white px-4 py-4 space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="contractId" className="flex items-center gap-2">
                           {t('form.bill.contract')} <span className="text-red-500">*</span>
@@ -1861,26 +1882,12 @@ function NewBillPageContent() {
                           </div>
                         )}
                       </div>
-                    </AccordionContent>
-                  </AccordionItem>
+                    </div>
+                  </div>
 
                   {/* SECTION 2: Work Classifications */}
-                  <AccordionItem value="classification" className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
-                    <AccordionTrigger className="px-5 py-4 hover:no-underline bg-slate-50/50 hover:bg-slate-50/80 transition-all">
-                      <div className="flex items-center gap-3 w-full">
-                        <div className="p-2 bg-green-50 rounded-lg text-green-600">
-                          <ClipboardList className="h-5 w-5" />
-                        </div>
-                        <div className="text-left">
-                          <div className="font-semibold text-slate-900">{t('form.bill.classifications')}</div>
-                          <div className="text-xs text-slate-500">{t('form.bill.classifications_desc')}</div>
-                        </div>
-                        {classificationEntries.length > 0 && (
-                          <CheckCircle2 className="h-5 w-5 text-green-600 ml-auto" />
-                        )}
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4 space-y-4">
+                  <div className={billPanelCls('classification')}>
+                    <div className="border border-slate-200 rounded-xl bg-white px-4 py-4 space-y-4">
                       <p className="text-xs text-slate-500 leading-relaxed mb-2">
                         {t('form.bill.classifications_help')}
                       </p>
@@ -1925,28 +1932,12 @@ function NewBillPageContent() {
                         lockEntries={isAiUploaded}
                         aiJustificationFee={99}
                       />
-                    </AccordionContent>
-                  </AccordionItem>
+                    </div>
+                  </div>
 
                   {/* SECTION 2b: Cement (derived from the entered items via DSR) */}
-                  <AccordionItem value="cement" className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
-                    <AccordionTrigger className="px-5 py-4 hover:no-underline bg-slate-50/50 hover:bg-slate-50/80 transition-all">
-                      <div className="flex items-center gap-3 w-full">
-                        <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
-                          <Package className="h-5 w-5" />
-                        </div>
-                        <div className="text-left">
-                          <div className="font-semibold text-slate-900">Cement</div>
-                          <div className="text-xs text-slate-500">Optional — derive the cement cost from your items (no direct cement supply item)</div>
-                        </div>
-                        {Number(formData.cementAmount) > 0 && (
-                          <Badge variant="secondary" className="ml-auto bg-emerald-100 text-emerald-700 border-emerald-200">
-                            ₹{Number(formData.cementAmount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                          </Badge>
-                        )}
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4 space-y-4">
+                  <div className={billPanelCls('cement')}>
+                    <div className="border border-slate-200 rounded-xl bg-white px-4 py-4 space-y-4">
                       <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3 space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
@@ -1993,28 +1984,12 @@ function NewBillPageContent() {
                           Applied cement amount: <strong>₹{Number(formData.cementAmount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong> — included in this bill&apos;s PVC.
                         </p>
                       )}
-                    </AccordionContent>
-                  </AccordionItem>
+                    </div>
+                  </div>
 
                   {/* SECTION 3: Non-Schedule Items (Optional) */}
-                  <AccordionItem value="optional" className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
-                    <AccordionTrigger className="px-5 py-4 hover:no-underline bg-slate-50/50 hover:bg-slate-50/80 transition-all">
-                      <div className="flex items-center gap-3 w-full">
-                        <div className="p-2 bg-orange-50 rounded-lg text-orange-600">
-                          <Layers className="h-5 w-5" />
-                        </div>
-                        <div className="text-left">
-                          <div className="font-semibold text-slate-900">{t('form.bill.non_schedule')}</div>
-                          <div className="text-xs text-slate-500">{t('form.bill.non_schedule_desc')}</div>
-                        </div>
-                        {nonScheduleItems.length > 0 && (
-                          <Badge variant="secondary" className="ml-auto bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-200">
-                            {nonScheduleItems.length} {language === 'hi' ? 'आइटम' : 'items'}
-                          </Badge>
-                        )}
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4 space-y-4">
+                  <div className={billPanelCls('optional')}>
+                    <div className="border border-slate-200 rounded-xl bg-white px-4 py-4 space-y-4">
                       {/* Non-Schedule Items Section */}
                       <div className="space-y-3 p-3 border border-orange-200 rounded-lg bg-orange-50 mt-4">
                         <div className="flex items-center justify-between">
@@ -2101,11 +2076,41 @@ function NewBillPageContent() {
                           </div>
                         )}
                       </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
+                    </div>
+                  </div>
+                </div>
 
-
+                {/* Tab step navigation */}
+                <div className="flex items-center justify-between mt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setActiveBillTab(BILL_TABS[Math.max(0, billTabIndex - 1)].id)}
+                    disabled={billTabIndex === 0}
+                    className="rounded-xl px-5"
+                  >
+                    {language === 'hi' ? 'पिछला' : 'Back'}
+                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    {BILL_TABS.map((tb, i) => (
+                      <span
+                        key={tb.id}
+                        className={`h-1.5 rounded-full transition-all ${i === billTabIndex ? 'w-5 bg-purple-600' : 'w-1.5 bg-slate-300'}`}
+                      />
+                    ))}
+                  </div>
+                  {billTabIndex < BILL_TABS.length - 1 ? (
+                    <Button
+                      type="button"
+                      onClick={() => setActiveBillTab(BILL_TABS[Math.min(BILL_TABS.length - 1, billTabIndex + 1)].id)}
+                      className="bg-slate-800 hover:bg-slate-900 text-white rounded-xl px-5"
+                    >
+                      {language === 'hi' ? 'अगला' : 'Next'}
+                    </Button>
+                  ) : (
+                    <span className="w-[72px]" />
+                  )}
+                </div>
 
                 {/* Submit Section */}
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 mt-6 border-t border-slate-200">
