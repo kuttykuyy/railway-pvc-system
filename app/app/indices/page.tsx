@@ -102,17 +102,17 @@ export default function IndicesPage() {
       desc: 'View full indices grid matrix, trace formula breakdowns, and export to Excel.',
       href: '/indices/view',
       icon: LineChart,
-      color: 'from-blue-500 to-indigo-600',
-      bgLight: 'bg-blue-50 dark:bg-blue-950/20',
-      iconColor: 'text-blue-600 dark:text-blue-400',
-      borderColor: 'hover:border-blue-500/50 dark:hover:border-blue-500/30'
+      color: 'from-emerald-500 to-emerald-600',
+      bgLight: 'bg-emerald-50 dark:bg-emerald-950/20',
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
+      borderColor: 'hover:border-emerald-500/50 dark:hover:border-emerald-500/30'
     },
     {
       title: 'Spreadsheet Manager',
       desc: 'Input/edit general index data (Labour CPI-IW, WPI Cement, Plant, Explosives, Other Materials).',
       href: '/indices/spreadsheet',
       icon: FileSpreadsheet,
-      color: 'from-emerald-500 to-teal-600',
+      color: 'from-emerald-500 to-emerald-600',
       bgLight: 'bg-emerald-50 dark:bg-emerald-950/20',
       iconColor: 'text-emerald-600 dark:text-emerald-400',
       borderColor: 'hover:border-emerald-500/50 dark:hover:border-emerald-500/30'
@@ -132,10 +132,10 @@ export default function IndicesPage() {
       desc: 'Upload fortnightly Joint Plant Committee rates Excel files or enter city-specific values manually.',
       href: '/indices/steel-import',
       icon: FileUp,
-      color: 'from-purple-500 to-fuchsia-600',
-      bgLight: 'bg-purple-50 dark:bg-purple-950/20',
-      iconColor: 'text-purple-600 dark:text-purple-400',
-      borderColor: 'hover:border-purple-500/50 dark:hover:border-purple-500/30'
+      color: 'from-emerald-500 to-emerald-600',
+      bgLight: 'bg-emerald-50 dark:bg-emerald-950/20',
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
+      borderColor: 'hover:border-emerald-500/50 dark:hover:border-emerald-500/30'
     },
     {
       title: 'Component Documents',

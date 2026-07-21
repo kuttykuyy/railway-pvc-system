@@ -606,14 +606,14 @@ export default function PvcComparisonPage() {
           </div>
 
           {/* Insights */}
-          <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+          <Card className="bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800">
             <CardHeader>
-              <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
+              <CardTitle className="flex items-center text-emerald-900 dark:text-emerald-100">
                 <AlertCircle className="h-5 w-5 mr-2" />
                 Work Classification Comparison Insights
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-blue-800 dark:text-blue-200">
+            <CardContent className="text-sm text-emerald-800 dark:text-emerald-200">
               {bestResult && (
                 <div className="space-y-2">
                   <p>
@@ -627,7 +627,7 @@ export default function PvcComparisonPage() {
                       <strong>Difference from next best:</strong> ₹{(bestResult.totalPvc - comparisonResults.sort((a, b) => b.totalPvc - a.totalPvc)[1].totalPvc).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                     </p>
                   )}
-                  <Separator className="my-2 bg-blue-200 dark:bg-blue-800" />
+                  <Separator className="my-2 bg-emerald-200 dark:bg-emerald-800" />
                   <p className="text-xs">
                     <strong>About Work Classifications:</strong> Work classifications include detailed component breakdowns (Labour, Steel, Cement, Plant & Machinery, Fuel, Other Materials, Explosives) and sub-classifications for precise PVC calculation.
                   </p>

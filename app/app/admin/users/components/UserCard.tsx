@@ -46,33 +46,33 @@ export function UserCard({
   const getAvatarRingClass = (role: string) => {
     switch (role?.toLowerCase()) {
       case 'superadmin':
-        return 'ring-2 ring-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.15)]';
+        return 'ring-2 ring-emerald-500/30 shadow-[0_0_10px_rgba(168,85,247,0.15)]';
       case 'admin':
-        return 'ring-2 ring-indigo-500/25 shadow-[0_0_8px_rgba(99,102,241,0.1)]';
+        return 'ring-2 ring-emerald-500/25 shadow-[0_0_8px_rgba(99,102,241,0.1)]';
       case 'railway_official':
-        return 'ring-2 ring-cyan-500/25 shadow-[0_0_8px_rgba(6,182,212,0.1)]';
+        return 'ring-2 ring-emerald-500/25 shadow-[0_0_8px_rgba(6,182,212,0.1)]';
       default: // contractor
-        return 'ring-2 ring-teal-500/20';
+        return 'ring-2 ring-emerald-500/20';
     }
   };
 
   const getAvatarFallbackClass = (role: string) => {
     switch (role?.toLowerCase()) {
       case 'superadmin':
-        return 'bg-purple-50 text-purple-700 border border-purple-200/50';
+        return 'bg-emerald-50 text-emerald-700 border border-emerald-200/50';
       case 'admin':
-        return 'bg-indigo-50 text-indigo-700 border border-indigo-200/50';
+        return 'bg-emerald-50 text-emerald-700 border border-emerald-200/50';
       case 'railway_official':
-        return 'bg-cyan-50 text-cyan-700 border border-cyan-200/50';
+        return 'bg-emerald-50 text-emerald-700 border border-emerald-200/50';
       default: // contractor
-        return 'bg-teal-50 text-teal-700 border border-teal-200/50';
+        return 'bg-emerald-50 text-emerald-700 border border-emerald-200/50';
     }
   };
 
   return (
     <Card className="group relative overflow-hidden border border-slate-100 bg-white/75 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.015)] rounded-3xl transition-all duration-300 transform hover:-translate-y-1 hover:border-slate-200 hover:shadow-lg">
       {/* Background glow hover animation */}
-      <div className="absolute inset-0 bg-gradient-to-r from-violet-600/0 via-indigo-600/0 to-cyan-600/0 group-hover:from-violet-600/1 group-hover:via-indigo-600/1 group-hover:to-cyan-600/1 transition-all duration-500 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/0 via-emerald-600/0 to-emerald-600/0 group-hover:from-emerald-600/1 group-hover:via-emerald-600/1 group-hover:to-emerald-600/1 transition-all duration-500 pointer-events-none" />
       
       <CardContent className="p-6 relative z-10">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -125,7 +125,7 @@ export function UserCard({
                 </Badge>
                 
                 {(user.role === 'railway_official' || user.role === 'RAILWAY_OFFICIAL') && (
-                  <Badge variant="default" className="bg-cyan-50 border border-cyan-200 text-cyan-700 text-[10px] font-bold hover:bg-cyan-100 rounded-lg px-2.5 py-0.5">
+                  <Badge variant="default" className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold hover:bg-emerald-100 rounded-lg px-2.5 py-0.5">
                     Railway Official (Free)
                   </Badge>
                 )}
@@ -137,7 +137,7 @@ export function UserCard({
                 )}
 
                 {user.role === 'superadmin' && (
-                  <Badge variant="default" className="bg-purple-50 border border-purple-200 text-purple-700 text-[10px] font-bold hover:bg-purple-100 rounded-lg px-2.5 py-0.5">
+                  <Badge variant="default" className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold hover:bg-emerald-100 rounded-lg px-2.5 py-0.5">
                     Superadmin (Free)
                   </Badge>
                 )}
@@ -209,7 +209,7 @@ export function UserCard({
                 </DropdownMenuItem>
                 {(user.role === 'railway_official' || user.role === 'RAILWAY_OFFICIAL') && (
                   <DropdownMenuItem onClick={() => onOpenContractLimitDialog(user)} className="focus:bg-slate-50 focus:text-slate-900 rounded-xl px-3.5 py-2 text-xs font-semibold cursor-pointer">
-                    <FolderOpen className="h-4 w-4 mr-3 text-cyan-500" />
+                    <FolderOpen className="h-4 w-4 mr-3 text-emerald-500" />
                     Set Contract Limit
                   </DropdownMenuItem>
                 )}

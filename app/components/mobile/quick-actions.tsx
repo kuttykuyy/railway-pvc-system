@@ -37,7 +37,7 @@ export default function QuickActions({ stats }: QuickActionsProps) {
       name: 'New Contract',
       href: '/contracts/new',
       icon: Building2,
-      color: 'bg-blue-500 hover:bg-blue-600',
+      color: 'bg-emerald-500 hover:bg-emerald-600',
       description: 'Create new contract'
     },
     {
@@ -51,7 +51,7 @@ export default function QuickActions({ stats }: QuickActionsProps) {
       name: 'Bill Abstracts',
       href: '/reports/abstract',
       icon: Calculator,
-      color: 'bg-purple-500 hover:bg-purple-600',
+      color: 'bg-emerald-500 hover:bg-emerald-600',
       description: 'Generate abstracts'
     },
     {
@@ -68,7 +68,7 @@ export default function QuickActions({ stats }: QuickActionsProps) {
       name: 'Price Indices',
       href: '/indices',
       icon: TrendingUp,
-      color: 'bg-indigo-500 hover:bg-indigo-600',
+      color: 'bg-emerald-500 hover:bg-emerald-600',
       description: 'Manage indices'
     },
   ];
@@ -78,7 +78,7 @@ export default function QuickActions({ stats }: QuickActionsProps) {
       title: 'Total Contracts',
       value: stats?.totalContracts || 0,
       icon: Building2,
-      color: 'text-blue-600 bg-blue-100',
+      color: 'text-emerald-600 bg-emerald-100',
     },
     {
       title: 'Total Bills',
@@ -96,7 +96,7 @@ export default function QuickActions({ stats }: QuickActionsProps) {
       title: 'Recent Activity',
       value: stats?.recentActivity || 0,
       icon: CheckCircle,
-      color: 'text-purple-600 bg-purple-100',
+      color: 'text-emerald-600 bg-emerald-100',
     },
   ];
 
@@ -172,8 +172,8 @@ export default function QuickActions({ stats }: QuickActionsProps) {
           </div>
 
           <div className="flex items-center space-x-3 p-2 border rounded-lg">
-            <div className="p-1.5 rounded bg-blue-100">
-              <Building2 className="h-3 w-3 text-blue-600" />
+            <div className="p-1.5 rounded bg-emerald-100">
+              <Building2 className="h-3 w-3 text-emerald-600" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">New contract created</p>

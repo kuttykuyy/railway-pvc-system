@@ -46,7 +46,7 @@ export default async function EditContractPage({ params }: EditContractPageProps
         <BackButton href={`/contracts/${contract.id}`} label="Back to Contract" variant="outline" />
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Building2 className="h-8 w-8 text-blue-600" />
+            <Building2 className="h-8 w-8 text-emerald-600" />
             Edit Contract
           </h1>
           <p className="text-gray-600 mt-2">

@@ -278,7 +278,7 @@ export default function UserPermissionsPage() {
     return (
       <div className="space-y-6">
         <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
         </div>
       </div>
     );
@@ -290,7 +290,7 @@ export default function UserPermissionsPage() {
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Shield className="h-8 w-8 text-purple-600" />
+            <Shield className="h-8 w-8 text-emerald-600" />
             User Permissions
           </h1>
           <p className="text-gray-600 mt-2">
@@ -301,7 +301,7 @@ export default function UserPermissionsPage() {
         <div className="flex gap-3">
           <Dialog open={showGrantDialog} onOpenChange={setShowGrantDialog}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
+              <Button className="bg-gradient-to-r from-emerald-600 to-emerald-600 hover:from-emerald-700 hover:to-emerald-700">
                 <Plus className="h-4 w-4 mr-2" />
                 Grant Access
               </Button>
@@ -589,7 +589,7 @@ export default function UserPermissionsPage() {
                   <div
                     key={user.id}
                     className={`p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors ${
-                      selectedUser?.id === user.id ? 'bg-purple-50 border-purple-200' : ''
+                      selectedUser?.id === user.id ? 'bg-emerald-50 border-emerald-200' : ''
                     }`}
                     onClick={() => fetchUserPermissions(user.id)}
                   >

@@ -137,7 +137,7 @@ export default function MobileBillsList() {
       <div className="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 py-3">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-purple-600" />
+            <FileText className="h-5 w-5 text-emerald-600" />
             <h1 className="text-lg font-semibold">Bills</h1>
           </div>
           <Button
@@ -265,7 +265,7 @@ export default function MobileBillsList() {
                     variant="outline"
                     onClick={() => recalculateBill(bill.id)}
                     disabled={recalculating === bill.id}
-                    className="w-full h-9 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                    className="w-full h-9 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                   >
                     {recalculating === bill.id ? (
                       <>

@@ -74,8 +74,8 @@ const mobileNavSections = [
 ];
 
 const quickActions = [
-  { name: 'New Bill', href: '/bills/new', icon: FileText, color: 'bg-gradient-to-br from-purple-500 to-purple-600', adminOnly: true },
-  { name: 'New Contract', href: '/contracts/new', icon: Building2, color: 'bg-gradient-to-br from-blue-500 to-blue-600', adminOnly: true },
+  { name: 'New Bill', href: '/bills/new', icon: FileText, color: 'bg-gradient-to-br from-emerald-500 to-emerald-600', adminOnly: true },
+  { name: 'New Contract', href: '/contracts/new', icon: Building2, color: 'bg-gradient-to-br from-emerald-500 to-emerald-600', adminOnly: true },
 ];
 
 interface MobileNavigationProps {
@@ -175,7 +175,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
   const menuContent = (
     <div className="flex flex-col h-full bg-white">
       {/* Header */}
-      <SheetHeader className="px-6 py-5 bg-gradient-to-br from-purple-600 to-purple-700 text-white">
+      <SheetHeader className="px-6 py-5 bg-gradient-to-br from-emerald-600 to-emerald-700 text-white">
         <div className="flex items-center justify-between">
           <SheetTitle className="text-left text-white text-xl font-bold">
             IR-PVC
@@ -186,8 +186,8 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
               className={cn(
                 "px-2.5 py-1 text-xs font-semibold rounded-md transition-all duration-150",
                 language === 'en'
-                  ? "bg-white text-purple-700 shadow-sm"
-                  : "text-purple-100 hover:text-white"
+                  ? "bg-white text-emerald-700 shadow-sm"
+                  : "text-emerald-100 hover:text-white"
               )}
             >
               EN
@@ -197,8 +197,8 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
               className={cn(
                 "px-2.5 py-1 text-xs font-semibold rounded-md transition-all duration-150",
                 language === 'hi'
-                  ? "bg-white text-purple-700 shadow-sm"
-                  : "text-purple-100 hover:text-white"
+                  ? "bg-white text-emerald-700 shadow-sm"
+                  : "text-emerald-100 hover:text-white"
               )}
             >
               हिन्दी
@@ -206,7 +206,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
           </div>
         </div>
         {session?.user && (
-          <div className="flex items-center space-x-3 mt-3 pt-3 border-t border-purple-500">
+          <div className="flex items-center space-x-3 mt-3 pt-3 border-t border-emerald-500">
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
               <span className="text-lg font-medium text-white">
                 {session.user.name?.[0] || session.user.email?.[0] || 'U'}
@@ -216,10 +216,10 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
               <div className="text-sm font-medium text-white truncate">
                 {session.user.name || (language === 'hi' ? 'उपयोगकर्ता' : 'User')}
               </div>
-              <div className="text-xs text-purple-200 truncate">
+              <div className="text-xs text-emerald-200 truncate">
                 {session.user.email}
               </div>
-              <div className="text-xs text-purple-200 font-medium mt-0.5">
+              <div className="text-xs text-emerald-200 font-medium mt-0.5">
                 {getRoleLabel(role)}
               </div>
             </div>
@@ -268,13 +268,13 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
                   className={cn(
                     "flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-150",
                     pathname === item.href
-                      ? "bg-purple-50 text-purple-700 font-medium"
+                      ? "bg-emerald-50 text-emerald-700 font-medium"
                       : "text-gray-700 hover:bg-gray-50 active:bg-gray-100"
                   )}
                 >
                   <item.icon className={cn(
                     "h-5 w-5",
-                    pathname === item.href ? "text-purple-600" : "text-gray-500"
+                    pathname === item.href ? "text-emerald-600" : "text-gray-500"
                   )} />
                   <span className="flex-1 text-sm">{translateNav(item.name)}</span>
                 </NavLink>
@@ -313,7 +313,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
           <div className="flex items-center space-x-3">
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="sm" className="p-2 hover:bg-purple-50">
+                <Button variant="ghost" size="sm" className="p-2 hover:bg-emerald-50">
                   <Menu className="h-6 w-6 text-gray-700" />
                 </Button>
               </SheetTrigger>
@@ -323,7 +323,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
             </Sheet>
             
             <Link href="/dashboard" className="flex items-center space-x-2">
-              <h1 className="text-lg font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">
+              <h1 className="text-lg font-bold bg-gradient-to-r from-emerald-600 to-emerald-800 bg-clip-text text-transparent">
                 IR-PVC
               </h1>
             </Link>
@@ -332,7 +332,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
           {/* User Avatar */}
           <div className="flex items-center space-x-2">
             {session?.user && (
-              <div className="w-9 h-9 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center shadow-sm">
+              <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-sm">
                 <span className="text-sm font-semibold text-white">
                   {session.user.name?.[0] || session.user.email?.[0] || 'U'}
                 </span>

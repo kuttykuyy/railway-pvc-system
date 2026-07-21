@@ -14,10 +14,10 @@ export default function ContactPage() {
       
       <div className="space-y-6">
         {/* Header */}
-        <Card className="border-0 shadow-lg bg-gradient-to-r from-blue-50 to-indigo-50">
+        <Card className="border-0 shadow-lg bg-gradient-to-r from-emerald-50 to-emerald-50">
           <CardHeader>
             <CardTitle className="flex items-center gap-3 text-2xl">
-              <MessageCircle className="h-7 w-7 text-blue-600" />
+              <MessageCircle className="h-7 w-7 text-emerald-600" />
               Contact Us
             </CardTitle>
             <p className="text-gray-600 mt-2">
@@ -30,14 +30,14 @@ export default function ContactPage() {
         <Card className="border-0 shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl text-gray-900">
-              <User className="h-6 w-6 text-blue-600" />
+              <User className="h-6 w-6 text-emerald-600" />
               Primary Contact
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+            <div className="bg-emerald-50 p-6 rounded-lg border border-emerald-200">
               <div className="flex items-center gap-4 mb-4">
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                <div className="w-16 h-16 bg-emerald-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
                   PK
                 </div>
                 <div>
@@ -62,7 +62,7 @@ export default function ContactPage() {
                 </div>
 
                 <div className="flex items-center gap-3 bg-white p-4 rounded-lg">
-                  <Clock className="h-5 w-5 text-purple-600 flex-shrink-0" />
+                  <Clock className="h-5 w-5 text-emerald-600 flex-shrink-0" />
                   <div>
                     <p className="text-xs text-gray-500 mb-1">Availability</p>
                     <p className="text-sm font-medium text-gray-900">Mon-Sat: 9 AM - 7 PM</p>
@@ -91,9 +91,9 @@ export default function ContactPage() {
                 </ul>
               </div>
 
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <h4 className="font-semibold text-blue-900 mb-2">🔧 Technical Support</h4>
-                <ul className="text-sm text-blue-800 space-y-1">
+              <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                <h4 className="font-semibold text-emerald-900 mb-2">🔧 Technical Support</h4>
+                <ul className="text-sm text-emerald-800 space-y-1">
                   <li>• Calculation queries</li>
                   <li>• System errors</li>
                   <li>• Account issues</li>
@@ -101,9 +101,9 @@ export default function ContactPage() {
                 </ul>
               </div>
 
-              <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                <h4 className="font-semibold text-purple-900 mb-2">📄 Contract & Bills</h4>
-                <ul className="text-sm text-purple-800 space-y-1">
+              <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                <h4 className="font-semibold text-emerald-900 mb-2">📄 Contract & Bills</h4>
+                <ul className="text-sm text-emerald-800 space-y-1">
                   <li>• PVC calculation help</li>
                   <li>• GCC compliance questions</li>
                   <li>• Report generation issues</li>
@@ -132,14 +132,14 @@ export default function ContactPage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-start gap-3">
-                <Globe className="h-5 w-5 text-blue-600 mt-1 flex-shrink-0" />
+                <Globe className="h-5 w-5 text-emerald-600 mt-1 flex-shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-gray-900 mb-1">Website</p>
                   <a 
                     href="https://irpvc.in" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
+                    className="text-emerald-600 hover:underline"
                   >
                     https://irpvc.in
                   </a>
@@ -147,7 +147,7 @@ export default function ContactPage() {
               </div>
 
               <div className="flex items-start gap-3">
-                <MapPin className="h-5 w-5 text-blue-600 mt-1 flex-shrink-0" />
+                <MapPin className="h-5 w-5 text-emerald-600 mt-1 flex-shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-gray-900 mb-1">Service Area</p>
                   <p className="text-sm text-gray-600">
@@ -161,7 +161,7 @@ export default function ContactPage() {
         </Card>
 
         {/* Quick Actions */}
-        <Card className="border-0 shadow-lg bg-gradient-to-r from-blue-50 to-purple-50">
+        <Card className="border-0 shadow-lg bg-gradient-to-r from-emerald-50 to-emerald-50">
           <CardContent className="pt-6">
             <div className="text-center space-y-4">
               <h3 className="text-lg font-semibold text-gray-900">Need Immediate Assistance?</h3>
@@ -173,7 +173,7 @@ export default function ContactPage() {
                   </a>
                 </Button>
 
-                <Button asChild size="lg" className="bg-blue-600 hover:bg-blue-700">
+                <Button asChild size="lg" className="bg-emerald-600 hover:bg-emerald-700">
                   <a href="mailto:admin@illall.in">
                     <Mail className="h-5 w-5 mr-2" />
                     Email Us

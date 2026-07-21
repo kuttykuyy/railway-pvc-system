@@ -19,7 +19,7 @@ export function PromoBanner() {
   if (!visible) return null;
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-blue-200 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 bg-[length:200%_100%] animate-shimmer p-3 sm:p-4 shadow-sm mb-4">
+    <div className="relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-600 via-emerald-600 to-emerald-600 bg-[length:200%_100%] animate-shimmer p-3 sm:p-4 shadow-sm mb-4">
       <button
         onClick={dismiss}
         className="absolute top-2 right-2 text-white/60 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors z-10"
@@ -41,7 +41,7 @@ export function PromoBanner() {
             rel="noopener noreferrer"
             className="flex items-center gap-2 bg-white/15 hover:bg-white/25 rounded-lg px-3 py-1.5 transition-colors group"
           >
-            <span className="bg-white text-blue-700 text-[10px] font-black rounded px-1.5 py-0.5">ERP</span>
+            <span className="bg-white text-emerald-700 text-[10px] font-black rounded px-1.5 py-0.5">ERP</span>
             <span className="text-white text-sm font-semibold">PRIME ERP</span>
             <span className="text-green-300 text-[10px] font-bold">FREE TRIAL</span>
             <ExternalLink className="h-3 w-3 text-white/50 group-hover:text-white/80" />

@@ -324,8 +324,8 @@ export function ComponentIndexManager() {
   const getSortIcon = (field: SortField) => {
     if (sortField !== field) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-30" />;
     return sortOrder === "asc" ? 
-      <ArrowUpDown className="ml-2 h-4 w-4 text-blue-600" /> : 
-      <ArrowUpDown className="ml-2 h-4 w-4 text-blue-600 rotate-180" />;
+      <ArrowUpDown className="ml-2 h-4 w-4 text-emerald-600" /> : 
+      <ArrowUpDown className="ml-2 h-4 w-4 text-emerald-600 rotate-180" />;
   };
 
   return (

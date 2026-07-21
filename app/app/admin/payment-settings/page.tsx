@@ -100,7 +100,7 @@ export default function PaymentSettingsPage() {
         {/* Header */}
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold text-gray-900 flex items-center justify-center gap-3">
-            <Settings className="h-8 w-8 text-blue-600" />
+            <Settings className="h-8 w-8 text-emerald-600" />
             Payment Settings
           </h1>
           <p className="text-gray-600">
@@ -110,7 +110,7 @@ export default function PaymentSettingsPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
             <span className="ml-3 text-gray-600">Loading settings...</span>
           </div>
         ) : (
@@ -120,7 +120,7 @@ export default function PaymentSettingsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
-                    <Info className="h-5 w-5 text-blue-600" />
+                    <Info className="h-5 w-5 text-emerald-600" />
                     Current Configuration
                   </span>
                   <Badge variant={settings?.paymentMethod === 'razorpay' ? 'default' : 'secondary'}>
@@ -170,7 +170,7 @@ export default function PaymentSettingsPage() {
                         htmlFor="razorpay" 
                         className="flex items-center gap-2 font-medium cursor-pointer"
                       >
-                        <CreditCard className="h-5 w-5 text-blue-600" />
+                        <CreditCard className="h-5 w-5 text-emerald-600" />
                         Razorpay Payment Gateway
                       </Label>
                       <p className="text-sm text-gray-600 mt-1">

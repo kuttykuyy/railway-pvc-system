@@ -335,10 +335,10 @@ export default function FuelPricesPage() {
         {isAdmin && (
           <>
             {/* PPAC Auto-Fetch Card */}
-            <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50">
+            <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Globe className="h-5 w-5 text-blue-600" />
+                  <Globe className="h-5 w-5 text-emerald-600" />
                   Auto-Fetch from PPAC Website
                 </CardTitle>
                 <CardDescription>
@@ -351,7 +351,7 @@ export default function FuelPricesPage() {
                     variant="outline"
                     onClick={checkPPAC}
                     disabled={ppacFetching}
-                    className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-100"
                   >
                     {ppacFetching ? (
                       <>
@@ -368,7 +368,7 @@ export default function FuelPricesPage() {
                   <Button
                     onClick={handlePPACFetch}
                     disabled={ppacFetching}
-                    className="bg-blue-600 hover:bg-blue-700"
+                    className="bg-emerald-600 hover:bg-emerald-700"
                   >
                     {ppacFetching ? (
                       <>
@@ -384,7 +384,7 @@ export default function FuelPricesPage() {
                   </Button>
                 </div>
                 {ppacPdfInfo && (
-                  <div className="text-sm bg-white/50 rounded p-3 border border-blue-100">
+                  <div className="text-sm bg-white/50 rounded p-3 border border-emerald-100">
                     <p><strong>Latest PDF:</strong> {ppacPdfInfo.filename}</p>
                     {ppacPdfInfo.date && (
                       <p className="text-muted-foreground">PDF Date: {ppacPdfInfo.date}</p>
@@ -393,7 +393,7 @@ export default function FuelPricesPage() {
                       href={ppacPdfInfo.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline text-xs"
+                      className="text-emerald-600 hover:underline text-xs"
                     >
                       View PDF on PPAC website →
                     </a>
@@ -590,8 +590,8 @@ export default function FuelPricesPage() {
                 <>
                   {/* Monthly Averages */}
                   {averages && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                      <h3 className="font-semibold text-blue-800 mb-2">Monthly Averages</h3>
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
+                      <h3 className="font-semibold text-emerald-800 mb-2">Monthly Averages</h3>
                       <div className="grid grid-cols-5 gap-4 text-sm">
                         <div>
                           <div className="text-muted-foreground">Delhi</div>
@@ -611,7 +611,7 @@ export default function FuelPricesPage() {
                         </div>
                         <div>
                           <div className="text-muted-foreground">Overall Avg</div>
-                          <div className="font-bold text-blue-600">₹{averages.overallAvg.toFixed(2)}</div>
+                          <div className="font-bold text-emerald-600">₹{averages.overallAvg.toFixed(2)}</div>
                         </div>
                       </div>
                     </div>

@@ -20,7 +20,7 @@ const statusConfig = {
     label: 'Pending Approval',
     variant: 'default' as const,
     icon: Clock,
-    color: 'text-blue-600'
+    color: 'text-emerald-600'
   },
   approved: {
     label: 'Approved',

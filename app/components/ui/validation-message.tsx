@@ -30,8 +30,8 @@ export function ValidationMessage({ type, messages, className }: ValidationMessa
       title: 'Please Review:'
     },
     info: {
-      container: 'bg-blue-50 border-blue-300 text-blue-900',
-      icon: <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />,
+      container: 'bg-emerald-50 border-emerald-300 text-emerald-900',
+      icon: <Info className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />,
       title: 'Information:'
     },
     success: {

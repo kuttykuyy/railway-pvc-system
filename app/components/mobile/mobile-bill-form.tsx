@@ -184,7 +184,7 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-purple-600" />
+            <FileText className="h-5 w-5 text-emerald-600" />
             <h1 className="text-lg font-semibold">
               {mode === 'edit' ? t('form.bill.edit_title') : t('form.bill.add_title')}
             </h1>

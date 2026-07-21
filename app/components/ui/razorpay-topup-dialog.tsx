@@ -245,7 +245,7 @@ export function RazorpayTopupDialog({
           creditAmount: baseAmount,
         },
         theme: {
-          color: '#3B82F6',
+          color: '#10b981',
         },
         modal: {
           ondismiss: function () {
@@ -340,7 +340,7 @@ export function RazorpayTopupDialog({
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-blue-600" />
+              <CreditCard className="h-5 w-5 text-emerald-600" />
               Credit Top-up via Razorpay
             </DialogTitle>
             <DialogDescription>
@@ -401,7 +401,7 @@ export function RazorpayTopupDialog({
             </div>
 
             {/* Price Breakdown */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-700">Base Amount:</span>
                 <span className="font-medium">₹{baseAmount.toFixed(2)}</span>
@@ -410,11 +410,11 @@ export function RazorpayTopupDialog({
                 <span className="text-gray-700">GST (18%):</span>
                 <span className="font-medium">₹{gst.toFixed(2)}</span>
               </div>
-              <div className="border-t border-blue-300 pt-2 flex justify-between text-base font-semibold">
+              <div className="border-t border-emerald-300 pt-2 flex justify-between text-base font-semibold">
                 <span className="text-gray-900">Total to Pay:</span>
-                <span className="text-blue-600">₹{totalToPay.toFixed(2)}</span>
+                <span className="text-emerald-600">₹{totalToPay.toFixed(2)}</span>
               </div>
-              <div className="border-t border-blue-300 pt-2 flex justify-between text-base font-bold">
+              <div className="border-t border-emerald-300 pt-2 flex justify-between text-base font-bold">
                 <span className="text-green-700">Credits to Wallet:</span>
                 <span className="text-green-600">₹{creditToReceive.toFixed(2)}</span>
               </div>

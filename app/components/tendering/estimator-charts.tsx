@@ -13,7 +13,7 @@ export function EscalationAreaChart({ data }: { data: any[] }) {
       <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="gBaseline" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} /><stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+            <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} />
           </linearGradient>
           <linearGradient id="gAggressive" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} />
@@ -28,7 +28,7 @@ export function EscalationAreaChart({ data }: { data: any[] }) {
         <Tooltip formatter={(v: any) => [`₹${Number(v).toLocaleString()}`, '']} labelFormatter={l => `Quarter ${l}`} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
         <Area type="monotone" dataKey="aggressive" name="Aggressive" stroke="#10b981" strokeWidth={2} fill="url(#gAggressive)" />
-        <Area type="monotone" dataKey="baseline" name="Baseline" stroke="#6366f1" strokeWidth={2} fill="url(#gBaseline)" />
+        <Area type="monotone" dataKey="baseline" name="Baseline" stroke="#10b981" strokeWidth={2} fill="url(#gBaseline)" />
         <Area type="monotone" dataKey="conservative" name="Conservative" stroke="#f59e0b" strokeWidth={2} fill="url(#gConservative)" />
       </AreaChart>
     </ResponsiveContainer>

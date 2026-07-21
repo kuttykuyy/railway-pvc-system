@@ -7,11 +7,11 @@ import Link from 'next/link';
 
 export default function AboutUsPage() {
   return (
-    <div className="relative min-h-screen pb-16 space-y-8 overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
+    <div className="relative min-h-screen pb-16 space-y-8 overflow-hidden bg-gradient-to-br from-slate-50 via-emerald-50/30 to-emerald-50/50">
       {/* Decorative Light Backdrops */}
-      <div className="absolute top-0 right-10 w-96 h-96 bg-blue-300/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute top-1/3 -left-20 w-80 h-80 bg-indigo-300/10 blur-[100px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-10 right-20 w-[450px] h-[450px] bg-purple-300/5 blur-[150px] rounded-full pointer-events-none" />
+      <div className="absolute top-0 right-10 w-96 h-96 bg-emerald-300/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute top-1/3 -left-20 w-80 h-80 bg-emerald-300/10 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-10 right-20 w-[450px] h-[450px] bg-emerald-300/5 blur-[150px] rounded-full pointer-events-none" />
 
       <div className="container mx-auto px-4 py-8 max-w-6xl relative z-10 space-y-8">
         <BackButton href="/" variant="outline" className="mb-4 border-slate-200/80 bg-white/80 hover:bg-slate-50 text-slate-600 hover:text-slate-800" />
@@ -19,15 +19,15 @@ export default function AboutUsPage() {
         {/* Organization Banner */}
         <div className="relative flex flex-col items-center justify-center p-10 bg-white/80 backdrop-blur-xl border border-slate-200/50 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.03)] overflow-hidden text-center space-y-4">
           <div className="absolute inset-0 bg-grid-slate-900/[0.01] pointer-events-none" />
-          <div className="relative inline-flex items-center justify-center p-4 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl shadow-lg shadow-indigo-500/20">
+          <div className="relative inline-flex items-center justify-center p-4 bg-gradient-to-tr from-emerald-600 to-emerald-600 rounded-2xl shadow-lg shadow-emerald-500/20">
             <Building2 className="h-8 w-8 text-white" />
           </div>
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200/50 rounded-full">
-              <Sparkles className="h-3 w-3 text-blue-600 animate-pulse" />
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/50 rounded-full">
+              <Sparkles className="h-3 w-3 text-emerald-600 animate-pulse" />
               Southern Railway Contractors Association
             </div>
-            <h1 className="text-4xl sm:text-5xl font-black tracking-tight bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 bg-clip-text text-transparent">
+            <h1 className="text-4xl sm:text-5xl font-black tracking-tight bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 bg-clip-text text-transparent">
               About IR-PVC Platform
             </h1>
             <p className="text-sm sm:text-base text-slate-500 max-w-2xl mx-auto font-normal">
@@ -41,7 +41,7 @@ export default function AboutUsPage() {
           <Card className="lg:col-span-7 border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl overflow-hidden flex flex-col justify-between">
             <CardContent className="p-8 space-y-6">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                <span className="w-1.5 h-6 bg-blue-600 rounded-full" />
+                <span className="w-1.5 h-6 bg-emerald-600 rounded-full" />
                 Who We Are
               </h2>
               <div className="space-y-4 text-slate-600 leading-relaxed font-normal text-sm sm:text-base">
@@ -68,13 +68,13 @@ export default function AboutUsPage() {
           <div className="lg:col-span-5 flex flex-col justify-stretch">
             <Card className="border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl p-8 flex flex-col justify-center flex-grow">
               <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-indigo-600" />
+                <Sparkles className="h-5 w-5 text-emerald-600" />
                 Platform Highlights
               </h3>
               <div className="space-y-6">
                 {[
-                  { label: "GCC Compliance", val: "100%", desc: "Aligned with GCC 2022 & latest amendments.", icon: Shield, color: "text-purple-600 bg-purple-50 border-purple-100" },
-                  { label: "Average Time Saved", val: "95%", desc: "Reduces manual effort from hours to seconds.", icon: Clock, color: "text-blue-600 bg-blue-50 border-blue-100" },
+                  { label: "GCC Compliance", val: "100%", desc: "Aligned with GCC 2022 & latest amendments.", icon: Shield, color: "text-emerald-600 bg-emerald-50 border-emerald-100" },
+                  { label: "Average Time Saved", val: "95%", desc: "Reduces manual effort from hours to seconds.", icon: Clock, color: "text-emerald-600 bg-emerald-50 border-emerald-100" },
                   { label: "Active Division", val: "TPJ", desc: "Initiated by Tiruchirappalli Contractors.", icon: Building2, color: "text-amber-600 bg-amber-50 border-amber-100" }
                 ].map((stat, idx) => (
                   <div key={idx} className="flex items-center justify-between p-4 bg-slate-50/60 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-colors">
@@ -97,10 +97,10 @@ export default function AboutUsPage() {
 
         {/* Mission & Vision */}
         <div className="grid md:grid-cols-2 gap-6">
-          <Card className="border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl hover:border-purple-200/50 hover:shadow-lg transition-all duration-300">
+          <Card className="border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl hover:border-emerald-200/50 hover:shadow-lg transition-all duration-300">
             <CardContent className="p-8 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-purple-50 border border-purple-100 rounded-2xl text-purple-600">
+                <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-600">
                   <Target className="h-6 w-6" />
                 </div>
                 <h3 className="text-xl font-black text-slate-900">Our Mission</h3>
@@ -113,10 +113,10 @@ export default function AboutUsPage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl hover:border-blue-200/50 hover:shadow-lg transition-all duration-300">
+          <Card className="border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl hover:border-emerald-200/50 hover:shadow-lg transition-all duration-300">
             <CardContent className="p-8 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-blue-50 border border-blue-100 rounded-2xl text-blue-600">
+                <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-600">
                   <Award className="h-6 w-6" />
                 </div>
                 <h3 className="text-xl font-black text-slate-900">Our Vision</h3>
@@ -134,21 +134,21 @@ export default function AboutUsPage() {
         <Card className="border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl overflow-hidden">
           <CardContent className="p-8 space-y-8">
             <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <span className="w-1.5 h-6 bg-blue-600 rounded-full" />
+              <span className="w-1.5 h-6 bg-emerald-600 rounded-full" />
               Why Choose IR-PVC?
             </h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
-                { icon: Shield, title: 'GCC Compliant', desc: 'Fully aligned with Indian Railway GCC policies including GCC-2022, GCC-April 2022, and all official amendments.', color: 'text-purple-600', bg: 'bg-purple-50 border-purple-100' },
-                { icon: Zap, title: 'Automated Calculations', desc: 'Instantly compute PVC for cement, steel, and other components with real-time index data from official sources.', color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
+                { icon: Shield, title: 'GCC Compliant', desc: 'Fully aligned with Indian Railway GCC policies including GCC-2022, GCC-April 2022, and all official amendments.', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
+                { icon: Zap, title: 'Automated Calculations', desc: 'Instantly compute PVC for cement, steel, and other components with real-time index data from official sources.', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
                 { icon: Users, title: 'Multi-User Support', desc: 'Role-based access control for contractors, consultants, and railway officials with approval workflows.', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
                 { icon: Award, title: 'Professional Reports', desc: 'Generate PDF reports with detailed formulas, ready for submission to railway divisional authorities.', color: 'text-amber-600', bg: 'bg-amber-50 border-amber-100' },
                 { icon: Building2, title: 'Contract Registry', desc: 'Manage multiple railway contracts, track historical bill intervals, and maintain comprehensive project records.', color: 'text-pink-600', bg: 'bg-pink-50 border-pink-100' },
-                { icon: Clock, title: 'Real-Time Indices', desc: 'Automatic fetching of latest price indices from government WPI and JPC sources with provisional support.', color: 'text-cyan-600', bg: 'bg-cyan-50 border-cyan-100' },
+                { icon: Clock, title: 'Real-Time Indices', desc: 'Automatic fetching of latest price indices from government WPI and JPC sources with provisional support.', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
               ].map((feature, idx) => {
                 const IconComp = feature.icon;
                 return (
-                  <div key={idx} className="flex gap-4 p-4 rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-blue-200/50 hover:shadow-md transition-all duration-300">
+                  <div key={idx} className="flex gap-4 p-4 rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-emerald-200/50 hover:shadow-md transition-all duration-300">
                     <div className="flex-shrink-0">
                       <div className={`w-11 h-11 rounded-xl flex items-center justify-center border ${feature.bg} ${feature.color}`}>
                         <IconComp className="h-5 w-5" />
@@ -170,7 +170,7 @@ export default function AboutUsPage() {
           <Card className="lg:col-span-7 border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl overflow-hidden flex flex-col justify-between">
             <CardContent className="p-8 space-y-6">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                <span className="w-1.5 h-6 bg-blue-600 rounded-full" />
+                <span className="w-1.5 h-6 bg-emerald-600 rounded-full" />
                 About the Association
               </h2>
               <div className="space-y-4 text-slate-600 leading-relaxed font-normal text-sm sm:text-base">
@@ -189,32 +189,32 @@ export default function AboutUsPage() {
 
           {/* Official Contact Details Box - dynamic right-side balance */}
           <div className="lg:col-span-5 flex flex-col justify-stretch">
-            <Card className="border border-slate-100 bg-gradient-to-br from-blue-50/50 to-indigo-50/50 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl p-8 flex flex-col justify-center space-y-6 flex-grow">
+            <Card className="border border-slate-100 bg-gradient-to-br from-emerald-50/50 to-emerald-50/50 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl p-8 flex flex-col justify-center space-y-6 flex-grow">
               <div>
-                <p className="font-black text-blue-700 text-xs tracking-wider uppercase">Official Association Details</p>
+                <p className="font-black text-emerald-700 text-xs tracking-wider uppercase">Official Association Details</p>
                 <p className="text-xs text-slate-500 mt-1 font-light">Tiruchirappalli Division Contacts</p>
               </div>
 
               <div className="space-y-4">
                 <div className="flex items-center gap-3 p-3 bg-white/60 border border-slate-100 rounded-xl">
-                  <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
+                  <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
                     <Building2 className="h-4 w-4" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700">SR Contractors Association - TPJ</span>
                 </div>
                 
-                <a href="https://irpvc.in" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-white/60 border border-slate-100 rounded-xl hover:border-blue-300 hover:bg-white transition-all group">
-                  <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                <a href="https://irpvc.in" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-white/60 border border-slate-100 rounded-xl hover:border-emerald-300 hover:bg-white transition-all group">
+                  <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                     <Globe className="h-4 w-4" />
                   </div>
-                  <span className="text-xs font-semibold text-indigo-600 group-hover:text-blue-700">irpvc.in</span>
+                  <span className="text-xs font-semibold text-emerald-600 group-hover:text-emerald-700">irpvc.in</span>
                 </a>
 
-                <a href="mailto:admin@illall.in" className="flex items-center gap-3 p-3 bg-white/60 border border-slate-100 rounded-xl hover:border-blue-300 hover:bg-white transition-all group">
-                  <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                <a href="mailto:admin@illall.in" className="flex items-center gap-3 p-3 bg-white/60 border border-slate-100 rounded-xl hover:border-emerald-300 hover:bg-white transition-all group">
+                  <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                     <Mail className="h-4 w-4" />
                   </div>
-                  <span className="text-xs font-semibold text-emerald-600 group-hover:text-blue-700">admin@illall.in</span>
+                  <span className="text-xs font-semibold text-emerald-600 group-hover:text-emerald-700">admin@illall.in</span>
                 </a>
               </div>
             </Card>
@@ -232,8 +232,8 @@ export default function AboutUsPage() {
             </div>
             
             <div className="max-w-md mx-auto pt-2">
-              <div className="p-8 rounded-3xl text-center space-y-4 transition-all duration-300 relative overflow-hidden bg-gradient-to-b from-blue-50/50 to-white shadow-[0_8px_30px_rgba(37,99,235,0.08)] border border-blue-200 hover:shadow-lg">
-                <span className="text-xs font-bold text-blue-600 uppercase tracking-widest block">Flat Rate Pricing</span>
+              <div className="p-8 rounded-3xl text-center space-y-4 transition-all duration-300 relative overflow-hidden bg-gradient-to-b from-emerald-50/50 to-white shadow-[0_8px_30px_rgba(37,99,235,0.08)] border border-emerald-200 hover:shadow-lg">
+                <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest block">Flat Rate Pricing</span>
                 <div className="flex items-baseline justify-center gap-0.5">
                   <span className="text-5xl font-black text-slate-900">₹199</span>
                   <span className="text-sm text-slate-500 font-medium">/ bill</span>
@@ -259,20 +259,20 @@ export default function AboutUsPage() {
         </Card>
 
         {/* Call to Action */}
-        <div className="relative overflow-hidden p-10 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-3xl text-center space-y-6 shadow-xl shadow-blue-500/10">
+        <div className="relative overflow-hidden p-10 bg-gradient-to-r from-emerald-600 to-emerald-600 text-white rounded-3xl text-center space-y-6 shadow-xl shadow-emerald-500/10">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-white/5 blur-[80px] rounded-full pointer-events-none" />
           <h2 className="text-2xl sm:text-3xl font-black tracking-tight relative z-10">Ready to Simplify Your PVC Calculations?</h2>
-          <p className="text-blue-100 font-light max-w-2xl mx-auto text-sm sm:text-base relative z-10">
+          <p className="text-emerald-100 font-light max-w-2xl mx-auto text-sm sm:text-base relative z-10">
             Join hundreds of railway contractors and officials who trust the IR-PVC platform for rapid, compliant, and completely audited Price Variation Clause statements.
           </p>
           <div className="flex flex-wrap justify-center gap-4 relative z-10 pt-2">
             <Link href="/auth/signin?mode=signup">
-              <button className="px-8 py-3 bg-white hover:bg-blue-50 text-blue-700 rounded-xl font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 text-sm">
+              <button className="px-8 py-3 bg-white hover:bg-emerald-50 text-emerald-700 rounded-xl font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 text-sm">
                 Get Started Now
               </button>
             </Link>
             <Link href="/">
-              <button className="px-8 py-3 bg-blue-700/40 border border-white/20 text-white rounded-xl font-bold hover:bg-blue-700/60 transition-colors text-sm">
+              <button className="px-8 py-3 bg-emerald-700/40 border border-white/20 text-white rounded-xl font-bold hover:bg-emerald-700/60 transition-colors text-sm">
                 Explore Homepage
               </button>
             </Link>

@@ -154,7 +154,7 @@ export function QuarterlyAveragesDisplay({ contractId }: QuarterlyAveragesDispla
                 return (
                   <table className="w-full border-collapse border border-gray-300">
                     <thead>
-                      <tr className="bg-blue-100">
+                      <tr className="bg-emerald-100">
                         <th colSpan={6 + sortedMonths.length} className="border border-gray-300 p-3 text-center font-bold">
                           QUARTERWISE CALCULATION OF PVC AMOUNT AS PER Average Indices and Amounts of respective Categories
                         </th>
@@ -240,7 +240,7 @@ export function QuarterlyAveragesDisplay({ contractId }: QuarterlyAveragesDispla
                           </tr>
                         );
                       })}
-                      <tr className="bg-blue-50 font-bold">
+                      <tr className="bg-emerald-50 font-bold">
                         <td colSpan={4 + sortedMonths.length} className="border border-gray-300 p-2 text-right text-sm">
                           Total for Q7 =
                         </td>

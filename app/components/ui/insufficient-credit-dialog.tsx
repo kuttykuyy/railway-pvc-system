@@ -99,8 +99,8 @@ export function InsufficientCreditDialog({
           </Alert>
 
           {/* Top-up Action */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
-            <div className="text-sm text-blue-900 font-medium">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 space-y-3">
+            <div className="text-sm text-emerald-900 font-medium">
               Top up your credits instantly via Razorpay to continue processing bills.
             </div>
             <Button 

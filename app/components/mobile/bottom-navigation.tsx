@@ -39,7 +39,7 @@ export default function BottomNavigation() {
                 href={tab.href}
                 className={cn(
                   'flex flex-col items-center justify-center gap-1 transition-colors touch-manipulation',
-                  isActive ? 'text-violet-600' : 'text-slate-400 hover:text-slate-600'
+                  isActive ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'
                 )}
               >
                 <tab.icon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 2} />

@@ -365,7 +365,7 @@ export default function ManualIndicesManagePage() {
         <BackButton href="/indices" label="Back to Price Indices" variant="outline" />
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Eye className="h-8 w-8 text-blue-600" />
+            <Eye className="h-8 w-8 text-emerald-600" />
             Manage Manual Indices
           </h1>
           <p className="text-gray-600 mt-2">
@@ -465,7 +465,7 @@ export default function ManualIndicesManagePage() {
                 Showing {filteredValues.length} of {monthlyValues.length} entries
               </span>
               {selectedItems.size > 0 && (
-                <span className="text-sm font-medium text-blue-600">
+                <span className="text-sm font-medium text-emerald-600">
                   {selectedItems.size} selected
                 </span>
               )}
@@ -532,7 +532,7 @@ export default function ManualIndicesManagePage() {
         ) : (
           filteredValues.map((value) => (
             <Card key={value.id} className={`border-0 shadow-lg hover:shadow-xl transition-shadow ${
-              selectedItems.has(value.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+              selectedItems.has(value.id) ? 'ring-2 ring-emerald-500 bg-emerald-50' : ''
             }`}>
               <CardHeader>
                 <div className="flex justify-between items-start">
@@ -653,7 +653,7 @@ export default function ManualIndicesManagePage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
                         <p className="text-sm font-medium text-gray-600">Current Value</p>
-                        <p className="text-2xl font-bold text-blue-600">
+                        <p className="text-2xl font-bold text-emerald-600">
                           {value.value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                         </p>
                       </div>

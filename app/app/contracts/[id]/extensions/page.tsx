@@ -55,7 +55,7 @@ export default async function ExtensionsPage({ params }: ExtensionsPageProps) {
           <BackButton href={`/contracts/${contract.id}`} label="Back to Contract" variant="outline" />
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <CalendarClock className="h-8 w-8 text-blue-600" />
+              <CalendarClock className="h-8 w-8 text-emerald-600" />
               Contract Extensions
             </h1>
             <p className="text-gray-600 mt-1">{contract.agreementNo}</p>
@@ -65,19 +65,19 @@ export default async function ExtensionsPage({ params }: ExtensionsPageProps) {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-0 shadow-md bg-gradient-to-r from-blue-50 to-blue-100">
+        <Card className="border-0 shadow-md bg-gradient-to-r from-emerald-50 to-emerald-100">
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-900">Total Extensions</p>
-                <p className="text-2xl font-bold text-blue-700 mt-1">
+                <p className="text-sm font-medium text-emerald-900">Total Extensions</p>
+                <p className="text-2xl font-bold text-emerald-700 mt-1">
                   {contract.extensions.length}
                 </p>
-                <p className="text-xs text-blue-600 mt-1">
+                <p className="text-xs text-emerald-600 mt-1">
                   {totalExtensionDays} days total
                 </p>
               </div>
-              <CalendarClock className="h-8 w-8 text-blue-600 opacity-50" />
+              <CalendarClock className="h-8 w-8 text-emerald-600 opacity-50" />
             </div>
           </CardContent>
         </Card>
@@ -110,24 +110,24 @@ export default async function ExtensionsPage({ params }: ExtensionsPageProps) {
 
         <Card className={`border-0 shadow-md ${
           isInExtensionPeriod 
-            ? 'bg-gradient-to-r from-purple-50 to-purple-100' 
+            ? 'bg-gradient-to-r from-emerald-50 to-emerald-100' 
             : 'bg-gradient-to-r from-gray-50 to-gray-100'
         }`}>
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
               <div>
                 <p className={`text-sm font-medium ${
-                  isInExtensionPeriod ? 'text-purple-900' : 'text-gray-900'
+                  isInExtensionPeriod ? 'text-emerald-900' : 'text-gray-900'
                 }`}>
                   Current Status
                 </p>
                 <p className={`text-2xl font-bold mt-1 ${
-                  isInExtensionPeriod ? 'text-purple-700' : 'text-gray-700'
+                  isInExtensionPeriod ? 'text-emerald-700' : 'text-gray-700'
                 }`}>
                   {isInExtensionPeriod ? 'Extended' : 'Normal'}
                 </p>
                 <p className={`text-xs mt-1 ${
-                  isInExtensionPeriod ? 'text-purple-600' : 'text-gray-600'
+                  isInExtensionPeriod ? 'text-emerald-600' : 'text-gray-600'
                 }`}>
                   {contract.currentCompletionDate && (
                     <>Until {format(new Date(contract.currentCompletionDate), 'dd MMM yyyy')}</>
@@ -135,7 +135,7 @@ export default async function ExtensionsPage({ params }: ExtensionsPageProps) {
                 </p>
               </div>
               <Info className={`h-8 w-8 opacity-50 ${
-                isInExtensionPeriod ? 'text-purple-600' : 'text-gray-600'
+                isInExtensionPeriod ? 'text-emerald-600' : 'text-gray-600'
               }`} />
             </div>
           </CardContent>
@@ -143,11 +143,11 @@ export default async function ExtensionsPage({ params }: ExtensionsPageProps) {
       </div>
 
       {/* GCC Compliance Info */}
-      <Card className="border-blue-200 bg-blue-50">
+      <Card className="border-emerald-200 bg-emerald-50">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-            <div className="text-sm text-blue-900">
+            <Info className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-emerald-900">
               <p className="font-medium mb-2">GCC 2022 ACS2 - Chapter 17 Compliance</p>
               <ul className="space-y-1 text-xs">
                 <li>

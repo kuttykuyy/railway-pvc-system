@@ -56,7 +56,7 @@ export function ContractLimitDialog({ user, open, onOpenChange, onSubmit }: Cont
       <DialogContent className="sm:max-w-[460px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FolderOpen className="h-5 w-5 text-cyan-600" />
+            <FolderOpen className="h-5 w-5 text-emerald-600" />
             Contract Limit — {user.name || user.email}
           </DialogTitle>
           <DialogDescription>
@@ -72,7 +72,7 @@ export function ContractLimitDialog({ user, open, onOpenChange, onSubmit }: Cont
               id="use-override"
               checked={useOverride}
               onChange={e => setUseOverride(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-cyan-600"
+              className="h-4 w-4 rounded border-slate-300 text-emerald-600"
             />
             <Label htmlFor="use-override" className="text-sm font-medium cursor-pointer">
               Set a custom limit for this user

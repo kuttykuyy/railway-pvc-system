@@ -109,14 +109,14 @@ export default function InstallPrompt() {
     <div className="fixed bottom-20 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm animate-in slide-in-from-bottom-4">
       <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-4">
         <div className="flex items-start gap-3">
-          <div className="h-10 w-10 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
-            <Smartphone className="h-5 w-5 text-violet-600" />
+          <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+            <Smartphone className="h-5 w-5 text-emerald-600" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-slate-900">Install IR-PVC</p>
             <p className="text-xs text-slate-500 mt-0.5">Add to home screen for quick access and offline use.</p>
             <div className="flex gap-2 mt-3">
-              <Button size="sm" className="flex-1 bg-violet-600 hover:bg-violet-700 rounded-xl font-semibold" onClick={handleInstallClick}>
+              <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-semibold" onClick={handleInstallClick}>
                 Install
               </Button>
               <Button size="sm" variant="ghost" className="flex-1 text-slate-500 hover:bg-slate-50 rounded-xl font-semibold" onClick={handleDismiss}>

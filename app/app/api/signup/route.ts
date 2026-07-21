@@ -277,7 +277,7 @@ export async function POST(request: NextRequest) {
 
       const welcomeHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-          <div style="text-align: center; padding: 30px 20px; background: linear-gradient(135deg, #1e40af, #4f46e5); border-radius: 12px 12px 0 0;">
+          <div style="text-align: center; padding: 30px 20px; background: linear-gradient(135deg, #1e40af, #059669); border-radius: 12px 12px 0 0;">
             <h1 style="color: #fff; margin: 0; font-size: 24px;">Welcome to IR-PVC! 🎉</h1>
             <p style="color: #c7d2fe; margin: 8px 0 0; font-size: 14px;">Indian Railway Price Variation Clause System</p>
           </div>
@@ -286,7 +286,7 @@ export async function POST(request: NextRequest) {
             <p style="font-size: 16px; margin: 0 0 20px;">Hello <strong>${fullName}</strong>,</p>
             <p style="margin: 0 0 20px; line-height: 1.6;">Your account has been created successfully. Here's a quick guide to get you started with PVC bill generation.</p>
 
-            <div style="background: #f0f9ff; border-left: 4px solid #2563eb; padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 0 0 24px;">
+            <div style="background: #f0f9ff; border-left: 4px solid #059669; padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 0 0 24px;">
               <h3 style="margin: 0 0 12px; color: #1e40af; font-size: 15px;">🚀 Getting Started</h3>
               <ol style="margin: 0; padding-left: 20px; line-height: 1.8; font-size: 14px;">
                 <li><strong>Add your Contract</strong> — Enter your LOA details, agreement number, base month, and work description.</li>
@@ -299,14 +299,14 @@ export async function POST(request: NextRequest) {
             <div style="background: #fefce8; border-left: 4px solid #ca8a04; padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 0 0 24px;">
               <h3 style="margin: 0 0 8px; color: #854d0e; font-size: 15px;">📚 Need Help?</h3>
               <p style="margin: 0; font-size: 14px; line-height: 1.6;">
-                • Visit the <a href="${appUrl}/help" style="color: #2563eb; text-decoration: underline;">Help Center</a> for detailed guides<br/>
+                • Visit the <a href="${appUrl}/help" style="color: #059669; text-decoration: underline;">Help Center</a> for detailed guides<br/>
                 • Use the <strong>AI Assistant</strong> (chat icon on every page) to ask questions<br/>
                 • WhatsApp support: <strong>+91 99447 76689</strong>
               </p>
             </div>
 
             <div style="text-align: center; margin: 24px 0;">
-              <a href="${appUrl}/contracts" style="display: inline-block; padding: 12px 32px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">Start Adding Your Contract →</a>
+              <a href="${appUrl}/contracts" style="display: inline-block; padding: 12px 32px; background: #059669; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">Start Adding Your Contract →</a>
             </div>
           </div>
 

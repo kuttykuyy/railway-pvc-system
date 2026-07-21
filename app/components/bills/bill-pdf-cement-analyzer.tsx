@@ -759,11 +759,11 @@ export function BillPdfCementAnalyzer({
   const showGrandUploader = !isAnalyzing && !result;
 
   return (
-    <Card className={`overflow-hidden ${showGrandUploader ? 'border-slate-200 bg-white shadow-sm' : 'border-blue-200 bg-blue-50/40'}`}>
+    <Card className={`overflow-hidden ${showGrandUploader ? 'border-slate-200 bg-white shadow-sm' : 'border-emerald-200 bg-emerald-50/40'}`}>
       {!showGrandUploader && (
         <CardHeader className={compact ? 'p-4 pb-2' : 'p-5 pb-3'}>
           <CardTitle className="flex items-center gap-2 text-base">
-            <FileText className="h-4 w-4 text-blue-700" />
+            <FileText className="h-4 w-4 text-emerald-700" />
             {title}
           </CardTitle>
         </CardHeader>
@@ -774,7 +774,7 @@ export function BillPdfCementAnalyzer({
             {/* Top title and scanning bar animation */}
             <div className="flex items-center justify-between border-b pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="rounded-md bg-blue-50 p-2 text-blue-600 animate-pulse">
+                <div className="rounded-md bg-emerald-50 p-2 text-emerald-600 animate-pulse">
                   <Cpu className="h-5 w-5 animate-spin" style={{ animationDuration: '4s' }} />
                 </div>
                 <div>
@@ -788,7 +788,7 @@ export function BillPdfCementAnalyzer({
                   </p>
                 </div>
               </div>
-              <Badge className="gap-1 bg-blue-100 text-blue-700 font-bold hover:bg-blue-100 border-none px-2.5 py-1">
+              <Badge className="gap-1 bg-emerald-100 text-emerald-700 font-bold hover:bg-emerald-100 border-none px-2.5 py-1">
                 <Clock3 className="h-3 w-3" />
                 {formatElapsed(elapsedSeconds)}
               </Badge>
@@ -797,7 +797,7 @@ export function BillPdfCementAnalyzer({
             <div className="space-y-2">
               <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
                 <div
-                  className={`h-full rounded-full bg-blue-600 transition-all duration-300 ${uploadPercent === 100 ? 'animate-pulse' : ''}`}
+                  className={`h-full rounded-full bg-emerald-600 transition-all duration-300 ${uploadPercent === 100 ? 'animate-pulse' : ''}`}
                   style={{
                     width: uploadPercent < 100
                       ? `${uploadPercent}%`
@@ -835,7 +835,7 @@ export function BillPdfCementAnalyzer({
                     {isCompleted ? (
                       <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
                     ) : isActive ? (
-                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-600" />
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-600" />
                     ) : (
                       <div className="h-4 w-4 shrink-0 flex items-center justify-center">
                         <div className="h-1.5 w-1.5 rounded-full bg-slate-200" />
@@ -862,7 +862,7 @@ export function BillPdfCementAnalyzer({
           </div>
         ) : showGrandUploader ? (
           <div
-            className={`grid min-h-[330px] grid-cols-1 transition-colors lg:grid-cols-[1.15fr_0.85fr] ${isDraggingFile ? 'bg-blue-50' : 'bg-white'}`}
+            className={`grid min-h-[330px] grid-cols-1 transition-colors lg:grid-cols-[1.15fr_0.85fr] ${isDraggingFile ? 'bg-emerald-50' : 'bg-white'}`}
             onDragEnter={(event) => {
               event.preventDefault();
               if (!disabled) setIsDraggingFile(true);
@@ -874,8 +874,8 @@ export function BillPdfCementAnalyzer({
             onDrop={handlePdfDrop}
           >
             <div className="flex flex-col justify-center border-b border-slate-200 bg-slate-950 px-6 py-9 text-white sm:px-10 lg:border-b-0 lg:border-r lg:px-12">
-              <div className="mb-5 flex items-center gap-3 text-sm font-semibold text-blue-300">
-                <span className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm">
+              <div className="mb-5 flex items-center gap-3 text-sm font-semibold text-emerald-300">
+                <span className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-600 text-white shadow-sm">
                   <ScanText className="h-5 w-5" />
                 </span>
                 {title}
@@ -900,7 +900,7 @@ export function BillPdfCementAnalyzer({
                   <span className="text-slate-200">Work classifications</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
+                  <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
                   <span className="text-slate-200">Cement and steel analysis</span>
                 </div>
               </div>
@@ -918,13 +918,13 @@ export function BillPdfCementAnalyzer({
                 type="button"
                 onClick={() => inputRef.current?.click()}
                 disabled={disabled}
-                className={`flex min-h-[240px] w-full flex-col items-center justify-center border-2 border-dashed px-6 py-8 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`flex min-h-[240px] w-full flex-col items-center justify-center border-2 border-dashed px-6 py-8 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
                   isDraggingFile
-                    ? 'border-blue-600 bg-blue-50'
-                    : 'border-slate-300 bg-slate-50 hover:border-blue-500 hover:bg-blue-50/60'
+                    ? 'border-emerald-600 bg-emerald-50'
+                    : 'border-slate-300 bg-slate-50 hover:border-emerald-500 hover:bg-emerald-50/60'
                 }`}
               >
-                <span className="flex h-16 w-16 items-center justify-center rounded-md bg-blue-600 text-white shadow-md">
+                <span className="flex h-16 w-16 items-center justify-center rounded-md bg-emerald-600 text-white shadow-md">
                   <Upload className="h-7 w-7" />
                 </span>
                 <span className="mt-5 text-lg font-bold text-slate-900">
@@ -1037,11 +1037,11 @@ export function BillPdfCementAnalyzer({
             {result.aiEnhancement && result.aiEnhancement.status !== 'not_requested' && (
               <div className={`flex items-start gap-2 rounded-md border p-2 text-xs ${
                 result.aiEnhancement.status === 'completed'
-                  ? 'border-blue-200 bg-blue-50 text-blue-900'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
                   : 'border-amber-200 bg-amber-50 text-amber-900'
               }`}>
                 {result.aiEnhancement.status === 'completed'
-                  ? <Cpu className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-700" />
+                  ? <Cpu className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700" />
                   : <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
                 <div>
                   <span className="font-semibold">AI review: </span>
@@ -1063,7 +1063,7 @@ export function BillPdfCementAnalyzer({
                   <div className="rounded-md border border-slate-200 bg-slate-50/50 p-3 text-xs space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="font-semibold text-slate-800 flex items-center gap-1.5">
-                        <FileText className="h-4 w-4 text-violet-600" />
+                        <FileText className="h-4 w-4 text-emerald-600" />
                         DSR 5.35 Cement Rate Calculator (No direct supply rate fallback)
                       </div>
                       <div className="flex items-center gap-2 text-[10px] text-emerald-700">
@@ -1110,7 +1110,7 @@ export function BillPdfCementAnalyzer({
                         return (
                           <div key={sched} className="border-t pt-3 first:border-t-0 first:pt-0 space-y-2">
                             <div className="flex items-center gap-2">
-                              <Badge className="bg-violet-100 text-violet-750 font-bold border-none">
+                              <Badge className="bg-emerald-100 text-emerald-750 font-bold border-none">
                                 {sched}
                               </Badge>
                               <span className="text-[10px] text-slate-500">({schedItemsCount} cement-affected items)</span>
@@ -1172,7 +1172,7 @@ export function BillPdfCementAnalyzer({
                               </div>
                               <div className="text-right">
                                 <span className="text-slate-400">Amount: </span>
-                                <span className="font-bold text-violet-700">{formatAmount(schedAmount)}</span>
+                                <span className="font-bold text-emerald-700">{formatAmount(schedAmount)}</span>
                               </div>
                             </div>
                           </div>
@@ -1183,7 +1183,7 @@ export function BillPdfCementAnalyzer({
                     <div className="flex items-center justify-between pt-3 border-t border-slate-200">
                       <div>
                         <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Total Derived Cement Cost</div>
-                        <div className="text-base font-extrabold text-violet-850">
+                        <div className="text-base font-extrabold text-emerald-850">
                           {formatAmount(
                             getUniqueCementSchedules(result).reduce((sum, sched) => sum + getScheduleCementAmount(sched), 0)
                           )}
@@ -1195,7 +1195,7 @@ export function BillPdfCementAnalyzer({
                         onClick={() => applyCalculatedAmount(
                           getUniqueCementSchedules(result).reduce((sum, sched) => sum + getScheduleCementAmount(sched), 0)
                         )}
-                        className="h-8 text-xs bg-violet-600 hover:bg-violet-700 text-white font-medium"
+                        className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
                       >
                         Apply Derived Costs
                       </Button>
@@ -1433,10 +1433,10 @@ export function BillPdfCementAnalyzer({
                 )}
               </>
             ) : (
-              <div className="relative overflow-hidden rounded-xl border border-blue-100 bg-slate-50/50 p-6 text-center shadow-sm">
+              <div className="relative overflow-hidden rounded-xl border border-emerald-100 bg-slate-50/50 p-6 text-center shadow-sm">
                 <div className="absolute inset-0 bg-white/40 backdrop-blur-[1px]" />
                 <div className="relative z-10 space-y-3">
-                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
                     <Lock className="h-5 w-5" />
                   </div>
                   <div className="space-y-1">
@@ -1450,7 +1450,7 @@ export function BillPdfCementAnalyzer({
                       type="button"
                       onClick={handleUnlock}
                       disabled={unlocking}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-all"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm transition-all"
                     >
                       {unlocking ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />

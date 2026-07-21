@@ -55,14 +55,14 @@ function VerifyNoticeContent() {
       <div className="absolute inset-0 bg-grid-slate-200/50 [mask-image:linear-gradient(to_bottom,white,transparent)] pointer-events-none" />
       
       {/* Floating Elements */}
-      <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200/20 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute bottom-20 right-10 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
+      <div className="absolute top-20 left-10 w-72 h-72 bg-emerald-200/20 rounded-full blur-3xl animate-pulse" />
+      <div className="absolute bottom-20 right-10 w-96 h-96 bg-emerald-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
 
       <Card className="w-full max-w-md shadow-2xl border-0 bg-white/95 backdrop-blur-sm relative z-10">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="bg-blue-100 p-4 rounded-full">
-              <Mail className="h-12 w-12 text-blue-600" />
+            <div className="bg-emerald-100 p-4 rounded-full">
+              <Mail className="h-12 w-12 text-emerald-600" />
             </div>
           </div>
           <CardTitle className="text-2xl">{sendFailed ? 'Almost there' : 'Check Your Email'}</CardTitle>
@@ -74,8 +74,8 @@ function VerifyNoticeContent() {
         </CardHeader>
         <CardContent className="space-y-4">
           {email && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-              <p className="text-sm text-blue-800 font-medium">{email}</p>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
+              <p className="text-sm text-emerald-800 font-medium">{email}</p>
             </div>
           )}
 
@@ -152,7 +152,7 @@ export default function VerifyNoticePage() {
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading...</p>
         </div>
       </div>

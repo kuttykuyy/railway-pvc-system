@@ -89,7 +89,7 @@ export default function AdminAiUsagePage() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-purple-600" /> AI Usage & Credit
+            <Sparkles className="h-6 w-6 text-emerald-600" /> AI Usage & Credit
           </h1>
           <p className="text-muted-foreground">AI bill-extraction consumption and provider status (Abacus RouteLLM).</p>
         </div>
@@ -122,7 +122,7 @@ export default function AdminAiUsagePage() {
               href="https://apps.abacus.ai"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
+              className="text-sm text-emerald-600 hover:underline inline-flex items-center gap-1"
             >
               Open Abacus dashboard <ExternalLink className="h-3.5 w-3.5" />
             </a>

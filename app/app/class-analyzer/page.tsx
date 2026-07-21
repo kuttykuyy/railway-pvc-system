@@ -848,7 +848,7 @@ export default function ClassAnalyzerPage() {
                 )}
               </span>
               {steelTypeDisplay && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300">
                   {steelTypeDisplay}
                 </Badge>
               )}
@@ -915,18 +915,18 @@ export default function ClassAnalyzerPage() {
   if (!subscriptionActive) {
     return (
       <div className="container mx-auto px-4 py-16 max-w-4xl min-h-[70vh] flex items-center justify-center">
-        <Card className="relative overflow-hidden border border-slate-100 bg-gradient-to-br from-white via-indigo-50/5 to-purple-50/10 rounded-3xl p-8 lg:p-12 shadow-[0_20px_50px_rgba(79,70,229,0.07)] text-center space-y-8 max-w-2xl mx-auto">
+        <Card className="relative overflow-hidden border border-slate-100 bg-gradient-to-br from-white via-emerald-50/5 to-emerald-50/10 rounded-3xl p-8 lg:p-12 shadow-[0_20px_50px_rgba(79,70,229,0.07)] text-center space-y-8 max-w-2xl mx-auto">
           {/* Glassmorphic glowing circles */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-300/10 blur-[80px] rounded-full pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-300/10 blur-[80px] rounded-full pointer-events-none" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-300/10 blur-[80px] rounded-full pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-300/10 blur-[80px] rounded-full pointer-events-none" />
           
-          <div className="relative inline-flex items-center justify-center p-5 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-3xl shadow-xl shadow-indigo-500/20">
+          <div className="relative inline-flex items-center justify-center p-5 bg-gradient-to-tr from-emerald-600 to-emerald-600 rounded-3xl shadow-xl shadow-emerald-500/20">
             <Calculator className="h-10 w-10 text-white" />
           </div>
           
           <div className="space-y-3 relative z-10">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-full">
-              <span className="flex h-2 w-2 rounded-full bg-indigo-600 animate-pulse" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
               Advanced Contractor Feature
             </div>
             <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 leading-tight">
@@ -941,13 +941,13 @@ export default function ClassAnalyzerPage() {
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Subscription Benefits</p>
             <ul className="text-xs sm:text-sm text-slate-600 space-y-2.5 font-light">
               <li className="flex items-center gap-2">
-                <span className="text-indigo-600 font-extrabold text-base">✓</span> <strong>Unlimited Comparisons:</strong> Run unlimited classifications check.
+                <span className="text-emerald-600 font-extrabold text-base">✓</span> <strong>Unlimited Comparisons:</strong> Run unlimited classifications check.
               </li>
               <li className="flex items-center gap-2">
-                <span className="text-indigo-600 font-extrabold text-base">✓</span> <strong>Zero Event Fees:</strong> No cost per bill checked.
+                <span className="text-emerald-600 font-extrabold text-base">✓</span> <strong>Zero Event Fees:</strong> No cost per bill checked.
               </li>
               <li className="flex items-center gap-2">
-                <span className="text-indigo-600 font-extrabold text-base">✓</span> <strong>Dual Access:</strong> Includes full access to the PVC Check tool.
+                <span className="text-emerald-600 font-extrabold text-base">✓</span> <strong>Dual Access:</strong> Includes full access to the PVC Check tool.
               </li>
             </ul>
           </div>
@@ -955,13 +955,13 @@ export default function ClassAnalyzerPage() {
           <div className="pt-4 max-w-sm mx-auto space-y-3 relative z-10">
             <div className="flex items-baseline justify-between px-6">
               <span className="text-xs text-slate-400 font-medium">Monthly Plan:</span>
-              <span className="text-2xl font-black text-indigo-600">₹99 <span className="text-[11px] text-slate-400 font-medium">/ month</span></span>
+              <span className="text-2xl font-black text-emerald-600">₹99 <span className="text-[11px] text-slate-400 font-medium">/ month</span></span>
             </div>
             
             <Button
               onClick={handleSubscribeTools}
               disabled={subscribing || creditBalance < 99}
-              className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/25 active:scale-[0.98] transition-all text-sm"
+              className="w-full h-12 bg-gradient-to-r from-emerald-600 to-emerald-600 hover:from-emerald-700 hover:to-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/25 active:scale-[0.98] transition-all text-sm"
             >
               {subscribing ? (
                 <>
@@ -1002,11 +1002,11 @@ export default function ClassAnalyzerPage() {
       <div className="mb-4 sm:mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Class Analyzer - Compare Work Classifications</h1>
-          <Card className="p-3 sm:p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-150">
+          <Card className="p-3 sm:p-4 bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-150">
             <div className="flex items-center gap-2">
-              <Calculator className="h-5 w-5 text-indigo-600 animate-pulse" />
+              <Calculator className="h-5 w-5 text-emerald-600 animate-pulse" />
               <div className="text-sm">
-                <p className="font-semibold text-indigo-700">
+                <p className="font-semibold text-emerald-700">
                   Unlimited Comparisons Enabled
                 </p>
                 <p className="text-xs text-slate-500">
@@ -1040,13 +1040,13 @@ export default function ClassAnalyzerPage() {
             />
             <p className="text-xs text-muted-foreground">Format: mm-yyyy</p>
             {availableDateRange.minDate && availableDateRange.maxDate && (
-              <div className="flex items-center gap-2.5 p-2 px-3 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800 animate-blink font-semibold">
-                <AlertCircle className="h-4 w-4 flex-shrink-0 animate-pulse text-blue-500" />
+              <div className="flex items-center gap-2.5 p-2 px-3 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800 animate-blink font-semibold">
+                <AlertCircle className="h-4 w-4 flex-shrink-0 animate-pulse text-emerald-500" />
                 <span>
                   Indices available from{' '}
                   <strong>{availableDateRange.minDate.split('-').reverse().join('-')}</strong> to{' '}
                   <strong>{availableDateRange.maxDate.split('-').reverse().join('-')}</strong>
-                  <span className="ml-2 bg-blue-100/80 text-blue-900 border border-blue-250 px-1.5 py-0.5 rounded font-extrabold whitespace-nowrap">
+                  <span className="ml-2 bg-emerald-100/80 text-emerald-900 border border-emerald-250 px-1.5 py-0.5 rounded font-extrabold whitespace-nowrap">
                     (All indices up to date: {new Date(availableDateRange.maxDate).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })})
                   </span>
                 </span>
@@ -1585,7 +1585,7 @@ export default function ClassAnalyzerPage() {
                                       <span className="text-muted-foreground">Dedicated PVC:</span>
                                       <span className={cn(
                                         "font-semibold",
-                                        dedicatedPVC >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400"
+                                        dedicatedPVC >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
                                       )}>
                                         {dedicatedPVC >= 0 ? '+' : ''}₹{dedicatedPVC.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                                       </span>
@@ -1643,7 +1643,7 @@ export default function ClassAnalyzerPage() {
                                       <span className="text-muted-foreground">Dedicated Impact:</span>
                                       <span className={cn(
                                         "font-semibold",
-                                        dedicatedPVC >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400"
+                                        dedicatedPVC >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
                                       )}>
                                         {dedicatedPVC >= 0 ? '+' : ''}{((dedicatedPVC / billResult.amount) * 100).toFixed(2)}%
                                       </span>
@@ -1777,7 +1777,7 @@ export default function ClassAnalyzerPage() {
                             const componentName = dedicated.component === 'tmt' ? 'TMT Bars' : 'Cement';
                             
                             return (
-                              <Card key={idx} className="border-2 border-blue-200 dark:border-blue-800">
+                              <Card key={idx} className="border-2 border-emerald-200 dark:border-emerald-800">
                                 <CardHeader className="pb-3">
                                   <div className="flex items-center justify-between">
                                     <CardTitle className="text-base">{componentName}</CardTitle>
@@ -1785,7 +1785,7 @@ export default function ClassAnalyzerPage() {
                                       variant={isPositive ? "default" : "destructive"} 
                                       className={cn(
                                         "text-lg font-bold",
-                                        isPositive && "bg-blue-600"
+                                        isPositive && "bg-emerald-600"
                                       )}
                                     >
                                       {isPositive ? '+' : ''}₹{dedicated.pvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
@@ -1808,7 +1808,7 @@ export default function ClassAnalyzerPage() {
                                     <Separator />
                                     <div className="flex justify-between font-semibold">
                                       <span>PVC:</span>
-                                      <span className={isPositive ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400"}>
+                                      <span className={isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}>
                                         ₹{dedicated.pvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                                       </span>
                                     </div>

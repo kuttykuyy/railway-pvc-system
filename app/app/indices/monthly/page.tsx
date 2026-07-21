@@ -371,7 +371,7 @@ export default function MonthlyIndicesPage() {
             <Button
               type="submit"
               disabled={isSaving}
-              className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
             >
               {isSaving ? (
                 <LoadingSpinner size="sm" text="Saving..." />

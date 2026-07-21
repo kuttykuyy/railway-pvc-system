@@ -170,13 +170,13 @@ export default function AdminUsersPage() {
   if (status === 'loading' || loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] relative overflow-hidden bg-white/70 rounded-3xl border border-slate-100 shadow-[0_15px_35px_rgba(0,0,0,0.02)] backdrop-blur-md p-8">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-violet-600/10 blur-[80px] rounded-full animate-pulse" />
-        <div className="absolute top-1/3 left-1/3 w-48 h-48 bg-cyan-600/8 blur-[100px] rounded-full animate-pulse delay-700" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-emerald-600/10 blur-[80px] rounded-full animate-pulse" />
+        <div className="absolute top-1/3 left-1/3 w-48 h-48 bg-emerald-600/8 blur-[100px] rounded-full animate-pulse delay-700" />
         <div className="relative text-center space-y-4">
-          <div className="relative inline-flex items-center justify-center p-4 bg-gradient-to-tr from-violet-600 to-indigo-600 rounded-2xl shadow-xl shadow-indigo-500/20 animate-bounce">
+          <div className="relative inline-flex items-center justify-center p-4 bg-gradient-to-tr from-emerald-600 to-emerald-600 rounded-2xl shadow-xl shadow-emerald-500/20 animate-bounce">
             <Users className="h-8 w-8 text-white" />
           </div>
-          <h2 className="text-xl font-bold bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 bg-clip-text text-transparent">Securing Directory...</h2>
+          <h2 className="text-xl font-bold bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 bg-clip-text text-transparent">Securing Directory...</h2>
           <p className="text-sm text-slate-500 max-w-xs mx-auto animate-pulse">Loading system user credentials and account balances.</p>
         </div>
       </div>
@@ -191,19 +191,19 @@ export default function AdminUsersPage() {
   return (
     <div className="relative min-h-screen pb-12 space-y-8 overflow-hidden">
       {/* Dynamic Background Blurs */}
-      <div className="absolute top-0 right-10 w-96 h-96 bg-violet-300/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute top-1/3 -left-20 w-80 h-80 bg-cyan-300/10 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute top-0 right-10 w-96 h-96 bg-emerald-300/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute top-1/3 -left-20 w-80 h-80 bg-emerald-300/10 blur-[100px] rounded-full pointer-events-none" />
       <div className="absolute bottom-10 right-20 w-[450px] h-[450px] bg-emerald-300/5 blur-[150px] rounded-full pointer-events-none" />
 
       {/* Header Container */}
       <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6 p-8 bg-white/80 backdrop-blur-xl border border-slate-200/50 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.03)] overflow-hidden">
         <div className="absolute inset-0 bg-grid-slate-900/[0.01] pointer-events-none" />
         <div className="relative space-y-2">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 text-xs font-semibold text-violet-700 bg-violet-50 border border-violet-200/50 rounded-full shadow-sm">
-            <Sparkles className="h-3 w-3 animate-spin text-violet-600" />
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/50 rounded-full shadow-sm">
+            <Sparkles className="h-3 w-3 animate-spin text-emerald-600" />
             Admin Operations Center
           </div>
-          <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 bg-clip-text text-transparent">
             User Management
           </h1>
           <p className="text-sm text-slate-500 max-w-lg font-normal">

@@ -16,7 +16,7 @@ export default function NewContractPage() {
           />
           <div className="h-6 w-px bg-slate-200 hidden md:block" />
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
-            <div className="bg-blue-50 p-2 rounded-xl text-blue-600">
+            <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600">
               <Building2 className="h-6 w-6 sm:h-7 sm:w-7" />
             </div>
             Add New Contract

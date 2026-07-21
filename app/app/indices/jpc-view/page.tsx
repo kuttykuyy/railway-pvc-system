@@ -46,9 +46,9 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const INDEX_MAPPING_COLORS: Record<string, string> = {
-  'Steel TMT Bars': 'bg-blue-100 text-blue-800',
+  'Steel TMT Bars': 'bg-emerald-100 text-emerald-800',
   'Steel Angle/Channel': 'bg-green-100 text-green-800',
-  'Steel Plates': 'bg-purple-100 text-purple-800',
+  'Steel Plates': 'bg-emerald-100 text-emerald-800',
   'Steel Other Sections': 'bg-gray-100 text-gray-700'
 };
 

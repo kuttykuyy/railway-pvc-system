@@ -295,7 +295,7 @@ export default function ReportTemplatesPage() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-4">
-          <FileText className="h-8 w-8 text-indigo-600 animate-pulse mx-auto" />
+          <FileText className="h-8 w-8 text-emerald-600 animate-pulse mx-auto" />
           <p className="text-sm text-slate-500">Loading templates...</p>
         </div>
       </div>
@@ -305,8 +305,8 @@ export default function ReportTemplatesPage() {
   return (
     <div className="relative min-h-screen pb-12 space-y-8 overflow-hidden">
       {/* Background Blurs */}
-      <div className="absolute top-0 right-10 w-96 h-96 bg-violet-300/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute top-1/3 -left-20 w-80 h-80 bg-cyan-300/10 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute top-0 right-10 w-96 h-96 bg-emerald-300/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute top-1/3 -left-20 w-80 h-80 bg-emerald-300/10 blur-[100px] rounded-full pointer-events-none" />
       <div className="absolute bottom-10 right-20 w-[450px] h-[450px] bg-emerald-300/5 blur-[150px] rounded-full pointer-events-none" />
 
       <BackButton href="/dashboard" className="mb-4 inline-flex items-center text-slate-500 hover:text-slate-800" />
@@ -315,11 +315,11 @@ export default function ReportTemplatesPage() {
       <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6 p-8 bg-white/80 backdrop-blur-xl border border-slate-200/50 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.03)] overflow-hidden">
         <div className="absolute inset-0 bg-grid-slate-900/[0.01] pointer-events-none" />
         <div className="relative space-y-2">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/50 rounded-full shadow-sm">
-            <Sparkles className="h-3 w-3 text-indigo-600" />
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/50 rounded-full shadow-sm">
+            <Sparkles className="h-3 w-3 text-emerald-600" />
             PDF Customization Panel
           </div>
-          <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 bg-clip-text text-transparent">
             Report Templates
           </h1>
           <p className="text-sm text-slate-500 max-w-lg font-normal">
@@ -327,7 +327,7 @@ export default function ReportTemplatesPage() {
           </p>
         </div>
         
-        <Button onClick={handleCreate} className="h-11 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/10 transition-colors cursor-pointer shrink-0">
+        <Button onClick={handleCreate} className="h-11 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/10 transition-colors cursor-pointer shrink-0">
           <Plus className="h-4 w-4 mr-2" />
           Create Template
         </Button>
@@ -345,7 +345,7 @@ export default function ReportTemplatesPage() {
                 Create your first report template to customize how PDFs are formatted and generated.
               </p>
             </div>
-            <Button onClick={handleCreate} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl">
+            <Button onClick={handleCreate} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
               <Plus className="h-4 w-4 mr-2" />
               Create Template
             </Button>
@@ -354,7 +354,7 @@ export default function ReportTemplatesPage() {
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {templates.map((template) => (
-            <Card key={template.id} className={`group relative overflow-hidden border bg-white/75 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.015)] rounded-3xl transition-all duration-300 transform hover:-translate-y-1 hover:border-slate-200 hover:shadow-lg ${template.isDefault ? 'border-indigo-200 ring-2 ring-indigo-500/5' : 'border-slate-100'}`}>
+            <Card key={template.id} className={`group relative overflow-hidden border bg-white/75 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.015)] rounded-3xl transition-all duration-300 transform hover:-translate-y-1 hover:border-slate-200 hover:shadow-lg ${template.isDefault ? 'border-emerald-200 ring-2 ring-emerald-500/5' : 'border-slate-100'}`}>
               <CardHeader className="p-6 pb-4">
                 <div className="flex justify-between items-start gap-4">
                   <div className="space-y-1">
@@ -364,7 +364,7 @@ export default function ReportTemplatesPage() {
                         <Star className="h-4.5 w-4.5 fill-amber-400 text-amber-500 shrink-0" />
                       )}
                       {template.isGlobal && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-blue-50 border border-blue-200/50 text-blue-700 text-[10px] font-bold rounded-full">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 border border-emerald-200/50 text-emerald-700 text-[10px] font-bold rounded-full">
                           <Globe className="h-3 w-3" />
                           Global
                         </span>
@@ -382,32 +382,32 @@ export default function ReportTemplatesPage() {
                     <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Sections Included:</h5>
                     <div className="flex flex-wrap gap-1.5">
                       {template.sections.contractDetails && (
-                        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100/50 text-indigo-700 text-[10px] font-semibold rounded-lg">
+                        <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100/50 text-emerald-700 text-[10px] font-semibold rounded-lg">
                           Contract Details
                         </span>
                       )}
                       {template.sections.workClassification && (
-                        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100/50 text-indigo-700 text-[10px] font-semibold rounded-lg">
+                        <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100/50 text-emerald-700 text-[10px] font-semibold rounded-lg">
                           Classification
                         </span>
                       )}
                       {template.sections.allBillsTable && (
-                        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100/50 text-indigo-700 text-[10px] font-semibold rounded-lg">
+                        <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100/50 text-emerald-700 text-[10px] font-semibold rounded-lg">
                           All Bills
                         </span>
                       )}
                       {template.sections.monthlyIndices && (
-                        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100/50 text-indigo-700 text-[10px] font-semibold rounded-lg">
+                        <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100/50 text-emerald-700 text-[10px] font-semibold rounded-lg">
                           Monthly Indices
                         </span>
                       )}
                       {template.sections.pvcCalculation && (
-                        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100/50 text-indigo-700 text-[10px] font-semibold rounded-lg">
+                        <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100/50 text-emerald-700 text-[10px] font-semibold rounded-lg">
                           PVC Details
                         </span>
                       )}
                       {template.sections.componentIndexDocuments && (
-                        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100/50 text-indigo-700 text-[10px] font-semibold rounded-lg">
+                        <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100/50 text-emerald-700 text-[10px] font-semibold rounded-lg">
                           Index Docs
                         </span>
                       )}
@@ -466,7 +466,7 @@ export default function ReportTemplatesPage() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200/80 rounded-3xl p-8 shadow-2xl">
           <DialogHeader className="space-y-1.5 pb-4 border-b border-slate-100">
             <DialogTitle className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-              <div className="p-1.5 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-600"><LayoutList className="h-5 w-5" /></div>
+              <div className="p-1.5 bg-emerald-50 border border-emerald-100 rounded-lg text-emerald-600"><LayoutList className="h-5 w-5" /></div>
               {editingTemplate ? 'Edit Template Parameters' : 'Create Custom PDF Template'}
             </DialogTitle>
             <DialogDescription className="text-slate-500 text-sm">
@@ -484,7 +484,7 @@ export default function ReportTemplatesPage() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g., Full Audited PDF, Quick Client Abstract, Internal Summary"
-                  className="bg-slate-50/50 border border-slate-200 text-slate-800 placeholder-slate-400 rounded-xl focus:bg-white focus:ring-violet-500/10 focus:border-violet-500/50 h-11 transition-all"
+                  className="bg-slate-50/50 border border-slate-200 text-slate-800 placeholder-slate-400 rounded-xl focus:bg-white focus:ring-emerald-500/10 focus:border-emerald-500/50 h-11 transition-all"
                 />
               </div>
 
@@ -496,7 +496,7 @@ export default function ReportTemplatesPage() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Describe when to generate reports using this template format..."
                   rows={2}
-                  className="bg-slate-50/50 border border-slate-200 text-slate-800 placeholder-slate-400 rounded-xl focus:bg-white focus:ring-violet-500/10 focus:border-violet-500/50 transition-all p-3"
+                  className="bg-slate-50/50 border border-slate-200 text-slate-800 placeholder-slate-400 rounded-xl focus:bg-white focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all p-3"
                 />
               </div>
 
@@ -519,7 +519,7 @@ export default function ReportTemplatesPage() {
                   <div className="flex items-center justify-between p-4 border border-slate-100 bg-slate-50/20 rounded-xl hover:bg-slate-50/40 transition-colors">
                     <div className="space-y-0.5">
                       <Label htmlFor="isGlobal" className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                        Global Template <span className="text-[9px] font-bold bg-indigo-50 border border-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Admin Only</span>
+                        Global Template <span className="text-[9px] font-bold bg-emerald-50 border border-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">Admin Only</span>
                       </Label>
                       <p className="text-xs text-slate-400 font-light">Visually available to all system users.</p>
                     </div>
@@ -538,7 +538,7 @@ export default function ReportTemplatesPage() {
             {/* Sections Toggle */}
             <div className="space-y-4">
               <h4 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                <Settings className="h-4.5 w-4.5 text-indigo-600" /> Include Report Sections
+                <Settings className="h-4.5 w-4.5 text-emerald-600" /> Include Report Sections
               </h4>
               
               <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
@@ -746,10 +746,10 @@ export default function ReportTemplatesPage() {
                 {/* Show detailed calculation steps toggle */}
                 {Object.entries(formData.fields.pvcCalculation).map(([key, value]) => (
                   key === 'showCalculationSteps' && (
-                    <div key={key} className="flex items-start justify-between p-4 border border-indigo-100/60 bg-indigo-50/20 rounded-xl gap-4">
+                    <div key={key} className="flex items-start justify-between p-4 border border-emerald-100/60 bg-emerald-50/20 rounded-xl gap-4">
                       <div className="space-y-1">
-                        <Label htmlFor={key} className="text-sm font-bold text-indigo-950 flex items-center gap-1.5 cursor-pointer">
-                          <Sparkles className="h-4 w-4 text-indigo-600" /> Show Detailed Calculation Steps
+                        <Label htmlFor={key} className="text-sm font-bold text-emerald-950 flex items-center gap-1.5 cursor-pointer">
+                          <Sparkles className="h-4 w-4 text-emerald-600" /> Show Detailed Calculation Steps
                         </Label>
                         <p className="text-xs text-slate-500 font-light leading-normal">
                           Appends algebraic calculation steps (formula values, indexes, differences) for each index component in final reports.
@@ -783,7 +783,7 @@ export default function ReportTemplatesPage() {
             <Button variant="outline" onClick={() => setShowDialog(false)} className="border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl h-11 px-5">
               Cancel
             </Button>
-            <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-11 px-6 shadow-md shadow-indigo-500/10 cursor-pointer">
+            <Button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-11 px-6 shadow-md shadow-emerald-500/10 cursor-pointer">
               {editingTemplate ? 'Update Template' : 'Create Template'}
             </Button>
           </DialogFooter>

@@ -470,12 +470,12 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
 
       {/* Auto-fill from agreement PDF (new contracts only) */}
       {!isEdit && (
-        <div className="rounded-xl border border-dashed border-indigo-300 bg-indigo-50/60 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="rounded-xl border border-dashed border-emerald-300 bg-emerald-50/60 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="flex-1">
-            <p className="text-sm font-semibold text-indigo-900 flex items-center gap-1.5">
+            <p className="text-sm font-semibold text-emerald-900 flex items-center gap-1.5">
               <Sparkles className="h-4 w-4" /> Fill from agreement (AI)
             </p>
-            <p className="text-xs text-indigo-700/80 mt-0.5">
+            <p className="text-xs text-emerald-700/80 mt-0.5">
               Upload the railway agreement PDF and we'll fill this form for you — free. You review everything before saving.
             </p>
           </div>
@@ -491,7 +491,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
             variant="outline"
             onClick={() => agreementFileRef.current?.click()}
             disabled={extractingAgreement}
-            className="shrink-0 border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-100"
+            className="shrink-0 border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100"
           >
             {extractingAgreement ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Reading…</>
@@ -515,14 +515,14 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 onClick={() => setActiveTab(tb.id)}
                 className={`flex items-center gap-2 whitespace-nowrap px-3.5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                   isActive
-                    ? 'border-blue-600 text-blue-700'
+                    ? 'border-emerald-600 text-emerald-700'
                     : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                 }`}
               >
                 <Icon className="h-4 w-4" />
                 {tb.label}
                 {tb.id === 'schedules' && schedules.length > 0 && (
-                  <span className="ml-1 text-xs bg-violet-50 text-violet-750 px-1.5 py-0.5 rounded-full font-semibold border border-violet-100">
+                  <span className="ml-1 text-xs bg-emerald-50 text-emerald-750 px-1.5 py-0.5 rounded-full font-semibold border border-emerald-100">
                     {schedules.length}
                   </span>
                 )}
@@ -550,7 +550,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   required
                   aria-invalid={Boolean(fieldErrors.agreementNo) || agreementAvailability === 'duplicate'}
                   aria-describedby="agreementNo-help agreementNo-status"
-                  className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${fieldErrors.agreementNo || agreementAvailability === 'duplicate' ? 'border-red-500 focus:border-red-500' : agreementAvailability === 'available' ? 'border-emerald-500 focus:border-emerald-500' : ''}`}
+                  className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${fieldErrors.agreementNo || agreementAvailability === 'duplicate' ? 'border-red-500 focus:border-red-500' : agreementAvailability === 'available' ? 'border-emerald-500 focus:border-emerald-500' : ''}`}
                 />
                 <p id="agreementNo-help" className="text-xs text-slate-500 mt-1 leading-relaxed">
                   {t('form.contract.agreement_no_desc')}
@@ -587,7 +587,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   value={formData.loaNo}
                   onChange={handleInputChange}
                   placeholder={t('form.contract.loa_no_placeholder')}
-                  className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                  className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
                 />
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                   {t('form.contract.loa_no_desc')}
@@ -606,7 +606,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 onChange={handleInputChange}
                 placeholder={t('form.contract.contractor_name_placeholder')}
                 required
-                className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${fieldErrors.contractorName ? 'border-red-500 focus:border-red-500' : ''}`}
+                className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${fieldErrors.contractorName ? 'border-red-500 focus:border-red-500' : ''}`}
               />
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                 {t('form.contract.contractor_name_desc')}
@@ -628,7 +628,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 placeholder={t('form.contract.contractor_phone_placeholder')}
                 type="tel"
                 maxLength={10}
-                className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
               />
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                 {t('form.contract.contractor_phone_desc')}
@@ -647,7 +647,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 placeholder={t('form.contract.work_desc_placeholder')}
                 rows={3}
                 required
-                className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-none ${fieldErrors.workDescription ? 'border-red-500 focus:border-red-500' : ''}`}
+                className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all resize-none ${fieldErrors.workDescription ? 'border-red-500 focus:border-red-500' : ''}`}
               />
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                 {t('form.contract.work_desc_desc')}
@@ -664,7 +664,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
           <div className="space-y-5">
             <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4">
               <div className="flex items-start gap-2.5">
-                <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                <Info className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-slate-600 space-y-1">
                   <p className="font-semibold text-slate-800 text-sm">{t('form.contract.pvc_rules_title')}</p>
                   <p className="leading-relaxed">{t('form.contract.pvc_rules_text')}</p>
@@ -830,7 +830,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 value={formData.completionPeriodMonths}
                 onChange={handleInputChange}
                 placeholder={t('form.contract.completion_period_placeholder')}
-                className={`max-w-sm bg-slate-50/50 border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${fieldErrors.completionPeriodMonths ? 'border-red-500 focus:border-red-500' : ''}`}
+                className={`max-w-sm bg-slate-50/50 border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${fieldErrors.completionPeriodMonths ? 'border-red-500 focus:border-red-500' : ''}`}
               />
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                 {t('form.contract.completion_period_desc')}
@@ -852,7 +852,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 value={formData.dateOfOpening}
                 onChange={handleInputChange}
                 required
-                className={`max-w-sm bg-slate-50/50 border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${fieldErrors.dateOfOpening ? 'border-red-500 focus:border-red-500' : ''}`}
+                className={`max-w-sm bg-slate-50/50 border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${fieldErrors.dateOfOpening ? 'border-red-500 focus:border-red-500' : ''}`}
               />
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                 {t('form.contract.date_opening_desc')}
@@ -874,7 +874,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
           <div className="space-y-6">
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mb-2">
               <div className="flex items-start gap-2.5">
-                <Info className="h-5 w-5 text-violet-600 mt-0.5 flex-shrink-0" />
+                <Info className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-slate-650">
                   <p className="leading-relaxed">{t('form.contract.schedules_help')}</p>
                 </div>
@@ -890,7 +890,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   variant="outline"
                   size="sm"
                   onClick={() => setSchedules([...schedules, emptySchedule()])}
-                  className="h-8 text-xs bg-white border-slate-200 text-slate-700 hover:bg-violet-50 hover:text-violet-750 transition-colors"
+                  className="h-8 text-xs bg-white border-slate-200 text-slate-700 hover:bg-emerald-50 hover:text-emerald-750 transition-colors"
                 >
                   <Plus className="h-3 w-3 mr-1" />
                   {t('form.contract.add_schedule')}
@@ -919,7 +919,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                         value={schedule.name}
                         onChange={(e) => update({ name: e.target.value })}
                         placeholder={language === 'hi' ? `जैसे, अनुसूची ${String.fromCharCode(65 + index)} - मिट्टी का काम` : `e.g., A1 - All items covered by CPWD-DSR 2021`}
-                        className="bg-white border-slate-200 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all flex-1"
+                        className="bg-white border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all flex-1"
                       />
                       <Button
                         type="button"
@@ -958,7 +958,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
           <div className="space-y-4">
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mb-4">
               <div className="flex items-start gap-2.5">
-                <Info className="h-5 w-5 text-teal-600 mt-0.5 flex-shrink-0" />
+                <Info className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-slate-650">
                   <p className="font-semibold text-slate-800 mb-0.5">{t('form.contract.cov_letter_help_title')}</p>
                   <p className="leading-relaxed">{t('form.contract.cov_letter_help_text')}</p>
@@ -977,7 +977,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   value={formData.coveringLetterDesignation}
                   onChange={handleInputChange}
                   placeholder={t('form.contract.designation_placeholder')}
-                  className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all"
+                  className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
                 />
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                   {t('form.contract.designation_desc')}
@@ -995,7 +995,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   type="date"
                   value={formData.loaDate}
                   onChange={handleInputChange}
-                  className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all"
+                  className="bg-slate-50/50 border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
                 />
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                   {t('form.contract.loa_date_desc')}
@@ -1073,7 +1073,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
           {TABS.map((tb, i) => (
             <span
               key={tb.id}
-              className={`h-1.5 rounded-full transition-all ${i === activeIndex ? 'w-5 bg-blue-600' : 'w-1.5 bg-slate-300'}`}
+              className={`h-1.5 rounded-full transition-all ${i === activeIndex ? 'w-5 bg-emerald-600' : 'w-1.5 bg-slate-300'}`}
             />
           ))}
         </div>
@@ -1104,7 +1104,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
         <Button
           type="submit"
           disabled={isLoading || agreementAvailability === 'duplicate'}
-          className="bg-blue-600 hover:bg-blue-750 text-white font-semibold shadow-md shadow-blue-500/10 rounded-xl px-6"
+          className="bg-emerald-600 hover:bg-emerald-750 text-white font-semibold shadow-md shadow-emerald-500/10 rounded-xl px-6"
         >
           {isLoading ? (
             <LoadingSpinner size="sm" text={isEdit ? (language === 'hi' ? 'अपडेट किया जा रहा है...' : 'Updating...') : (language === 'hi' ? 'बनाया जा रहा है...' : 'Creating...')} />

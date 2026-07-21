@@ -475,7 +475,7 @@ export function ClassificationComparisonDialog({
           <p className="text-sm text-muted-foreground">
             Comparing against: <span className="font-semibold">{currentClassification.code} - {currentClassification.name}</span>
             {' '}| Amount: <span className="font-semibold">₹{entryAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-            {indicesLoading && <span className="ml-2 text-xs text-blue-600">Loading indices...</span>}
+            {indicesLoading && <span className="ml-2 text-xs text-emerald-600">Loading indices...</span>}
             {!indicesData && !indicesLoading && <span className="ml-2 text-xs text-amber-600">(Select contract &amp; date to see PVC)</span>}
           </p>
         </DialogHeader>

@@ -132,7 +132,7 @@ export function WhatsAppNumberAlert({ userEmail, userName, hasPhone }: WhatsAppN
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
-              <Phone className="h-5 w-5 text-blue-600" />
+              <Phone className="h-5 w-5 text-emerald-600" />
               <span>Add WhatsApp Number</span>
             </DialogTitle>
             <DialogDescription>
@@ -156,11 +156,11 @@ export function WhatsAppNumberAlert({ userEmail, userName, hasPhone }: WhatsAppN
               </p>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-xs text-blue-800">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+              <p className="text-xs text-emerald-800">
                 <strong>Why we need this:</strong>
               </p>
-              <ul className="text-xs text-blue-700 mt-1 space-y-1 ml-4 list-disc">
+              <ul className="text-xs text-emerald-700 mt-1 space-y-1 ml-4 list-disc">
                 <li>Receive bill notifications instantly</li>
                 <li>Get PDF reports via WhatsApp</li>
                 <li>Quick updates on approvals</li>

@@ -12,9 +12,9 @@ interface InfoCardProps {
 
 const typeStyles = {
   info: {
-    container: "bg-blue-50 border-blue-200 text-blue-900",
-    icon: "text-blue-600",
-    title: "text-blue-900",
+    container: "bg-emerald-50 border-emerald-200 text-emerald-900",
+    icon: "text-emerald-600",
+    title: "text-emerald-900",
     Icon: Info
   },
   warning: {
@@ -30,9 +30,9 @@ const typeStyles = {
     Icon: CheckCircle
   },
   help: {
-    container: "bg-purple-50 border-purple-200 text-purple-900",
-    icon: "text-purple-600",
-    title: "text-purple-900",
+    container: "bg-emerald-50 border-emerald-200 text-emerald-900",
+    icon: "text-emerald-600",
+    title: "text-emerald-900",
     Icon: HelpCircle
   }
 };

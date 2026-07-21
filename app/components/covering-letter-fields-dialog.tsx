@@ -87,7 +87,7 @@ export function CoveringLetterFieldsDialog({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-blue-600" />
+            <FileText className="h-5 w-5 text-emerald-600" />
             Add Covering Letter Details
           </DialogTitle>
           <DialogDescription>

@@ -321,7 +321,7 @@ function EditBillPageContent() {
               Cancel
             </button>
             <button type="submit" disabled={isSaving || !form.billNo || !form.dateOfMeasurement || classificationEntries.length === 0}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50">
               {isSaving ? <LoadingSpinner size="sm" /> : <Save className="h-4 w-4" />}
               {isSaving ? 'Saving...' : 'Update Bill'}
             </button>

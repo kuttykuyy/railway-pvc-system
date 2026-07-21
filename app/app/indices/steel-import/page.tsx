@@ -323,19 +323,19 @@ export default function SteelImportPage() {
       </div>
 
       {/* Calculation Method Info */}
-      <Card className="mb-6 border-blue-200 bg-blue-50">
+      <Card className="mb-6 border-emerald-200 bg-emerald-50">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2 text-blue-800">
+          <CardTitle className="text-base flex items-center gap-2 text-emerald-800">
             <Info className="h-5 w-5" />
             Calculation Method (as per GCC 2022 Clause 46A.9)
           </CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-blue-700 space-y-1">
+        <CardContent className="text-sm text-emerald-700 space-y-1">
           <p><strong>1. TMT Bars:</strong> Average of 10mm & 25mm TMT rates</p>
           <p><strong>2. Angle/Channel:</strong> Average of [ISA 75x6, MS Plate-10mm, ISMC 150x75]</p>
           <p><strong>3. Plates:</strong> Average of [MS Plate-10mm, MS Plate-25mm]</p>
           <p><strong>4. Other Sections:</strong> (TMT + Angle/Channel + Plates) ÷ 3</p>
-          <p className="text-xs text-blue-600 mt-2">* Item Avg = (F1 + F2) ÷ 2 | Source: GCC April 2022</p>
+          <p className="text-xs text-emerald-600 mt-2">* Item Avg = (F1 + F2) ÷ 2 | Source: GCC April 2022</p>
         </CardContent>
       </Card>
 
@@ -343,7 +343,7 @@ export default function SteelImportPage() {
       <Card className="mb-6">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
-            <span className="bg-blue-100 text-blue-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">1</span>
+            <span className="bg-emerald-100 text-emerald-700 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">1</span>
             Select Month & City
           </CardTitle>
         </CardHeader>
@@ -371,7 +371,7 @@ export default function SteelImportPage() {
                       setSaveSuccess(false);
                       setSaveResult(null);
                     }}
-                    className={selectedCity === city ? "bg-blue-600 hover:bg-blue-700" : ""}
+                    className={selectedCity === city ? "bg-emerald-600 hover:bg-emerald-700" : ""}
                   >
                     {city}
                   </Button>
@@ -399,8 +399,8 @@ export default function SteelImportPage() {
         <CardContent>
           {/* TMT Bars Section */}
           <div className="mb-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="font-semibold text-blue-800 mb-3">TMT Bars</h4>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+              <h4 className="font-semibold text-emerald-800 mb-3">TMT Bars</h4>
               <div className="grid grid-cols-5 gap-3 items-end">
                 <div>
                   <Label className="text-xs text-gray-600">10mm F1</Label>
@@ -438,9 +438,9 @@ export default function SteelImportPage() {
                     className="font-mono"
                   />
                 </div>
-                <div className="bg-blue-100 rounded-lg p-2 text-center">
-                  <div className="text-xs text-blue-600">TMT Avg</div>
-                  <div className="text-lg font-bold text-blue-800">
+                <div className="bg-emerald-100 rounded-lg p-2 text-center">
+                  <div className="text-xs text-emerald-600">TMT Avg</div>
+                  <div className="text-lg font-bold text-emerald-800">
                     {tmtCalc.avg > 0 ? tmtCalc.avg.toLocaleString() : "-"}
                   </div>
                 </div>
@@ -632,11 +632,11 @@ export default function SteelImportPage() {
                   <div 
                     key={item.id} 
                     className={`grid grid-cols-12 gap-2 items-center p-2 rounded ${
-                      isCalcItem ? "bg-blue-50 border border-blue-200" : hasData ? "bg-green-50" : "hover:bg-gray-50"
+                      isCalcItem ? "bg-emerald-50 border border-emerald-200" : hasData ? "bg-green-50" : "hover:bg-gray-50"
                     }`}
                   >
                     <div className="col-span-1 text-sm text-gray-400">{item.sno}</div>
-                    <div className={`col-span-4 text-sm ${isCalcItem ? "font-semibold text-blue-700" : ""}`}>
+                    <div className={`col-span-4 text-sm ${isCalcItem ? "font-semibold text-emerald-700" : ""}`}>
                       {item.name}
                     </div>
                     <div className="col-span-2">
@@ -657,12 +657,12 @@ export default function SteelImportPage() {
                         className="h-8 text-sm font-mono"
                       />
                     </div>
-                    <div className="col-span-2 text-sm font-mono text-blue-600 font-semibold">
+                    <div className="col-span-2 text-sm font-mono text-emerald-600 font-semibold">
                       {itemAvg > 0 ? itemAvg.toLocaleString() : "-"}
                     </div>
                     <div className="col-span-1">
                       {isCalcItem ? (
-                        <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">✓</span>
+                        <span className="text-xs px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded">✓</span>
                       ) : (
                         <span className="text-xs text-gray-300">-</span>
                       )}
@@ -675,7 +675,7 @@ export default function SteelImportPage() {
             {/* Legend */}
             <div className="mt-4 pt-3 border-t flex gap-6 text-xs text-gray-500">
               <div className="flex items-center gap-2">
-                <span className="w-4 h-4 bg-blue-50 border border-blue-200 rounded"></span>
+                <span className="w-4 h-4 bg-emerald-50 border border-emerald-200 rounded"></span>
                 <span>Used in PVC Calculation</span>
               </div>
               <div className="flex items-center gap-2">
@@ -702,9 +702,9 @@ export default function SteelImportPage() {
         <CardContent>
           {/* 4 Index Values */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
               <div className="text-sm text-gray-600 mb-1">Steel TMT Bars</div>
-              <div className="text-xl font-bold text-blue-700">
+              <div className="text-xl font-bold text-emerald-700">
                 {tmtCalc.avg > 0 ? `₹${tmtCalc.avg.toLocaleString()}` : "-"}
               </div>
               <div className="text-xs text-gray-400 mt-1">2 items</div>
@@ -723,9 +723,9 @@ export default function SteelImportPage() {
               </div>
               <div className="text-xs text-gray-400 mt-1">2 items</div>
             </div>
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
               <div className="text-sm text-gray-600 mb-1">Steel Other Sections</div>
-              <div className="text-xl font-bold text-purple-700">
+              <div className="text-xl font-bold text-emerald-700">
                 {otherSectionsCalc.avg > 0 ? `₹${otherSectionsCalc.avg.toLocaleString()}` : "-"}
               </div>
               <div className="text-xs text-gray-400 mt-1">= (1 + 2 + 3) ÷ 3</div>

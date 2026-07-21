@@ -131,7 +131,7 @@ export default function AdminReviewRewardsPage() {
                   href={submission.proofUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-3 inline-flex items-center text-sm font-medium text-blue-700 hover:underline"
+                  className="mt-3 inline-flex items-center text-sm font-medium text-emerald-700 hover:underline"
                 >
                   Open proof <ExternalLink className="ml-1 h-3.5 w-3.5" />
                 </a>

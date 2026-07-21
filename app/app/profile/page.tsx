@@ -197,13 +197,13 @@ export default function ProfilePage() {
   const txnIcon = (type: string) => {
     if (type === 'add') return <Plus className="h-4 w-4 text-green-600" />;
     if (type === 'deduct' || type === 'bill_usage') return <Minus className="h-4 w-4 text-red-600" />;
-    if (type === 'refund') return <CheckCircle className="h-4 w-4 text-blue-600" />;
+    if (type === 'refund') return <CheckCircle className="h-4 w-4 text-emerald-600" />;
     return <Activity className="h-4 w-4 text-slate-600" />;
   };
   const txnColor = (type: string) => {
     if (type === 'add') return 'text-green-600 font-semibold';
     if (type === 'deduct' || type === 'bill_usage') return 'text-red-600 font-semibold';
-    if (type === 'refund') return 'text-blue-600 font-semibold';
+    if (type === 'refund') return 'text-emerald-600 font-semibold';
     return 'text-slate-600';
   };
 
@@ -211,7 +211,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-10 w-10 animate-spin text-purple-600" />
+        <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
       </div>
     );
   }
@@ -223,7 +223,7 @@ export default function ProfilePage() {
       <div className="mb-6">
         <BackButton href="/dashboard" className="mb-4" />
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          <User className="h-6 w-6 text-purple-600" />
+          <User className="h-6 w-6 text-emerald-600" />
           Profile & Billing
         </h1>
         <p className="text-slate-500 mt-1 text-sm">
@@ -237,7 +237,7 @@ export default function ProfilePage() {
         <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
           <CardHeader className="bg-slate-50/50 border-b border-slate-100 px-5 py-4">
             <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <User className="h-4 w-4 text-purple-600" />
+              <User className="h-4 w-4 text-emerald-600" />
               Account Information
             </CardTitle>
           </CardHeader>
@@ -277,7 +277,7 @@ export default function ProfilePage() {
                 <CardHeader className="border-b border-inherit px-5 py-4">
                   <CardTitle className="text-sm font-bold flex items-center justify-between">
                     <span className="flex items-center gap-2 text-slate-900">
-                      <FolderOpen className="h-4 w-4 text-purple-600" />
+                      <FolderOpen className="h-4 w-4 text-emerald-600" />
                       Contract Quota
                     </span>
                     {!roQuota.contracts.allowed ? (
@@ -296,7 +296,7 @@ export default function ProfilePage() {
                   {/* Usage bar row */}
                   <div className="flex items-center gap-5">
                     <div className="shrink-0 text-center">
-                      <p className={`text-4xl font-black ${!roQuota.contracts.allowed ? 'text-red-600' : roQuota.contracts.remaining <= 1 ? 'text-amber-600' : 'text-purple-600'}`}>
+                      <p className={`text-4xl font-black ${!roQuota.contracts.allowed ? 'text-red-600' : roQuota.contracts.remaining <= 1 ? 'text-amber-600' : 'text-emerald-600'}`}>
                         {roQuota.contracts.used}
                         {roQuota.contracts.limit > 0 && <span className="text-xl font-medium text-slate-400">/{roQuota.contracts.limit}</span>}
                       </p>
@@ -306,7 +306,7 @@ export default function ProfilePage() {
                       {roQuota.contracts.limit > 0 && (
                         <div className="w-full bg-slate-100 rounded-full h-2.5">
                           <div
-                            className={`h-2.5 rounded-full transition-all ${!roQuota.contracts.allowed ? 'bg-red-500' : roQuota.contracts.remaining <= 1 ? 'bg-amber-500' : 'bg-purple-500'}`}
+                            className={`h-2.5 rounded-full transition-all ${!roQuota.contracts.allowed ? 'bg-red-500' : roQuota.contracts.remaining <= 1 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                             style={{ width: `${Math.min(100, (roQuota.contracts.used / roQuota.contracts.limit) * 100)}%` }}
                           />
                         </div>
@@ -368,13 +368,13 @@ export default function ProfilePage() {
         {/* ── 3. Credit & Billing ────────────────────────────────────── */}
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <CreditCard className="h-5 w-5 text-purple-600" />
+            <CreditCard className="h-5 w-5 text-emerald-600" />
             <h2 className="text-base font-bold text-slate-900">Credit & Billing</h2>
           </div>
 
           {billingLoading ? (
             <div className="flex items-center justify-center py-12 bg-white border border-slate-100 rounded-2xl">
-              <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+              <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
               <span className="ml-3 text-slate-500 text-sm">Loading billing info…</span>
             </div>
           ) : (
@@ -387,11 +387,11 @@ export default function ProfilePage() {
                   <CardHeader className="bg-slate-50/50 border-b border-slate-100 px-4 py-3">
                     <CardTitle className="text-xs font-bold text-slate-900 flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
-                        <CreditCard className="h-4 w-4 text-purple-600" />
+                        <CreditCard className="h-4 w-4 text-emerald-600" />
                         {effectiveBillCost === 0 ? 'Plan' : 'Balance'}
                       </span>
                       {creditBalance && (
-                        <Badge variant="secondary" className="bg-purple-50 text-purple-700 border border-purple-100 text-[9px] rounded-md font-semibold px-1.5 py-0.5">
+                        <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] rounded-md font-semibold px-1.5 py-0.5">
                           {creditBalance.accountInfo.tier}
                         </Badge>
                       )}
@@ -400,10 +400,10 @@ export default function ProfilePage() {
                   <CardContent className="p-4">
                     {effectiveBillCost === 0 ? (
                       <div className="space-y-2">
-                        <div className="p-3 bg-gradient-to-br from-purple-50 to-indigo-50/50 border border-purple-100 rounded-xl">
-                          <span className="text-[10px] font-bold text-purple-500 uppercase tracking-wider block mb-0.5">Active Plan</span>
-                          <span className="text-base font-black text-purple-700">Unlimited Free</span>
-                          <p className="text-[10px] text-purple-600/80 mt-1 leading-relaxed">All PVC bills processed at zero cost.</p>
+                        <div className="p-3 bg-gradient-to-br from-emerald-50 to-emerald-50/50 border border-emerald-100 rounded-xl">
+                          <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider block mb-0.5">Active Plan</span>
+                          <span className="text-base font-black text-emerald-700">Unlimited Free</span>
+                          <p className="text-[10px] text-emerald-600/80 mt-1 leading-relaxed">All PVC bills processed at zero cost.</p>
                         </div>
                         <div className="text-[11px] text-slate-500 space-y-1">
                           <div className="flex justify-between"><span>Next Bill:</span><span className="font-semibold text-green-600">Free (₹0)</span></div>
@@ -440,7 +440,7 @@ export default function ProfilePage() {
                   <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
                     <CardHeader className="bg-slate-50/50 border-b border-slate-100 px-4 py-3">
                       <CardTitle className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                        <IndianRupee className="h-4 w-4 text-purple-600" />
+                        <IndianRupee className="h-4 w-4 text-emerald-600" />
                         Top-Up Credits
                       </CardTitle>
                     </CardHeader>
@@ -448,7 +448,7 @@ export default function ProfilePage() {
                       {razorpayEnabled && (
                         <Button
                           onClick={() => setRazorpayDialogOpen(true)}
-                          className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-9 text-xs font-bold"
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-9 text-xs font-bold"
                         >
                           <CreditCard className="h-3.5 w-3.5 mr-1.5" />
                           Pay via Razorpay
@@ -457,12 +457,12 @@ export default function ProfilePage() {
                       <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1.5">
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Manual Contact</div>
                         <div className="flex items-center gap-1.5 text-slate-800 text-xs font-semibold">
-                          <User className="h-3.5 w-3.5 text-purple-500" />
+                          <User className="h-3.5 w-3.5 text-emerald-500" />
                           Prasath Kumar (Admin)
                         </div>
                         <div className="flex items-center gap-1.5 text-xs">
-                          <Phone className="h-3.5 w-3.5 text-purple-500" />
-                          <a href="tel:+919944776689" className="text-purple-600 font-bold hover:underline">+91 9944776689</a>
+                          <Phone className="h-3.5 w-3.5 text-emerald-500" />
+                          <a href="tel:+919944776689" className="text-emerald-600 font-bold hover:underline">+91 9944776689</a>
                         </div>
                       </div>
                     </CardContent>
@@ -473,7 +473,7 @@ export default function ProfilePage() {
                 <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
                   <CardHeader className="bg-slate-50/50 border-b border-slate-100 px-4 py-3">
                     <CardTitle className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                      <FileText className="h-4 w-4 text-purple-600" />
+                      <FileText className="h-4 w-4 text-emerald-600" />
                       Billing Config
                     </CardTitle>
                   </CardHeader>
@@ -490,7 +490,7 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                         <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center">
                           <span className="text-[10px] font-bold text-slate-400 uppercase">Cost / Bill</span>
-                          <span className="text-xl font-bold text-purple-600">₹{effectiveBillCost.toLocaleString()}</span>
+                          <span className="text-xl font-bold text-emerald-600">₹{effectiveBillCost.toLocaleString()}</span>
                         </div>
                         {billingSettings?.isTrialActive && (
                           <div className="flex justify-between text-[11px]">
@@ -504,11 +504,11 @@ export default function ProfilePage() {
                 </Card>
 
                 {/* Advanced Tools Add-on — hidden for railway officials */}
-                {userData?.role !== 'railway_official' && <Card className="border border-slate-100 shadow-sm bg-gradient-to-br from-white to-indigo-50/20 rounded-2xl overflow-hidden">
-                  <CardHeader className="bg-gradient-to-r from-indigo-50/30 to-purple-50/30 border-b border-slate-100 px-4 py-3">
+                {userData?.role !== 'railway_official' && <Card className="border border-slate-100 shadow-sm bg-gradient-to-br from-white to-emerald-50/20 rounded-2xl overflow-hidden">
+                  <CardHeader className="bg-gradient-to-r from-emerald-50/30 to-emerald-50/30 border-b border-slate-100 px-4 py-3">
                     <CardTitle className="text-xs font-bold text-slate-900 flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
-                        <Activity className="h-4 w-4 text-indigo-600" />
+                        <Activity className="h-4 w-4 text-emerald-600" />
                         Advanced Tools
                       </span>
                       {effectiveBillCost === 0 ? (
@@ -522,26 +522,26 @@ export default function ProfilePage() {
                   </CardHeader>
                   <CardContent className="p-4 space-y-3">
                     <ul className="text-[11px] text-slate-600 space-y-1">
-                      <li className="flex items-center gap-1.5"><span className="text-indigo-600 font-bold">✓</span> PVC Check Tool</li>
-                      <li className="flex items-center gap-1.5"><span className="text-indigo-600 font-bold">✓</span> Class Analyzer</li>
+                      <li className="flex items-center gap-1.5"><span className="text-emerald-600 font-bold">✓</span> PVC Check Tool</li>
+                      <li className="flex items-center gap-1.5"><span className="text-emerald-600 font-bold">✓</span> Class Analyzer</li>
                     </ul>
                     {effectiveBillCost === 0 ? (
                       <p className="text-[11px] text-slate-500">Full access included in your free plan.</p>
                     ) : creditBalance?.subscription?.isActive ? (
                       <p className="text-[11px] text-slate-700 font-medium flex items-center gap-1">
-                        <Calendar className="h-3 w-3 text-indigo-500" />
+                        <Calendar className="h-3 w-3 text-emerald-500" />
                         Expires: {creditBalance.subscription.expiryDate ? fmtDate(creditBalance.subscription.expiryDate) : 'N/A'}
                       </p>
                     ) : (
                       <div className="space-y-2">
                         <div className="flex justify-between text-[11px]">
                           <span className="text-slate-500">Price:</span>
-                          <span className="font-black text-indigo-600">₹99 / month</span>
+                          <span className="font-black text-emerald-600">₹99 / month</span>
                         </div>
                         <Button
                           onClick={handleSubscribeTools}
                           disabled={subscribing || (creditBalance?.balance || 0) < 99}
-                          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl h-8 text-xs font-bold"
+                          className="w-full bg-gradient-to-r from-emerald-600 to-emerald-600 hover:from-emerald-700 hover:to-emerald-700 text-white rounded-xl h-8 text-xs font-bold"
                         >
                           {subscribing ? <><Loader2 className="h-3 w-3 animate-spin mr-1" />Activating…</> : 'Subscribe (₹99)'}
                         </Button>
@@ -565,7 +565,7 @@ export default function ProfilePage() {
                   <CardHeader className="bg-slate-50/50 border-b border-slate-100 px-5 py-4">
                     <CardTitle className="flex items-center justify-between">
                       <span className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <Activity className="h-4 w-4 text-purple-600" />
+                        <Activity className="h-4 w-4 text-emerald-600" />
                         {activeTab === 'transactions' ? 'Credit Transactions' : 'GST Invoices'}
                       </span>
                       {effectiveBillCost > 0 && (
@@ -589,7 +589,7 @@ export default function ProfilePage() {
                     {activeTab === 'transactions' || effectiveBillCost === 0 ? (
                       transactionsLoading ? (
                         <div className="flex items-center justify-center py-10">
-                          <Loader2 className="h-5 w-5 animate-spin text-purple-600" />
+                          <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
                           <span className="ml-2 text-slate-500 text-xs">Loading…</span>
                         </div>
                       ) : transactions.length === 0 ? (
@@ -634,7 +634,7 @@ export default function ProfilePage() {
                     ) : (
                       invoicesLoading ? (
                         <div className="flex items-center justify-center py-10">
-                          <Loader2 className="h-5 w-5 animate-spin text-purple-600" />
+                          <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
                           <span className="ml-2 text-slate-500 text-xs">Loading…</span>
                         </div>
                       ) : gstInvoices.length === 0 ? (
@@ -661,7 +661,7 @@ export default function ProfilePage() {
                               {gstInvoices.map(inv => (
                                 <tr key={inv.id} className="border-b border-slate-50 hover:bg-slate-50/30 transition-colors">
                                   <td className="py-3 px-5">
-                                    <div className="flex items-center gap-1.5"><Receipt className="h-3.5 w-3.5 text-purple-500" /><span className="text-xs font-bold text-purple-600">{inv.invoiceNumber}</span></div>
+                                    <div className="flex items-center gap-1.5"><Receipt className="h-3.5 w-3.5 text-emerald-500" /><span className="text-xs font-bold text-emerald-600">{inv.invoiceNumber}</span></div>
                                   </td>
                                   <td className="py-3 px-5 text-xs text-slate-500">{fmtDate(inv.invoiceDate)}</td>
                                   <td className="py-3 px-5 text-xs text-slate-700">
@@ -679,7 +679,7 @@ export default function ProfilePage() {
                                       <Button size="sm" variant="outline" onClick={() => window.open(`/api/gst-invoices/${inv.id}/pdf`, '_blank')} className="h-7 px-2 border-slate-200 text-slate-600 rounded-lg bg-white hover:bg-slate-50" title="View">
                                         <Eye className="h-3.5 w-3.5" />
                                       </Button>
-                                      <Button size="sm" onClick={() => window.open(`/api/gst-invoices/${inv.id}/pdf`, '_blank')} className="h-7 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg" title="Download">
+                                      <Button size="sm" onClick={() => window.open(`/api/gst-invoices/${inv.id}/pdf`, '_blank')} className="h-7 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg" title="Download">
                                         <Download className="h-3.5 w-3.5" />
                                       </Button>
                                     </div>
@@ -720,7 +720,7 @@ export default function ProfilePage() {
                     </div>
                     <div className="text-xs text-slate-400 mt-2 sm:mt-0 sm:text-right space-y-0.5">
                       <div>{new Date(s.updatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}</div>
-                      {s.updatedByUserEmail && <div className="text-blue-500">{s.updatedByUserEmail}</div>}
+                      {s.updatedByUserEmail && <div className="text-emerald-500">{s.updatedByUserEmail}</div>}
                     </div>
                   </div>
                 ))}

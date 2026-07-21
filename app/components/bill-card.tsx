@@ -169,7 +169,7 @@ export function BillCard({
                   Provisional
                 </Badge>
               ) : (
-                <Badge className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-300">
+                <Badge className="text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-300">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
                   Final
                 </Badge>
@@ -213,7 +213,7 @@ export function BillCard({
               <Building2 className="h-4 w-4 text-gray-500" />
               <Link 
                 href={`/contracts/${bill.contract.id}`}
-                className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                className="font-medium text-emerald-600 hover:text-emerald-700 hover:underline"
               >
                 {bill.contract.agreementNo}
               </Link>
@@ -234,10 +234,10 @@ export function BillCard({
             {/* Creator Information - Visible to Admin and Railway Officials */}
             {canSeeCreator && bill.contract.user && (
               <div className="flex items-center gap-2 text-xs pt-2 border-t border-gray-100">
-                <User className="h-3.5 w-3.5 text-blue-600" />
+                <User className="h-3.5 w-3.5 text-emerald-600" />
                 <span className="text-gray-600">
                   <span className="text-gray-500">Created by: </span>
-                  <span className="font-medium text-blue-600">
+                  <span className="font-medium text-emerald-600">
                     {bill.contract.user.name || bill.contract.user.email}
                   </span>
                 </span>
@@ -279,7 +279,7 @@ export function BillCard({
               <FileText className="h-3 w-3" />
               Bill Amount
             </p>
-            <p className="text-lg font-bold text-blue-600">
+            <p className="text-lg font-bold text-emerald-600">
               ₹{bill.billAmount?.toLocaleString('en-IN', { maximumFractionDigits: 0 }) || '0'}
             </p>
           </div>
@@ -319,7 +319,7 @@ export function BillCard({
                     <Calculator className="h-3 w-3" />
                     Cumulative PVC
                   </p>
-                  <p className="text-lg font-bold text-purple-600">
+                  <p className="text-lg font-bold text-emerald-600">
                     ₹{bill.pvcCalculation.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                   </p>
                 </div>
@@ -418,9 +418,9 @@ export function BillCard({
               
               {/* Dedicated Steel */}
               {bill.pvcCalculation.dedicatedSteelPvc != null && bill.pvcCalculation.dedicatedSteelPvc !== 0 && (
-                <div className="flex justify-between items-center p-2 bg-blue-50 rounded border border-blue-200">
+                <div className="flex justify-between items-center p-2 bg-emerald-50 rounded border border-emerald-200">
                   <span className="text-gray-600 font-medium">Dedicated Steel:</span>
-                  <span className={`font-semibold ${bill.pvcCalculation.dedicatedSteelPvc < 0 ? 'text-red-600' : 'text-blue-700'}`}>
+                  <span className={`font-semibold ${bill.pvcCalculation.dedicatedSteelPvc < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
                     ₹{bill.pvcCalculation.dedicatedSteelPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                   </span>
                 </div>

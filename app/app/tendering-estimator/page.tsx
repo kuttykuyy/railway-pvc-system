@@ -49,12 +49,12 @@ const PRESETS: Record<string, { label: string; coefficients: CoefficientSet }> =
 };
 
 const COEFF_COLORS: Record<string, string> = {
-  labor: '#6366f1', cement: '#3b82f6', steel: '#10b981',
-  fuel: '#f59e0b', materials: '#ec4899', machinery: '#8b5cf6',
+  labor: '#10b981', cement: '#10b981', steel: '#10b981',
+  fuel: '#f59e0b', materials: '#ec4899', machinery: '#10b981',
   explosives: '#ef4444', fixed: '#94a3b8',
 };
 
-const COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#64748b'];
+const COLORS = ['#10b981', '#10b981', '#10b981', '#f59e0b', '#ec4899', '#10b981', '#64748b'];
 
 const STEEL_TYPES = [
   { value: 'TMT',            label: 'TMT Bars' },
@@ -210,7 +210,7 @@ export default function TenderingEstimatorPage() {
   };
 
   if (status === 'loading') {
-    return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="h-8 w-8 animate-spin text-indigo-500" /></div>;
+    return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="h-8 w-8 animate-spin text-emerald-500" /></div>;
   }
 
   const chartData = forecastResult?.scenarios.baseline.quarterBreakdown.map((q: any, idx: number) => ({
@@ -243,7 +243,7 @@ export default function TenderingEstimatorPage() {
               <p className="text-[11px] text-slate-400 hidden sm:block">Forecast price escalation payouts before you bid</p>
             </div>
           </div>
-          <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-full">
+          <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">
             <Sparkles className="h-3 w-3" /> Premium Feature
           </span>
         </div>
@@ -263,7 +263,7 @@ export default function TenderingEstimatorPage() {
                     className={`flex items-center gap-2 ${s.n < step ? 'cursor-pointer' : 'cursor-default'}`}
                   >
                     <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                      step === s.n ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' :
+                      step === s.n ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200' :
                       step > s.n  ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
                     }`}>
                       {step > s.n ? <CheckCircle2 className="h-4 w-4" /> : s.n}
@@ -289,7 +289,7 @@ export default function TenderingEstimatorPage() {
                     placeholder="e.g. Doubling Works — Trichy Division"
                     value={tenderTitle}
                     onChange={e => setTenderTitle(e.target.value)}
-                    className="h-10 border-slate-200 focus:ring-indigo-500"
+                    className="h-10 border-slate-200 focus:ring-emerald-500"
                   />
                 </div>
 
@@ -347,7 +347,7 @@ export default function TenderingEstimatorPage() {
                         key={s.value}
                         className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer transition-all text-sm font-medium select-none ${
                           selectedSteelTypes.includes(s.value)
-                            ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+                            ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
                             : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                         }`}
                       >
@@ -368,7 +368,7 @@ export default function TenderingEstimatorPage() {
 
                 <Button
                   onClick={() => setStep(2)}
-                  className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl"
+                  className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl"
                 >
                   Next: Set PVC Coefficients
                   <ChevronRight className="h-4 w-4 ml-1" />
@@ -486,7 +486,7 @@ export default function TenderingEstimatorPage() {
                   <Button
                     onClick={handleCalculate}
                     disabled={loading || coefficientSum !== 100}
-                    className="flex-[2] h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl"
+                    className="flex-[2] h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl"
                   >
                     {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Calculating...</> : 'Calculate Forecast'}
                   </Button>
@@ -524,15 +524,15 @@ export default function TenderingEstimatorPage() {
                   label: 'Recommended Loading',
                   value: `+${forecastResult.biddingIntelligence.recommendedLoadingPercent}%`,
                   sub: 'Markup to hedge fixed-cost inflation',
-                  color: 'text-indigo-600',
-                  bg: 'bg-indigo-50',
+                  color: 'text-emerald-600',
+                  bg: 'bg-emerald-50',
                 },
                 {
                   label: 'Projected PVC Payout',
                   value: formatCr(forecastResult.scenarios.baseline.totalPvc),
                   sub: 'Baseline escalation recovery',
-                  color: 'text-blue-600',
-                  bg: 'bg-blue-50',
+                  color: 'text-emerald-600',
+                  bg: 'bg-emerald-50',
                 },
                 {
                   label: 'Cost Inflation',
@@ -559,13 +559,13 @@ export default function TenderingEstimatorPage() {
 
             {/* Recommendation strip */}
             <div className="bg-white border border-slate-200 rounded-2xl p-5 flex items-start gap-4">
-              <div className="p-2.5 bg-indigo-100 rounded-xl shrink-0">
-                <Sparkles className="h-5 w-5 text-indigo-600" />
+              <div className="p-2.5 bg-emerald-100 rounded-xl shrink-0">
+                <Sparkles className="h-5 w-5 text-emerald-600" />
               </div>
               <p className="text-sm text-slate-700 leading-relaxed">
                 Raw price inflation is projected to cost <strong className="text-slate-900">₹{forecastResult.biddingIntelligence.totalProjectedCostInflation.toLocaleString()}</strong> over {duration} months.
                 GCC escalation compensates <strong className="text-slate-900">₹{forecastResult.scenarios.baseline.totalPvc.toLocaleString()}</strong>.
-                To protect your margin, <strong className="text-indigo-700">load your base quote by +{forecastResult.biddingIntelligence.recommendedLoadingPercent}%</strong>.
+                To protect your margin, <strong className="text-emerald-700">load your base quote by +{forecastResult.biddingIntelligence.recommendedLoadingPercent}%</strong>.
               </p>
             </div>
 
@@ -573,8 +573,8 @@ export default function TenderingEstimatorPage() {
             <div className="bg-white border border-slate-200 rounded-2xl p-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-violet-100 rounded-xl shrink-0">
-                    <BrainCircuit className="h-5 w-5 text-violet-600" />
+                  <div className="p-2.5 bg-emerald-100 rounded-xl shrink-0">
+                    <BrainCircuit className="h-5 w-5 text-emerald-600" />
                   </div>
                   <div>
                     <h3 className="font-bold text-slate-800 text-sm">AI Market Intelligence</h3>
@@ -593,7 +593,7 @@ export default function TenderingEstimatorPage() {
                 <Button
                   onClick={handleGenerateAiInsights}
                   disabled={aiLoading}
-                  className="shrink-0 bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-xl px-5 h-10"
+                  className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl px-5 h-10"
                 >
                   {aiLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analysing...</>
                     : aiInsights ? <><RefreshCw className="h-4 w-4 mr-2" />Regenerate</>
@@ -612,7 +612,7 @@ export default function TenderingEstimatorPage() {
                   {/* Market Outlook */}
                   <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                      <Activity className="h-3.5 w-3.5 text-indigo-500" /> Market Outlook
+                      <Activity className="h-3.5 w-3.5 text-emerald-500" /> Market Outlook
                     </p>
                     <p className="text-sm text-slate-700 leading-relaxed">{aiInsights.marketOutlook}</p>
                   </div>
@@ -620,14 +620,14 @@ export default function TenderingEstimatorPage() {
                   <div className="grid sm:grid-cols-2 gap-4">
                     {/* Key Findings */}
                     {aiInsights.keyFindings?.length > 0 && (
-                      <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-                        <p className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                        <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                           <Target className="h-3.5 w-3.5" /> Key Findings
                         </p>
                         <ul className="space-y-2">
                           {aiInsights.keyFindings.map((f: string, i: number) => (
                             <li key={i} className="flex items-start gap-2 text-xs text-slate-700">
-                              <CheckCircle2 className="h-3.5 w-3.5 text-blue-400 shrink-0 mt-0.5" /> {f}
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" /> {f}
                             </li>
                           ))}
                         </ul>
@@ -692,7 +692,7 @@ export default function TenderingEstimatorPage() {
                           <div key={i} className="bg-white rounded-lg border border-slate-200 p-3">
                             <p className="text-[11px] font-black text-slate-600 uppercase">{c.component}</p>
                             <p className="text-xs text-slate-600 mt-0.5">{c.insight}</p>
-                            {c.action && <p className="text-xs text-indigo-600 font-semibold mt-1.5 flex items-center gap-1"><ArrowRight className="h-3 w-3" />{c.action}</p>}
+                            {c.action && <p className="text-xs text-emerald-600 font-semibold mt-1.5 flex items-center gap-1"><ArrowRight className="h-3 w-3" />{c.action}</p>}
                           </div>
                         ))}
                       </div>

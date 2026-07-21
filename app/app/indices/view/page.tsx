@@ -225,11 +225,11 @@ export default function IndicesViewPage() {
         {/* Tabs */}
         <div className="flex border border-gray-200 rounded-lg overflow-hidden">
           <button onClick={() => setTab('sheet')}
-            className={`px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'sheet' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+            className={`px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'sheet' ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
             Data Sheet
           </button>
           <button onClick={() => setTab('glossary')}
-            className={`px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'glossary' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+            className={`px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'glossary' ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
             Glossary
           </button>
         </div>
@@ -247,7 +247,7 @@ export default function IndicesViewPage() {
             <span className="text-xs text-gray-400 px-1 font-medium">Steel:</span>
             {STEEL_CITIES.map(c => (
               <button key={c} onClick={() => setSteelCity(c)}
-                className={`px-2 py-1 text-xs rounded font-medium transition-colors ${steelCity === c ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+                className={`px-2 py-1 text-xs rounded font-medium transition-colors ${steelCity === c ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
                 {c === 'Default' ? 'Chennai*' : c}
               </button>
             ))}
@@ -269,7 +269,7 @@ export default function IndicesViewPage() {
                       <div className="text-gray-400 font-normal text-[10px]">{c.sub}</div>
                     </th>
                   ))}
-                  <th colSpan={4} className="px-3 py-2 text-center font-semibold text-blue-600 bg-blue-50/50 border-l border-blue-100 whitespace-nowrap">
+                  <th colSpan={4} className="px-3 py-2 text-center font-semibold text-emerald-600 bg-emerald-50/50 border-l border-emerald-100 whitespace-nowrap">
                     Steel (JPC) — {steelCity === 'Default' ? 'Chennai' : steelCity} · ₹/MT
                   </th>
                 </tr>
@@ -277,7 +277,7 @@ export default function IndicesViewPage() {
                   <th className="sticky left-0 bg-gray-50 z-20 border-r border-gray-200" />
                   {NON_STEEL.map(() => <th key={Math.random()} />)}
                   {(STEEL_BY_CITY[steelCity] || STEEL_BY_CITY.Default).map(c => (
-                    <th key={c.key} className="px-3 py-1.5 text-center text-[10px] font-semibold text-blue-500 bg-blue-50/30 border-l border-blue-50">
+                    <th key={c.key} className="px-3 py-1.5 text-center text-[10px] font-semibold text-emerald-500 bg-emerald-50/30 border-l border-emerald-50">
                       {c.label}
                     </th>
                   ))}
@@ -299,7 +299,7 @@ export default function IndicesViewPage() {
                         const clickable = isSteel && n != null && sd;
                         return (
                           <td key={col.key}
-                            className={`px-3 py-2.5 text-center font-mono ${i >= NON_STEEL.length ? 'bg-blue-50/20 border-l border-blue-50' : ''} ${prov ? 'text-amber-600 italic' : 'text-gray-700'} ${clickable ? 'cursor-pointer hover:bg-blue-100/50' : ''}`}
+                            className={`px-3 py-2.5 text-center font-mono ${i >= NON_STEEL.length ? 'bg-emerald-50/20 border-l border-emerald-50' : ''} ${prov ? 'text-amber-600 italic' : 'text-gray-700'} ${clickable ? 'cursor-pointer hover:bg-emerald-100/50' : ''}`}
                             title={clickable ? (!subscriptionActive ? '🔒 Click for JPC breakdown' : 'Click for JPC breakdown') : formula(cv) ? `Formula: ${formula(cv)}` : undefined}
                             onClick={clickable ? () => {
                               if (!subscriptionActive) {
@@ -327,7 +327,7 @@ export default function IndicesViewPage() {
           <div className="px-4 py-2 border-t border-gray-100 flex items-center gap-1.5 text-xs text-gray-400">
             <Info className="h-3 w-3 text-amber-500 flex-shrink-0" />
             Faded rows = no data uploaded. <span className="bg-amber-100 text-amber-700 px-1 rounded font-bold">P</span> = provisional. Click highlighted steel cells for JPC formula breakdown.
-            <span className="ml-1 text-blue-500">*Default = Chennai rates</span>
+            <span className="ml-1 text-emerald-500">*Default = Chennai rates</span>
           </div>
         </div>
       )}
@@ -338,7 +338,7 @@ export default function IndicesViewPage() {
           {GLOSSARY.map(({ icon: Icon, title, sub, lines }) => (
             <div key={title} className="bg-white border border-gray-200 rounded-lg p-5">
               <div className="flex items-center gap-2 mb-1">
-                <Icon className="h-4 w-4 text-blue-500" />
+                <Icon className="h-4 w-4 text-emerald-500" />
                 <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
               </div>
               <p className="text-xs text-gray-400 mb-3">{sub}</p>
@@ -360,12 +360,12 @@ export default function IndicesViewPage() {
               <div>
                 <h2 className="font-semibold text-gray-900">JPC Steel Rate Details</h2>
                 <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                  <MapPin className="h-3 w-3 text-blue-500" />
+                  <MapPin className="h-3 w-3 text-emerald-500" />
                   {detail.city} · {detail.colName} · {detail.month} {year}
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-xl font-bold text-blue-600 font-mono">₹{Math.round(detail.value).toLocaleString('en-IN')}</p>
+                <p className="text-xl font-bold text-emerald-600 font-mono">₹{Math.round(detail.value).toLocaleString('en-IN')}</p>
                 <p className="text-xs text-gray-400">Avg Rate / MT</p>
               </div>
             </div>
@@ -377,7 +377,7 @@ export default function IndicesViewPage() {
                       <th className="text-left px-3 py-2 font-semibold text-gray-600">Item</th>
                       <th className="text-center px-3 py-2 font-semibold text-gray-600">F1</th>
                       <th className="text-center px-3 py-2 font-semibold text-gray-600">F2</th>
-                      <th className="text-center px-3 py-2 font-semibold text-blue-600">Avg</th>
+                      <th className="text-center px-3 py-2 font-semibold text-emerald-600">Avg</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 font-mono">
@@ -386,7 +386,7 @@ export default function IndicesViewPage() {
                         <td className="px-3 py-2 font-sans text-gray-700">{item.name}</td>
                         <td className="px-3 py-2 text-center text-gray-600">{item.f1 != null ? `₹${Math.round(item.f1).toLocaleString('en-IN')}` : '—'}</td>
                         <td className="px-3 py-2 text-center text-gray-600">{item.f2 != null ? `₹${Math.round(item.f2).toLocaleString('en-IN')}` : '—'}</td>
-                        <td className="px-3 py-2 text-center text-blue-600 font-bold">{item.avg != null ? `₹${Math.round(item.avg).toLocaleString('en-IN')}` : '—'}</td>
+                        <td className="px-3 py-2 text-center text-emerald-600 font-bold">{item.avg != null ? `₹${Math.round(item.avg).toLocaleString('en-IN')}` : '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -395,7 +395,7 @@ export default function IndicesViewPage() {
                 <p className="text-xs text-gray-400 text-center py-4">No sub-item breakdown available.</p>
               )}
               {detail.detail.formulaDesc && (
-                <div className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-3">
+                <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg p-3">
                   <Info className="h-3.5 w-3.5 inline mr-1" />{detail.detail.formulaDesc}
                 </div>
               )}

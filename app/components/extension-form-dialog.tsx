@@ -130,7 +130,7 @@ export function ExtensionFormDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CalendarClock className="h-5 w-5 text-blue-600" />
+            <CalendarClock className="h-5 w-5 text-emerald-600" />
             Add Contract Extension
           </DialogTitle>
           <DialogDescription>

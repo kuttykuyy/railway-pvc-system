@@ -277,11 +277,11 @@ export default function Navigation() {
           {/* Brand */}
           <Link href="/contracts" className="flex items-center space-x-2 sm:space-x-3 group">
             <div className="flex flex-col">
-              <span className="text-lg sm:text-xl font-bold text-blue-600 hidden sm:block leading-tight tracking-tight">
+              <span className="text-lg sm:text-xl font-bold text-emerald-600 hidden sm:block leading-tight tracking-tight">
                 IR-PVC
               </span>
 
-              <span className="text-sm font-bold text-blue-600 block sm:hidden">
+              <span className="text-sm font-bold text-emerald-600 block sm:hidden">
                 IR-PVC
               </span>
             </div>
@@ -303,7 +303,7 @@ export default function Navigation() {
                       size="sm"
                       className={cn(
                         "flex items-center space-x-2 text-gray-700 hover:bg-gray-100 transition-all duration-200",
-                        isActive && "bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold"
+                        isActive && "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold"
                       )}
                     >
                       <Link href={item.href}>
@@ -327,7 +327,7 @@ export default function Navigation() {
                           size="sm"
                           className={cn(
                             "flex items-center space-x-2 text-gray-700 hover:bg-gray-100 transition-all duration-200",
-                            groupActive && "bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold"
+                            groupActive && "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold"
                           )}
                         >
                           <GroupIcon className="h-4 w-4" />
@@ -345,7 +345,7 @@ export default function Navigation() {
                                 href={item.href}
                                 className={cn(
                                   "flex items-center space-x-2 w-full px-2 py-2 cursor-pointer",
-                                  isActive && "bg-blue-50 text-blue-700 font-medium"
+                                  isActive && "bg-emerald-50 text-emerald-700 font-medium"
                                 )}
                               >
                                 <ItemIcon className="h-4 w-4" />
@@ -411,7 +411,7 @@ export default function Navigation() {
                         "shadow-sm",
                         hasInsufficientBalance
                           ? "bg-red-500 text-white hover:bg-red-600 animate-pulse"
-                          : "bg-blue-600 text-white hover:bg-blue-700"
+                          : "bg-emerald-600 text-white hover:bg-emerald-700"
                       )}
                     >
                       <Plus className="h-4 w-4 mr-1" />
@@ -434,7 +434,7 @@ export default function Navigation() {
                       onClick={() => setLanguage('en')}
                       className={cn(
                         "cursor-pointer font-medium text-xs",
-                        language === 'en' && "bg-blue-50 text-blue-700 font-semibold"
+                        language === 'en' && "bg-emerald-50 text-emerald-700 font-semibold"
                       )}
                     >
                       English
@@ -443,7 +443,7 @@ export default function Navigation() {
                       onClick={() => setLanguage('hi')}
                       className={cn(
                         "cursor-pointer font-medium text-xs",
-                        language === 'hi' && "bg-blue-50 text-blue-700 font-semibold"
+                        language === 'hi' && "bg-emerald-50 text-emerald-700 font-semibold"
                       )}
                     >
                       हिन्दी
@@ -496,7 +496,7 @@ export default function Navigation() {
                 <Button asChild variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-100">
                   <Link href="/auth/signin">Sign In</Link>
                 </Button>
-                <Button asChild size="sm" className="bg-blue-600 text-white hover:bg-blue-700">
+                <Button asChild size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700">
                   <Link href="/auth/signup">Sign Up</Link>
                 </Button>
               </div>
@@ -583,7 +583,7 @@ export default function Navigation() {
                           "w-full shadow-sm",
                           hasInsufficientBalance
                             ? "bg-red-500 text-white hover:bg-red-600 animate-pulse"
-                            : "bg-blue-600 text-white hover:bg-blue-700"
+                            : "bg-emerald-600 text-white hover:bg-emerald-700"
                         )}
                       >
                         <Plus className="h-4 w-4 mr-2" />
@@ -606,7 +606,7 @@ export default function Navigation() {
                             size="sm"
                             className={cn(
                               "w-full justify-start flex items-center space-x-2 text-gray-700 hover:bg-gray-100",
-                              isActive && "bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold"
+                              isActive && "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold"
                             )}
                             onClick={() => setIsOpen(false)}
                           >
@@ -643,7 +643,7 @@ export default function Navigation() {
                               size="sm"
                               className={cn(
                                 "w-full justify-start flex items-center space-x-2 ml-4 text-gray-700 hover:bg-gray-100",
-                                isActive && "bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold"
+                                isActive && "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold"
                               )}
                               onClick={() => setIsOpen(false)}
                             >
@@ -701,7 +701,7 @@ export default function Navigation() {
                   <Button asChild variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-100" onClick={() => setIsOpen(false)}>
                     <Link href="/auth/signin">Sign In</Link>
                   </Button>
-                  <Button asChild size="sm" className="bg-blue-600 text-white hover:bg-blue-700" onClick={() => setIsOpen(false)}>
+                  <Button asChild size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setIsOpen(false)}>
                     <Link href="/auth/signup">Sign Up</Link>
                   </Button>
                 </div>

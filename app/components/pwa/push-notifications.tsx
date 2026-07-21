@@ -144,11 +144,11 @@ export default function PushNotifications() {
 
   return (
     <div className="fixed top-4 right-4 z-50 max-w-sm">
-      <Card className="shadow-lg border-blue-200">
+      <Card className="shadow-lg border-emerald-200">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
             <div className="flex items-center space-x-2">
-              <Bell className="h-5 w-5 text-blue-600" />
+              <Bell className="h-5 w-5 text-emerald-600" />
               <CardTitle className="text-base">Stay Updated</CardTitle>
             </div>
             <Button

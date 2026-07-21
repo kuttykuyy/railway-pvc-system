@@ -68,7 +68,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-blue-50 to-cyan-50 flex flex-col w-full overflow-x-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-emerald-50 to-emerald-50 flex flex-col w-full overflow-x-hidden">
       {/* Desktop Navigation */}
       <div className="hidden lg:block">
         <Navigation />

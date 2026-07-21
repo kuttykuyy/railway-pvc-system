@@ -54,7 +54,7 @@ interface AnalyticsData {
   }>;
 }
 
-const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1', '#f97316', '#14b8a6', '#d946ef'];
+const COLORS = ['#10b981', '#10b981', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#10b981', '#f97316', '#14b8a6', '#d946ef'];
 
 interface ActivationData {
   total: number;
@@ -103,7 +103,7 @@ export default function AnalyticsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
       </div>
     );
   }
@@ -181,7 +181,7 @@ export default function AnalyticsPage() {
 
       {/* Activation Funnel — where new users get stuck */}
       {activation && (
-        <Card className="border-indigo-200">
+        <Card className="border-emerald-200">
           <CardHeader>
             <CardTitle>New-User Activation</CardTitle>
             <CardDescription>
@@ -303,7 +303,7 @@ export default function AnalyticsPage() {
                   <div key={contract.contractId} className="flex items-center justify-between pb-3 border-b last:border-0">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm font-semibold">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-sm font-semibold">
                           {idx + 1}
                         </div>
                         <div>
@@ -337,7 +337,7 @@ export default function AnalyticsPage() {
                   <div key={user.userId} className="flex items-center justify-between pb-3 border-b last:border-0">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 text-purple-600 text-sm font-semibold">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-sm font-semibold">
                           {idx + 1}
                         </div>
                         <div className="min-w-0">
@@ -348,7 +348,7 @@ export default function AnalyticsPage() {
                     </div>
                     <div className="text-right ml-2">
                       <p className="font-semibold text-sm">{user.checkCount}x</p>
-                      <p className="text-xs text-blue-600">₹{user.totalSpent.toLocaleString('en-IN')}</p>
+                      <p className="text-xs text-emerald-600">₹{user.totalSpent.toLocaleString('en-IN')}</p>
                     </div>
                   </div>
                 ))

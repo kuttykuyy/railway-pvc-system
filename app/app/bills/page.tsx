@@ -1053,7 +1053,7 @@ export default function BillsPage() {
         {/* Header skeleton */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-slate-100 p-6 rounded-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-purple-100" />
+            <div className="w-11 h-11 rounded-xl bg-emerald-100" />
             <div className="space-y-2">
               <div className="h-7 w-40 bg-slate-200 rounded-lg" />
               <div className="h-4 w-64 bg-slate-100 rounded-md" />
@@ -1061,7 +1061,7 @@ export default function BillsPage() {
           </div>
           <div className="flex gap-3">
             <div className="h-11 w-28 bg-slate-100 rounded-xl" />
-            <div className="h-11 w-28 bg-purple-100 rounded-xl" />
+            <div className="h-11 w-28 bg-emerald-100 rounded-xl" />
           </div>
         </div>
 
@@ -1094,7 +1094,7 @@ export default function BillsPage() {
               <div className="w-4 h-4 bg-slate-100 rounded" />
               <div className="h-4 w-24 bg-slate-100 rounded-md" />
               <div className="h-4 w-36 bg-slate-100 rounded-md" />
-              <div className="h-5 w-16 bg-purple-100 rounded-full" />
+              <div className="h-5 w-16 bg-emerald-100 rounded-full" />
               <div className="h-4 w-20 bg-slate-100 rounded-md" />
               <div className="h-4 w-20 bg-slate-100 rounded-md" />
               <div className="h-5 w-14 bg-emerald-100 rounded-full" />
@@ -1119,7 +1119,7 @@ export default function BillsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-slate-100 p-6 rounded-2xl shadow-sm">
         <div className="space-y-1">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
-            <div className="bg-purple-50 p-2 rounded-xl text-purple-600">
+            <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600">
               <FileText className="h-7 w-7" />
             </div>
             Bill Processing
@@ -1140,7 +1140,7 @@ export default function BillsPage() {
             </div>
           )}
           {canCreateBulkBills() ? (
-            <Button asChild variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50 font-semibold rounded-xl w-full sm:w-auto" size="lg">
+            <Button asChild variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-semibold rounded-xl w-full sm:w-auto" size="lg">
               <Link href="/bills/bulk-new">
                 <Plus className="h-5 w-5 mr-2" />
                 Bulk Bills
@@ -1153,7 +1153,7 @@ export default function BillsPage() {
             </Button>
           )}
           {canCreateSingleBill() ? (
-            <Button asChild className="bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-md shadow-purple-500/10 rounded-xl w-full sm:w-auto" size="lg">
+            <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md shadow-emerald-500/10 rounded-xl w-full sm:w-auto" size="lg">
               <Link href="/bills/new">
                 <Plus className="h-5 w-5 mr-2" />
                 New Bill
@@ -1363,7 +1363,7 @@ export default function BillsPage() {
                 <button
                   type="button"
                   onClick={() => setViewMode('grid')}
-                  className={`flex-grow flex items-center justify-center gap-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'grid' ? 'bg-white text-purple-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-800'}`}
+                  className={`flex-grow flex items-center justify-center gap-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'grid' ? 'bg-white text-emerald-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-800'}`}
                 >
                   <Grid3X3 className="h-3.5 w-3.5" />
                   Grid
@@ -1371,7 +1371,7 @@ export default function BillsPage() {
                 <button
                   type="button"
                   onClick={() => setViewMode('table')}
-                  className={`flex-grow flex items-center justify-center gap-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'table' ? 'bg-white text-purple-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-800'}`}
+                  className={`flex-grow flex items-center justify-center gap-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'table' ? 'bg-white text-emerald-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-800'}`}
                 >
                   <List className="h-3.5 w-3.5" />
                   Table
@@ -1402,13 +1402,13 @@ export default function BillsPage() {
       {/* Single vs Bulk bill tabs — always visible */}
       <Tabs value={billTypeFilter === 'approvals' ? 'all' : billTypeFilter} onValueChange={(val) => setBillTypeFilter(val as 'all' | 'single' | 'bulk')} className="w-full">
         <TabsList className="grid w-full grid-cols-3 h-12 bg-slate-100/80 border border-slate-200/50 p-1 rounded-xl">
-          <TabsTrigger value="all" className="data-[state=active]:bg-white data-[state=active]:text-purple-600 data-[state=active]:shadow-sm font-semibold text-sm text-slate-500 hover:text-slate-800 rounded-lg">
+          <TabsTrigger value="all" className="data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm font-semibold text-sm text-slate-500 hover:text-slate-800 rounded-lg">
             All Bills
           </TabsTrigger>
-          <TabsTrigger value="single" className="data-[state=active]:bg-white data-[state=active]:text-purple-600 data-[state=active]:shadow-sm font-semibold text-sm text-slate-500 hover:text-slate-800 rounded-lg gap-2">
+          <TabsTrigger value="single" className="data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm font-semibold text-sm text-slate-500 hover:text-slate-800 rounded-lg gap-2">
             <FileText className="h-4 w-4" /> Single Bills
           </TabsTrigger>
-          <TabsTrigger value="bulk" className="data-[state=active]:bg-white data-[state=active]:text-purple-600 data-[state=active]:shadow-sm font-semibold text-sm text-slate-500 hover:text-slate-800 rounded-lg gap-2">
+          <TabsTrigger value="bulk" className="data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm font-semibold text-sm text-slate-500 hover:text-slate-800 rounded-lg gap-2">
             <Layers className="h-4 w-4" /> Bulk Bills
           </TabsTrigger>
         </TabsList>
@@ -1423,7 +1423,7 @@ export default function BillsPage() {
               <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Bills</p>
               <p className="text-xl sm:text-2xl font-bold text-slate-900">{filteredBills.length}</p>
             </div>
-            <div className="bg-purple-50 p-2.5 sm:p-3 rounded-2xl text-purple-600 flex-shrink-0">
+            <div className="bg-emerald-50 p-2.5 sm:p-3 rounded-2xl text-emerald-600 flex-shrink-0">
               <FileText className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
           </CardContent>
@@ -1434,9 +1434,9 @@ export default function BillsPage() {
           <CardContent className="p-4 sm:p-5 flex items-center justify-between">
             <div className="space-y-1">
               <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider">Bill Amount</p>
-              <p className="text-xl sm:text-2xl font-bold text-blue-600">₹{(totalBillAmount / 1000).toFixed(0)}K</p>
+              <p className="text-xl sm:text-2xl font-bold text-emerald-600">₹{(totalBillAmount / 1000).toFixed(0)}K</p>
             </div>
-            <div className="bg-blue-50 p-2.5 sm:p-3 rounded-2xl text-blue-600 flex-shrink-0">
+            <div className="bg-emerald-50 p-2.5 sm:p-3 rounded-2xl text-emerald-600 flex-shrink-0">
               <Calculator className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
           </CardContent>
@@ -1499,7 +1499,7 @@ export default function BillsPage() {
       {selectedBills.length > 0 && (
         <div className="border border-slate-200 bg-slate-50 p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-sm">
+            <div className="bg-emerald-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-sm">
               {selectedBills.length} Selected
             </div>
             <Button 
@@ -1574,7 +1574,7 @@ export default function BillsPage() {
             <p className="text-slate-500 text-center mb-8 max-w-sm mx-auto">
               Start processing your first running account bill to see PVC calculations.
             </p>
-            <Button asChild size="lg" className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl">
+            <Button asChild size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
               <Link href="/bills/new">
                 <Plus className="h-5 w-5 mr-2" />
                 Process First Bill
@@ -1648,7 +1648,7 @@ export default function BillsPage() {
                     if (group.type === 'single') {
                       const bill = group.bills[0];
                       return [(
-                    <tr key={bill.id} className={`hover:bg-gray-50 ${selectedBills.includes(bill.id) ? 'bg-purple-50' : groupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
+                    <tr key={bill.id} className={`hover:bg-gray-50 ${selectedBills.includes(bill.id) ? 'bg-emerald-50' : groupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
                       <td className="px-4 py-3">
                         <Checkbox
                           checked={selectedBills.includes(bill.id)}
@@ -1696,7 +1696,7 @@ export default function BillsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <div className="font-medium text-blue-600" suppressHydrationWarning>
+                        <div className="font-medium text-emerald-600" suppressHydrationWarning>
                           ₹{bill.billAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                         </div>
                       </td>
@@ -1734,7 +1734,7 @@ export default function BillsPage() {
                                 <span className="text-xs font-medium text-green-600">FREE</span>
                               </div>
                             ) : (
-                              <span className="text-xs font-medium text-purple-600">
+                              <span className="text-xs font-medium text-emerald-600">
                                 ₹{bill.billTransaction.amount.toLocaleString('en-IN')}
                               </span>
                             )}
@@ -1764,7 +1764,7 @@ export default function BillsPage() {
                               disabled={recalculating === bill.id}
                               variant="ghost"
                               size="sm"
-                              className="h-6 w-6 p-0 text-purple-600 hover:text-purple-700"
+                              className="h-6 w-6 p-0 text-emerald-600 hover:text-emerald-700"
                               title="Recalculate PVC"
                             >
                               {recalculating === bill.id ? (
@@ -1795,7 +1795,7 @@ export default function BillsPage() {
                               <DropdownMenuItem asChild>
                                 <Link 
                                   href={`/bills/${bill.id}`}
-                                  className="flex items-center gap-2 cursor-pointer text-purple-600 focus:text-purple-700 focus:bg-purple-50"
+                                  className="flex items-center gap-2 cursor-pointer text-emerald-600 focus:text-emerald-700 focus:bg-emerald-50"
                                 >
                                   <Eye className="h-4 w-4" />
                                   <span>View Details</span>
@@ -1820,7 +1820,7 @@ export default function BillsPage() {
                               {/* Export Section */}
                               <DropdownMenuItem 
                                 onClick={() => openTemplateDialog(bill.id, bill.billNo)}
-                                className="flex items-center gap-2 cursor-pointer text-blue-600 focus:text-blue-700 focus:bg-blue-50"
+                                className="flex items-center gap-2 cursor-pointer text-emerald-600 focus:text-emerald-700 focus:bg-emerald-50"
                               >
                                 <Download className="h-4 w-4" />
                                 <span>PDF</span>
@@ -1836,7 +1836,7 @@ export default function BillsPage() {
                               
                               <DropdownMenuItem 
                                 onClick={() => downloadCoveringLetter(bill.id, bill.billNo, bill.contract)}
-                                className="flex items-center gap-2 cursor-pointer text-indigo-600 focus:text-indigo-700 focus:bg-indigo-50"
+                                className="flex items-center gap-2 cursor-pointer text-emerald-600 focus:text-emerald-700 focus:bg-emerald-50"
                               >
                                 <Send className="h-4 w-4" />
                                 <span>Covering Letter</span>
@@ -1883,7 +1883,7 @@ export default function BillsPage() {
                       // Batch group - render a single row with batch info
                       const batchId = group.batchId!;
                       return [(
-                    <tr key={`batch-${batchId}`} className="bg-purple-50 hover:bg-purple-100" onClick={() => toggleBatchExpansion(batchId)} style={{cursor: 'pointer'}}>
+                    <tr key={`batch-${batchId}`} className="bg-emerald-50 hover:bg-emerald-100" onClick={() => toggleBatchExpansion(batchId)} style={{cursor: 'pointer'}}>
                       <td className="px-4 py-3">
                         <Checkbox
                           checked={group.bills.every(b => selectedBills.includes(b.id))}
@@ -1900,18 +1900,18 @@ export default function BillsPage() {
                       <td className="px-4 py-3" colSpan={2}>
                         <div className="flex items-center gap-2">
                           {expandedBatches.has(batchId) ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                          <Layers className="h-4 w-4 text-purple-600" />
+                          <Layers className="h-4 w-4 text-emerald-600" />
                           <div>
-                            <div className="font-semibold text-purple-900">{group.batchName}</div>
-                            <div className="text-xs text-purple-700">{group.bills.length} bills in this batch</div>
+                            <div className="font-semibold text-emerald-900">{group.batchName}</div>
+                            <div className="text-xs text-emerald-700">{group.bills.length} bills in this batch</div>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <Badge className="bg-purple-100 text-purple-700">Batch</Badge>
+                        <Badge className="bg-emerald-100 text-emerald-700">Batch</Badge>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <div className="font-medium text-blue-600" suppressHydrationWarning>
+                        <div className="font-medium text-emerald-600" suppressHydrationWarning>
                           ₹{group.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                         </div>
                       </td>
@@ -1976,7 +1976,7 @@ export default function BillsPage() {
                     Select All ({filteredBills.length} bills)
                   </span>
                   {selectedBills.length > 0 && (
-                    <Badge variant="secondary" className="bg-purple-100 text-purple-700 hover:bg-purple-200">
+                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
                       {selectedBills.length} selected
                     </Badge>
                   )}
@@ -1989,7 +1989,7 @@ export default function BillsPage() {
             if (group.type === 'single') {
               const bill = group.bills[0];
               return [(
-            <Card key={bill.id} className={`group relative overflow-hidden rounded-2xl border border-slate-150 bg-white/80 backdrop-blur-md shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:border-slate-300/80 dark:border-slate-800 dark:bg-slate-950/70 dark:hover:border-slate-700/80 ${selectedBills.includes(bill.id) ? 'ring-2 ring-violet-500 ring-offset-2 dark:ring-offset-slate-900 border-violet-200 dark:border-violet-800' : ''}`}>
+            <Card key={bill.id} className={`group relative overflow-hidden rounded-2xl border border-slate-150 bg-white/80 backdrop-blur-md shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:border-slate-300/80 dark:border-slate-800 dark:bg-slate-950/70 dark:hover:border-slate-700/80 ${selectedBills.includes(bill.id) ? 'ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900 border-emerald-200 dark:border-emerald-800' : ''}`}>
               <CardContent className="p-6">
                 <div className="flex flex-col lg:flex-row lg:items-stretch justify-between gap-6">
                   <div className="flex items-start gap-4 flex-1">
@@ -1997,7 +1997,7 @@ export default function BillsPage() {
                       <Checkbox
                         checked={selectedBills.includes(bill.id)}
                         onCheckedChange={() => handleSelectBill(bill.id)}
-                        className="rounded border-slate-350 text-violet-600 focus:ring-violet-500 w-4 h-4"
+                        className="rounded border-slate-350 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
                       />
                     </div>
                     
@@ -2067,7 +2067,7 @@ export default function BillsPage() {
                           </div>
                           {bill.contract?.user?.name && (
                             <div className="flex items-center gap-2 mt-1">
-                              <User className="h-4 w-4 text-indigo-400 flex-shrink-0" />
+                              <User className="h-4 w-4 text-emerald-400 flex-shrink-0" />
                               <span className="text-xs text-slate-500">
                                 By: <span className="font-medium text-slate-700">{bill.contract.user.name}</span>
                               </span>
@@ -2079,9 +2079,9 @@ export default function BillsPage() {
                       {/* Financial Summary Grid */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
                         {/* Bill Amount */}
-                        <div className="bg-gradient-to-br from-blue-50/40 to-blue-100/10 dark:from-blue-950/20 dark:to-blue-900/5 border border-blue-100/50 dark:border-blue-900/30 rounded-xl p-3 hover:bg-blue-50/20 transition-all duration-200">
-                          <p className="text-[10px] font-semibold text-blue-600/80 dark:text-blue-400 uppercase tracking-wider mb-1">Bill Amount</p>
-                          <p className="text-base font-bold text-blue-700 dark:text-blue-300" suppressHydrationWarning>
+                        <div className="bg-gradient-to-br from-emerald-50/40 to-emerald-100/10 dark:from-emerald-950/20 dark:to-emerald-900/5 border border-emerald-100/50 dark:border-emerald-900/30 rounded-xl p-3 hover:bg-emerald-50/20 transition-all duration-200">
+                          <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-1">Bill Amount</p>
+                          <p className="text-base font-bold text-emerald-700 dark:text-emerald-300" suppressHydrationWarning>
                             ₹{bill.billAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </p>
                         </div>
@@ -2110,10 +2110,10 @@ export default function BillsPage() {
                         </div>
 
                         {/* Cumulative PVC */}
-                        <div className="bg-gradient-to-br from-violet-50/40 to-violet-100/10 dark:from-violet-950/20 dark:to-violet-900/5 border border-violet-100/50 dark:border-violet-900/30 rounded-xl p-3 hover:bg-violet-50/20 transition-all duration-200">
-                          <p className="text-[10px] font-semibold text-violet-600/80 dark:text-violet-400 uppercase tracking-wider mb-1">Cumulative PVC</p>
+                        <div className="bg-gradient-to-br from-emerald-50/40 to-emerald-100/10 dark:from-emerald-950/20 dark:to-emerald-900/5 border border-emerald-100/50 dark:border-emerald-900/30 rounded-xl p-3 hover:bg-emerald-50/20 transition-all duration-200">
+                          <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-1">Cumulative PVC</p>
                           {bill.pvcCalculation ? (
-                            <p className="text-base font-bold text-violet-700 dark:text-violet-300" suppressHydrationWarning>
+                            <p className="text-base font-bold text-emerald-700 dark:text-emerald-300" suppressHydrationWarning>
                               ₹{bill.pvcCalculation.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                             </p>
                           ) : (
@@ -2122,16 +2122,16 @@ export default function BillsPage() {
                         </div>
 
                         {/* Processing Fee */}
-                        <div className="bg-gradient-to-br from-teal-50/40 to-teal-100/10 dark:from-teal-950/20 dark:to-teal-900/5 border border-teal-100/50 dark:border-teal-900/30 rounded-xl p-3 hover:bg-teal-50/20 transition-all duration-200">
-                          <p className="text-[10px] font-semibold text-teal-600/80 dark:text-teal-400 uppercase tracking-wider mb-1">Processing Fee</p>
+                        <div className="bg-gradient-to-br from-emerald-50/40 to-emerald-100/10 dark:from-emerald-950/20 dark:to-emerald-900/5 border border-emerald-100/50 dark:border-emerald-900/30 rounded-xl p-3 hover:bg-emerald-50/20 transition-all duration-200">
+                          <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-1">Processing Fee</p>
                           {bill.billTransaction ? (
                             bill.billTransaction.isFree ? (
                               <div className="flex items-center gap-1 mt-0.5">
-                                <Gift className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
-                                <span className="text-xs font-bold text-teal-600 dark:text-teal-400">FREE</span>
+                                <Gift className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">FREE</span>
                               </div>
                             ) : (
-                              <p className="text-base font-bold text-teal-700 dark:text-teal-300" suppressHydrationWarning>
+                              <p className="text-base font-bold text-emerald-700 dark:text-emerald-300" suppressHydrationWarning>
                                 ₹{bill.billTransaction.amount.toLocaleString('en-IN')}
                               </p>
                             )
@@ -2146,7 +2146,7 @@ export default function BillsPage() {
                   {/* Actions Console */}
                   <div className="flex flex-wrap lg:flex-col items-stretch justify-center gap-3 min-w-[200px] w-full lg:w-[220px] mt-4 lg:mt-0 border-t lg:border-t-0 lg:border-l border-slate-150 dark:border-slate-800/80 pt-4 lg:pt-0 lg:pl-5">
                     {/* View Details - Highlighted Primary CTA */}
-                    <Button asChild variant="default" size="default" className="w-full bg-violet-600 hover:bg-violet-750 text-white shadow-sm hover:shadow transition-all duration-300 font-semibold rounded-xl h-10 gap-2">
+                    <Button asChild variant="default" size="default" className="w-full bg-emerald-600 hover:bg-emerald-750 text-white shadow-sm hover:shadow transition-all duration-300 font-semibold rounded-xl h-10 gap-2">
                       <Link href={`/bills/${bill.id}`}>
                         <Eye className="h-4 w-4" />
                         <span>View Details</span>
@@ -2158,7 +2158,7 @@ export default function BillsPage() {
                       {/* PDF */}
                       <button
                         onClick={() => openTemplateDialog(bill.id, bill.billNo)}
-                        className="flex flex-col items-center justify-center p-2 rounded-xl border border-slate-200/50 hover:border-blue-200 dark:border-slate-800 dark:hover:border-blue-900/50 bg-slate-50/50 hover:bg-blue-50/30 text-blue-700 dark:text-blue-400 dark:bg-slate-900/20 transition-all duration-200 group/btn"
+                        className="flex flex-col items-center justify-center p-2 rounded-xl border border-slate-200/50 hover:border-emerald-200 dark:border-slate-800 dark:hover:border-emerald-900/50 bg-slate-50/50 hover:bg-emerald-50/30 text-emerald-700 dark:text-emerald-400 dark:bg-slate-900/20 transition-all duration-200 group/btn"
                         title="Download PDF"
                       >
                         <Download className="h-4 w-4 mb-1 group-hover/btn:scale-110 transition-transform duration-200" />
@@ -2178,7 +2178,7 @@ export default function BillsPage() {
                       {/* Covering Letter */}
                       <button
                         onClick={() => downloadCoveringLetter(bill.id, bill.billNo, bill.contract)}
-                        className="flex flex-col items-center justify-center p-2 rounded-xl border border-slate-200/50 hover:border-indigo-200 dark:border-slate-800 dark:hover:border-indigo-900/50 bg-slate-50/50 hover:bg-indigo-50/30 text-indigo-700 dark:text-indigo-400 dark:bg-slate-900/20 transition-all duration-200 group/btn"
+                        className="flex flex-col items-center justify-center p-2 rounded-xl border border-slate-200/50 hover:border-emerald-200 dark:border-slate-800 dark:hover:border-emerald-900/50 bg-slate-50/50 hover:bg-emerald-50/30 text-emerald-700 dark:text-emerald-400 dark:bg-slate-900/20 transition-all duration-200 group/btn"
                         title="Download Covering Letter"
                       >
                         <Send className="h-4 w-4 mb-1 group-hover/btn:scale-110 transition-transform duration-200" />
@@ -2261,10 +2261,10 @@ export default function BillsPage() {
                   <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-850">
                     <div className="flex flex-wrap gap-2.5 justify-center lg:justify-start">
                       {bill.pvcCalculation.labourPvc !== 0 && (
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50/60 border border-blue-100/50 text-blue-700 dark:bg-blue-950/20 dark:border-blue-900/30 dark:text-blue-400 text-xs font-semibold shadow-sm hover:bg-blue-100/30 transition-colors duration-150">
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/60 border border-emerald-100/50 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900/30 dark:text-emerald-400 text-xs font-semibold shadow-sm hover:bg-emerald-100/30 transition-colors duration-150">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                           <span>Labour:</span>
-                          <span className={`font-bold ${bill.pvcCalculation.labourPvc < 0 ? 'text-rose-600' : 'text-blue-800 dark:text-blue-300'}`}>
+                          <span className={`font-bold ${bill.pvcCalculation.labourPvc < 0 ? 'text-rose-600' : 'text-emerald-800 dark:text-emerald-300'}`}>
                             {bill.pvcCalculation.labourPvc < 0 ? '-' : ''}₹{Math.abs(bill.pvcCalculation.labourPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </span>
                         </div>
@@ -2292,19 +2292,19 @@ export default function BillsPage() {
                         </div>
                       )}
                       {bill.pvcCalculation.otherMaterialsPvc !== 0 && (
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50/60 border border-indigo-100/50 text-indigo-700 dark:bg-indigo-950/20 dark:border-indigo-900/30 dark:text-indigo-400 text-xs font-semibold shadow-sm hover:bg-indigo-100/30 transition-colors duration-150">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/60 border border-emerald-100/50 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900/30 dark:text-emerald-400 text-xs font-semibold shadow-sm hover:bg-emerald-100/30 transition-colors duration-150">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                           <span>Materials:</span>
-                          <span className={`font-bold ${bill.pvcCalculation.otherMaterialsPvc < 0 ? 'text-rose-600' : 'text-indigo-800 dark:text-indigo-300'}`}>
+                          <span className={`font-bold ${bill.pvcCalculation.otherMaterialsPvc < 0 ? 'text-rose-600' : 'text-emerald-800 dark:text-emerald-300'}`}>
                             {bill.pvcCalculation.otherMaterialsPvc < 0 ? '-' : ''}₹{Math.abs(bill.pvcCalculation.otherMaterialsPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </span>
                         </div>
                       )}
                       {(bill.pvcCalculation.cementPvc !== 0 || bill.pvcCalculation.dedicatedCementPvc !== 0) && (
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-50/60 border border-teal-100/50 text-teal-700 dark:bg-teal-950/20 dark:border-teal-900/30 dark:text-teal-400 text-xs font-semibold shadow-sm hover:bg-teal-100/30 transition-colors duration-150">
-                          <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/60 border border-emerald-100/50 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900/30 dark:text-emerald-400 text-xs font-semibold shadow-sm hover:bg-emerald-100/30 transition-colors duration-150">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                           <span>Cement:</span>
-                          <span className={`font-bold ${(bill.pvcCalculation.cementPvc + bill.pvcCalculation.dedicatedCementPvc) < 0 ? 'text-rose-600' : 'text-teal-800 dark:text-teal-300'}`}>
+                          <span className={`font-bold ${(bill.pvcCalculation.cementPvc + bill.pvcCalculation.dedicatedCementPvc) < 0 ? 'text-rose-600' : 'text-emerald-800 dark:text-emerald-300'}`}>
                             {(bill.pvcCalculation.cementPvc + bill.pvcCalculation.dedicatedCementPvc) < 0 ? '-' : ''}₹{Math.abs(bill.pvcCalculation.cementPvc + bill.pvcCalculation.dedicatedCementPvc).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </span>
                         </div>
@@ -2338,7 +2338,7 @@ export default function BillsPage() {
               const batchId = group.batchId!;
               const isExpanded = expandedBatches.has(batchId);
               return [(
-            <Card key={`batch-${batchId}`} className="group relative overflow-hidden rounded-2xl border border-purple-100/70 bg-gradient-to-br from-purple-50/20 to-indigo-50/10 dark:border-purple-900/30 dark:from-purple-950/20 dark:to-indigo-950/10 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg">
+            <Card key={`batch-${batchId}`} className="group relative overflow-hidden rounded-2xl border border-emerald-100/70 bg-gradient-to-br from-emerald-50/20 to-emerald-50/10 dark:border-emerald-900/30 dark:from-emerald-950/20 dark:to-emerald-950/10 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg">
               <CardContent className="p-6">
                 <div className="flex flex-col gap-4">
                   <div className="flex items-start gap-4">
@@ -2351,43 +2351,43 @@ export default function BillsPage() {
                           setSelectedBills(prev => prev.filter(id => !group.bills.some(b => b.id === id)));
                         }
                       }}
-                      className="mt-1.5 border-purple-300 text-purple-600 focus:ring-purple-500 w-4 h-4"
+                      className="mt-1.5 border-emerald-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-3 flex-wrap mb-3">
-                        <Layers className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                        <h3 className="text-xl font-bold text-purple-950 dark:text-purple-300 tracking-tight">
+                        <Layers className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                        <h3 className="text-xl font-bold text-emerald-950 dark:text-emerald-300 tracking-tight">
                           {group.batchName}
                         </h3>
-                        <Badge className="bg-purple-100 text-purple-800 border-purple-200/50 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-900/30 font-semibold px-2.5 py-0.5 rounded-full text-xs">
+                        <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200/50 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/30 font-semibold px-2.5 py-0.5 rounded-full text-xs">
                           {group.bills.length} Bills
                         </Badge>
                       </div>
                       
-                      <div className="space-y-3 mb-4 bg-purple-50/30 dark:bg-purple-950/10 p-4 rounded-xl border border-purple-100/50 dark:border-purple-900/20">
+                      <div className="space-y-3 mb-4 bg-emerald-50/30 dark:bg-emerald-950/10 p-4 rounded-xl border border-emerald-100/50 dark:border-emerald-900/20">
                         {/* Work Description */}
                         <div>
-                          <p className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-1">Work Description</p>
+                          <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">Work Description</p>
                           <p className="text-sm font-medium text-slate-800 dark:text-slate-200 line-clamp-2 leading-relaxed">
                             {group.bills[0]?.contract?.workDescription || 'N/A'}
                           </p>
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-purple-100/30 dark:border-purple-900/10 shadow-sm">
-                            <p className="text-[10px] font-semibold text-purple-600/80 dark:text-purple-400 uppercase tracking-wider mb-0.5">Total Bill Amount</p>
-                            <p className="text-base font-bold text-blue-600 dark:text-blue-400">
+                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-emerald-100/30 dark:border-emerald-900/10 shadow-sm">
+                            <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-0.5">Total Bill Amount</p>
+                            <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">
                               ₹{group.totalAmount.toLocaleString('en-IN')}
                             </p>
                           </div>
-                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-purple-100/30 dark:border-purple-900/10 shadow-sm">
-                            <p className="text-[10px] font-semibold text-purple-600/80 dark:text-purple-400 uppercase tracking-wider mb-0.5">Total PVC</p>
+                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-emerald-100/30 dark:border-emerald-900/10 shadow-sm">
+                            <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-0.5">Total PVC</p>
                             <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">
                               ₹{group.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                             </p>
                           </div>
-                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-purple-100/30 dark:border-purple-900/10 shadow-sm">
-                            <p className="text-[10px] font-semibold text-purple-600/80 dark:text-purple-400 uppercase tracking-wider mb-0.5">Contract</p>
+                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-emerald-100/30 dark:border-emerald-900/10 shadow-sm">
+                            <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-0.5">Contract</p>
                             <p className="text-sm font-semibold text-slate-850 dark:text-slate-200 truncate mt-0.5" title={group.bills[0]?.contract?.agreementNo}>
                               {group.bills[0]?.contract?.agreementNo}
                             </p>
@@ -2404,7 +2404,7 @@ export default function BillsPage() {
                             generateBatchCombinedPDF(group.bills, group.batchName || 'Batch', batchId);
                           }}
                           disabled={generatingCombinedPDF === batchId}
-                          className="bg-purple-600 hover:bg-purple-750 text-white font-semibold rounded-xl px-4 py-2 h-9 shadow-sm hover:shadow transition-all duration-200 gap-1.5"
+                          className="bg-emerald-600 hover:bg-emerald-750 text-white font-semibold rounded-xl px-4 py-2 h-9 shadow-sm hover:shadow transition-all duration-200 gap-1.5"
                         >
                           {generatingCombinedPDF === batchId ? (
                             <><LoadingSpinner size="sm" className="mr-1" /><span>Generating...</span></>
@@ -2416,7 +2416,7 @@ export default function BillsPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => toggleBatchExpansion(batchId)}
-                          className="border-purple-200 hover:border-purple-300 hover:bg-purple-50/50 dark:border-purple-900 dark:hover:bg-purple-950/30 text-purple-700 dark:text-purple-400 font-semibold rounded-xl px-4 py-2 h-9 transition-all duration-200 gap-1.5"
+                          className="border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-emerald-900 dark:hover:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 font-semibold rounded-xl px-4 py-2 h-9 transition-all duration-200 gap-1.5"
                         >
                           {isExpanded ? (
                             <><ChevronUp className="h-4 w-4" /><span>Hide Bills</span></>
@@ -2427,7 +2427,7 @@ export default function BillsPage() {
                       </div>
 
                       {isExpanded && (
-                        <div className="space-y-3 pl-4 border-l-2 border-purple-200 dark:border-purple-800/60 mt-4">
+                        <div className="space-y-3 pl-4 border-l-2 border-emerald-200 dark:border-emerald-800/60 mt-4">
                           {group.bills.map((bill) => (
                             <div key={bill.id} className="p-4 bg-white/90 dark:bg-slate-900/80 rounded-xl border border-slate-150 dark:border-slate-800 shadow-sm transition-all duration-200 hover:shadow-md">
                               <div className="flex items-center justify-between mb-3">
@@ -2438,7 +2438,7 @@ export default function BillsPage() {
                                   </p>
                                 </div>
                                 <div className="text-right">
-                                  <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                                  <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
                                     ₹{bill.billAmount.toLocaleString('en-IN')}
                                   </p>
                                   {bill.pvcCalculation && (
@@ -2453,7 +2453,7 @@ export default function BillsPage() {
                                   variant="ghost"
                                   size="sm"
                                   asChild
-                                  className="h-8 px-3 text-xs text-purple-600 hover:text-purple-750 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/30 font-semibold rounded-lg"
+                                  className="h-8 px-3 text-xs text-emerald-600 hover:text-emerald-750 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30 font-semibold rounded-lg"
                                 >
                                   <Link href={`/bills/${bill.id}`}>
                                     <Eye className="h-3.5 w-3.5 mr-1" />View Details
@@ -2463,7 +2463,7 @@ export default function BillsPage() {
                                   onClick={() => openTemplateDialog(bill.id, bill.billNo)}
                                   variant="ghost"
                                   size="sm"
-                                  className="h-8 px-3 text-xs text-blue-600 hover:text-blue-750 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30 font-semibold rounded-lg"
+                                  className="h-8 px-3 text-xs text-emerald-600 hover:text-emerald-750 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30 font-semibold rounded-lg"
                                 >
                                   <Download className="h-3.5 w-3.5 mr-1" />PDF
                                 </Button>
@@ -2479,7 +2479,7 @@ export default function BillsPage() {
                                   onClick={() => downloadCoveringLetter(bill.id, bill.billNo, bill.contract)}
                                   variant="ghost"
                                   size="sm"
-                                  className="h-8 px-3 text-xs text-indigo-600 hover:text-indigo-750 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/30 font-semibold rounded-lg"
+                                  className="h-8 px-3 text-xs text-emerald-600 hover:text-emerald-750 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30 font-semibold rounded-lg"
                                 >
                                   <Send className="h-3.5 w-3.5 mr-1" />Letter
                                 </Button>
@@ -2536,7 +2536,7 @@ export default function BillsPage() {
                 <button
                   type="button"
                   onClick={() => setIncludeIndexDocs(true)}
-                  className={`flex flex-col items-start p-3 rounded-lg border-2 text-left transition-colors ${includeIndexDocs ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+                  className={`flex flex-col items-start p-3 rounded-lg border-2 text-left transition-colors ${includeIndexDocs ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 hover:border-slate-300'}`}
                 >
                   <span className="font-semibold text-sm">IR PDF + Index Documents</span>
                   <span className="text-xs text-muted-foreground mt-1">Official A4 proforma with the published index documents attached</span>
@@ -2544,7 +2544,7 @@ export default function BillsPage() {
                 <button
                   type="button"
                   onClick={() => setIncludeIndexDocs(false)}
-                  className={`flex flex-col items-start p-3 rounded-lg border-2 text-left transition-colors ${!includeIndexDocs ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+                  className={`flex flex-col items-start p-3 rounded-lg border-2 text-left transition-colors ${!includeIndexDocs ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 hover:border-slate-300'}`}
                 >
                   <span className="font-semibold text-sm">IR PDF only</span>
                   <span className="text-xs text-muted-foreground mt-1">Statement pages only, without the supporting index documents</span>
@@ -2580,7 +2580,7 @@ export default function BillsPage() {
               </Select>
               {templates.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  No custom templates found. <Link href="/report-templates" className="text-blue-600 hover:underline">Create one</Link>
+                  No custom templates found. <Link href="/report-templates" className="text-emerald-600 hover:underline">Create one</Link>
                 </p>
               )}
             </div>}

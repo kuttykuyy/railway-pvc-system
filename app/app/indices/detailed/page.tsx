@@ -474,7 +474,7 @@ export default function DetailedIndicesPage() {
         <BackButton href="/indices" label="Back to Indices" variant="outline" />
         <div className="flex-1">
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg">
+            <div className="p-2 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg">
               <Activity className="h-7 w-7 text-white" />
             </div>
             Detailed Indices Analysis
@@ -509,16 +509,16 @@ export default function DetailedIndicesPage() {
 
       {/* Statistics Dashboard */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow bg-gradient-to-br from-blue-50 to-blue-100">
+        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow bg-gradient-to-br from-emerald-50 to-emerald-100">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-blue-900 flex items-center gap-2">
+            <CardTitle className="text-sm font-medium text-emerald-900 flex items-center gap-2">
               <Database className="h-4 w-4" />
               Total Indices
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-900">{overallStats.totalIndices}</div>
-            <p className="text-xs text-blue-700 mt-1">
+            <div className="text-3xl font-bold text-emerald-900">{overallStats.totalIndices}</div>
+            <p className="text-xs text-emerald-700 mt-1">
               {overallStats.indicesWithData} with data • {overallStats.totalIndices - overallStats.indicesWithData} empty
             </p>
           </CardContent>
@@ -556,18 +556,18 @@ export default function DetailedIndicesPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow bg-gradient-to-br from-purple-50 to-purple-100">
+        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow bg-gradient-to-br from-emerald-50 to-emerald-100">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-purple-900 flex items-center gap-2">
+            <CardTitle className="text-sm font-medium text-emerald-900 flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
               Average Change
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-purple-900">
+            <div className="text-3xl font-bold text-emerald-900">
               {overallStats.avgChangePercent.toFixed(2)}%
             </div>
-            <p className="text-xs text-purple-700 mt-1">
+            <p className="text-xs text-emerald-700 mt-1">
               ↑ {overallStats.increasingCount} • ↓ {overallStats.decreasingCount}
             </p>
           </CardContent>
@@ -906,7 +906,7 @@ export default function DetailedIndicesPage() {
 
       {/* Bulk Actions */}
       {selectedIndices.size > 0 && (
-        <Card className="border-0 shadow-lg bg-gradient-to-r from-indigo-50 to-purple-50">
+        <Card className="border-0 shadow-lg bg-gradient-to-r from-emerald-50 to-emerald-50">
           <CardContent className="py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -968,7 +968,7 @@ export default function DetailedIndicesPage() {
               <Card 
                 key={index.id} 
                 className={`border-0 shadow-lg hover:shadow-xl transition-all ${
-                  isSelected ? 'ring-2 ring-blue-500' : ''
+                  isSelected ? 'ring-2 ring-emerald-500' : ''
                 } ${viewMode === 'compact' ? 'p-2' : ''}`}
               >
                 <CardHeader className={viewMode === 'compact' ? 'pb-2' : ''}>

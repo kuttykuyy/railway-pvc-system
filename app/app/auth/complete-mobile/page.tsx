@@ -54,7 +54,7 @@ export default function CompleteMobilePage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
+        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
           <Phone className="h-5 w-5" />
         </div>
         <h1 className="text-xl font-bold text-slate-900">One quick step</h1>

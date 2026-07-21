@@ -211,7 +211,7 @@ export default function ExtensionSubcategoriesPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading subcategories...</p>
         </div>
       </div>
@@ -225,7 +225,7 @@ export default function ExtensionSubcategoriesPage() {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-3">
-              <FileBarChart className="h-8 w-8 text-blue-600" />
+              <FileBarChart className="h-8 w-8 text-emerald-600" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">
                   Extension Subcategories
@@ -243,11 +243,11 @@ export default function ExtensionSubcategoriesPage() {
         </div>
 
         {/* Info Card */}
-        <Card className="mb-6 border-blue-200 bg-blue-50">
+        <Card className="mb-6 border-emerald-200 bg-emerald-50">
           <CardContent className="pt-4">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-blue-900">
+              <AlertTriangle className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-emerald-900">
                 <p className="font-medium mb-1">About Extension Subcategories</p>
                 <p>
                   These subcategories are used for GCC Clause 17A extensions (extensions without liquidated damages).

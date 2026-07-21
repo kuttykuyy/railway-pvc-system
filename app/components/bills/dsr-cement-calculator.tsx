@@ -128,7 +128,7 @@ export function DsrCementCalculator({
     <div className="rounded-lg border border-slate-200 p-4 space-y-4">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-purple-600" />
+          <FileText className="h-4 w-4 text-emerald-600" />
           <h3 className="text-sm font-semibold text-slate-800">DSR 5.35 Cement Rate Calculator</h3>
         </div>
         <button type="button" onClick={reset} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600">
@@ -185,7 +185,7 @@ export function DsrCementCalculator({
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-slate-500">
               <span>Rate/Qtl: <span className="font-medium text-slate-700">₹{money(perQuintal)}</span></span>
               <span>Rate/MT: <span className="font-medium text-slate-700">₹{money(perMt)}</span></span>
-              <span>Amount: <span className="font-semibold text-purple-700">₹{money(scheduleAmount(s))}</span></span>
+              <span>Amount: <span className="font-semibold text-emerald-700">₹{money(scheduleAmount(s))}</span></span>
             </div>
           </div>
         );
@@ -196,7 +196,7 @@ export function DsrCementCalculator({
           <div className="text-[11px] uppercase tracking-wide text-slate-400">Total Derived Cement Cost</div>
           <div className="text-lg font-bold text-slate-900">₹{money(total)}</div>
         </div>
-        <Button type="button" onClick={() => onApply(Math.round(total * 100) / 100)} className="bg-purple-600 hover:bg-purple-700 text-white">
+        <Button type="button" onClick={() => onApply(Math.round(total * 100) / 100)} className="bg-emerald-600 hover:bg-emerald-700 text-white">
           Apply Derived Cost
         </Button>
       </div>
