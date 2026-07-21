@@ -154,6 +154,8 @@ function NewBillPageContent() {
   const [availableDateRange, setAvailableDateRange] = useState<{
     minDate: string | null;
     maxDate: string | null;
+    lastCompleteDate: string | null;
+    allowProvisional: boolean;
     availableMonths: string[];
   } | null>(null);
   const [isLoadingDateRange, setIsLoadingDateRange] = useState(true);
@@ -434,6 +436,8 @@ function NewBillPageContent() {
       setAvailableDateRange({
         minDate: data.minDate,
         maxDate: data.maxDate,
+        lastCompleteDate: data.lastCompleteDate ?? null,
+        allowProvisional: !!data.allowProvisional,
         availableMonths: data.availableMonths || []
       });
     } catch (error) {
@@ -1792,10 +1796,17 @@ function NewBillPageContent() {
                               {new Date(availableDateRange.minDate).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-GB', { timeZone: 'Asia/Kolkata' })}
                               {language === 'hi' ? ' से ' : ' to '}
                               {new Date(availableDateRange.maxDate).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-GB', { timeZone: 'Asia/Kolkata' })}
-                              <span className="ml-1.5 bg-blue-50 border border-blue-150 text-blue-700 px-1.5 py-0.5 rounded font-black whitespace-nowrap">
-                                ({language === 'hi' ? 'सभी सूचकांक अद्यतित हैं: ' : 'All indices up to date: '}
-                                {new Date(availableDateRange.maxDate).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-GB', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })})
-                              </span>
+                              {availableDateRange.lastCompleteDate && (
+                                <span className="ml-1.5 bg-blue-50 border border-blue-150 text-blue-700 px-1.5 py-0.5 rounded font-black whitespace-nowrap">
+                                  ({language === 'hi' ? 'सभी सूचकांक अद्यतित हैं: ' : 'All indices final up to: '}
+                                  {new Date(availableDateRange.lastCompleteDate).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-GB', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })})
+                                </span>
+                              )}
+                              {availableDateRange.allowProvisional && availableDateRange.lastCompleteDate && availableDateRange.maxDate > availableDateRange.lastCompleteDate && (
+                                <span className="ml-1.5 bg-amber-50 border border-amber-200 text-amber-700 px-1.5 py-0.5 rounded font-semibold whitespace-nowrap">
+                                  {language === 'hi' ? 'बाद की तारीखें अनंतिम होंगी' : 'later dates = Provisional bill'}
+                                </span>
+                              )}
                             </span>
                           </p>
                         ) : isLoadingDateRange ? (
