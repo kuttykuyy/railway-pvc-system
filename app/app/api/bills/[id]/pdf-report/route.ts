@@ -1666,6 +1666,49 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     pdf.line(marginLeft, yPosition + 2, marginLeft + indicesTitleWidth, yPosition + 2);
     yPosition += 12;
 
+    // ---- Provisional / borrowed markers (parity with the IR-standard report) ----
+    // For the bill's quarter, surface the real value the calc borrows for a not-yet-published
+    // month, mark provisional values "P" and borrowed values "(b)", and make the shown quarter
+    // average match the value actually used in the PVC calculation.
+    const provBorrow = new Map<string, { prov: boolean; borrowed: boolean; value: number }>();
+    const affectedAvg = new Map<string, number>();
+    let hasProvMarks = false, hasBorrowMarks = false;
+    try {
+      const fuelNameD = getFuelIndexNameForBill(bill.zone, bill.fuelPriceType);
+      const steelNamesD = getSteelIndexNamesForZone(bill.zone);
+      const idxNamesD = ['Labour', 'RBI Plant Machinery', fuelNameD, 'RBI Other Materials', 'RBI Cement', 'RBI Explosives', ...steelNamesD];
+      const canon = (n: string) => {
+        if (n === fuelNameD) return 'MPNG Fuel';
+        const m = n.match(/^(Steel TMT Bars|Steel Angle\/Channel|Steel Plates|Steel Other Sections)( - .+)?$/);
+        return m ? m[1] : n;
+      };
+      const qAvgD = await getQuarterlyAverages(bill.quarter, idxNamesD, baseMonth, 'auto');
+      const qMonthsD = getQuarterMonths(bill.quarter, baseMonth);
+      const qStartD = new Date(qMonthsD[0].getFullYear(), qMonthsD[0].getMonth(), 1);
+      const qEndD = new Date(qMonthsD[qMonthsD.length - 1].getFullYear(), qMonthsD[qMonthsD.length - 1].getMonth() + 1, 1);
+      const pIdxD = await prisma.priceIndex.findMany({ where: { name: { in: idxNamesD } }, select: { id: true, name: true } });
+      const rawD = await prisma.monthlyIndexValue.findMany({
+        where: { priceIndexId: { in: pIdxD.map((p: any) => p.id) }, month: { gte: qStartD, lt: qEndD } },
+        include: { priceIndex: true },
+      });
+      const realKeysD = new Set<string>();
+      for (const mv of rawD) {
+        const key = `${canon(mv.priceIndex.name)}|${new Date(mv.month).toISOString().slice(0, 7)}`;
+        realKeysD.add(key);
+        if (mv.isProvisional) { provBorrow.set(key, { prov: true, borrowed: false, value: mv.value }); hasProvMarks = true; }
+      }
+      for (const qa of (qAvgD as any[])) {
+        const cn = canon(qa.indexName);
+        affectedAvg.set(cn, qa.average);
+        for (const mv of (qa.monthlyValues || [])) {
+          const key = `${cn}|${mv.month}`;
+          if (!realKeysD.has(key)) { provBorrow.set(key, { prov: true, borrowed: true, value: mv.value }); hasBorrowMarks = true; }
+        }
+      }
+    } catch (e) {
+      console.error('detailed report provisional/borrowed lookup failed:', e);
+    }
+
     // Create comprehensive monthly indices table
     const monthlyTableData = [];
 
@@ -1744,7 +1787,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         
         const monthRow = [
           periodText,
-          ...activeCols.map(col => fmtIdx(col, qData.monthlyData[col.indexName]?.[monthKey]))
+          ...activeCols.map(col => {
+            const pb = qData.quarter === bill.quarter ? provBorrow.get(`${col.indexName}|${monthKey}`) : undefined;
+            // A borrowed month has no published value — show the real borrowed figure, not the base value.
+            if (pb?.borrowed) return `${fmtIdx(col, pb.value)} (b)`;
+            const base = fmtIdx(col, qData.monthlyData[col.indexName]?.[monthKey]);
+            if (pb?.prov && base) return `${base} P`;
+            return base;
+          })
         ];
         monthlyTableData.push(monthRow);
         currentRowIndex++;
@@ -1779,7 +1829,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const avgRow = [
         avgPeriodText,
         ...activeCols.map(col => {
-          const v = qData.averages[col.indexName];
+          // For the bill's quarter, use the borrowed-inclusive average so the printed figure
+          // matches the value actually used in the PVC calculation.
+          const v = (qData.quarter === bill.quarter && affectedAvg.has(col.indexName))
+            ? affectedAvg.get(col.indexName)
+            : qData.averages[col.indexName];
           return (v !== undefined && v !== null) ? v.toFixed(2) : '';
         })
       ];
@@ -1849,8 +1903,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     });
 
-    yPosition = pdf.lastAutoTable.finalY + 15;
-    
+    yPosition = pdf.lastAutoTable.finalY + 8;
+
+    // Legend for provisional / borrowed markers, when any appear in the affected quarter.
+    if (hasProvMarks || hasBorrowMarks) {
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'italic');
+      if (hasProvMarks) {
+        pdf.text('P = provisional index (temporary — will be revised when the final index is published).', marginLeft, yPosition);
+        yPosition += 5;
+      }
+      if (hasBorrowMarks) {
+        pdf.text("(b) = borrowed from the previous available month because this month's index is not yet published; used in the quarter average.", marginLeft, yPosition);
+        yPosition += 5;
+      }
+      pdf.setFont('helvetica', 'normal');
+    }
+    yPosition += 7;
+
     // Add thin separator line after MONTHLY INDICES section
     pdf.setDrawColor(200, 200, 200); // Light gray
     pdf.setLineWidth(0.3);
