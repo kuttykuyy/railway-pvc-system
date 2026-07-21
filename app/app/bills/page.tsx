@@ -706,12 +706,14 @@ export default function BillsPage() {
       if (response.ok) {
         const data = await response.json();
         // Update the bill in the list with new calculation
-        setBills(prev => prev.map(bill => 
-          bill.id === billId 
+        setBills(prev => prev.map(bill =>
+          bill.id === billId
             ? { ...bill, pvcCalculation: data.pvcCalculation, updatedAt: new Date().toISOString() }
             : bill
         ));
-        toast.success('PVC recalculated successfully');
+        // Refresh so the provisional/final badge reflects any newly-entered final indices.
+        void fetchBills();
+        toast.success('PVC regenerated. If the month is now final, it will show as Final.');
       } else {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || errorData.error || 'Failed to recalculate PVC');
@@ -1798,7 +1800,20 @@ export default function BillsPage() {
                                   <span>View Details</span>
                                 </Link>
                               </DropdownMenuItem>
-                              
+
+                              {/* Regenerate — only for provisional bills. Re-runs the PVC with the
+                                  latest indices, so once the real numbers are entered it becomes Final. */}
+                              {bill.indicesStatus?.isProvisional && (
+                                <DropdownMenuItem
+                                  onClick={(e) => { e.preventDefault(); recalculateBill(bill.id); }}
+                                  disabled={recalculating === bill.id}
+                                  className="flex items-center gap-2 cursor-pointer text-amber-700 focus:text-amber-800 focus:bg-amber-50"
+                                >
+                                  {recalculating === bill.id ? <LoadingSpinner /> : <Calculator className="h-4 w-4" />}
+                                  <span>Regenerate PVC</span>
+                                </DropdownMenuItem>
+                              )}
+
                               <DropdownMenuSeparator />
                               
                               {/* Export Section */}
