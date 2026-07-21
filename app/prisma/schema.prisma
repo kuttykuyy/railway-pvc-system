@@ -585,6 +585,10 @@ model PvcCalculation {
   indexL_Materials               Float?    @default(0)
   indexL_Plant                   Float?    @default(0)
   indexL_Steel                   Float?    @default(0)
+  // True when this saved PVC was computed while one or more quarter months were
+  // provisional or borrowed. Stays true (sticky) after the real index is published,
+  // so the bill can still offer a "Regenerate" action until it is recalculated.
+  usedProvisionalIndices         Boolean   @default(false)
   bill                           Bill      @relation(fields: [billId], references: [id], onDelete: Cascade)
   contract                       Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
 

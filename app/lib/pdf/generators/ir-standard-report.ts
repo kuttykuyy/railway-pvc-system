@@ -1843,6 +1843,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     // Rotate 45 degrees around page center
     pdf.text('PROVISIONAL', pageW / 2, pageH / 2, {
       align: 'center',
+      baseline: 'middle',
       angle: 45,
     });
     pdf.restoreGraphicsState();
