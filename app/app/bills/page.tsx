@@ -1495,9 +1495,9 @@ export default function BillsPage() {
         </Card>
       </div>
 
-      {/* Bulk Action Buttons - Shown prominently when bills are selected */}
+      {/* Bulk Action Buttons - Floating bar, stays visible while scrolling when bills are selected */}
       {selectedBills.length > 0 && (
-        <div className="border border-slate-200 bg-slate-50 p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-1.5rem)] max-w-4xl border border-slate-200 bg-white/95 backdrop-blur p-3 sm:p-4 rounded-2xl shadow-xl ring-1 ring-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-4 duration-200">
           <div className="flex items-center gap-3">
             <div className="bg-emerald-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-sm">
               {selectedBills.length} Selected
