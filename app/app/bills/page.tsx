@@ -2552,7 +2552,7 @@ export default function BillsPage() {
               </div>
             </div>
 
-            {pdfFormat === 'detailed' && <div className="space-y-2">
+            <div className="space-y-2">
               <Label htmlFor="template-select">Report Template</Label>
               <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
                 <SelectTrigger id="template-select">
@@ -2583,9 +2583,9 @@ export default function BillsPage() {
                   No custom templates found. <Link href="/report-templates" className="text-emerald-600 hover:underline">Create one</Link>
                 </p>
               )}
-            </div>}
+            </div>
 
-            {pdfFormat === 'detailed' && selectedTemplateId !== 'default' && templates.find(t => t.id === selectedTemplateId)?.description && (
+            {selectedTemplateId !== 'default' && templates.find(t => t.id === selectedTemplateId)?.description && (
               <div className="rounded-md bg-muted p-3">
                 <p className="text-sm text-muted-foreground">
                   {templates.find(t => t.id === selectedTemplateId)?.description}
