@@ -380,8 +380,9 @@ export function BillClassificationEntries({
         </div>
         <span className="text-[11px] text-slate-500">
           {ratesIncludeGst
-            ? `Rates include ${(AGREEMENT_GST_RATE * 100).toFixed(0)}% GST — amounts below are the GST-free value used for PVC.`
-            : 'Rates are GST-free — amounts below are used for PVC as entered.'}
+            ? `Rates include ${(AGREEMENT_GST_RATE * 100).toFixed(0)}% GST — the ${(AGREEMENT_GST_RATE * 100).toFixed(0)}% is removed from items entered as quantity × rate, and PVC uses the GST-free value.`
+            : 'Rates are GST-free — items are used for PVC as entered.'}
+          {' '}Only items with a quantity × rate are recalculated; amounts you type in directly stay unchanged.
         </span>
       </div>
 
