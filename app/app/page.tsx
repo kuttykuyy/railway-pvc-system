@@ -223,7 +223,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900 mb-3 tracking-tight">Automated PVC Bills</h3>
                 <p className="text-slate-600 leading-relaxed font-light">
-                  Create comprehensive running account bills instantly. The system automatically calculates PVC formulas per GCC Clause 17, applying correct quarterly indices without any manual spreadsheet entry.
+                  Create comprehensive running account bills instantly. The system automatically calculates PVC formulas per GCC Clause 46A, applying correct quarterly indices without any manual spreadsheet entry.
                 </p>
               </div>
             </div>
@@ -238,7 +238,7 @@ export default function HomePage() {
                   <span className="px-2.5 py-1 text-xs font-bold bg-orange-100 text-orange-700 rounded-full">NEW</span>
                 </div>
                 <p className="text-slate-600 leading-relaxed font-light">
-                  Generate official GCC Clause 17 PVC statements in Indian Railway standard format — with formula display, fixed component row, monthly index history, provisional watermark, and affected-indices-only tables.
+                  Generate official GCC Clause 46A PVC statements in Indian Railway standard format — with formula display, fixed component row, monthly index history, provisional watermark, and affected-indices-only tables.
                 </p>
               </div>
             </div>
@@ -326,8 +326,8 @@ export default function HomePage() {
               {[
                 { step: '01', title: 'Add Contract', desc: 'Enter agreement details, base month, zone, and extension type. The system validates against Railway norms automatically.', icon: <FileText className="w-6 h-6" /> },
                 { step: '02', title: 'Add or Upload Bill Data', desc: 'Upload your signed bill PDF and let AI extract the items automatically, or add line items by classification yourself. Bulk upload multiple bills at once with shared zone and fuel settings.', icon: <ScanSearch className="w-6 h-6" /> },
-                { step: '03', title: 'Auto Calculation', desc: 'Our engine fetches current indices from official sources and computes PVC per GCC Clause 17 instantly — no manual lookups.', icon: <Calculator className="w-6 h-6" /> },
-                { step: '04', title: 'Export PDF', desc: 'Download in Detailed Report or IR Standard Format (GCC Cl.17 proforma with monthly indices, formula, and fixed component row). Share via WhatsApp.', icon: <Download className="w-6 h-6" /> },
+                { step: '03', title: 'Auto Calculation', desc: 'Our engine fetches current indices from official sources and computes PVC per GCC Clause 46A instantly — no manual lookups.', icon: <Calculator className="w-6 h-6" /> },
+                { step: '04', title: 'Export PDF', desc: 'Download in Detailed Report or IR Standard Format (GCC Cl.46A proforma with monthly indices, formula, and fixed component row). Share via WhatsApp.', icon: <Download className="w-6 h-6" /> },
               ].map((item) => (
                 <div key={item.step} className="group relative p-8 rounded-3xl bg-slate-50 border border-slate-100 hover:bg-white hover:border-emerald-100 hover:shadow-xl hover:shadow-emerald-900/5 transition-all duration-300">
                   <div className="absolute top-8 right-8 text-4xl font-black text-slate-200/50 group-hover:text-emerald-500/10 transition-colors">
@@ -409,7 +409,7 @@ export default function HomePage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <MiniFeature icon={<Gift />} title="Free Trial" desc="First PVC bill is completely free for every new user — no credits needed, watermarked PDF" badge="New" />
-            <MiniFeature icon={<ReceiptText />} title="IR Standard PDF" desc="Official GCC Cl.17 statement with monthly indices, formula, and provisional watermark" badge="New" />
+            <MiniFeature icon={<ReceiptText />} title="IR Standard PDF" desc="Official GCC Cl.46A statement with monthly indices, formula, and provisional watermark" badge="New" />
             <MiniFeature icon={<Layers />} title="Bulk Bill Creation" desc="Create and submit multiple bills simultaneously with one-time zone & fuel setup" badge="New" />
             <MiniFeature icon={<Download />} title="Bulk PDF Download" desc="Download Detailed or IR Standard PDFs for multiple bills merged into one file" badge="New" />
             <MiniFeature icon={<FileSpreadsheet />} title="Excel Contract Import" desc="Import multiple contracts at once via Excel/CSV template — saves hours of manual entry" badge="New" />
