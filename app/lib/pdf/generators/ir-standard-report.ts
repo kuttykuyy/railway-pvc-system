@@ -8,6 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import type { SteelBreakdownSection } from '@/lib/jpc-items';
+import { findScheduleRates } from '@/lib/contract-schedules';
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -1016,18 +1017,37 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     // reconciles to the actual Bill Amount, matching the IREPS proforma. (grossBillAmount
     // is not relied on here because for rebate bills it is stored equal to the net.)
     const grossTotal = itemsGrossTotal;
-    // The rebate comes ONLY from the contract's agreed rebate %. An agreement with no
-    // rebate on record shows no rebate line (it is not inferred from the amounts, which
-    // could otherwise invent a rebate from an unrelated gap).
+    // The schedule items are the GROSS value (Qty x Agreement Rate). The bill's payable
+    // value is reached by applying, per schedule, the agreed bid rate then escalation
+    // (both from the contract's schedules), then the agreement-wide rebate. Bid rate and
+    // escalation differ per schedule, so aggregate the adjustment AMOUNTS across schedules.
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const contractSchedules = (bill.contract as any)?.schedules;
+    let bidAdj = 0, escAdj = 0, adjustedTotal = 0;
+    for (const [schedule, gs] of scheduleTotals.entries()) {
+      const rates = findScheduleRates(contractSchedules, schedule);
+      const bid = Number(rates?.bidRate) || 0;
+      const esc = Number(rates?.escalation) || 0;
+      const afterBid = gs * (1 + bid / 100);
+      const afterEsc = afterBid * (1 + esc / 100);
+      bidAdj += afterBid - gs;         // bid rate effect (signed)
+      escAdj += afterEsc - afterBid;   // escalation effect (signed)
+      adjustedTotal += afterEsc;
+    }
+    bidAdj = round2(bidAdj);
+    escAdj = round2(escAdj);
+    adjustedTotal = round2(adjustedTotal);
     const rebatePct = Number((bill.contract as any)?.rebatePercentage) || 0;
-    const rebate = rebatePct > 0 ? Math.round(grossTotal * rebatePct) / 100 : 0; // gross x pct/100
-    const netAmount = grossTotal - rebate;
-    const showRebate = rebatePct > 0 && rebate > 0;
+    const rebate = rebatePct > 0 ? round2(adjustedTotal * rebatePct / 100) : 0;
+    const netAmount = round2(adjustedTotal - rebate);
+    const showBid = Math.abs(bidAdj) >= 0.01;
+    const showEsc = Math.abs(escAdj) >= 0.01;
+    const showRebate = rebatePct > 0 && rebate >= 0.01;
 
     // Reserve room for the whole summary (title + header + one row per schedule,
     // each of which can wrap to ~2 lines, + up to 3 total/rebate/net rows) so the
     // block is not split across a page break.
-    ensureSpace(44 + scheduleTotals.size * 14);
+    ensureSpace(58 + scheduleTotals.size * 14);
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
     pdf.text('F. BILL SCHEDULE SUMMARY', mL, y);
@@ -1038,14 +1058,30 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       { content: fmt(total), styles: { halign: 'right' as const } },
     ]);
     summaryBody.push([
-      { content: 'Total of Schedule Items', styles: { fontStyle: 'bold' as const } },
+      { content: 'Total of Schedule Items (at agreement rate)', styles: { fontStyle: 'bold' as const } },
       { content: fmt(grossTotal), styles: { fontStyle: 'bold' as const, halign: 'right' as const } },
     ]);
-    if (showRebate) {
+    // Signed adjustment lines: bid rate then escalation (per schedule), then rebate.
+    const signed = (n: number) => (n < 0 ? '-' : '+') + fmt(Math.abs(n));
+    if (showBid) {
       summaryBody.push([
-        `Less: Rebate (${rebatePct.toFixed(2)}%)`,
-        { content: '-' + fmt(rebate), styles: { halign: 'right' as const } },
+        `${bidAdj < 0 ? 'Less' : 'Add'}: Bid rate (per schedule)`,
+        { content: signed(bidAdj), styles: { halign: 'right' as const } },
       ]);
+    }
+    if (showEsc) {
+      summaryBody.push([
+        `${escAdj < 0 ? 'Less' : 'Add'}: Escalation (per schedule)`,
+        { content: signed(escAdj), styles: { halign: 'right' as const } },
+      ]);
+    }
+    if (showRebate || showBid || showEsc) {
+      if (showRebate) {
+        summaryBody.push([
+          `Less: Rebate (${rebatePct.toFixed(2)}%)`,
+          { content: '-' + fmt(rebate), styles: { halign: 'right' as const } },
+        ]);
+      }
       summaryBody.push([
         { content: 'Net Bill Amount (Incl. GST)', styles: { fontStyle: 'bold' as const } },
         { content: fmt(netAmount), styles: { fontStyle: 'bold' as const, halign: 'right' as const } },
