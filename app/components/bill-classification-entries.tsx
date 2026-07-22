@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { AlertCircle, CheckCircle2, Plus, Trash2, Sparkles, Pencil, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Plus, Trash2, Sparkles, Pencil, X, Upload, Download } from 'lucide-react';
 
 import { BillAmountCalculator } from './bill-amount-calculator';
 import { ClassificationComparisonDialog } from './classification-comparison-dialog';
@@ -320,6 +320,130 @@ export function BillClassificationEntries({
       description: '',
       itemRows: [{ itemNumber: '', quantity: '', agreementRate: '' }],
     }]);
+  };
+
+  // Import item rows (item number + quantity + agreement rate) from an Excel/CSV file into
+  // a new classification entry, so the user doesn't type each row. Header names are matched
+  // loosely (Item No / Qty / Agreement Rate, etc.), so most sheets work as-is.
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+
+  const pickField = (row: Record<string, any>, keys: string[]) => {
+    for (const k of Object.keys(row)) {
+      const norm = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (keys.includes(norm)) return row[k];
+    }
+    return '';
+  };
+
+  const handleImportItems = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (event.target) event.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+    setImporting(true);
+    try {
+      const XLSX = await import('xlsx');
+      const wb = /\.csv$/i.test(file.name)
+        ? XLSX.read(await file.text(), { type: 'string' })
+        : XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' });
+
+      // Parse each row: item + optional classification code + optional schedule.
+      const allSubs = classificationGroups.flatMap(g => g.subClassifications);
+      const findSub = (raw: any) => {
+        const norm = String(raw || '').trim().toLowerCase();
+        if (!norm) return null;
+        return allSubs.find(s => (s.code || '').toLowerCase() === norm)
+          || allSubs.find(s => (s.name || '').toLowerCase() === norm)
+          || allSubs.find(s => {
+            const c = (s.code || '').toLowerCase();
+            return !!c && (c.startsWith(norm) || norm.startsWith(c));
+          })
+          || null;
+      };
+
+      type Parsed = { itemNumber: string; quantity: number | ''; agreementRate: number | ''; classCode: string; schedule: string };
+      const parsed: Parsed[] = rows
+        .map(r => {
+          const q = pickField(r, ['quantity', 'qty', 'quantityexecuted', 'quantitysincelastbill']);
+          const rate = pickField(r, ['agreementrate', 'rate', 'rateinrs', 'agreementrateinrs', 'agrate']);
+          return {
+            itemNumber: String(pickField(r, ['itemnumber', 'itemno', 'item', 'itemcode', 'dsrcode', 'no']) || '').trim(),
+            quantity: q === '' ? '' as const : (Number(q) || ''),
+            agreementRate: rate === '' ? '' as const : (Number(rate) || ''),
+            classCode: String(pickField(r, ['classification', 'class', 'classificationcode', 'subclassification', 'subclass', 'classcode']) || '').trim(),
+            schedule: String(pickField(r, ['schedule', 'scheduleitem', 'schedulename']) || '').trim(),
+          };
+        })
+        .filter(r => r.itemNumber || Number(r.quantity) > 0 || Number(r.agreementRate) > 0);
+
+      if (parsed.length === 0) {
+        toast.error('No items found. Expected columns: Item No, Quantity, Agreement Rate (optional: Classification, Schedule).');
+        return;
+      }
+
+      // Group by classification + schedule so each combination becomes one row. When no
+      // classification column is present, everything lands in a single default entry.
+      const groups = new Map<string, Parsed[]>();
+      for (const p of parsed) {
+        const key = `${p.classCode.toLowerCase()}||${p.schedule.toLowerCase()}`;
+        (groups.get(key) || groups.set(key, []).get(key)!).push(p);
+      }
+
+      const defGroup = requiredGroup || classificationGroups[0];
+      const defSub = defGroup?.subClassifications.find(s => s.isDefault) || defGroup?.subClassifications[0];
+      let unmatchedClass = 0;
+      const newEntries: ClassificationEntry[] = [];
+      for (const list of groups.values()) {
+        const itemRows: ItemRow[] = list.map(p => ({ itemNumber: p.itemNumber, quantity: p.quantity, agreementRate: p.agreementRate }));
+        const classCode = list[0].classCode;
+        const sub = (classCode && findSub(classCode)) || defSub;
+        if (classCode && !findSub(classCode)) unmatchedClass++;
+        const scheduleItem = list[0].schedule;
+        const first = itemRows[0];
+        newEntries.push({
+          subClassificationId: sub?.id || '',
+          subClassification: sub,
+          mainClassificationGroupId: sub?.groupId,
+          amount: deriveAmount({ scheduleItem } as ClassificationEntry, itemRows),
+          description: '',
+          scheduleItem,
+          manualClassification: !!(classCode && findSub(classCode)),
+          itemNumber: first.itemNumber,
+          quantity: first.quantity,
+          agreementRate: first.agreementRate,
+          itemRows,
+        });
+      }
+
+      setUnlockedEntries(prev => {
+        const nextSet = new Set(prev);
+        newEntries.forEach((_, i) => nextSet.add(entries.length + i));
+        return nextSet;
+      });
+      commit([...entries, ...newEntries]);
+      const itemCount = parsed.length;
+      toast.success(
+        `Imported ${itemCount} item(s) into ${newEntries.length} classification row(s).`
+        + (unmatchedClass ? ` ${unmatchedClass} used the default class (code not found) — please check.` : ''),
+      );
+    } catch (err) {
+      console.error('item import failed:', err);
+      toast.error('Could not read that file. Please use the template.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadItemsTemplate = async () => {
+    const XLSX = await import('xlsx');
+    const ws = XLSX.utils.json_to_sheet([
+      { 'Item No': '1130 10 (G)', 'Quantity': 100, 'Agreement Rate': 4500.5, 'Classification': '', 'Schedule': '' },
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Items');
+    XLSX.writeFile(wb, 'bill-items-template.xlsx');
   };
 
   const addItemRow = (entryIndex: number) => {
@@ -835,10 +959,24 @@ export function BillClassificationEntries({
         )}
       </div>
 
-      <Button type="button" variant="outline" onClick={addEntry} className="w-full">
-        <Plus className="mr-2 h-4 w-4" />
-        Add classification entry
-      </Button>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <Button type="button" variant="outline" onClick={addEntry} className="flex-1">
+          <Plus className="mr-2 h-4 w-4" />
+          Add classification entry
+        </Button>
+        <input ref={importInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleImportItems} />
+        <Button type="button" variant="outline" disabled={importing} onClick={() => importInputRef.current?.click()} className="flex-1 sm:flex-none">
+          <Upload className="mr-2 h-4 w-4" />
+          {importing ? 'Importing…' : 'Import items (Excel)'}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={downloadItemsTemplate} className="text-slate-500 hover:text-slate-700">
+          <Download className="mr-1.5 h-3.5 w-3.5" />
+          Template
+        </Button>
+      </div>
+      <p className="text-[11px] text-slate-400">
+        Excel/CSV columns: <span className="font-medium">Item No</span>, <span className="font-medium">Quantity</span>, <span className="font-medium">Agreement Rate</span>, and optionally <span className="font-medium">Classification</span> (code, e.g. A1) and <span className="font-medium">Schedule</span>. Items are grouped by classification + schedule; rows without a valid classification use the default one.
+      </p>
     </div>
   );
 }
