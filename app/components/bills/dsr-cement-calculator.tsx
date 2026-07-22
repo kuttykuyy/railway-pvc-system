@@ -12,6 +12,14 @@ export interface CementSchedule {
   name: string;
   affectedItemCount: number;
   cementQtyMT: number;
+  /** DSR codes of the cement-affected items in this schedule (for splitting cement out). */
+  codes?: string[];
+}
+
+export interface CementApplyBreakdown {
+  schedule: string;
+  amount: number;
+  codes: string[];
 }
 
 interface ScheduleSetting {
@@ -44,7 +52,7 @@ export function DsrCementCalculator({
   contractSchedules?: unknown;
   /** Contract.rebatePercentage — agreed once for the whole agreement. */
   contractRebate?: number | null;
-  onApply: (amount: number) => void;
+  onApply: (amount: number, breakdown: CementApplyBreakdown[]) => void;
 }) {
   const [baseRate, setBaseRate] = useState(DEFAULT_DSR_BASE_RATE);
   const [settings, setSettings] = useState<Record<string, ScheduleSetting>>({});
@@ -196,7 +204,14 @@ export function DsrCementCalculator({
           <div className="text-[11px] uppercase tracking-wide text-slate-400">Total Derived Cement Cost</div>
           <div className="text-lg font-bold text-slate-900">₹{money(total)}</div>
         </div>
-        <Button type="button" onClick={() => onApply(Math.round(total * 100) / 100)} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+        <Button
+          type="button"
+          onClick={() => onApply(
+            Math.round(total * 100) / 100,
+            schedules.map(s => ({ schedule: s.name, amount: Math.round(scheduleAmount(s) * 100) / 100, codes: s.codes || [] })),
+          )}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+        >
           Apply Derived Cost
         </Button>
       </div>

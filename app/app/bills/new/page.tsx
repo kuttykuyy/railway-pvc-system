@@ -51,6 +51,7 @@ import { validateDate, validateDateForApi } from '@/lib/date-validation';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
 import { computeRebateFactor, scaleComponentsWithRebate } from '@/lib/rebate';
 import { inferMainClassification } from '@/lib/work-classification';
+import { applyCementSplit, type CementBreakdownItem } from '@/lib/cement-split';
 
 
 interface Contract {
@@ -117,6 +118,7 @@ interface ClassificationEntry {
   itemRows?: ItemRow[];
   aiReviewed?: boolean;
   manualClassification?: boolean;
+  isDerivedCement?: boolean;
 }
 
 function classificationEntryKey(entry: ClassificationEntry): string {
@@ -1130,6 +1132,38 @@ function NewBillPageContent() {
     }
   };
 
+  // Split derived cement out of the work items into a "Cement (derived)" classification
+  // row (like the AI upload) instead of the single dedicated field, keeping the total same.
+  const applyDerivedCement = (total: number, breakdown: CementBreakdownItem[]) => {
+    const allSubs = classificationGroups.flatMap((g: any) => g.subClassifications);
+    const mainCode = (classificationEntries[0]?.subClassification?.code
+      || (selectedContract?.workDescription ? inferMainClassification(selectedContract.workDescription).code : '')
+      || '').charAt(0).toUpperCase();
+    const cementSub = allSubs.find((s: any) => s.code?.toUpperCase() === `${mainCode}C`)
+      || allSubs.find((s: any) => /c$/i.test(s.code || ''));
+    if (!cementSub) {
+      // No cement classification exists — fall back to the dedicated field.
+      setFormData(p => ({ ...p, cementAmount: total.toFixed(2) }));
+      toast.success(`Cement cost applied to the dedicated field: ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
+      return;
+    }
+    const makeCementEntry = (schedule: string, amount: number): ClassificationEntry => ({
+      subClassificationId: cementSub.id,
+      subClassification: cementSub,
+      amount,
+      description: `Cement (derived) — ${schedule}`,
+      scheduleItem: schedule === 'Default' ? '' : schedule,
+      isDerivedCement: true,
+      manualClassification: true,
+      classificationJustification: 'Cement portion split from the work items using DSR 2021 cement coefficients.',
+    });
+    const next = applyCementSplit(classificationEntries, breakdown, makeCementEntry);
+    setClassificationEntries(next);
+    // Cement now lives in the classification rows, so clear the dedicated field to avoid double-counting.
+    setFormData(p => ({ ...p, cementAmount: '' }));
+    toast.success(`Cement split into ${breakdown.filter(b => b.amount > 0).length} classification row(s): ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
+  };
+
   const handlePreview = async () => {
     if (!formData.contractId || !formData.zone || !formData.dateOfMeasurement) {
       toast.error('Please fill Contract, Zone, and Date of Measurement before previewing');
@@ -2049,10 +2083,7 @@ function NewBillPageContent() {
                             contractId={formData.contractId || undefined}
                             contractSchedules={selectedContract?.schedules}
                             contractRebate={selectedContract?.rebatePercentage}
-                            onApply={(amount) => {
-                              setFormData(p => ({ ...p, cementAmount: amount.toFixed(2) }));
-                              toast.success(`Cement cost applied: ₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
-                            }}
+                            onApply={applyDerivedCement}
                           />
                         )}
                       </div>
