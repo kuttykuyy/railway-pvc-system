@@ -276,6 +276,11 @@ export default function Navigation() {
         <div className="flex justify-between items-center h-16">
           {/* Brand */}
           <Link href="/contracts" className="flex items-center space-x-2 sm:space-x-3 group">
+            <img
+              src="/logo.png"
+              alt="IR-PVC logo"
+              className="h-9 w-auto sm:h-10 object-contain transition-transform group-hover:scale-105"
+            />
             <div className="flex flex-col">
               <span className="text-lg sm:text-xl font-bold text-emerald-600 hidden sm:block leading-tight tracking-tight">
                 IR-PVC

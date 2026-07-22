@@ -323,6 +323,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
             </Sheet>
             
             <Link href="/dashboard" className="flex items-center space-x-2">
+              <img src="/logo.png" alt="IR-PVC logo" className="h-8 w-auto object-contain" />
               <h1 className="text-lg font-bold bg-gradient-to-r from-emerald-600 to-emerald-800 bg-clip-text text-transparent">
                 IR-PVC
               </h1>
