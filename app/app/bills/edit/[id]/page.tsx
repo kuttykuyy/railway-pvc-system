@@ -191,16 +191,24 @@ function EditBillPageContent() {
       toast.success(`Cement cost applied to the dedicated field: ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
       return;
     }
-    const makeCementEntry = (schedule: string, amount: number): ClassificationEntry => ({
-      subClassificationId: cementSub.id,
-      subClassification: cementSub,
-      amount,
-      description: `Cement (derived) — ${schedule}`,
-      scheduleItem: schedule === 'Default' ? '' : schedule,
-      isDerivedCement: true,
-      manualClassification: true,
-      classificationJustification: 'Cement portion split from the work items using DSR 2021 cement coefficients.',
-    });
+    const makeCementEntry = (item: CementBreakdownItem, amount: number): ClassificationEntry => {
+      const qty = item.cementQtyMT ?? 0;
+      const rate = item.ratePerMt ?? 0;
+      const breakup = qty > 0 && rate > 0
+        ? ` · ${qty.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT × ₹${rate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}/MT`
+          + (item.affectedItemCount ? ` (${item.affectedItemCount} items)` : '')
+        : '';
+      return {
+        subClassificationId: cementSub.id,
+        subClassification: cementSub,
+        amount,
+        description: `Cement (derived) — ${item.schedule}${breakup}`,
+        scheduleItem: item.schedule === 'Default' ? '' : item.schedule,
+        isDerivedCement: true,
+        manualClassification: true,
+        classificationJustification: `Cement portion split from the work items using DSR 2021 cement coefficients${breakup ? `:${breakup.replace(' · ', ' ')} = ₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '.'}`,
+      };
+    };
     setClassificationEntries(applyCementSplit(classificationEntries, breakdown, makeCementEntry));
     setForm(p => ({ ...p, cementAmount: '' }));
     toast.success(`Cement split into ${breakdown.filter(b => b.amount > 0).length} classification row(s): ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);

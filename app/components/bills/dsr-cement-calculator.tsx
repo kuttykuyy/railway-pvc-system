@@ -20,6 +20,9 @@ export interface CementApplyBreakdown {
   schedule: string;
   amount: number;
   codes: string[];
+  cementQtyMT: number;
+  ratePerMt: number;
+  affectedItemCount: number;
 }
 
 interface ScheduleSetting {
@@ -208,7 +211,14 @@ export function DsrCementCalculator({
           type="button"
           onClick={() => onApply(
             Math.round(total * 100) / 100,
-            schedules.map(s => ({ schedule: s.name, amount: Math.round(scheduleAmount(s) * 100) / 100, codes: s.codes || [] })),
+            schedules.map(s => ({
+              schedule: s.name,
+              amount: Math.round(scheduleAmount(s) * 100) / 100,
+              codes: s.codes || [],
+              cementQtyMT: s.cementQtyMT,
+              ratePerMt: derivedRates(s.name).perMt,
+              affectedItemCount: s.affectedItemCount,
+            })),
           )}
           className="bg-emerald-600 hover:bg-emerald-700 text-white"
         >
