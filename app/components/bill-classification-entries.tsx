@@ -180,8 +180,12 @@ export function BillClassificationEntries({
     Math.round((scheduleFactor(scheduleItem) - 1) * 10000) / 100;
 
   // Amount actually stored for an entry: row total (GST-adjusted) x its schedule factor.
-  const deriveAmount = (entry: ClassificationEntry, rows: ItemRow[], includeGst: boolean = ratesIncludeGst) =>
-    Math.round(rowsTotal(rows, includeGst) * scheduleFactor(entry.scheduleItem) * 100) / 100;
+  // Derived-cement rows already have escalation/bid/rebate baked into the DSR cement rate,
+  // so the schedule factor must NOT be applied again to them.
+  const deriveAmount = (entry: ClassificationEntry, rows: ItemRow[], includeGst: boolean = ratesIncludeGst) => {
+    const factor = entry.isDerivedCement ? 1 : scheduleFactor(entry.scheduleItem);
+    return Math.round(rowsTotal(rows, includeGst) * factor * 100) / 100;
+  };
 
   // Switching the GST basis re-derives every amount from its rows, so the toggle is
   // lossless — the raw entered rates never change and it can be flipped back. Entries
@@ -746,6 +750,8 @@ export function BillClassificationEntries({
                       />
                     )}
                     {(() => {
+                      // Derived-cement rows already bake escalation/bid into the DSR rate, so no factor note.
+                      if (entry.isDerivedCement) return null;
                       const rates = findScheduleRates(scheduleRates, entry.scheduleItem || '');
                       if (!rates || (!rates.bidRate && !rates.escalation)) return null;
                       const pct = factorPct(entry.scheduleItem);

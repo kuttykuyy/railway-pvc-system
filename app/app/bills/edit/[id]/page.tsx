@@ -198,6 +198,7 @@ function EditBillPageContent() {
         ? ` · ${qty.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT × ₹${rate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}/MT`
           + (item.affectedItemCount ? ` (${item.affectedItemCount} items)` : '')
         : '';
+      const cementRow = { itemNumber: 'DSR 5.35 (Cement)', quantity: qty || '', agreementRate: rate || '' };
       return {
         subClassificationId: cementSub.id,
         subClassification: cementSub,
@@ -206,6 +207,10 @@ function EditBillPageContent() {
         scheduleItem: item.schedule === 'Default' ? '' : item.schedule,
         isDerivedCement: true,
         manualClassification: true,
+        itemNumber: cementRow.itemNumber,
+        quantity: cementRow.quantity,
+        agreementRate: cementRow.agreementRate,
+        itemRows: [cementRow],
         classificationJustification: `Cement portion split from the work items using DSR 2021 cement coefficients${breakup ? `:${breakup.replace(' · ', ' ')} = ₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '.'}`,
       };
     };
