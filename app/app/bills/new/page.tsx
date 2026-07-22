@@ -44,7 +44,7 @@ import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-di
 import { BillPdfCementAnalyzer, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
 import { useLanguage } from '@/components/i18n-provider';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
-import { scheduleNames } from '@/lib/contract-schedules';
+import { scheduleNames, normalizeSchedules } from '@/lib/contract-schedules';
 import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr-cement-calculator';
 import { ContextualHelp } from '@/components/contextual-help';
 import { validateDate, validateDateForApi } from '@/lib/date-validation';
@@ -2003,6 +2003,7 @@ function NewBillPageContent() {
                         classificationGroups={classificationGroups}
                         workDescription={selectedContract?.workDescription}
                         contractSchedules={scheduleNames(selectedContract?.schedules)}
+                        scheduleRates={normalizeSchedules(selectedContract?.schedules)}
                         contractId={formData.contractId || undefined}
                         measurementDate={formData.dateOfMeasurement || undefined}
                         lockEntries={isAiUploaded}
