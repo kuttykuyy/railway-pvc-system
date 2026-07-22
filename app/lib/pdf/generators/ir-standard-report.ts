@@ -1016,10 +1016,20 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     // reconciles to the actual Bill Amount, matching the IREPS proforma. (grossBillAmount
     // is not relied on here because for rebate bills it is stored equal to the net.)
     const grossTotal = itemsGrossTotal;
-    const netAmount = Number(bill.billAmount) || grossTotal;
-    const rebate = grossTotal - netAmount;
+    // Prefer the contract's agreed rebate %; only fall back to inferring it from the
+    // stored payable amount when the contract carries no rebate on record.
+    const contractRebatePct = Number((bill.contract as any)?.rebatePercentage) || 0;
+    let rebate: number, netAmount: number, rebatePct: number;
+    if (contractRebatePct > 0) {
+      rebatePct = contractRebatePct;
+      rebate = Math.round(grossTotal * contractRebatePct) / 100; // gross x pct/100, to paise
+      netAmount = grossTotal - rebate;
+    } else {
+      netAmount = Number(bill.billAmount) || grossTotal;
+      rebate = grossTotal - netAmount;
+      rebatePct = grossTotal > 0 ? (rebate / grossTotal) * 100 : 0;
+    }
     const showRebate = grossTotal > 0 && rebate > 0 && rebate / grossTotal > 0.005;
-    const rebatePct = grossTotal > 0 ? (rebate / grossTotal) * 100 : 0;
 
     // Reserve room for the whole summary (title + header + one row per schedule,
     // each of which can wrap to ~2 lines, + up to 3 total/rebate/net rows) so the
