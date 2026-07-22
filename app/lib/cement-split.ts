@@ -4,6 +4,10 @@ export interface CementBreakdownItem {
   schedule: string;
   amount: number;
   codes: string[];
+  /** Breakup behind the amount, for display on the cement row. */
+  cementQtyMT?: number;
+  ratePerMt?: number;
+  affectedItemCount?: number;
 }
 
 interface EntryLike {
@@ -37,7 +41,7 @@ function entryCodes(e: EntryLike): string[] {
 export function applyCementSplit<T extends EntryLike>(
   entries: T[],
   breakdown: CementBreakdownItem[],
-  makeCementEntry: (schedule: string, amount: number) => T,
+  makeCementEntry: (item: CementBreakdownItem, amount: number) => T,
 ): T[] {
   // 1. Separate prior derived-cement entries from the work items.
   const oldCementBySched = new Map<string, number>();
@@ -72,7 +76,7 @@ export function applyCementSplit<T extends EntryLike>(
       const factor = target / curTotal;
       for (const e of affected) e.amount = Math.round(num(e.amount) * factor * 100) / 100;
     }
-    if (newC > 0) cementEntries.push(makeCementEntry(s, newC));
+    if (newC > 0 && bd) cementEntries.push(makeCementEntry(bd, newC));
   }
 
   return [...work, ...cementEntries];
