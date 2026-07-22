@@ -1,6 +1,6 @@
 /**
  * Indian Railway Standard PVC Statement Generator
- * Format as per Railway Board GCC Clause 17 / 17A / 17B Proforma
+ * Format as per Railway Board GCC Clause 46A Proforma (17A / 17B govern the extension caps)
  * A4 Landscape for better readability
  */
 
@@ -340,7 +340,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   y += 5;
   pdf.setFontSize(9);
   pdf.setFont('helvetica', 'normal');
-  pdf.text('(As per GCC Clause 17 / Railway Board Guidelines)', pageW / 2, y, { align: 'center' });
+  pdf.text('(As per GCC Clause 46A / Railway Board Guidelines)', pageW / 2, y, { align: 'center' });
   y += 2;
 
   // Double rule
@@ -428,14 +428,14 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   ensureSpace(60);
   pdf.setFontSize(9);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('C. PRICE VARIATION COMPUTATION (GCC Clause 17)', mL, y);
+  pdf.text('C. PRICE VARIATION COMPUTATION (GCC Clause 46A)', mL, y);
   y += 5;
 
   // GCC Formula display
   pdf.setFontSize(8);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(60, 60, 60);
-  pdf.text('Formula (GCC Cl.17):  Vn = W x SUM[ Pn x (In - I0) / I0 ]', mL + 2, y);
+  pdf.text('Formula (GCC Cl.46A):  Vn = W x SUM[ Pn x (In - I0) / I0 ]', mL + 2, y);
   pdf.setFont('helvetica', 'italic');
   pdf.text(`where  W = Gross Bill Amount = ${fmtMoney(billAmount)},  Pn = Component Weight (%),  I0 = Base Month Index,  In = Quarter Average Index`, mL + 2, y + 4);
   pdf.setFont('helvetica', 'normal');
