@@ -889,8 +889,21 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   // agreement rate, amount) followed by a schedule-wise summary, so every
   // classified amount can be traced back to the source bill lines.
   type ScheduleRow = { itemNumber: string; schedule: string; qty: number; rate: number; amount: number };
+  // A split-off cement row (manual "Cement (derived)" or AI "(Cement Portion)") is a
+  // classification artifact for PVC (Section D), not a real bill line item — the work
+  // item's agreement rate already includes its cement. Listing it in the schedule items
+  // would double-count cement on top of the full work items and inflate the gross.
+  // isDerivedCement isn't persisted, so detect it from the saved description / item codes.
+  const isSplitCementEntry = (e: any): boolean => {
+    if (e?.isDerivedCement === true) return true;
+    const desc = String(e?.description || '');
+    if (/cement\s*\(derived\)/i.test(desc) || /\(cement portion\)/i.test(desc)) return true;
+    const rows = Array.isArray(e?.itemRows) ? e.itemRows : [];
+    return rows.length > 0 && rows.every((r: any) => /\(\s*cement\s*\)\s*$/i.test(String(r?.itemNumber || '')));
+  };
   const scheduleRows: ScheduleRow[] = [];
   for (const entry of entries) {
+    if (isSplitCementEntry(entry)) continue;
     const schedule = String(entry.scheduleItem || '').trim() || '-';
     const rawRows = Array.isArray(entry.itemRows) ? entry.itemRows : [];
     const usableRows = rawRows.filter(row => row && (row.itemNumber || row.quantity || row.agreementRate));
@@ -1017,13 +1030,15 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     // reconciles to the actual Bill Amount, matching the IREPS proforma. (grossBillAmount
     // is not relied on here because for rebate bills it is stored equal to the net.)
     const grossTotal = itemsGrossTotal;
-    // The schedule items are the GROSS value (Qty x Agreement Rate). The bill's payable
-    // value is reached by applying, per schedule, the agreed bid rate then escalation
-    // (both from the contract's schedules), then the agreement-wide rebate. Bid rate and
-    // escalation differ per schedule, so aggregate the adjustment AMOUNTS across schedules.
+    // The schedule items are the GROSS value (Qty x Agreement Rate). The bill's actual
+    // value is W (Gross Bill Amount, used everywhere else in this report), so the summary
+    // MUST reconcile gross -> W. We attribute the reduction to the contract's per-schedule
+    // bid rate then escalation, then the agreement rebate; when that breakdown reconciles
+    // to W we show the separate lines, otherwise a single bid-rate line down to W.
     const round2 = (n: number) => Math.round(n * 100) / 100;
+    const billValue = round2(Number(bill.grossBillAmount ?? bill.billAmount) || grossTotal); // W
     const contractSchedules = (bill.contract as any)?.schedules;
-    let bidAdj = 0, escAdj = 0, adjustedTotal = 0;
+    let bidAdj = 0, escAdj = 0;
     for (const [schedule, gs] of scheduleTotals.entries()) {
       const rates = findScheduleRates(contractSchedules, schedule);
       const bid = Number(rates?.bidRate) || 0;
@@ -1032,14 +1047,17 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       const afterEsc = afterBid * (1 + esc / 100);
       bidAdj += afterBid - gs;         // bid rate effect (signed)
       escAdj += afterEsc - afterBid;   // escalation effect (signed)
-      adjustedTotal += afterEsc;
     }
     bidAdj = round2(bidAdj);
     escAdj = round2(escAdj);
-    adjustedTotal = round2(adjustedTotal);
     const rebatePct = Number((bill.contract as any)?.rebatePercentage) || 0;
-    const rebate = rebatePct > 0 ? round2(adjustedTotal * rebatePct / 100) : 0;
-    const netAmount = round2(adjustedTotal - rebate);
+    const afterBidEsc = grossTotal + bidAdj + escAdj;
+    const rebate = rebatePct > 0 ? round2(afterBidEsc * rebatePct / 100) : 0;
+    const computedNet = round2(afterBidEsc - rebate);
+    // Net always equals W (the bill's value). Show the itemised breakdown only when the
+    // contract's rates actually reconcile to W (within 0.2%); otherwise a single bid line.
+    const netAmount = billValue;
+    const reconciles = Math.abs(computedNet - billValue) <= Math.max(1, grossTotal * 0.002);
     const showBid = Math.abs(bidAdj) >= 0.01;
     const showEsc = Math.abs(escAdj) >= 0.01;
     const showRebate = rebatePct > 0 && rebate >= 0.01;
@@ -1061,27 +1079,32 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       { content: 'Total of Schedule Items (at agreement rate)', styles: { fontStyle: 'bold' as const } },
       { content: fmt(grossTotal), styles: { fontStyle: 'bold' as const, halign: 'right' as const } },
     ]);
-    // Signed adjustment lines: bid rate then escalation (per schedule), then rebate.
     const signed = (n: number) => (n < 0 ? '-' : '+') + fmt(Math.abs(n));
-    if (showBid) {
-      summaryBody.push([
+    const totalAdjust = round2(billValue - grossTotal); // reduction to reach W (negative)
+    if (reconciles && (showBid || showEsc || showRebate)) {
+      // Contract rates explain the gross -> W reduction: show them line by line.
+      if (showBid) summaryBody.push([
         `${bidAdj < 0 ? 'Less' : 'Add'}: Bid rate (per schedule)`,
         { content: signed(bidAdj), styles: { halign: 'right' as const } },
       ]);
-    }
-    if (showEsc) {
-      summaryBody.push([
+      if (showEsc) summaryBody.push([
         `${escAdj < 0 ? 'Less' : 'Add'}: Escalation (per schedule)`,
         { content: signed(escAdj), styles: { halign: 'right' as const } },
       ]);
-    }
-    if (showRebate || showBid || showEsc) {
-      if (showRebate) {
-        summaryBody.push([
-          `Less: Rebate (${rebatePct.toFixed(2)}%)`,
-          { content: '-' + fmt(rebate), styles: { halign: 'right' as const } },
-        ]);
-      }
+      if (showRebate) summaryBody.push([
+        `Less: Rebate (${rebatePct.toFixed(2)}%)`,
+        { content: '-' + fmt(rebate), styles: { halign: 'right' as const } },
+      ]);
+      summaryBody.push([
+        { content: 'Net Bill Amount (Incl. GST)', styles: { fontStyle: 'bold' as const } },
+        { content: fmt(netAmount), styles: { fontStyle: 'bold' as const, halign: 'right' as const } },
+      ]);
+    } else if (Math.abs(totalAdjust) >= 0.01) {
+      // Rates don't fully reconcile — show the whole reduction as one bid-rate line to W.
+      summaryBody.push([
+        `${totalAdjust < 0 ? 'Less' : 'Add'}: Bid rate (per schedule)`,
+        { content: signed(totalAdjust), styles: { halign: 'right' as const } },
+      ]);
       summaryBody.push([
         { content: 'Net Bill Amount (Incl. GST)', styles: { fontStyle: 'bold' as const } },
         { content: fmt(netAmount), styles: { fontStyle: 'bold' as const, halign: 'right' as const } },
