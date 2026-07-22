@@ -65,6 +65,9 @@ interface ClassificationEntry {
   /** True once the user manually picks a classification — rebuilds and the automatic
    * PVC comparison must never override a manual choice. */
   manualClassification?: boolean;
+  /** True for a "Cement (derived)" row split out of the work items by the DSR calculator,
+   * so re-applying can fold it back in first (keeps the bill total stable). */
+  isDerivedCement?: boolean;
 }
 
 interface BillClassificationEntriesProps {

@@ -18,6 +18,8 @@ import { BillClassificationEntries } from '@/components/bill-classification-entr
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr-cement-calculator';
 import { scheduleNames, normalizeSchedules } from '@/lib/contract-schedules';
+import { inferMainClassification } from '@/lib/work-classification';
+import { applyCementSplit, type CementBreakdownItem } from '@/lib/cement-split';
 
 interface ClassificationEntry {
   subClassificationId: string;
@@ -31,6 +33,8 @@ interface ClassificationEntry {
   quantity?: number | string | '';
   agreementRate?: number | string | '';
   itemRows?: any[];
+  isDerivedCement?: boolean;
+  manualClassification?: boolean;
 }
 
 const STEEL_FIELDS = [
@@ -172,6 +176,34 @@ function EditBillPageContent() {
     } finally {
       setDerivingCement(false);
     }
+  };
+
+  // Split derived cement into a classification row (like the AI upload), keeping total same.
+  const applyDerivedCement = (total: number, breakdown: CementBreakdownItem[]) => {
+    const allSubs = classificationGroups.flatMap((g: any) => g.subClassifications);
+    const mainCode = ((classificationEntries[0] as any)?.subClassification?.code
+      || (selectedContract?.workDescription ? inferMainClassification(selectedContract.workDescription).code : '')
+      || '').charAt(0).toUpperCase();
+    const cementSub = allSubs.find((s: any) => s.code?.toUpperCase() === `${mainCode}C`)
+      || allSubs.find((s: any) => /c$/i.test(s.code || ''));
+    if (!cementSub) {
+      setForm(p => ({ ...p, cementAmount: total.toFixed(2) }));
+      toast.success(`Cement cost applied to the dedicated field: ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
+      return;
+    }
+    const makeCementEntry = (schedule: string, amount: number): ClassificationEntry => ({
+      subClassificationId: cementSub.id,
+      subClassification: cementSub,
+      amount,
+      description: `Cement (derived) — ${schedule}`,
+      scheduleItem: schedule === 'Default' ? '' : schedule,
+      isDerivedCement: true,
+      manualClassification: true,
+      classificationJustification: 'Cement portion split from the work items using DSR 2021 cement coefficients.',
+    });
+    setClassificationEntries(applyCementSplit(classificationEntries, breakdown, makeCementEntry));
+    setForm(p => ({ ...p, cementAmount: '' }));
+    toast.success(`Cement split into ${breakdown.filter(b => b.amount > 0).length} classification row(s): ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -396,10 +428,7 @@ function EditBillPageContent() {
                   contractId={form.contractId || undefined}
                   contractSchedules={selectedContract?.schedules}
                   contractRebate={selectedContract?.rebatePercentage}
-                  onApply={(amount) => {
-                    setForm(p => ({ ...p, cementAmount: amount.toFixed(2) }));
-                    toast.success(`Cement cost applied: ₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
-                  }}
+                  onApply={applyDerivedCement}
                 />
               )}
             </div>
