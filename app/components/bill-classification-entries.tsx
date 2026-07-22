@@ -349,40 +349,85 @@ export function BillClassificationEntries({
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' });
 
-      const itemRows: ItemRow[] = rows
-        .map(r => ({
-          itemNumber: String(pickField(r, ['itemnumber', 'itemno', 'item', 'itemcode', 'dsrcode', 'code', 'no']) || '').trim(),
-          quantity: pickField(r, ['quantity', 'qty', 'quantityexecuted', 'quantitysincelastbill']),
-          agreementRate: pickField(r, ['agreementrate', 'rate', 'rateinrs', 'agreementrateinrs', 'agrate']),
-        }))
-        .filter(r => r.itemNumber || Number(r.quantity) > 0 || Number(r.agreementRate) > 0)
-        .map(r => ({
-          itemNumber: r.itemNumber,
-          quantity: r.quantity === '' ? '' : (Number(r.quantity) || ''),
-          agreementRate: r.agreementRate === '' ? '' : (Number(r.agreementRate) || ''),
-        }));
+      // Parse each row: item + optional classification code + optional schedule.
+      const allSubs = classificationGroups.flatMap(g => g.subClassifications);
+      const findSub = (raw: any) => {
+        const norm = String(raw || '').trim().toLowerCase();
+        if (!norm) return null;
+        return allSubs.find(s => (s.code || '').toLowerCase() === norm)
+          || allSubs.find(s => (s.name || '').toLowerCase() === norm)
+          || allSubs.find(s => {
+            const c = (s.code || '').toLowerCase();
+            return !!c && (c.startsWith(norm) || norm.startsWith(c));
+          })
+          || null;
+      };
 
-      if (itemRows.length === 0) {
-        toast.error('No items found. Expected columns: Item No, Quantity, Agreement Rate.');
+      type Parsed = { itemNumber: string; quantity: number | ''; agreementRate: number | ''; classCode: string; schedule: string };
+      const parsed: Parsed[] = rows
+        .map(r => {
+          const q = pickField(r, ['quantity', 'qty', 'quantityexecuted', 'quantitysincelastbill']);
+          const rate = pickField(r, ['agreementrate', 'rate', 'rateinrs', 'agreementrateinrs', 'agrate']);
+          return {
+            itemNumber: String(pickField(r, ['itemnumber', 'itemno', 'item', 'itemcode', 'dsrcode', 'no']) || '').trim(),
+            quantity: q === '' ? '' as const : (Number(q) || ''),
+            agreementRate: rate === '' ? '' as const : (Number(rate) || ''),
+            classCode: String(pickField(r, ['classification', 'class', 'classificationcode', 'subclassification', 'subclass', 'classcode']) || '').trim(),
+            schedule: String(pickField(r, ['schedule', 'scheduleitem', 'schedulename']) || '').trim(),
+          };
+        })
+        .filter(r => r.itemNumber || Number(r.quantity) > 0 || Number(r.agreementRate) > 0);
+
+      if (parsed.length === 0) {
+        toast.error('No items found. Expected columns: Item No, Quantity, Agreement Rate (optional: Classification, Schedule).');
         return;
       }
 
-      const group = requiredGroup || classificationGroups[0];
-      const sub = group?.subClassifications.find(s => s.isDefault) || group?.subClassifications[0];
-      const first = itemRows[0];
-      const newEntry: ClassificationEntry = {
-        subClassificationId: sub?.id || '',
-        subClassification: sub,
-        amount: deriveAmount({ scheduleItem: '' } as ClassificationEntry, itemRows),
-        description: '',
-        itemNumber: first.itemNumber,
-        quantity: first.quantity,
-        agreementRate: first.agreementRate,
-        itemRows,
-      };
-      setUnlockedEntries(prev => new Set(prev).add(entries.length));
-      commit([...entries, newEntry]);
-      toast.success(`Imported ${itemRows.length} item(s). Pick the right classification for them.`);
+      // Group by classification + schedule so each combination becomes one row. When no
+      // classification column is present, everything lands in a single default entry.
+      const groups = new Map<string, Parsed[]>();
+      for (const p of parsed) {
+        const key = `${p.classCode.toLowerCase()}||${p.schedule.toLowerCase()}`;
+        (groups.get(key) || groups.set(key, []).get(key)!).push(p);
+      }
+
+      const defGroup = requiredGroup || classificationGroups[0];
+      const defSub = defGroup?.subClassifications.find(s => s.isDefault) || defGroup?.subClassifications[0];
+      let unmatchedClass = 0;
+      const newEntries: ClassificationEntry[] = [];
+      for (const list of groups.values()) {
+        const itemRows: ItemRow[] = list.map(p => ({ itemNumber: p.itemNumber, quantity: p.quantity, agreementRate: p.agreementRate }));
+        const classCode = list[0].classCode;
+        const sub = (classCode && findSub(classCode)) || defSub;
+        if (classCode && !findSub(classCode)) unmatchedClass++;
+        const scheduleItem = list[0].schedule;
+        const first = itemRows[0];
+        newEntries.push({
+          subClassificationId: sub?.id || '',
+          subClassification: sub,
+          mainClassificationGroupId: sub?.groupId,
+          amount: deriveAmount({ scheduleItem } as ClassificationEntry, itemRows),
+          description: '',
+          scheduleItem,
+          manualClassification: !!(classCode && findSub(classCode)),
+          itemNumber: first.itemNumber,
+          quantity: first.quantity,
+          agreementRate: first.agreementRate,
+          itemRows,
+        });
+      }
+
+      setUnlockedEntries(prev => {
+        const nextSet = new Set(prev);
+        newEntries.forEach((_, i) => nextSet.add(entries.length + i));
+        return nextSet;
+      });
+      commit([...entries, ...newEntries]);
+      const itemCount = parsed.length;
+      toast.success(
+        `Imported ${itemCount} item(s) into ${newEntries.length} classification row(s).`
+        + (unmatchedClass ? ` ${unmatchedClass} used the default class (code not found) — please check.` : ''),
+      );
     } catch (err) {
       console.error('item import failed:', err);
       toast.error('Could not read that file. Please use the template.');
@@ -393,7 +438,9 @@ export function BillClassificationEntries({
 
   const downloadItemsTemplate = async () => {
     const XLSX = await import('xlsx');
-    const ws = XLSX.utils.json_to_sheet([{ 'Item No': '1130 10 (G)', 'Quantity': 100, 'Agreement Rate': 4500.5 }]);
+    const ws = XLSX.utils.json_to_sheet([
+      { 'Item No': '1130 10 (G)', 'Quantity': 100, 'Agreement Rate': 4500.5, 'Classification': '', 'Schedule': '' },
+    ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Items');
     XLSX.writeFile(wb, 'bill-items-template.xlsx');
@@ -928,7 +975,7 @@ export function BillClassificationEntries({
         </Button>
       </div>
       <p className="text-[11px] text-slate-400">
-        Excel/CSV columns: <span className="font-medium">Item No</span>, <span className="font-medium">Quantity</span>, <span className="font-medium">Agreement Rate</span>. Imported items land in one new classification row — set its classification after.
+        Excel/CSV columns: <span className="font-medium">Item No</span>, <span className="font-medium">Quantity</span>, <span className="font-medium">Agreement Rate</span>, and optionally <span className="font-medium">Classification</span> (code, e.g. A1) and <span className="font-medium">Schedule</span>. Items are grouped by classification + schedule; rows without a valid classification use the default one.
       </p>
     </div>
   );
