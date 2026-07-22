@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const coeffs = await prisma.dsrCementCoefficient.findMany({ where: { isActive: true } });
     const byCode = new Map(coeffs.map((c) => [normalizeDsrCode(c.dsrCode), c]));
 
-    const bySchedule = new Map<string, { affectedItemCount: number; cementQtyMT: number; codes: Set<string> }>();
+    const bySchedule = new Map<string, { affectedItemCount: number; cementQtyMT: number; codes: Set<string>; items: Array<{ code: string; cementQtyMT: number }> }>();
     const unmatchedCodes = new Set<string>();
     let matchedCount = 0;
     let unmatchedCount = 0;
@@ -56,17 +56,20 @@ export async function POST(request: NextRequest) {
       const cementQty = qty * coeff.cementQuantityPerUnit; // in coeff.cementUnit (MT)
       matchedCount++;
       const sched = String(it.schedule || 'Default').trim() || 'Default';
-      const cur = bySchedule.get(sched) || { affectedItemCount: 0, cementQtyMT: 0, codes: new Set<string>() };
+      const cur = bySchedule.get(sched) || { affectedItemCount: 0, cementQtyMT: 0, codes: new Set<string>(), items: [] };
       cur.affectedItemCount += 1;
       cur.cementQtyMT += cementQty;
       // Record the raw item code that matched, so the form can split cement out of exactly
       // those cement-affected items (keeping the bill total unchanged).
-      if (String(it.dsrCode || '').trim()) cur.codes.add(String(it.dsrCode).trim());
+      const code = String(it.dsrCode || '').trim();
+      if (code) cur.codes.add(code);
+      // Per-item cement quantity, so the cement row can show one line per contributing item.
+      cur.items.push({ code: code || 'item', cementQtyMT: Math.round(cementQty * 1000) / 1000 });
       bySchedule.set(sched, cur);
     }
 
     const schedules = Array.from(bySchedule.entries())
-      .map(([name, v]) => ({ name, affectedItemCount: v.affectedItemCount, cementQtyMT: Math.round(v.cementQtyMT * 1000) / 1000, codes: Array.from(v.codes) }))
+      .map(([name, v]) => ({ name, affectedItemCount: v.affectedItemCount, cementQtyMT: Math.round(v.cementQtyMT * 1000) / 1000, codes: Array.from(v.codes), items: v.items }))
       .sort((a, b) => a.name.localeCompare(b.name));
     const totalCementQtyMT = Math.round(schedules.reduce((s, x) => s + x.cementQtyMT, 0) * 1000) / 1000;
 

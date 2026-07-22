@@ -1154,20 +1154,28 @@ function NewBillPageContent() {
         ? ` · ${qty.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT × ₹${rate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}/MT`
           + (item.affectedItemCount ? ` (${item.affectedItemCount} items)` : '')
         : '';
-      const cementRow = { itemNumber: 'DSR 5.35 (Cement)', quantity: qty || '', agreementRate: rate || '' };
+      const rate4 = rate ? Math.round(rate * 10000) / 10000 : '';
+      // One item row per cement-affected item (its own cement MT); fall back to a single
+      // aggregate row when per-item detail isn't available.
+      const perItem = (item.items && item.items.length > 0)
+        ? item.items.map(it => ({ itemNumber: `${it.code} (Cement)`, quantity: it.cementQtyMT || '', agreementRate: rate4 }))
+        : [{ itemNumber: 'DSR 5.35 (Cement)', quantity: qty || '', agreementRate: rate4 }];
+      // Set the amount from the rows so Payable = the sum of the item lines.
+      const computed = Math.round(perItem.reduce((s, r) => s + (Number(r.quantity) || 0) * (Number(r.agreementRate) || 0), 0) * 100) / 100 || amount;
+      const first = perItem[0];
       return {
         subClassificationId: cementSub.id,
         subClassification: cementSub,
-        amount,
+        amount: computed,
         description: `Cement (derived) — ${item.schedule}${breakup}`,
         scheduleItem: item.schedule === 'Default' ? '' : item.schedule,
         isDerivedCement: true,
         manualClassification: true,
-        itemNumber: cementRow.itemNumber,
-        quantity: cementRow.quantity,
-        agreementRate: cementRow.agreementRate,
-        itemRows: [cementRow],
-        classificationJustification: `Cement portion split from the work items using DSR 2021 cement coefficients${breakup ? `:${breakup.replace(' · ', ' ')} = ₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '.'}`,
+        itemNumber: first.itemNumber,
+        quantity: first.quantity,
+        agreementRate: first.agreementRate,
+        itemRows: perItem,
+        classificationJustification: `Cement portion split from the work items using DSR 2021 cement coefficients${breakup ? `:${breakup.replace(' · ', ' ')} = ₹${computed.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '.'}`,
       };
     };
     const next = applyCementSplit(classificationEntries, breakdown, makeCementEntry);

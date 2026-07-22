@@ -8,12 +8,19 @@ import { Badge } from '@/components/ui/badge';
 import { FileText, RotateCcw } from 'lucide-react';
 import { findScheduleRates } from '@/lib/contract-schedules';
 
+export interface CementItemQty {
+  code: string;
+  cementQtyMT: number;
+}
+
 export interface CementSchedule {
   name: string;
   affectedItemCount: number;
   cementQtyMT: number;
   /** DSR codes of the cement-affected items in this schedule (for splitting cement out). */
   codes?: string[];
+  /** Per-item cement quantity, for a one-line-per-item breakup on the cement row. */
+  items?: CementItemQty[];
 }
 
 export interface CementApplyBreakdown {
@@ -23,6 +30,7 @@ export interface CementApplyBreakdown {
   cementQtyMT: number;
   ratePerMt: number;
   affectedItemCount: number;
+  items: CementItemQty[];
 }
 
 interface ScheduleSetting {
@@ -218,6 +226,7 @@ export function DsrCementCalculator({
               cementQtyMT: s.cementQtyMT,
               ratePerMt: derivedRates(s.name).perMt,
               affectedItemCount: s.affectedItemCount,
+              items: s.items || [],
             })),
           )}
           className="bg-emerald-600 hover:bg-emerald-700 text-white"

@@ -8,6 +8,8 @@ export interface CementBreakdownItem {
   cementQtyMT?: number;
   ratePerMt?: number;
   affectedItemCount?: number;
+  /** Per-item cement quantity, for one item row per contributing item. */
+  items?: Array<{ code: string; cementQtyMT: number }>;
 }
 
 interface EntryLike {
