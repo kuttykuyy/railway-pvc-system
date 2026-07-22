@@ -186,6 +186,11 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
       ...updates
     }));
 
+    // Fill the schedule rows from the agreement (name + per-schedule escalation/bid).
+    if (Array.isArray(data.schedules) && data.schedules.length > 0) {
+      setSchedules(normalizeSchedules(data.schedules));
+    }
+
     // Clear any existing field errors for updated fields
     setFieldErrors(prev => {
       const newErrors = { ...prev };
