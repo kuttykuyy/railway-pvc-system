@@ -140,6 +140,20 @@ function fmtVariation(n: number): string {
   return (n * 100).toFixed(4) + '%';
 }
 
+// jsPDF's built-in Helvetica is WinAnsi-only, so characters outside Latin-1 (₹, ×,
+// en/em dashes, curly quotes) render as garbage. Map the common ones to safe text and
+// drop anything else still outside the range.
+function pdfSafe(value: unknown): string {
+  return String(value ?? '')
+    .replace(/₹/g, 'Rs.')                 // ₹ rupee
+    .replace(/[×✕✖]/g, 'x')     // × multiplication
+    .replace(/[‒-―−]/g, '-')    // figure/en/em dash, minus
+    .replace(/[‘’‛]/g, "'")     // curly single quotes
+    .replace(/[“”]/g, '"')           // curly double quotes
+    .replace(/•/g, '-')                    // bullet
+    .replace(/[^\x00-\xFF]/g, '');             // drop any remaining non-Latin1
+}
+
 // Rewrites a stored classification justification for display: strips the internal
 // price-variation working note, and rewords the older terse "Refined classification:
 // ..." text into GCC-clause style. Cement-supply rows (code ending in C) get a
@@ -360,7 +374,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     sectionHeader('A. CONTRACT DETAILS'),
     [
       { content: 'Name of Work:', styles: { fontStyle: 'bold' as const, textColor: [30,30,30] as [number,number,number] } },
-      { content: bill.contract.workDescription || '-', colSpan: 3 },
+      { content: pdfSafe(bill.contract.workDescription || '-'), colSpan: 3 },
     ],
     lv('Agreement No.:',   bill.contract.agreementNo || '-',
        'Date of Opening:', format(new Date(bill.contract.dateOfOpening), 'dd MMM yyyy')),
@@ -682,7 +696,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     let dSl = 0;
     for (const [sched, groupEntries] of sortedDGroups) {
       groupEntries.sort((a, b) => compareItemNumbers(entryItemNo(a), entryItemNo(b)));
-      classBody.push([{ content: `Schedule: ${sched}`, colSpan: 5, styles: dGroupHeaderStyle }]);
+      classBody.push([{ content: pdfSafe(`Schedule: ${sched}`), colSpan: 5, styles: dGroupHeaderStyle }]);
       for (const entry of groupEntries) {
         dSl++;
         const sub = entry.subClassification;
@@ -699,10 +713,10 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
           : String(entry.itemNumber || '').trim() || '-';
         classBody.push([
           dSl,
-          itemNumbers,
-          classification,
+          pdfSafe(itemNumbers),
+          pdfSafe(classification),
           fmt(Number(entry.amount) || 0),
-          justification,
+          pdfSafe(justification),
         ]);
       }
     }
@@ -936,14 +950,14 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     let eSl = 0;
     for (const [sched, rows] of sortedEGroups) {
       rows.sort((a, b) => compareItemNumbers(a.itemNumber, b.itemNumber));
-      itemBody.push([{ content: `Schedule: ${sched}`, colSpan: 5, styles: eGroupHeaderStyle }]);
+      itemBody.push([{ content: pdfSafe(`Schedule: ${sched}`), colSpan: 5, styles: eGroupHeaderStyle }]);
       let groupTotal = 0;
       for (const row of rows) {
         eSl++;
         groupTotal += row.amount;
         itemBody.push([
           eSl,
-          row.itemNumber,
+          pdfSafe(row.itemNumber),
           row.qty ? row.qty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : '-',
           row.rate ? fmt(row.rate) : '-',
           fmt(row.amount),
@@ -1562,7 +1576,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     y += 5;
     pdf.setFontSize(8);
     pdf.setFont('helvetica', 'normal');
-    const nowLines = pdf.splitTextToSize(`Name of Work: ${bill.contract.workDescription || '-'}`, contentW);
+    const nowLines = pdf.splitTextToSize(pdfSafe(`Name of Work: ${bill.contract.workDescription || '-'}`), contentW);
     pdf.text(nowLines, mL, y);
     y += nowLines.length * 3.6 + 1;
     const loaBits = [
