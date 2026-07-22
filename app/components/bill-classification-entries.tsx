@@ -12,6 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { inferMainClassification } from '@/lib/work-classification';
+import { findScheduleRates, type ContractSchedule } from '@/lib/contract-schedules';
 
 interface SubClassification {
   id: string;
@@ -73,6 +74,9 @@ interface BillClassificationEntriesProps {
   workDescription?: string;
   grossBillAmount?: number;
   contractSchedules?: string[];
+  /** Full schedule rate settings (name + escalation % + bid rate %) from the contract,
+   * used to adjust each entry's amount by its schedule's rates before PVC. */
+  scheduleRates?: ContractSchedule[];
   indicesData?: { base: { [key: string]: number }; current: { [key: string]: number } } | null;
   contractId?: string;
   measurementDate?: string;
@@ -106,6 +110,7 @@ export function BillClassificationEntries({
   workDescription,
   grossBillAmount,
   contractSchedules = [],
+  scheduleRates = [],
   indicesData = null,
   contractId,
   measurementDate,
@@ -158,6 +163,23 @@ export function BillClassificationEntries({
     return Math.round(net * 100) / 100;
   };
 
+  // Per-schedule rate adjustment: the amount is the estimate value, and the agreed
+  // bid rate % and escalation % (from the contract, for this entry's schedule) are
+  // applied on top before PVC — factor = (1 + bid/100) x (1 + escalation/100).
+  const scheduleFactor = (scheduleItem?: string) => {
+    const rates = findScheduleRates(scheduleRates, scheduleItem || '');
+    if (!rates) return 1;
+    const bid = Number(rates.bidRate) || 0;
+    const esc = Number(rates.escalation) || 0;
+    return (1 + bid / 100) * (1 + esc / 100);
+  };
+  const factorPct = (scheduleItem?: string) =>
+    Math.round((scheduleFactor(scheduleItem) - 1) * 10000) / 100;
+
+  // Amount actually stored for an entry: row total (GST-adjusted) x its schedule factor.
+  const deriveAmount = (entry: ClassificationEntry, rows: ItemRow[], includeGst: boolean = ratesIncludeGst) =>
+    Math.round(rowsTotal(rows, includeGst) * scheduleFactor(entry.scheduleItem) * 100) / 100;
+
   // Switching the GST basis re-derives every amount from its rows, so the toggle is
   // lossless — the raw entered rates never change and it can be flipped back. Entries
   // whose amount was typed directly (no quantity x rate) are left untouched.
@@ -167,7 +189,7 @@ export function BillClassificationEntries({
       const rows = getRows(entry);
       const derivable = rows.some(r => (Number(r.quantity) || 0) > 0 && (Number(r.agreementRate) || 0) > 0);
       if (!derivable) return entry;
-      return { ...entry, amount: rowsTotal(rows, nextIncludeGst) };
+      return { ...entry, amount: deriveAmount(entry, rows, nextIncludeGst) };
     });
     commit(nextEntries);
   };
@@ -199,6 +221,13 @@ export function BillClassificationEntries({
       // A user-picked classification is final: entry rebuilds (re-extraction, cement
       // apply) and the automatic PVC comparison must not override it.
       nextEntry.manualClassification = true;
+    }
+    // Changing the schedule changes the bid/escalation factor, so re-derive the amount
+    // from the raw rows under the new schedule (only when the rows drive the amount).
+    if (Object.prototype.hasOwnProperty.call(patch, 'scheduleItem')) {
+      const rows = getRows(nextEntry);
+      const derivable = rows.some(r => (Number(r.quantity) || 0) > 0 && (Number(r.agreementRate) || 0) > 0);
+      if (derivable) nextEntry.amount = deriveAmount(nextEntry, rows);
     }
     nextEntries[entryIndex] = nextEntry;
     commit(nextEntries);
@@ -271,7 +300,7 @@ export function BillClassificationEntries({
       itemNumber: firstRow?.itemNumber || '',
       quantity: firstRow?.quantity ?? '',
       agreementRate: firstRow?.agreementRate ?? '',
-      amount: rowsTotal(rows),
+      amount: deriveAmount(nextEntries[entryIndex], rows),
     };
     commit(nextEntries);
   };
@@ -304,7 +333,7 @@ export function BillClassificationEntries({
       itemNumber: firstRow.itemNumber,
       quantity: firstRow.quantity,
       agreementRate: firstRow.agreementRate,
-      amount: rowsTotal(rows),
+      amount: deriveAmount(entries[entryIndex], rows),
     });
   };
 
@@ -588,6 +617,17 @@ export function BillClassificationEntries({
                         className="h-9 bg-white text-sm"
                       />
                     )}
+                    {(() => {
+                      const rates = findScheduleRates(scheduleRates, entry.scheduleItem || '');
+                      if (!rates || (!rates.bidRate && !rates.escalation)) return null;
+                      const pct = factorPct(entry.scheduleItem);
+                      return (
+                        <p className="text-[11px] text-emerald-700">
+                          Bid {rates.bidRate ? `${rates.bidRate}%` : '—'} · Escalation {rates.escalation ? `${rates.escalation}%` : '—'}
+                          {' '}applied ({pct >= 0 ? '+' : ''}{pct}% to amount)
+                        </p>
+                      );
+                    })()}
                   </div>
 
                   <div className="space-y-1.5">
