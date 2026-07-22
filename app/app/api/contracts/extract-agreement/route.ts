@@ -92,7 +92,8 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   "tenderAdvertisedValue": "Advertised Value / Tender Amount (number)",
   "agreementAmount": "LOA Amount / accepted contract value (number)",
   "railwayName": "Railway zone name (e.g. Southern Railway)",
-  "division": "Division/Unit (e.g. Tiruchchirappalli / TPJ)"
+  "division": "Division/Unit (e.g. Tiruchchirappalli / TPJ)",
+  "schedules": "Array of the work schedules / schedule items listed in the agreement (e.g. Schedule-A, Schedule-B, or named item groups). For each, return {\"name\": \"schedule name/title\", \"escalation\": \"escalation % if a per-schedule escalation percentage is stated, else null\", \"bidRate\": \"tender/bid rate % above(+) or below(-) the estimate if stated for that schedule, else null\"}. Return [] if no schedules are listed."
 }`;
 
     const messages = [
@@ -110,7 +111,7 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
       response = await fetch(ABACUS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: 'route-llm', messages, response_format: { type: 'json_object' }, max_tokens: 2000, temperature: 0.1 }),
+        body: JSON.stringify({ model: 'route-llm', messages, response_format: { type: 'json_object' }, max_tokens: 3500, temperature: 0.1 }),
         signal: AbortSignal.timeout(60000),
       });
     } catch {
@@ -156,8 +157,22 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
     // derives it from dateOfOpening. So map the closing date onto dateOfOpening.
     const dateOfOpening = extracted.closingDate || extracted.dateOfOpening || null;
 
+    // Normalise the extracted schedules to { name, escalation, bidRate } strings and
+    // drop any without a name, so the form can drop them straight into its schedule rows.
+    const asStr = (v: any) => (v === null || v === undefined ? '' : String(v).trim());
+    const schedules = Array.isArray(extracted.schedules)
+      ? extracted.schedules
+          .map((s: any) => ({
+            name: asStr(s?.name),
+            escalation: asStr(s?.escalation).replace(/%/g, ''),
+            bidRate: asStr(s?.bidRate).replace(/%/g, ''),
+          }))
+          .filter((s: any) => s.name)
+      : [];
+
     return NextResponse.json({
       data: {
+        schedules,
         agreementNo: extracted.agreementNo ?? null,
         loaNo: extracted.loaNo ?? null,
         loaDate: extracted.loaDate ?? null,
