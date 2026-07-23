@@ -448,8 +448,8 @@ export default function BulkBillCreationPage() {
         ? ` · ${qty.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT × ₹${rate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}/MT`
           + (item.affectedItemCount ? ` (${item.affectedItemCount} items)` : '')
         : '';
-      const perItem = (item.items && item.items.length > 0)
-        ? item.items.map(it => ({ itemNumber: `${it.code} (Cement)`, quantity: it.cementQtyMT || '', agreementRate: rate4 }))
+      const perItem: any[] = (item.items && item.items.length > 0)
+        ? item.items.map(it => ({ itemNumber: `${it.code} (Cement)`, quantity: it.cementQtyMT || '', agreementRate: rate4, sourceQty: it.sourceQty, coefficient: it.coefficient, workUnit: it.workUnit }))
         : [{ itemNumber: 'DSR 5.35 (Cement)', quantity: qty || '', agreementRate: rate4 }];
       const computed = Math.round(perItem.reduce((s, r) => s + (Number(r.quantity) || 0) * (Number(r.agreementRate) || 0), 0) * 100) / 100 || amount;
       const first = perItem[0];

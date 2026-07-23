@@ -1157,8 +1157,8 @@ function NewBillPageContent() {
       const rate4 = rate ? Math.round(rate * 10000) / 10000 : '';
       // One item row per cement-affected item (its own cement MT); fall back to a single
       // aggregate row when per-item detail isn't available.
-      const perItem = (item.items && item.items.length > 0)
-        ? item.items.map(it => ({ itemNumber: `${it.code} (Cement)`, quantity: it.cementQtyMT || '', agreementRate: rate4 }))
+      const perItem: any[] = (item.items && item.items.length > 0)
+        ? item.items.map(it => ({ itemNumber: `${it.code} (Cement)`, quantity: it.cementQtyMT || '', agreementRate: rate4, sourceQty: it.sourceQty, coefficient: it.coefficient, workUnit: it.workUnit }))
         : [{ itemNumber: 'DSR 5.35 (Cement)', quantity: qty || '', agreementRate: rate4 }];
       // Set the amount from the rows so Payable = the sum of the item lines.
       const computed = Math.round(perItem.reduce((s, r) => s + (Number(r.quantity) || 0) * (Number(r.agreementRate) || 0), 0) * 100) / 100 || amount;
@@ -1346,6 +1346,8 @@ function NewBillPageContent() {
               itemNumber: r.itemNumber || '',
               quantity: r.quantity === '' ? null : parseFloat(String(r.quantity)) || null,
               agreementRate: r.agreementRate === '' ? null : parseFloat(String(r.agreementRate)) || null,
+              // Carry the cement derivation (source qty x coefficient / block) so the PDF can show the working.
+              ...((r as any).sourceQty !== undefined ? { sourceQty: (r as any).sourceQty, coefficient: (r as any).coefficient, workUnit: (r as any).workUnit } : {}),
             })) : null
           })),
           subClassifications: formattedSubClassifications, // Legacy support

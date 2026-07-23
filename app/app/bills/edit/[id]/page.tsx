@@ -199,8 +199,8 @@ function EditBillPageContent() {
           + (item.affectedItemCount ? ` (${item.affectedItemCount} items)` : '')
         : '';
       const rate4 = rate ? Math.round(rate * 10000) / 10000 : '';
-      const perItem = (item.items && item.items.length > 0)
-        ? item.items.map(it => ({ itemNumber: `${it.code} (Cement)`, quantity: it.cementQtyMT || '', agreementRate: rate4 }))
+      const perItem: any[] = (item.items && item.items.length > 0)
+        ? item.items.map(it => ({ itemNumber: `${it.code} (Cement)`, quantity: it.cementQtyMT || '', agreementRate: rate4, sourceQty: it.sourceQty, coefficient: it.coefficient, workUnit: it.workUnit }))
         : [{ itemNumber: 'DSR 5.35 (Cement)', quantity: qty || '', agreementRate: rate4 }];
       const computed = Math.round(perItem.reduce((s, r) => s + (Number(r.quantity) || 0) * (Number(r.agreementRate) || 0), 0) * 100) / 100 || amount;
       const first = perItem[0];
@@ -252,6 +252,7 @@ function EditBillPageContent() {
               itemNumber: r.itemNumber || '',
               quantity: r.quantity === '' ? null : parseFloat(String(r.quantity)) || null,
               agreementRate: r.agreementRate === '' ? null : parseFloat(String(r.agreementRate)) || null,
+              ...(r.sourceQty !== undefined ? { sourceQty: r.sourceQty, coefficient: r.coefficient, workUnit: r.workUnit } : {}),
             })) : null,
           })),
           nonScheduleItems: nonScheduleItems.filter(i => i.description && i.amount).map(i => ({

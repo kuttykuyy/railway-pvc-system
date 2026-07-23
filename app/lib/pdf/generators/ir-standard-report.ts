@@ -902,14 +902,18 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     return rows.length > 0 && rows.every((r: any) => /\(\s*cement\s*\)\s*$/i.test(String(r?.itemNumber || '')));
   };
   const scheduleRows: ScheduleRow[] = [];
-  const cementBreakupRows: ScheduleRow[] = []; // derived cement, shown separately (not summed)
+  type CementBreakupRow = ScheduleRow & { sourceQty?: number; coefficient?: number; workUnit?: string };
+  const cementBreakupRows: CementBreakupRow[] = []; // derived cement, shown separately (not summed)
   for (const entry of entries) {
     if (isSplitCementEntry(entry)) {
       const schedule = String(entry.scheduleItem || '').trim() || '-';
       for (const r of (Array.isArray(entry.itemRows) ? entry.itemRows : [])) {
         const qty = Number(r?.quantity) || 0;
         const rate = Number(r?.agreementRate) || 0;
-        cementBreakupRows.push({ itemNumber: String(r?.itemNumber || '').trim() || '-', schedule, qty, rate, amount: qty * rate });
+        cementBreakupRows.push({
+          itemNumber: String(r?.itemNumber || '').trim() || '-', schedule, qty, rate, amount: qty * rate,
+          sourceQty: (r as any)?.sourceQty, coefficient: (r as any)?.coefficient, workUnit: (r as any)?.workUnit,
+        });
       }
       continue;
     }
@@ -1036,23 +1040,29 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       y += 2;
       let cSl = 0;
       let cTotal = 0;
+      const blockOf = (u?: string) => { const m = String(u || '').match(/(\d+(?:\.\d+)?)/); const n = m ? parseFloat(m[1]) : 1; return n > 0 ? n : 1; };
       const cemBody: any[] = cementBreakupRows.map(r => {
         cSl++; cTotal += r.amount;
+        const block = blockOf(r.workUnit);
+        const working = (r.sourceQty != null && r.coefficient != null)
+          ? `${r.sourceQty} x ${r.coefficient}${block > 1 ? ` / ${block}` : ''}` + (r.workUnit ? ` (per ${r.workUnit})` : '')
+          : '-';
         return [
           cSl,
           pdfSafe(r.itemNumber),
+          pdfSafe(working),
           r.qty ? r.qty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : '-',
           r.rate ? fmt(r.rate) : '-',
           fmt(r.amount),
         ];
       });
       cemBody.push([
-        { content: 'Total Derived Cement (already included in the schedule items above)', colSpan: 4, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [242, 242, 242] as [number, number, number] } },
+        { content: 'Total Derived Cement (already included in the schedule items above)', colSpan: 5, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [242, 242, 242] as [number, number, number] } },
         { content: fmt(cTotal), styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [242, 242, 242] as [number, number, number] } },
       ]);
       autoTable(pdf, {
         startY: y + 2,
-        head: [['Sl.', 'Item No.', 'Cement Qty (MT)', 'Rate (Rs./MT)', 'Amount (Rs.)']],
+        head: [['Sl.', 'Item No.', 'Working (Qty x Coeff.)', 'Cement Qty (MT)', 'Rate (Rs./MT)', 'Amount (Rs.)']],
         body: cemBody,
         theme: 'grid',
         headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center', valign: 'middle', cellPadding: 2.5 },
@@ -1061,11 +1071,12 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         margin: { left: mL, right: mR },
         tableWidth: contentW,
         columnStyles: {
-          0: { cellWidth: 12, halign: 'center' },
-          1: { cellWidth: 75, halign: 'left' },
-          2: { cellWidth: 60, halign: 'right' },
-          3: { cellWidth: 60, halign: 'right' },
-          4: { cellWidth: 66, halign: 'right' },
+          0: { cellWidth: 10, halign: 'center' },
+          1: { cellWidth: 55, halign: 'left' },
+          2: { cellWidth: 70, halign: 'left' },
+          3: { cellWidth: 48, halign: 'right' },
+          4: { cellWidth: 48, halign: 'right' },
+          5: { cellWidth: 42, halign: 'right' },
         },
       });
       y = pdf.lastAutoTable.finalY + 6;
