@@ -383,35 +383,40 @@ export async function POST(request: NextRequest) {
         // the last row's cumulative equals the batch TOTAL. (The stored per-bill cumulative
         // is inconsistent across bills, which made this column jump around before.)
         let runningCum = 0;
+        let grossTotalSum = 0;
         const money = (n: number) => 'Rs. ' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const rows: any[] = irBills.map((b, i) => {
           // Use the stored total PVC (what the individual bill statement shows), not the
           // recomputed value, so the batch total matches the bills.
           const pvc = Number(b.pvcCalculation?.totalPvc ?? 0) || getBillPvc(b);
+          const gross = Number(b.grossBillAmount ?? b.billAmount ?? 0);
           runningCum += pvc;
+          grossTotalSum += gross;
           return [
             i + 1,
             b.billNo || '-',
             format(new Date(b.dateOfMeasurement), 'dd MMM yyyy'),
             b.quarter || '-',
+            money(gross),
             money(pvc),
             money(runningCum),
           ];
         });
         const grandTotal = runningCum;
         rows.push([
-          { content: 'TOTAL PVC (this batch)', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } },
-          { content: 'Rs. ' + grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { fontStyle: 'bold' } },
+          { content: 'TOTAL (this batch)', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } },
+          { content: money(grossTotalSum), styles: { fontStyle: 'bold', halign: 'right' } },
+          { content: money(grandTotal), styles: { fontStyle: 'bold', halign: 'right' } },
           '',
         ]);
         autoTable(sPdf, {
           startY: 35,
-          head: [['Sl.', 'Bill No.', 'Date of Measurement', 'Quarter', 'PVC Amount (Rs.)', 'Cumulative PVC (Rs.)']],
+          head: [['Sl.', 'Bill No.', 'Date of Measurement', 'Quarter', 'Gross Bill Amount (Rs.)', 'PVC Amount (Rs.)', 'Cumulative PVC (Rs.)']],
           body: rows,
           theme: 'grid',
           headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
           bodyStyles: { fontSize: 9, cellPadding: 2 },
-          columnStyles: { 0: { halign: 'center', cellWidth: 14 }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+          columnStyles: { 0: { halign: 'center', cellWidth: 12 }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } },
           margin: { left: 14, right: 14 },
         });
         const summaryBytes = new Uint8Array(sPdf.output('arraybuffer'));
