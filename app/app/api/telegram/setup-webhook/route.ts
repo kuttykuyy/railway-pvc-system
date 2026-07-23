@@ -22,7 +22,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const baseUrl = process.env.NEXTAUTH_URL || 'https://irpvc.in';
+    // Telegram requires a full public HTTPS URL. NEXTAUTH_URL is sometimes stored
+    // without a scheme (e.g. "irpvc.illall.tech"), which Telegram rejects — so
+    // normalise: add https:// when missing and drop any trailing slash.
+    let baseUrl = process.env.NEXTAUTH_URL || 'https://irpvc.in';
+    if (!/^https?:\/\//i.test(baseUrl)) baseUrl = `https://${baseUrl}`;
+    baseUrl = baseUrl.replace(/\/+$/, '');
     const webhookUrl = `${baseUrl}/api/telegram/webhook`;
 
     // Check current webhook

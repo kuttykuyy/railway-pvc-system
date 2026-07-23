@@ -14,7 +14,14 @@ function getBotToken(): string {
 export function getTelegramWebhookSecret(): string {
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
   if (!secret) throw new Error('TELEGRAM_WEBHOOK_SECRET not configured');
-  return secret;
+  // Telegram's setWebhook secret_token only allows A-Z, a-z, 0-9, "_" and "-"
+  // (1..256 chars). If the configured value has other characters, Telegram rejects
+  // setWebhook ("secret token contains unallowed characters"). Strip anything else
+  // here so BOTH registration (secret we send) and validation (secret Telegram
+  // echoes back in the header) use the same sanitized value.
+  const safe = secret.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 256);
+  if (!safe) throw new Error('TELEGRAM_WEBHOOK_SECRET has no usable characters (allowed: A-Z a-z 0-9 _ -)');
+  return safe;
 }
 
 function apiUrl(method: string): string {
