@@ -385,7 +385,9 @@ export async function POST(request: NextRequest) {
         let runningCum = 0;
         const money = (n: number) => 'Rs. ' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const rows: any[] = irBills.map((b, i) => {
-          const pvc = getBillPvc(b);
+          // Use the stored total PVC (what the individual bill statement shows), not the
+          // recomputed value, so the batch total matches the bills.
+          const pvc = Number(b.pvcCalculation?.totalPvc ?? 0) || getBillPvc(b);
           runningCum += pvc;
           return [
             i + 1,
