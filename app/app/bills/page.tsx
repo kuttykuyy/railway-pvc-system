@@ -158,6 +158,9 @@ export default function BillsPage() {
   // Detailed format is hidden from the UI; IR Standard is the only downloadable report.
   const [pdfFormat, setPdfFormat] = useState<'detailed' | 'ir_standard'>('ir_standard');
   const [includeIndexDocs, setIncludeIndexDocs] = useState(true);
+  // Bulk download: ask "with index / without index" before generating the combined PDF.
+  const [showBulkIndexDialog, setShowBulkIndexDialog] = useState(false);
+  const [pendingBulk, setPendingBulk] = useState<((includeDocs: boolean) => void) | null>(null);
 
   // Delete permissions state
   const [deletableBillIds, setDeletableBillIds] = useState<Set<string>>(new Set());
@@ -762,17 +765,21 @@ export default function BillsPage() {
     }
   };
 
-  const generateBulkReport = async () => {
+  const generateBulkReport = () => {
     if (selectedBills.length === 0) {
       toast.error('Please select bills to generate report');
       return;
     }
-
     if (selectedBills.length === 1) {
       toast.error('Please select at least 2 bills for bulk report');
       return;
     }
+    const ids = [...selectedBills];
+    setPendingBulk(() => (includeDocs: boolean) => runBulkReport(ids, includeDocs));
+    setShowBulkIndexDialog(true);
+  };
 
+  const runBulkReport = async (billIds: string[], includeDocs: boolean) => {
     setGeneratingBulkReport(true);
     try {
       const response = await fetch('/api/bills/bulk-pdf-report', {
@@ -780,7 +787,7 @@ export default function BillsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ billIds: selectedBills, format: pdfFormat }),
+        body: JSON.stringify({ billIds, format: pdfFormat, includeDocs }),
       });
 
       if (!response.ok) {
@@ -793,7 +800,7 @@ export default function BillsPage() {
       const a = document.createElement('a');
       a.href = downloadUrl;
       const formatSuffix = pdfFormat === 'ir_standard' ? 'IR_Standard' : 'Detailed';
-      a.download = `Bulk_PVC_${formatSuffix}_${selectedBills.length}_Bills_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf`;
+      a.download = `Bulk_PVC_${formatSuffix}_${billIds.length}_Bills_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -809,7 +816,12 @@ export default function BillsPage() {
     }
   };
 
-  const generateBatchCombinedPDF = async (batchBills: Bill[], batchName: string, batchId: string) => {
+  const generateBatchCombinedPDF = (batchBills: Bill[], batchName: string, batchId: string) => {
+    setPendingBulk(() => (includeDocs: boolean) => runBatchCombinedPDF(batchBills, batchName, batchId, includeDocs));
+    setShowBulkIndexDialog(true);
+  };
+
+  const runBatchCombinedPDF = async (batchBills: Bill[], batchName: string, batchId: string, includeDocs: boolean) => {
     const billIds = batchBills.map(b => b.id);
 
     setGeneratingCombinedPDF(batchId);
@@ -817,7 +829,7 @@ export default function BillsPage() {
       const response = await fetch('/api/bills/bulk-pdf-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ billIds, format: pdfFormat }),
+        body: JSON.stringify({ billIds, format: pdfFormat, includeDocs }),
       });
 
       if (!response.ok) {
@@ -2603,6 +2615,34 @@ export default function BillsPage() {
               Download PDF
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk download: with / without index documents */}
+      <Dialog open={showBulkIndexDialog} onOpenChange={setShowBulkIndexDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Download combined PDF</DialogTitle>
+            <DialogDescription>Do you want the supporting index documents included?</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 py-2">
+            <button
+              type="button"
+              onClick={() => { setShowBulkIndexDialog(false); const run = pendingBulk; setPendingBulk(null); run?.(true); }}
+              className="flex flex-col items-start p-3 rounded-lg border-2 border-emerald-600 bg-emerald-50 text-left"
+            >
+              <span className="font-semibold text-sm">With index documents</span>
+              <span className="text-xs text-muted-foreground mt-1">Statements + the published index documents attached</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowBulkIndexDialog(false); const run = pendingBulk; setPendingBulk(null); run?.(false); }}
+              className="flex flex-col items-start p-3 rounded-lg border-2 border-slate-200 hover:border-slate-300 text-left"
+            >
+              <span className="font-semibold text-sm">Without index</span>
+              <span className="text-xs text-muted-foreground mt-1">Statement pages only, no supporting documents</span>
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 

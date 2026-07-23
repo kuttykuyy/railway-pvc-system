@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
         
         const body = await request.json();
         const { billIds, format: pdfFormat } = body;
+        const includeIndexDocs = body.includeDocs !== false; // default: include
     
     if (!billIds || !Array.isArray(billIds) || billIds.length === 0) {
       return NextResponse.json(
@@ -501,15 +502,17 @@ export async function POST(request: NextRequest) {
       }, new Date(firstBill.dateOfMeasurement));
 
       let irFinalBytes = mergedBytes;
-      try {
-        const componentTypes = anyBillHasSteel(bills) ? undefined : NON_STEEL_COMPONENT_TYPES;
-        irFinalBytes = await embedComponentIndicesRange(mergedBytes, {
-          startDate: componentIndexStartDate,
-          endDate: componentIndexEndDate,
-          componentTypes,
-        });
-      } catch (error) {
-        console.error('Bulk IR PDF: error embedding component index documents:', error);
+      if (includeIndexDocs) {
+        try {
+          const componentTypes = anyBillHasSteel(bills) ? undefined : NON_STEEL_COMPONENT_TYPES;
+          irFinalBytes = await embedComponentIndicesRange(mergedBytes, {
+            startDate: componentIndexStartDate,
+            endDate: componentIndexEndDate,
+            componentTypes,
+          });
+        } catch (error) {
+          console.error('Bulk IR PDF: error embedding component index documents:', error);
+        }
       }
 
       // Make each summary row a clickable link that jumps to that bill's first page.
@@ -2840,11 +2843,13 @@ export async function POST(request: NextRequest) {
       }, new Date(firstBill.dateOfMeasurement));
 
       const bulkComponentTypes = anyBillHasSteel(bills) ? undefined : NON_STEEL_COMPONENT_TYPES;
-      const finalPdfBytes = await embedComponentIndicesRange(initialPdfBytes, {
-        startDate: componentIndexStartDate,
-        endDate: componentIndexEndDate,
-        componentTypes: bulkComponentTypes,
-      });
+      const finalPdfBytes = includeIndexDocs
+        ? await embedComponentIndicesRange(initialPdfBytes, {
+            startDate: componentIndexStartDate,
+            endDate: componentIndexEndDate,
+            componentTypes: bulkComponentTypes,
+          })
+        : initialPdfBytes;
 
       const pdfBuffer = Buffer.from(finalPdfBytes);
 
