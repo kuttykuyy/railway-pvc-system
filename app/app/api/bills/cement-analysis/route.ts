@@ -33,7 +33,7 @@ class AiProviderCreditsExhaustedError extends Error {
   }
 }
 
-interface ExtractedBillItem {
+export interface ExtractedBillItem {
   dsrCode: string;
   itemNo?: string;
   description: string;
@@ -270,7 +270,7 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
   };
 }
 
-interface ExtractedBillDetails {
+export interface ExtractedBillDetails {
   billNo?: string;
   agreementNo?: string;
   contractorName?: string;
@@ -1125,7 +1125,7 @@ ${markdownPart}
   return extractJsonWithRetry(apiKey, prompt, `part ${partNumber}/${partCount}`);
 }
 
-async function extractBillDetailsWithAi(file: File, requestOrigin: string, contractId?: string): Promise<ExtractedBillDetails> {
+export async function extractBillDetailsWithAi(file: File, requestOrigin: string, contractId?: string): Promise<ExtractedBillDetails> {
   const apiKey = process.env.ABACUSAI_API_KEY;
   if (!apiKey) {
     throw new Error('AI extraction is not configured. Missing ABACUSAI_API_KEY.');
