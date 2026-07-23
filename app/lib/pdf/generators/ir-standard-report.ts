@@ -902,8 +902,17 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     return rows.length > 0 && rows.every((r: any) => /\(\s*cement\s*\)\s*$/i.test(String(r?.itemNumber || '')));
   };
   const scheduleRows: ScheduleRow[] = [];
+  const cementBreakupRows: ScheduleRow[] = []; // derived cement, shown separately (not summed)
   for (const entry of entries) {
-    if (isSplitCementEntry(entry)) continue;
+    if (isSplitCementEntry(entry)) {
+      const schedule = String(entry.scheduleItem || '').trim() || '-';
+      for (const r of (Array.isArray(entry.itemRows) ? entry.itemRows : [])) {
+        const qty = Number(r?.quantity) || 0;
+        const rate = Number(r?.agreementRate) || 0;
+        cementBreakupRows.push({ itemNumber: String(r?.itemNumber || '').trim() || '-', schedule, qty, rate, amount: qty * rate });
+      }
+      continue;
+    }
     const schedule = String(entry.scheduleItem || '').trim() || '-';
     const rawRows = Array.isArray(entry.itemRows) ? entry.itemRows : [];
     const usableRows = rawRows.filter(row => row && (row.itemNumber || row.quantity || row.agreementRate));
@@ -1017,6 +1026,50 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     });
 
     y = pdf.lastAutoTable.finalY + 6;
+
+    // ── CEMENT BREAKUP (derived) — shown for reference; already part of the items above ──
+    if (cementBreakupRows.length > 0) {
+      ensureSpace(28 + cementBreakupRows.length * 8);
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('CEMENT BREAKUP (derived from the items above — not added to the bill total)', mL, y);
+      y += 2;
+      let cSl = 0;
+      let cTotal = 0;
+      const cemBody: any[] = cementBreakupRows.map(r => {
+        cSl++; cTotal += r.amount;
+        return [
+          cSl,
+          pdfSafe(r.itemNumber),
+          r.qty ? r.qty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : '-',
+          r.rate ? fmt(r.rate) : '-',
+          fmt(r.amount),
+        ];
+      });
+      cemBody.push([
+        { content: 'Total Derived Cement (already included in the schedule items above)', colSpan: 4, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [242, 242, 242] as [number, number, number] } },
+        { content: fmt(cTotal), styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [242, 242, 242] as [number, number, number] } },
+      ]);
+      autoTable(pdf, {
+        startY: y + 2,
+        head: [['Sl.', 'Item No.', 'Cement Qty (MT)', 'Rate (Rs./MT)', 'Amount (Rs.)']],
+        body: cemBody,
+        theme: 'grid',
+        headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center', valign: 'middle', cellPadding: 2.5 },
+        bodyStyles: { fontSize: 8, cellPadding: { top: 2, right: 3, bottom: 2, left: 3 }, textColor: [0, 0, 0] },
+        styles: { lineColor: [180, 180, 180], lineWidth: 0.3, font: 'helvetica', overflow: 'linebreak' },
+        margin: { left: mL, right: mR },
+        tableWidth: contentW,
+        columnStyles: {
+          0: { cellWidth: 12, halign: 'center' },
+          1: { cellWidth: 75, halign: 'left' },
+          2: { cellWidth: 60, halign: 'right' },
+          3: { cellWidth: 60, halign: 'right' },
+          4: { cellWidth: 66, halign: 'right' },
+        },
+      });
+      y = pdf.lastAutoTable.finalY + 6;
+    }
 
     // ── F. BILL SCHEDULE SUMMARY ────────────────────────────────────────────
     const scheduleTotals = new Map<string, number>();
