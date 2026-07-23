@@ -31,6 +31,18 @@ export interface CementCalculationResult {
   reason: string;
 }
 
+/**
+ * Some DSR items are rated per a BLOCK of units (e.g. "100 Sqm", "10 Cum"). The stored
+ * coefficient is the cement per that whole block, but bill quantities are measured in the
+ * base unit (sqm, cum), so the block size must be divided out or the cement comes out N×
+ * too high. A plain unit like "Cum" or "Sqm" (no leading number) has a block size of 1.
+ */
+export function unitBlockSize(workUnit: string | null | undefined): number {
+  const match = String(workUnit || '').match(/(\d+(?:\.\d+)?)/);
+  const n = match ? parseFloat(match[1]) : 1;
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
 function normalizeCode(code: string): string {
   return String(code || '')
     .replace(/\s+/g, '')
@@ -139,7 +151,7 @@ export function calculateDsrCementRequirement(
       };
     }
 
-    const cementQuantity = quantity * coefficient.cementQuantityPerUnit;
+    const cementQuantity = quantity * coefficient.cementQuantityPerUnit / unitBlockSize(coefficient.workUnit);
     const cementAmount = cementRatePerUnit && cementRatePerUnit > 0
       ? cementQuantity * cementRatePerUnit
       : null;

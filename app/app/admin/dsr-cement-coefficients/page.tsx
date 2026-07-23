@@ -167,12 +167,13 @@ export default function DsrCementCoefficientsPage() {
             </div>
             <div>
               <Label className="text-xs">Work unit *</Label>
-              <Input className="mt-1" required placeholder="e.g. Cum" value={form.workUnit}
+              <Input className="mt-1" required placeholder="e.g. Cum or 100 Sqm" value={form.workUnit}
                 onChange={(e) => setForm({ ...form, workUnit: e.target.value })} />
+              <p className="text-[10px] text-slate-400 mt-0.5">Include the block if the DSR rate is per a block, e.g. &quot;100 Sqm&quot; — cement is then divided by 100.</p>
             </div>
             <div className="flex gap-2">
               <div className="flex-1">
-                <Label className="text-xs">Cement (MT/unit) *</Label>
+                <Label className="text-xs">Cement (MT per work unit) *</Label>
                 <Input className="mt-1" required type="number" step="0.0001" min="0" placeholder="0.32"
                   value={form.cementQuantityPerUnit}
                   onChange={(e) => setForm({ ...form, cementQuantityPerUnit: e.target.value })} />

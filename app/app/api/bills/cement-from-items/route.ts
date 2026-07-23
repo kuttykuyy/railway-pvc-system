@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { normalizeDsrCode, inferCementCoefficientFromMix, matchCementCoefficient } from '@/lib/dsr-cement-calculation';
+import { normalizeDsrCode, inferCementCoefficientFromMix, matchCementCoefficient, unitBlockSize } from '@/lib/dsr-cement-calculation';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,7 +53,9 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const cementQty = qty * coeff.cementQuantityPerUnit; // in coeff.cementUnit (MT)
+      // Divide by the work-unit block (e.g. "100 Sqm" -> 100) so a per-100 coefficient
+      // isn't multiplied against a base-unit quantity.
+      const cementQty = qty * coeff.cementQuantityPerUnit / unitBlockSize(coeff.workUnit); // MT
       matchedCount++;
       const sched = String(it.schedule || 'Default').trim() || 'Default';
       const cur = bySchedule.get(sched) || { affectedItemCount: 0, cementQtyMT: 0, codes: new Set<string>(), items: [] };
