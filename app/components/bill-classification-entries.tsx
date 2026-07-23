@@ -643,8 +643,8 @@ export function BillClassificationEntries({
                   </Button>
                 )}
 
-                <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_minmax(200px,1.2fr)_minmax(150px,0.8fr)_minmax(140px,0.7fr)]">
-                  <div className="space-y-1.5">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="space-y-1.5 min-w-0">
                     <label htmlFor={`main-classification-${entryIndex}`} className="text-xs font-medium text-slate-600">Main classification</label>
                     <div className="flex items-center gap-1">
                       <select
@@ -687,7 +687,7 @@ export function BillClassificationEntries({
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 min-w-0">
                     <label className="text-xs font-medium text-slate-600">Sub classification</label>
                     <div className="flex items-center gap-1">
                       <Select
@@ -736,7 +736,7 @@ export function BillClassificationEntries({
                     )}
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 min-w-0">
                     <label className="text-xs font-medium text-slate-600">Schedule</label>
                     {contractSchedules.length ? (
                       <Select
@@ -783,7 +783,7 @@ export function BillClassificationEntries({
                     })()}
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 min-w-0">
                     <label className="text-xs font-medium text-slate-600">Payable amount (Rs)</label>
                     <Input
                       disabled={locked}
