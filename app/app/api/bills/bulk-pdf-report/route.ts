@@ -368,6 +368,53 @@ export async function POST(request: NextRequest) {
       const cumulativeSummaries = buildCumulativePvcSummaries(allContractBillsForCumulative);
       const irBills = [...bills].sort(compareBillsChronologically);
 
+      // ── Summary page (page 1): PVC amount per bill + batch total ──
+      {
+        const sPdf = new jsPDF('l', 'mm', 'a4');
+        const sW = sPdf.internal.pageSize.getWidth();
+        sPdf.setFont('helvetica', 'bold'); sPdf.setFontSize(14);
+        sPdf.text(irOrgName, sW / 2, 16, { align: 'center' });
+        sPdf.setFontSize(12);
+        sPdf.text('PRICE VARIATION (PVC) - COMBINED SUMMARY', sW / 2, 23, { align: 'center' });
+        sPdf.setFont('helvetica', 'normal'); sPdf.setFontSize(9);
+        sPdf.text(`${irBills.length} bill(s)  ·  Agreement: ${bills[0]?.contract?.agreementNo || '-'}`, sW / 2, 29, { align: 'center' });
+
+        let grandTotal = 0;
+        const rows: any[] = irBills.map((b, i) => {
+          const pvc = getBillPvc(b);
+          grandTotal += pvc;
+          const prev = cumulativeSummaries.get(b.id)?.previousPvcTotal ?? 0;
+          const money = (n: number) => 'Rs. ' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          return [
+            i + 1,
+            b.billNo || '-',
+            format(new Date(b.dateOfMeasurement), 'dd MMM yyyy'),
+            b.quarter || '-',
+            money(pvc),
+            money(prev + pvc),
+          ];
+        });
+        rows.push([
+          { content: 'TOTAL PVC (this batch)', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } },
+          { content: 'Rs. ' + grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { fontStyle: 'bold' } },
+          '',
+        ]);
+        autoTable(sPdf, {
+          startY: 35,
+          head: [['Sl.', 'Bill No.', 'Date of Measurement', 'Quarter', 'PVC Amount (Rs.)', 'Cumulative PVC (Rs.)']],
+          body: rows,
+          theme: 'grid',
+          headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
+          bodyStyles: { fontSize: 9, cellPadding: 2 },
+          columnStyles: { 0: { halign: 'center', cellWidth: 14 }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+          margin: { left: 14, right: 14 },
+        });
+        const summaryBytes = new Uint8Array(sPdf.output('arraybuffer'));
+        const summaryDoc = await PDFDocument.load(summaryBytes);
+        const summaryPages = await mergedPdf.copyPages(summaryDoc, summaryDoc.getPageIndices());
+        for (const p of summaryPages) mergedPdf.addPage(p);
+      }
+
       for (const bill of irBills) {
         const baseMonth = new Date(bill.contract.baseMonth);
         const fuelIdxName = getFuelName(bill.zone, bill.fuelPriceType);
