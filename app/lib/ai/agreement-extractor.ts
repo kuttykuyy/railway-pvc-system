@@ -25,6 +25,8 @@ export interface ExtractedSchedule {
 }
 
 export interface ExtractedAgreement {
+  /** What kind of railway document this is — used to tell an agreement from a bill. */
+  documentType: 'agreement' | 'bill' | 'other';
   schedules: ExtractedSchedule[];
   agreementNo: string | null;
   loaNo: string | null;
@@ -84,6 +86,7 @@ export async function extractAgreementFromPdf(
 Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null when a value is not clearly present. Convert every date to "YYYY-MM-DD". Convert money to a plain number (no commas, no ₹).
 
 {
+  "documentType": "Classify this document: 'agreement' if it is a tender/contract agreement, e-tender document or Letter of Acceptance (LOA); 'bill' if it is a running account bill / RA bill / measurement or deviation statement (it lists executed quantities and amounts since last bill); 'other' if neither. Note: a running bill often prints the agreement number too, so do NOT call it 'agreement' just because an agreement number appears.",
   "agreementNo": "Contract Agreement No (e.g. SR/TPJ/Civil/2026/0068)",
   "loaNo": "LOA Number",
   "loaDate": "LOA Date (YYYY-MM-DD)",
@@ -173,9 +176,14 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
         .filter((s: any) => s.name)
     : [];
 
+  const docTypeRaw = String(extracted.documentType ?? '').trim().toLowerCase();
+  const documentType: ExtractedAgreement['documentType'] =
+    docTypeRaw === 'agreement' ? 'agreement' : docTypeRaw === 'bill' ? 'bill' : 'other';
+
   return {
     ok: true,
     data: {
+      documentType,
       schedules,
       agreementNo: extracted.agreementNo ?? null,
       loaNo: extracted.loaNo ?? null,

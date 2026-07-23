@@ -70,11 +70,16 @@ export async function handleTelegramDocument(chatId: string, doc: TelegramDocume
   await sendTelegramMessage(chatId, `📄 Reading <b>${escapeHtml(doc.file_name || 'your PDF')}</b>…`);
   const extraction = await extractAgreementFromPdf(bytes, doc.file_name || 'document.pdf');
 
+  // Classify by the AI's documentType — NOT just "has an agreement number", because
+  // a running bill also prints the agreement number and was being misread as the
+  // agreement. Only treat it as the agreement when the model says so AND it found a
+  // number; anything else (bill / other) is handled as the bill PDF.
+  const data = extraction.ok ? extraction.data ?? null : null;
   const looksLikeAgreement =
-    extraction.ok && !!(extraction.data?.agreementNo && String(extraction.data.agreementNo).trim());
+    !!data && data.documentType === 'agreement' && !!(data.agreementNo && String(data.agreementNo).trim());
 
   if (looksLikeAgreement) {
-    return handleAgreementDoc(conversation.id, chatId, extraction.data ?? null, doc);
+    return handleAgreementDoc(conversation.id, chatId, data, doc);
   }
 
   // Not an agreement → treat as the bill PDF. Keep its file_id for the PVC step.
