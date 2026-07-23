@@ -749,7 +749,7 @@ export function BillClassificationEntries({
                         <SelectTrigger className="h-9 bg-white text-sm">
                           <SelectValue placeholder="Select schedule" />
                         </SelectTrigger>
-                        <SelectContent className="max-w-[min(92vw,420px)]">
+                        <SelectContent className="w-[220px] max-w-[92vw]">
                           <SelectItem value="_none_" className="whitespace-normal break-words leading-snug">No schedule</SelectItem>
                           {!scheduleInList && entry.scheduleItem && (
                             <SelectItem value={entry.scheduleItem} className="whitespace-normal break-words leading-snug">{entry.scheduleItem}</SelectItem>
