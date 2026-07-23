@@ -2065,6 +2065,9 @@ function NewBillPageContent() {
                         measurementDate={formData.dateOfMeasurement || undefined}
                         lockEntries={isAiUploaded}
                         aiJustificationFee={99}
+                        grossBillAmount={Number(formData.grossBillAmount) || undefined}
+                        onGrossBillAmountChange={(v) => setFormData(prev => ({ ...prev, grossBillAmount: v ? String(v) : '' }))}
+                        floatingSummary
                       />
                     </div>
                   </div>

@@ -76,6 +76,10 @@ interface BillClassificationEntriesProps {
   classificationGroups: ClassificationGroup[];
   workDescription?: string;
   grossBillAmount?: number;
+  /** When provided, the "Gross bill" figure becomes an editable field the user types the bill amount into. */
+  onGrossBillAmountChange?: (value: number) => void;
+  /** Show a floating summary bar (classification total / gross bill / difference) fixed at the bottom. */
+  floatingSummary?: boolean;
   contractSchedules?: string[];
   /** Full schedule rate settings (name + escalation % + bid rate %) from the contract,
    * used to adjust each entry's amount by its schedule's rates before PVC. */
@@ -112,6 +116,8 @@ export function BillClassificationEntries({
   classificationGroups = [],
   workDescription,
   grossBillAmount,
+  onGrossBillAmountChange,
+  floatingSummary = false,
   contractSchedules = [],
   scheduleRates = [],
   indicesData = null,
@@ -523,8 +529,19 @@ export function BillClassificationEntries({
           <div className="font-semibold">Rs {formatMoney(totalAmount)}</div>
         </div>
         <div className="bg-white px-3 py-2">
-          <div className="text-xs text-slate-500">Gross bill</div>
-          <div className="font-semibold">{grossBillAmount ? `Rs ${formatMoney(grossBillAmount)}` : '-'}</div>
+          <div className="text-xs text-slate-500">Gross bill (enter bill amount)</div>
+          {onGrossBillAmountChange ? (
+            <Input
+              type="number"
+              step="0.01"
+              value={grossBillAmount ? String(grossBillAmount) : ''}
+              onChange={(e) => onGrossBillAmountChange(e.target.value === '' ? 0 : Number(e.target.value))}
+              placeholder="Enter bill amount"
+              className="h-8 text-sm font-semibold mt-0.5"
+            />
+          ) : (
+            <div className="font-semibold">{grossBillAmount ? `Rs ${formatMoney(grossBillAmount)}` : '-'}</div>
+          )}
         </div>
         <div className="col-span-2 flex items-center justify-between bg-white px-3 py-2 md:col-span-1">
           <div>
@@ -983,6 +1000,29 @@ export function BillClassificationEntries({
       <p className="text-[11px] text-slate-400">
         Excel/CSV columns: <span className="font-medium">Item No</span>, <span className="font-medium">Quantity</span>, <span className="font-medium">Agreement Rate</span>, and optionally <span className="font-medium">Classification</span> (code, e.g. A1) and <span className="font-medium">Schedule</span>. Items are grouped by classification + schedule; rows without a valid classification use the default one.
       </p>
+
+      {/* Floating summary bar — stays visible while adding items so the total can be matched. */}
+      {floatingSummary && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-1.5rem)] max-w-3xl rounded-2xl border border-slate-200 bg-white/95 backdrop-blur shadow-xl ring-1 ring-black/5 px-4 py-2.5 flex items-center justify-between gap-4 text-sm">
+          <div>
+            <div className="text-[11px] text-slate-500">Classification total</div>
+            <div className="font-semibold text-slate-900">Rs {formatMoney(totalAmount)}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-slate-500">Gross bill</div>
+            <div className="font-semibold text-slate-900">{grossBillAmount ? `Rs ${formatMoney(grossBillAmount)}` : '-'}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div>
+              <div className="text-[11px] text-slate-500">Difference</div>
+              <div className={amountMatches ? 'font-semibold text-green-700' : 'font-semibold text-orange-700'}>Rs {formatMoney(Math.abs(amountDifference))}</div>
+            </div>
+            {amountMatches
+              ? <CheckCircle2 className="h-5 w-5 text-green-600" />
+              : <AlertCircle className="h-5 w-5 text-orange-600" />}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
