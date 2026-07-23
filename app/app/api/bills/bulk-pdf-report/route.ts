@@ -379,21 +379,24 @@ export async function POST(request: NextRequest) {
         sPdf.setFont('helvetica', 'normal'); sPdf.setFontSize(9);
         sPdf.text(`${irBills.length} bill(s)  ·  Agreement: ${bills[0]?.contract?.agreementNo || '-'}`, sW / 2, 29, { align: 'center' });
 
-        let grandTotal = 0;
+        // Cumulative = running total of this batch's PVC amounts (chronological order), so
+        // the last row's cumulative equals the batch TOTAL. (The stored per-bill cumulative
+        // is inconsistent across bills, which made this column jump around before.)
+        let runningCum = 0;
+        const money = (n: number) => 'Rs. ' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const rows: any[] = irBills.map((b, i) => {
           const pvc = getBillPvc(b);
-          grandTotal += pvc;
-          const prev = cumulativeSummaries.get(b.id)?.previousPvcTotal ?? 0;
-          const money = (n: number) => 'Rs. ' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          runningCum += pvc;
           return [
             i + 1,
             b.billNo || '-',
             format(new Date(b.dateOfMeasurement), 'dd MMM yyyy'),
             b.quarter || '-',
             money(pvc),
-            money(prev + pvc),
+            money(runningCum),
           ];
         });
+        const grandTotal = runningCum;
         rows.push([
           { content: 'TOTAL PVC (this batch)', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } },
           { content: 'Rs. ' + grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { fontStyle: 'bold' } },
