@@ -1,21 +1,29 @@
 /**
- * Stage 2a: read an uploaded running-bill PDF and reply with the PVC amount in chat.
+ * Stage 2: read an uploaded running-bill PDF, calculate the PVC, and send back
+ * both the PVC amount (in chat) and the full IR standard PDF report (as a file).
  *
  * Pipeline: download the bill PDF -> reuse the app's bill extractor to get line
  * items -> map each item to a PVC sub-classification by its suggested code -> run
- * the SAME PVC engine the website uses (quarterly index averages x classification
- * component split) -> reply with the total and a component breakdown.
+ * the SAME PVC engine the website uses -> reply with the total + breakdown, then
+ * render the IR standard report and send it as a Telegram document.
  *
  * IMPORTANT: this is an AUTOMATIC ESTIMATE. There is no in-chat review screen like
  * the website has, so the classification is taken from the AI's reading. The reply
- * says so and links to the contract on the site to verify/adjust. Saving the bill +
- * the PDF report is Stage 2b.
+ * says so and links to the contract on the site to verify/adjust. The report is
+ * generated in memory (the bill is NOT saved to the dashboard) — saving is a
+ * separate step if wanted later.
  */
 
 import { prisma } from './db';
-import { sendTelegramMessage, sendTelegramChatAction, downloadTelegramFile, getPublicSiteUrl } from './telegram-api';
+import {
+  sendTelegramMessage,
+  sendTelegramChatAction,
+  sendTelegramDocumentBytes,
+  downloadTelegramFile,
+  getPublicSiteUrl,
+} from './telegram-api';
 import { extractBillDetailsWithAi } from '@/app/api/bills/cement-analysis/route';
-import { getQuarterFromDate, calculateClassificationEntryPvc } from './pvc-calculations';
+import { getQuarterFromDate, getQuarterMonths, calculateClassificationEntryPvc } from './pvc-calculations';
 import { getQuarterlyAverages } from './db-utils';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from './zone-steel-city-mapping';
 import { extractSteelTypesFromEntries } from './steel-type-handler';
@@ -33,6 +41,10 @@ const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
 function formatMoney(value: number): string {
   return (Number(value) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function escapeHtml(s: string): string {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Promise<void> {
@@ -61,11 +73,9 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   }
 
   // 2. Extract the bill line items (same engine as the website).
-  let items;
   let billDetails;
   try {
     billDetails = await extractBillDetailsWithAi(file, baseUrl, contractId);
-    items = billDetails.items || [];
   } catch (err: any) {
     console.error('[Telegram] bill extraction failed:', err);
     await sendTelegramMessage(
@@ -75,6 +85,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     );
     return;
   }
+  const items = billDetails.items || [];
   if (!items.length) {
     await sendTelegramMessage(chatId, '❌ I could not find any bill items in that PDF. Please check it is the running bill.');
     return;
@@ -83,11 +94,9 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   // 3. Map each item to a PVC sub-classification by its suggested code, summing
   //    amounts per classification. Blank/unknown codes fall back to the bill's main
   //    group ("<group>A"), then to the work-description inferred group.
-  const subs = await prisma.subClassification.findMany({
-    where: { isActive: true },
-    select: { id: true, code: true, groupId: true, steel: true },
-  });
+  const subs = await prisma.subClassification.findMany({ where: { isActive: true } });
   const byCode = new Map(subs.map((s) => [s.code.toUpperCase(), s]));
+  const subById = new Map(subs.map((s) => [s.id, s]));
 
   const groupCode = String(billDetails.classificationGroupCode || inferMainClassification(contract.workDescription).code || '').trim();
   const defaultSub =
@@ -152,6 +161,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   }
 
   let totalPvc = 0, labour = 0, plant = 0, fuel = 0, materials = 0, cement = 0, steel = 0, explosives = 0;
+  const entriesForReport: any[] = [];
   for (const e of entries) {
     const entrySteelTypes = e.steelTypes.size > 0
       ? [...e.steelTypes]
@@ -168,16 +178,23 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     steel += pvc.steelPvc;
     explosives += pvc.explosivesPvc;
     totalPvc += pvc.totalPvc;
+
+    entriesForReport.push({
+      amount: e.amount,
+      steelTypes: entrySteelTypes,
+      subClassification: subById.get(e.subClassificationId),
+    });
   }
 
   // 5. Reply with the PVC estimate + component breakdown.
   const comp = (label: string, v: number) => (Math.abs(v) >= 0.005 ? `\n   ${label}: ₹${formatMoney(v)}` : '');
   const sign = totalPvc >= 0 ? '' : '-';
-  const billNo = billDetails.billNo ? ` (Bill ${escapeHtml(String(billDetails.billNo))})` : '';
+  const billNo = billDetails.billNo ? String(billDetails.billNo) : '';
+  const billNoLabel = billNo ? ` (Bill ${escapeHtml(billNo)})` : '';
 
   await sendTelegramMessage(
     chatId,
-    `✅ <b>PVC estimate${billNo}</b>\n\n` +
+    `✅ <b>PVC estimate${billNoLabel}</b>\n\n` +
       `📄 Agreement: <b>${escapeHtml(contract.agreementNo)}</b>\n` +
       `📅 Quarter: <b>${quarter}</b>\n` +
       `💰 Gross bill: <b>₹${formatMoney(grossBillAmount)}</b>\n` +
@@ -190,14 +207,178 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       comp('Cement', cement) +
       comp('Steel', steel) +
       comp('Explosives', explosives) +
-      `\n\n<i>⚠️ This is an automatic estimate from the AI's reading of the bill — there's no review step in chat. ` +
-      `Open the contract to check the classification and save the bill:</i>\n${contractLink}` +
+      `\n\n<i>⚠️ Automatic estimate from the AI's reading — no review step in chat. ` +
+      `Open the contract to check the classification:</i>\n${contractLink}` +
       (unclassifiedAmount > 0
         ? `\n\n<i>Note: ₹${formatMoney(unclassifiedAmount)} of items couldn't be classified and were left out of the PVC.</i>`
         : ''),
   );
+
+  // 6. Render the IR standard PDF report and send it as a document.
+  await sendTelegramChatAction(chatId, 'upload_document');
+  try {
+    const pdfBuf = await buildIrReport({
+      contract,
+      billNo: billNo || 'RA Bill',
+      measurementDate,
+      grossBillAmount,
+      quarter,
+      zone,
+      fuelIndexName,
+      steelIndexNames,
+      quarterlyAverages,
+      entriesForReport,
+      pvcComponents: { labour, plant, fuel, materials, cement, steel, explosives, totalPvc },
+      allIndices,
+    });
+
+    const safeAgr = String(contract.agreementNo).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const safeBill = (billNo || 'bill').replace(/[^A-Za-z0-9]+/g, '-');
+    await sendTelegramDocumentBytes(
+      chatId,
+      pdfBuf,
+      `PVC-${safeAgr}-${safeBill}.pdf`,
+      `📎 IR PVC statement — ${escapeHtml(contract.agreementNo)}`,
+    );
+  } catch (err: any) {
+    console.error('[Telegram] IR report generation failed:', err);
+    await sendTelegramMessage(
+      chatId,
+      `⚠️ The PVC amount above is ready, but I couldn't generate the PDF report this time. You can download it from the site:\n${contractLink}`,
+    );
+  }
 }
 
-function escapeHtml(s: string): string {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/**
+ * Builds the in-memory bill object and renders the IR standard PDF. The report
+ * generator only needs the shape (not a saved DB row), so nothing is persisted.
+ */
+async function buildIrReport(o: {
+  contract: any;
+  billNo: string;
+  measurementDate: Date;
+  grossBillAmount: number;
+  quarter: string;
+  zone: string | null;
+  fuelIndexName: string;
+  steelIndexNames: string[];
+  quarterlyAverages: any[];
+  entriesForReport: any[];
+  pvcComponents: { labour: number; plant: number; fuel: number; materials: number; cement: number; steel: number; explosives: number; totalPvc: number };
+  allIndices: string[];
+}): Promise<Buffer> {
+  const { generateIRStandardReport } = await import('@/lib/pdf/generators/ir-standard-report');
+  const { contract, pvcComponents: c } = o;
+  const baseMonth = new Date(contract.baseMonth);
+
+  // Cumulative continues from any bills already saved on this contract (usually 0
+  // for a Telegram-only contract).
+  const prevBills = await prisma.bill.findMany({
+    where: { contractId: contract.id },
+    include: { pvcCalculation: true },
+    orderBy: { dateOfMeasurement: 'desc' },
+    take: 1,
+  });
+  const previousCumulativePvc = prevBills[0]?.pvcCalculation?.cumulativePvc ?? 0;
+
+  // Report branding + division from the contract owner.
+  let organizationName = 'INDIAN RAILWAYS';
+  let divisionName = '';
+  try {
+    if (contract.userId) {
+      const owner = await prisma.user.findUnique({
+        where: { id: contract.userId },
+        select: { reportHeaderText: true, divisionName: true },
+      });
+      if (owner?.reportHeaderText) organizationName = owner.reportHeaderText;
+      if (owner?.divisionName) divisionName = owner.divisionName;
+    }
+  } catch { /* branding is optional */ }
+
+  // Monthly index history (base month → quarter end) and provisional status, so the
+  // report's index sections are complete. Best-effort — the report still renders
+  // from quarterlyAverages if these fail.
+  let allHistoricalMonthlyData: { indexName: string; month: string; value: number }[] = [];
+  let isProvisional = false;
+  let provisionalIndices: string[] = [];
+  try {
+    const months = getQuarterMonths(o.quarter, baseMonth);
+    const qEnd = months[months.length - 1];
+    const qEndDate = new Date(qEnd.getFullYear(), qEnd.getMonth() + 1, 1);
+    const priceIndexes = await prisma.priceIndex.findMany({ where: { name: { in: o.allIndices } } });
+    const historicalRaw = await prisma.monthlyIndexValue.findMany({
+      where: {
+        priceIndexId: { in: priceIndexes.map((p) => p.id) },
+        month: { gte: new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1), lt: qEndDate },
+      },
+      include: { priceIndex: true },
+    });
+    allHistoricalMonthlyData = historicalRaw.map((mv) => ({
+      indexName: mv.priceIndex.name,
+      month: new Date(mv.month).toISOString().slice(0, 7),
+      value: mv.value,
+    }));
+    const { getBillIndicesStatus } = await import('@/lib/index-status');
+    const status = await getBillIndicesStatus(o.quarter, baseMonth);
+    isProvisional = status.isProvisional;
+    provisionalIndices = status.provisionalIndices;
+  } catch (err) {
+    console.warn('[Telegram] report index enrichment skipped:', err);
+  }
+
+  const bill = {
+    billNo: o.billNo,
+    dateOfMeasurement: o.measurementDate,
+    grossBillAmount: o.grossBillAmount,
+    billAmount: o.grossBillAmount,
+    quarter: o.quarter,
+    zone: o.zone,
+    fuelPriceType: 'four_city_avg',
+    contract: {
+      agreementNo: contract.agreementNo,
+      contractorName: contract.contractorName,
+      workDescription: contract.workDescription,
+      dateOfOpening: contract.dateOfOpening,
+      baseMonth: contract.baseMonth,
+      contractValue: contract.contractValue,
+      completionPeriodMonths: contract.completionPeriodMonths,
+      loaNo: contract.loaNo,
+      loaDate: contract.loaDate,
+      isExtended: contract.isExtended,
+      extensionType: contract.extensionType,
+      hasRailwaySuppliedMaterials: contract.hasRailwaySuppliedMaterials,
+    },
+    pvcCalculation: {
+      labourPvc: c.labour,
+      plantMachineryPvc: c.plant,
+      fuelPowerPvc: c.fuel,
+      cementPvc: c.cement,
+      steelPvc: c.steel,
+      otherMaterialsPvc: c.materials,
+      explosivesPvc: c.explosives,
+      dedicatedCementPvc: 0,
+      dedicatedSteelTmtBarsPvc: 0,
+      dedicatedSteelAngleChannelPvc: 0,
+      dedicatedSteelPlatesPvc: 0,
+      dedicatedSteelOtherSectionsPvc: 0,
+      totalPvc: c.totalPvc,
+      previousPvcTotal: previousCumulativePvc,
+      cumulativePvc: round2(previousCumulativePvc + c.totalPvc),
+    },
+    classificationEntries: o.entriesForReport,
+  };
+
+  return generateIRStandardReport({
+    bill: bill as any,
+    quarterlyAverages: o.quarterlyAverages,
+    baseMonth,
+    organizationName,
+    divisionName,
+    fuelIndexName: o.fuelIndexName,
+    steelIndexNames: o.steelIndexNames,
+    isProvisional,
+    provisionalIndices,
+    allHistoricalMonthlyData,
+    previousCumulativePvc,
+  });
 }
