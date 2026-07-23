@@ -11,6 +11,10 @@ import { findScheduleRates } from '@/lib/contract-schedules';
 export interface CementItemQty {
   code: string;
   cementQtyMT: number;
+  /** Derivation: bill item quantity x coefficient / work-unit block = cementQtyMT. */
+  sourceQty?: number;
+  coefficient?: number;
+  workUnit?: string;
 }
 
 export interface CementSchedule {
@@ -184,6 +188,23 @@ export function DsrCementCalculator({
               <Badge variant="secondary">Schedule {s.name}</Badge>
               <span className="text-xs text-slate-500">({s.affectedItemCount} cement-affected items · {money(s.cementQtyMT)} MT)</span>
             </div>
+            {s.items && s.items.length > 0 && (
+              <details className="text-[11px] text-slate-500">
+                <summary className="cursor-pointer text-slate-600 hover:text-slate-800">How is the cement quantity worked out?</summary>
+                <div className="mt-1.5 space-y-0.5 font-mono">
+                  {s.items.map((it, i) => {
+                    const block = (() => { const m = String(it.workUnit || '').match(/(\d+(?:\.\d+)?)/); const n = m ? parseFloat(m[1]) : 1; return n > 0 ? n : 1; })();
+                    return (
+                      <div key={`${it.code}-${i}`}>
+                        {it.code}: {it.sourceQty ?? '?'} × {it.coefficient ?? '?'}
+                        {block > 1 ? ` ÷ ${block}` : ''} = <span className="text-emerald-700 font-medium">{money(it.cementQtyMT)} MT</span>
+                        {it.workUnit ? <span className="text-slate-400"> (MT per {it.workUnit})</span> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs text-slate-600">Escalation %</Label>

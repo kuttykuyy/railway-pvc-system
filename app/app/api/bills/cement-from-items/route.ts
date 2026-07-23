@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const coeffs = await prisma.dsrCementCoefficient.findMany({ where: { isActive: true } });
     const byCode = new Map(coeffs.map((c) => [normalizeDsrCode(c.dsrCode), c]));
 
-    const bySchedule = new Map<string, { affectedItemCount: number; cementQtyMT: number; codes: Set<string>; items: Array<{ code: string; cementQtyMT: number }> }>();
+    const bySchedule = new Map<string, { affectedItemCount: number; cementQtyMT: number; codes: Set<string>; items: Array<{ code: string; cementQtyMT: number; sourceQty: number; coefficient: number; workUnit: string }> }>();
     const unmatchedCodes = new Set<string>();
     let matchedCount = 0;
     let unmatchedCount = 0;
@@ -65,8 +65,14 @@ export async function POST(request: NextRequest) {
       // those cement-affected items (keeping the bill total unchanged).
       const code = String(it.dsrCode || '').trim();
       if (code) cur.codes.add(code);
-      // Per-item cement quantity, so the cement row can show one line per contributing item.
-      cur.items.push({ code: code || 'item', cementQtyMT: Math.round(cementQty * 1000) / 1000 });
+      // Per-item cement quantity + how it was derived (source qty x coefficient / block).
+      cur.items.push({
+        code: code || 'item',
+        cementQtyMT: Math.round(cementQty * 1000) / 1000,
+        sourceQty: qty,
+        coefficient: coeff.cementQuantityPerUnit,
+        workUnit: coeff.workUnit || '',
+      });
       bySchedule.set(sched, cur);
     }
 
