@@ -368,6 +368,11 @@ export async function POST(request: NextRequest) {
       const cumulativeSummaries = buildCumulativePvcSummaries(allContractBillsForCumulative);
       const irBills = [...bills].sort(compareBillsChronologically);
 
+      // Row rectangles (mm) on the summary page + each bill's start page, so the summary
+      // rows can be turned into clickable links that jump to the bill.
+      const summaryRowRects: Array<{ page: number; yTop: number; h: number } | undefined> = [];
+      const billPageStartIndex: number[] = [];
+
       // ── Summary page (page 1): PVC amount per bill + batch total ──
       {
         const sPdf = new jsPDF('l', 'mm', 'a4');
@@ -418,6 +423,12 @@ export async function POST(request: NextRequest) {
           bodyStyles: { fontSize: 9, cellPadding: 2 },
           columnStyles: { 0: { halign: 'center', cellWidth: 12 }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } },
           margin: { left: 14, right: 14 },
+          didDrawCell: (data: any) => {
+            // Capture each body row's rectangle (from column 0) for the clickable links.
+            if (data.section === 'body' && data.column.index === 0 && data.row.index < irBills.length) {
+              summaryRowRects[data.row.index] = { page: data.pageNumber, yTop: data.cell.y, h: data.cell.height };
+            }
+          },
         });
         const summaryBytes = new Uint8Array(sPdf.output('arraybuffer'));
         const summaryDoc = await PDFDocument.load(summaryBytes);
@@ -465,6 +476,7 @@ export async function POST(request: NextRequest) {
 
         const billPdfDoc = await PDFDocument.load(billPdfBuf);
         const copiedPages = await mergedPdf.copyPages(billPdfDoc, billPdfDoc.getPageIndices());
+        billPageStartIndex.push(mergedPdf.getPageCount()); // first page of this bill
         for (const page of copiedPages) mergedPdf.addPage(page);
       }
 
@@ -498,6 +510,36 @@ export async function POST(request: NextRequest) {
         });
       } catch (error) {
         console.error('Bulk IR PDF: error embedding component index documents:', error);
+      }
+
+      // Make each summary row a clickable link that jumps to that bill's first page.
+      try {
+        const { PDFDocument: PDFDoc2, PDFName: PDFName2 } = await import('pdf-lib');
+        const linked = await PDFDoc2.load(irFinalBytes);
+        const p0 = linked.getPage(0);
+        const kmm = 72 / 25.4;               // mm -> PDF points
+        const pageHpt = p0.getHeight();
+        const x1 = 14 * kmm, x2 = (297 - 14) * kmm; // A4 landscape width 297mm, 14mm margins
+        for (let i = 0; i < irBills.length; i++) {
+          const rect = summaryRowRects[i];
+          const tgt = billPageStartIndex[i];
+          if (!rect || rect.page !== 1 || tgt == null || tgt >= linked.getPageCount()) continue;
+          const yTop = pageHpt - rect.yTop * kmm;
+          const yBot = pageHpt - (rect.yTop + rect.h) * kmm;
+          const annot = linked.context.obj({
+            Type: 'Annot', Subtype: 'Link',
+            Rect: [x1, yBot, x2, yTop],
+            Border: [0, 0, 0],
+            Dest: [linked.getPage(tgt).ref, PDFName2.of('Fit')],
+          });
+          const ref = linked.context.register(annot);
+          const existing = p0.node.Annots();
+          if (existing) existing.push(ref);
+          else p0.node.set(PDFName2.of('Annots'), linked.context.obj([ref]));
+        }
+        irFinalBytes = new Uint8Array(await linked.save());
+      } catch (e) {
+        console.error('Bulk IR PDF: could not add summary links:', e);
       }
 
       const mergedBuffer = Buffer.from(irFinalBytes);
