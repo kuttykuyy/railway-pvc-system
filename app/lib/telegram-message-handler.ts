@@ -11,7 +11,7 @@ import {
   linkTelegramToUser,
   TelegramStep,
 } from './telegram-conversation';
-import { sendTelegramMessage, replyKeyboard } from './telegram-api';
+import { sendTelegramMessage, replyKeyboard, getPublicSiteUrl } from './telegram-api';
 import { prisma } from './db';
 
 /**
@@ -158,7 +158,7 @@ async function handlePhoneLinking(conversation: any, msg: string, chatId: string
     return sendTelegramMessage(
       chatId,
       '❌ No IR-PVC account found with this phone number.\n\n' +
-        `Please sign up first at ${process.env.NEXTAUTH_URL || 'https://irpvc.in'} and add your phone number.`
+        `Please sign up first at ${getPublicSiteUrl()} and add your phone number.`
     );
   }
 
@@ -345,7 +345,7 @@ async function createContractFromTelegram(conversation: any, chatId: string) {
         `📄 Agreement No: <b>${contract.agreementNo}</b>\n` +
         `👤 Contractor: <b>${contract.contractorName}</b>\n` +
         `🏗️ Work: <b>${contract.workDescription}</b>\n\n` +
-        `View contract: ${process.env.NEXTAUTH_URL || 'https://irpvc.in'}/contracts/${contract.id}\n\n` +
+        `View contract: ${getPublicSiteUrl()}/contracts/${contract.id}\n\n` +
         `Now you can create bills for this contract! Type /createbill to get started.`
     );
 
@@ -386,7 +386,7 @@ async function startBillCreation(conversation: any, chatId: string) {
     await resetTelegramConversation(conversation.id);
     return sendTelegramMessage(
       chatId,
-      `❌ No contracts found. Please create a contract first at ${process.env.NEXTAUTH_URL || 'https://irpvc.in'}`
+      `❌ No contracts found. Please create a contract first at ${getPublicSiteUrl()}`
     );
   }
 
@@ -714,7 +714,7 @@ async function createBillFromTelegram(conversation: any, chatId: string) {
         `💰 Amount: <b>₹${bill.billAmount.toLocaleString('en-IN')}</b>\n` +
         `🧱 Cement: ${cementPct}% (₹${cementAmount.toLocaleString('en-IN')})\n` +
         `🔩 Steel: ${steelPct}% (₹${steelAmount.toLocaleString('en-IN')})\n\n` +
-        `View bill: ${process.env.NEXTAUTH_URL || 'https://irpvc.in'}/bills/${bill.id}\n\n` +
+        `View bill: ${getPublicSiteUrl()}/bills/${bill.id}\n\n` +
         `Type /help to see other commands.`
     );
 
@@ -751,6 +751,6 @@ async function sendBillStatus(conversation: any, chatId: string) {
     msg += `    Amount: ₹${bill.billAmount.toLocaleString('en-IN')}\n`;
     msg += `    Date: ${new Date(bill.dateOfMeasurement).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n`;
   });
-  msg += `View all: ${process.env.NEXTAUTH_URL || 'https://irpvc.in'}/bills`;
+  msg += `View all: ${getPublicSiteUrl()}/bills`;
   return sendTelegramMessage(chatId, msg);
 }

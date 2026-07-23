@@ -13,7 +13,7 @@
  */
 
 import { prisma } from './db';
-import { sendTelegramMessage } from './telegram-api';
+import { sendTelegramMessage, getPublicSiteUrl } from './telegram-api';
 
 export interface ProcessUploadedBillArgs {
   chatId: string;
@@ -31,7 +31,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     select: { agreementNo: true, id: true },
   });
 
-  const baseUrl = process.env.NEXTAUTH_URL || 'https://irpvc.in';
+  const baseUrl = getPublicSiteUrl();
   await sendTelegramMessage(
     chatId,
     `✅ <b>Both files received</b> for agreement <b>${contract?.agreementNo || ''}</b>.\n\n` +

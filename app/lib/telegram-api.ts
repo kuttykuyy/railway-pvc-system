@@ -11,6 +11,18 @@ function getBotToken(): string {
   return token;
 }
 
+/**
+ * Public site URL for links we send to users in chat.
+ *
+ * NEXTAUTH_URL points at the platform host (e.g. irpvc.illall.tech), which is NOT
+ * the address users know — so bot links must use the public domain. Override with
+ * PUBLIC_SITE_URL if the public domain ever changes; defaults to the live site.
+ */
+export function getPublicSiteUrl(): string {
+  const url = process.env.PUBLIC_SITE_URL || 'https://irpvc.in';
+  return url.replace(/\/+$/, '');
+}
+
 export function getTelegramWebhookSecret(): string {
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
   if (!secret) throw new Error('TELEGRAM_WEBHOOK_SECRET not configured');
