@@ -93,6 +93,82 @@ export async function sendTelegramDocument(
 }
 
 /**
+ * Download a file that a user sent to the bot.
+ *
+ * Telegram is two steps: getFile turns a file_id into a temporary file_path, then
+ * the actual bytes are fetched from api.telegram.org/file/bot<token>/<path>.
+ * Returns the file bytes as a Buffer (throws on any failure).
+ */
+export async function downloadTelegramFile(fileId: string): Promise<Buffer> {
+  const infoRes = await fetch(apiUrl('getFile'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_id: fileId }),
+  });
+  const info = await infoRes.json();
+  if (!info.ok || !info.result?.file_path) {
+    throw new Error(`Telegram getFile failed: ${JSON.stringify(info).slice(0, 200)}`);
+  }
+  const fileUrl = `${TELEGRAM_API}/file/bot${getBotToken()}/${info.result.file_path}`;
+  const fileRes = await fetch(fileUrl);
+  if (!fileRes.ok) {
+    throw new Error(`Telegram file download failed: HTTP ${fileRes.status}`);
+  }
+  return Buffer.from(await fileRes.arrayBuffer());
+}
+
+/**
+ * Send a "typing"/"upload document" chat action so the user sees the bot is busy
+ * while a slow AI extraction runs. Best-effort — never throws.
+ */
+export async function sendTelegramChatAction(
+  chatId: string,
+  action: 'typing' | 'upload_document' = 'typing',
+): Promise<void> {
+  try {
+    await fetch(apiUrl('sendChatAction'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, action }),
+    });
+  } catch {
+    // ignore — this is only a nicety
+  }
+}
+
+/**
+ * Send a document from raw bytes (multipart upload) — used to return a generated
+ * PDF report to the chat. `documentUrl` variant above only works for public URLs.
+ */
+export async function sendTelegramDocumentBytes(
+  chatId: string,
+  bytes: Buffer | Uint8Array,
+  filename: string,
+  caption?: string,
+): Promise<any> {
+  try {
+    const form = new FormData();
+    form.append('chat_id', chatId);
+    if (caption) {
+      form.append('caption', caption);
+      form.append('parse_mode', 'HTML');
+    }
+    const blob = new Blob([Buffer.from(bytes)], { type: 'application/pdf' });
+    form.append('document', blob, filename);
+
+    const res = await fetch(apiUrl('sendDocument'), { method: 'POST', body: form });
+    const data = await res.json();
+    if (!data.ok) {
+      console.error('Telegram sendDocumentBytes error:', data);
+    }
+    return data;
+  } catch (err) {
+    console.error('Telegram sendDocumentBytes exception:', err);
+    throw err;
+  }
+}
+
+/**
  * Register webhook URL with Telegram
  */
 export async function setTelegramWebhook(webhookUrl: string, secretToken?: string): Promise<any> {

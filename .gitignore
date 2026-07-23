@@ -17,3 +17,5 @@ node_modules/
 
 # Git worktrees
 .worktrees/
+.vercel
+.env*

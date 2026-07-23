@@ -5,10 +5,13 @@ import { logger } from '@/lib/logger';
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { handleTelegramMessage } from '@/lib/telegram-message-handler';
+import { handleTelegramDocument } from '@/lib/telegram-document-flow';
 import { getTelegramWebhookSecret } from '@/lib/telegram-api';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,9 +24,27 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    // Handle text messages
+    // Handle document (PDF) uploads — agreement + bill → PVC flow
     const message = body.message;
-    if (message && message.text) {
+    if (message && message.document) {
+      const chatId = String(message.chat.id);
+      const doc = message.document;
+      logger.log(`[Telegram] Chat ${chatId}: document ${doc.file_name || doc.file_id}`);
+
+      // Reading + extracting a PDF is slow (AI calls), so run it AFTER the 200
+      // response via after() — on Vercel this keeps the function alive instead of
+      // killing the promise the moment we reply to Telegram.
+      after(
+        handleTelegramDocument(chatId, {
+          file_id: doc.file_id,
+          file_name: doc.file_name,
+          mime_type: doc.mime_type,
+          file_size: doc.file_size,
+        }).catch(err => console.error('[Telegram] Document handler error:', err)),
+      );
+    }
+    // Handle text messages
+    else if (message && message.text) {
       const chatId = String(message.chat.id);
       const text = message.text;
 

@@ -54,6 +54,11 @@ export interface TelegramConversationData {
   cementPercentage?: number;
   steelPercentage?: number;
   selectedSteelTypes?: string[];
+  // Document-upload PVC flow (agreement + bill PDFs sent to the bot)
+  docContractId?: string;      // contract resolved/created from the uploaded agreement
+  docContractAgreementNo?: string;
+  docBillFileId?: string;      // Telegram file_id of the uploaded bill PDF (downloaded on process)
+  docBillFileName?: string;
 }
 
 /**
