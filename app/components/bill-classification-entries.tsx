@@ -749,13 +749,13 @@ export function BillClassificationEntries({
                         <SelectTrigger className="h-9 bg-white text-sm">
                           <SelectValue placeholder="Select schedule" />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="_none_">No schedule</SelectItem>
+                        <SelectContent className="max-w-[min(92vw,420px)]">
+                          <SelectItem value="_none_" className="whitespace-normal break-words leading-snug">No schedule</SelectItem>
                           {!scheduleInList && entry.scheduleItem && (
-                            <SelectItem value={entry.scheduleItem}>{entry.scheduleItem}</SelectItem>
+                            <SelectItem value={entry.scheduleItem} className="whitespace-normal break-words leading-snug">{entry.scheduleItem}</SelectItem>
                           )}
                           {contractSchedules.map((schedule, index) => (
-                            <SelectItem key={`${schedule}-${index}`} value={schedule}>{schedule}</SelectItem>
+                            <SelectItem key={`${schedule}-${index}`} value={schedule} className="whitespace-normal break-words leading-snug">{schedule}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
