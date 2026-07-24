@@ -28,6 +28,7 @@ import { getQuarterlyAverages } from './db-utils';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from './zone-steel-city-mapping';
 import { extractSteelTypesFromEntries } from './steel-type-handler';
 import { inferMainClassification } from './work-classification';
+import { matchCementCoefficient, normalizeDsrCode, calculateDsrCementRequirement } from './dsr-cement-calculation';
 
 export interface ProcessUploadedBillArgs {
   chatId: string;
@@ -264,7 +265,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   }
 
   const { totalPvc, labour, plant, fuel, materials, cement, steel, explosives } = chosen;
-  const entriesForReport = preparedEntries.map((pe) => {
+  const entriesForReport: any[] = preparedEntries.map((pe) => {
     const first = pe.rows[0];
     return {
       amount: pe.amount,
@@ -277,6 +278,17 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       agreementRate: first?.agreementRate ?? '',
     };
   });
+
+  // Derived-cement breakup: for DSR items, work out the cement quantity (MT) from
+  // the DSR coefficient (qty x coefficient ÷ unit block) and add a "Cement (derived)"
+  // entry. The report shows this as its own CEMENT BREAKUP table (not summed into the
+  // gross), matching the website.
+  try {
+    const cementEntry = await buildDerivedCementEntry(items);
+    if (cementEntry) entriesForReport.push(cementEntry);
+  } catch (err) {
+    console.error('[Telegram] cement breakup failed:', err);
+  }
 
   // 5. Reply with the PVC estimate + component breakdown.
   const comp = (label: string, v: number) => (Math.abs(v) >= 0.005 ? `\n   ${label}: ₹${formatMoney(v)}` : '');
@@ -445,6 +457,78 @@ export async function renderAndSendPaidReport(chatId: string): Promise<boolean> 
     `✅ Payment received — thank you!\n📎 IR PVC statement — ${escapeHtml(contract.agreementNo)}`,
   );
   return true;
+}
+
+/**
+ * Builds a "Cement (derived)" entry: for each DSR item that consumes cement, work
+ * out the cement quantity (MT) from its DSR coefficient. The report renders this as
+ * the CEMENT BREAKUP table (with the qty x coefficient working) and does NOT add it
+ * to the bill gross — the work item's rate already includes its cement.
+ * Returns null when nothing matches a coefficient.
+ */
+async function buildDerivedCementEntry(items: any[]): Promise<any | null> {
+  const coeffs = await prisma.dsrCementCoefficient.findMany({ where: { isActive: true } });
+  if (!coeffs.length) return null;
+  const byCode = new Map(coeffs.map((c) => [normalizeDsrCode(c.dsrCode), c]));
+
+  // Cement supply rate (Rs per MT) from a direct MT cement-supply line, if present.
+  const MT_UNITS = ['MT', 'M.T.', 'TONNE', 'METRIC TONNE', 'METRIC TON'];
+  let cementRatePerMt: number | null = null;
+  for (const it of items) {
+    const unit = String(it.unit || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    const isCementSupply = /cement/i.test(String(it.description || '')) || /^\d+C$/.test(String(it.suggestedClassificationCode || ''));
+    if (MT_UNITS.includes(unit) && isCementSupply) {
+      const q = Number(it.quantitySinceLastBill || 0);
+      const a = Number(it.amountSinceLastBill || 0);
+      const r = Number(it.agreementRate || 0);
+      cementRatePerMt = q > 0 && a > 0 ? a / q : (r > 0 ? r : null);
+      if (cementRatePerMt) break;
+    }
+  }
+
+  const inputs = items
+    .filter((it) => it.sourceBook === 'DSR_2021')
+    .map((it) => {
+      const coefficient = matchCementCoefficient(byCode, normalizeDsrCode(it.dsrCode));
+      return coefficient ? {
+        dsrCode: normalizeDsrCode(it.dsrCode),
+        description: String(it.description || ''),
+        unit: String(it.unit || ''),
+        quantity: Number(it.quantitySinceLastBill || 0),
+        amount: Number(it.amountSinceLastBill || 0),
+        coefficient,
+        _srcQty: Number(it.quantitySinceLastBill || 0),
+        _workUnit: coefficient.workUnit,
+      } : null;
+    })
+    .filter(Boolean) as any[];
+
+  if (!inputs.length) return null;
+
+  // 1:1 with inputs, so pair each result with its input BEFORE filtering to keep
+  // sourceQty / workUnit aligned.
+  const results = calculateDsrCementRequirement(inputs, cementRatePerMt);
+  const itemRows = results
+    .map((r, k) => ({ r, input: inputs[k] }))
+    .filter(({ r }) => r.matched && r.cementQuantity > 0)
+    .map(({ r, input }) => ({
+      itemNumber: `${r.dsrCode} (Cement)`,
+      quantity: round2(r.cementQuantity),
+      agreementRate: cementRatePerMt || 0,
+      sourceQty: input?._srcQty,
+      coefficient: r.coefficient,
+      workUnit: input?._workUnit,
+    }));
+
+  if (!itemRows.length) return null;
+
+  return {
+    isDerivedCement: true,
+    description: 'Cement (derived)',
+    amount: 0, // never summed into the gross
+    scheduleItem: '',
+    itemRows,
+  };
 }
 
 /**
