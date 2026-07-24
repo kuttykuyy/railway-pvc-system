@@ -83,15 +83,10 @@ export default function HomePage() {
                 <span className="flex items-center gap-1.5"><FileText className="w-4 h-4 text-emerald-500" /> IR Standard PDF</span>
                 <span className="flex items-center gap-1.5"><Layers className="w-4 h-4 text-emerald-500" /> Bulk Bills</span>
               </div>
-              <div className="mt-auto pt-7 flex flex-col sm:flex-row gap-3">
-                <Link href="/auth/signin?mode=signup" className="flex-1">
-                  <Button size="lg" className="w-full h-13 px-6 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg shadow-emerald-600/20 hover:-translate-y-0.5 transition-all">
+              <div className="mt-auto pt-7">
+                <Link href="/auth/signin?mode=signup" className="block">
+                  <Button size="lg" className="w-full h-16 px-6 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg shadow-emerald-600/20 hover:-translate-y-0.5 transition-all">
                     Get Started Now <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </Link>
-                <Link href="/try-bill" className="flex-1">
-                  <Button size="lg" variant="outline" className="w-full h-13 px-6 text-base font-semibold bg-white text-slate-700 border-slate-200 hover:bg-slate-50 rounded-xl flex items-center justify-center gap-2">
-                    <Calculator className="w-5 h-5 text-emerald-600" /> Try it free
                   </Button>
                 </Link>
               </div>
