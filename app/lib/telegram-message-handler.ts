@@ -19,7 +19,6 @@ import {
   remindToUpload,
   handlePaidCheck,
   handleZoneReply,
-  handleFuelBasisReply,
 } from './telegram-document-flow';
 import { prisma } from './db';
 
@@ -59,8 +58,6 @@ export async function handleTelegramMessage(chatId: string, text: string) {
         return handleTenderDateReply(conversation, msg, chatId);
       case TelegramStep.AWAITING_ZONE:
         return handleZoneReply(conversation, msg, chatId);
-      case TelegramStep.AWAITING_FUEL_BASIS:
-        return handleFuelBasisReply(conversation, msg, chatId);
       // A PDF is expected, not text — nudge with the clip button.
       case TelegramStep.AWAITING_AGREEMENT_PDF:
       case TelegramStep.AWAITING_BILL_PDF:

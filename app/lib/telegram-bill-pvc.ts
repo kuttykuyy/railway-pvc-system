@@ -172,26 +172,36 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     return { needsInput: true };
   }
 
-  // Zone and fuel basis come from the questions the bot asked in the flow — they
-  // decide the steel indices and which diesel price applies, so they must not be
-  // assumed.
+  // The railway zone comes from the question the bot asked in the flow — it decides
+  // the steel indices and the zone-city diesel index, so it must not be assumed.
   const convForOpts = await prisma.telegramConversation.findUnique({
     where: { id: args.conversationId },
     select: { conversationData: true },
   });
   const convOpts = (convForOpts?.conversationData as any) || {};
   const zone: string | null = convOpts.docZone || null;
-  const fuelPriceType: string = convOpts.docFuelPriceType || 'four_city_avg';
 
   const extractedSteelTypes = await extractSteelTypesFromEntries(
     entries.map((e) => ({ subClassificationId: e.subClassificationId, amount: e.amount, steelTypes: [...e.steelTypes] })),
   );
   const steelIndexNames = getSteelIndexNamesForZone(zone);
-  const fuelIndexName = getFuelIndexNameForBill(zone, fuelPriceType);
-  const allIndices = ['Labour', 'RBI Plant Machinery', fuelIndexName, 'RBI Other Materials', 'RBI Cement', 'RBI Explosives', ...steelIndexNames];
-  const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, 'auto');
 
-  if (!quarterlyAverages || quarterlyAverages.length === 0) {
+  // Fuel basis is auto-chosen: compute the PVC with the 4-city average diesel index
+  // and with the zone-city diesel index, and keep whichever gives the higher PVC.
+  // The two index sets differ ONLY in the fuel index (the engine's findFuelIndex
+  // prefers exact 'MPNG Fuel', so the two names must never be in the same set).
+  const fuelNameFour = getFuelIndexNameForBill(zone, 'four_city_avg'); // 'MPNG Fuel'
+  const fuelNameZone = getFuelIndexNameForBill(zone, 'zone_city');     // 'MPNG Fuel - City'
+  const baseIndices = ['Labour', 'RBI Plant Machinery', 'RBI Other Materials', 'RBI Cement', 'RBI Explosives', ...steelIndexNames];
+  const indicesFour = [...baseIndices, fuelNameFour];
+  const indicesZone = [...baseIndices, fuelNameZone];
+
+  const [qaFour, qaZone] = await Promise.all([
+    getQuarterlyAverages(quarter, indicesFour, contract.baseMonth, 'auto'),
+    getQuarterlyAverages(quarter, indicesZone, contract.baseMonth, 'auto'),
+  ]);
+
+  if ((!qaFour || qaFour.length === 0) && (!qaZone || qaZone.length === 0)) {
     await sendTelegramMessage(
       chatId,
       `⚠️ I read the bill (gross ₹${formatMoney(grossBillAmount)}, quarter <b>${quarter}</b>), but the price indices for this quarter aren't available yet, so I can't calculate the PVC.\n\n` +
@@ -200,31 +210,56 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     return {};
   }
 
-  let totalPvc = 0, labour = 0, plant = 0, fuel = 0, materials = 0, cement = 0, steel = 0, explosives = 0;
-  const entriesForReport: any[] = [];
-  for (const e of entries) {
-    const entrySteelTypes = e.steelTypes.size > 0
+  const preparedEntries = entries.map((e) => ({
+    subClassificationId: e.subClassificationId,
+    amount: e.amount,
+    steelTypes: e.steelTypes.size > 0
       ? [...e.steelTypes]
-      : (e.steel > 0 && extractedSteelTypes.length > 0 ? extractedSteelTypes : []);
-    const pvc = await calculateClassificationEntryPvc(
-      { subClassificationId: e.subClassificationId, amount: e.amount, steelTypes: entrySteelTypes },
-      quarterlyAverages,
-    );
-    labour += pvc.labourPvc;
-    plant += pvc.plantMachineryPvc;
-    fuel += pvc.fuelPowerPvc;
-    materials += pvc.otherMaterialsPvc;
-    cement += pvc.cementPvc;
-    steel += pvc.steelPvc;
-    explosives += pvc.explosivesPvc;
-    totalPvc += pvc.totalPvc;
+      : (e.steel > 0 && extractedSteelTypes.length > 0 ? extractedSteelTypes : []),
+  }));
 
-    entriesForReport.push({
-      amount: e.amount,
-      steelTypes: entrySteelTypes,
-      subClassification: subById.get(e.subClassificationId),
-    });
+  // Total PVC + component split for one fuel basis.
+  const totalsFor = async (qa: any[]) => {
+    const c = { totalPvc: 0, labour: 0, plant: 0, fuel: 0, materials: 0, cement: 0, steel: 0, explosives: 0 };
+    for (const pe of preparedEntries) {
+      const pvc = await calculateClassificationEntryPvc(
+        { subClassificationId: pe.subClassificationId, amount: pe.amount, steelTypes: pe.steelTypes },
+        qa,
+      );
+      c.labour += pvc.labourPvc; c.plant += pvc.plantMachineryPvc; c.fuel += pvc.fuelPowerPvc;
+      c.materials += pvc.otherMaterialsPvc; c.cement += pvc.cementPvc; c.steel += pvc.steelPvc;
+      c.explosives += pvc.explosivesPvc; c.totalPvc += pvc.totalPvc;
+    }
+    return c;
+  };
+
+  const resFour = qaFour && qaFour.length ? await totalsFor(qaFour) : null;
+  const resZone = qaZone && qaZone.length ? await totalsFor(qaZone) : null;
+
+  // Keep the higher-PVC basis (only compare when both are available).
+  let chosen: NonNullable<typeof resFour>;
+  let quarterlyAverages: any[];
+  let fuelIndexName: string;
+  let allIndices: string[];
+  let fuelBasisLabel: string;
+  if (resFour && resZone) {
+    if (resZone.totalPvc > resFour.totalPvc) {
+      chosen = resZone; quarterlyAverages = qaZone; fuelIndexName = fuelNameZone; allIndices = indicesZone; fuelBasisLabel = 'zone city';
+    } else {
+      chosen = resFour; quarterlyAverages = qaFour; fuelIndexName = fuelNameFour; allIndices = indicesFour; fuelBasisLabel = '4-city average';
+    }
+  } else if (resFour) {
+    chosen = resFour; quarterlyAverages = qaFour; fuelIndexName = fuelNameFour; allIndices = indicesFour; fuelBasisLabel = '4-city average';
+  } else {
+    chosen = resZone!; quarterlyAverages = qaZone!; fuelIndexName = fuelNameZone; allIndices = indicesZone; fuelBasisLabel = 'zone city';
   }
+
+  const { totalPvc, labour, plant, fuel, materials, cement, steel, explosives } = chosen;
+  const entriesForReport = preparedEntries.map((pe) => ({
+    amount: pe.amount,
+    steelTypes: pe.steelTypes,
+    subClassification: subById.get(pe.subClassificationId),
+  }));
 
   // 5. Reply with the PVC estimate + component breakdown.
   const comp = (label: string, v: number) => (Math.abs(v) >= 0.005 ? `\n   ${label}: ₹${formatMoney(v)}` : '');
@@ -238,6 +273,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       `📄 Agreement: <b>${escapeHtml(contract.agreementNo)}</b>\n` +
       `📅 Quarter: <b>${quarter}</b>\n` +
       `💰 Gross bill: <b>₹${formatMoney(grossBillAmount)}</b>\n` +
+      `⛽ Fuel basis: <b>${fuelBasisLabel}</b> <i>(better of the two)</i>\n` +
       `📈 <b>PVC amount: ${sign}₹${formatMoney(Math.abs(totalPvc))}</b>\n` +
       `<i>Breakdown:</i>` +
       comp('Labour', labour) +
