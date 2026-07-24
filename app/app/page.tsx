@@ -11,7 +11,7 @@ import {
   IndianRupee, Smartphone, Lock,
   TrendingUp, Gift, Play,
   ChevronRight, Download, Layers, FileSpreadsheet,
-  CalendarDays, ReceiptText, ScanSearch, Sparkles, Send, Upload
+  CalendarDays, ReceiptText, ScanSearch, Sparkles, Send
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Footer } from '@/components/footer';
@@ -50,192 +50,96 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-white font-sans text-slate-800 selection:bg-emerald-100 selection:text-emerald-900">
 
-      {/* --- HERO SECTION --- */}
+      {/* --- HERO SECTION (split: web app | telegram) --- */}
       <section className="relative w-full overflow-hidden border-b border-slate-100 bg-white">
-        <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-emerald-50/30 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-[30rem] h-[30rem] bg-emerald-50/30 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/4 pointer-events-none" />
+        <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-sky-50/40 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-[30rem] h-[30rem] bg-emerald-50/40 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/4 pointer-events-none" />
 
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl relative pt-20 pb-28 lg:pt-32 lg:pb-40">
-          <div className="flex flex-col lg:flex-row items-center gap-16 lg:gap-24">
-
-            {/* Left Content */}
-            <div className="flex-1 space-y-8 text-center lg:text-left z-10">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-200 text-sm font-semibold text-emerald-700 shadow-sm hover:shadow transition-shadow">
-                <Sparkles className="h-4 w-4 text-emerald-600" />
-                New: AI PDF Bill Extraction
-              </div>
-
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight text-slate-900 leading-[1.1]">
-                Upload the bill PDF. <br className="hidden lg:block"/>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-emerald-600">Get a ready PVC bill.</span>
-              </h1>
-
-              <p className="text-lg sm:text-xl text-slate-600 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-light">
-                The modern platform for Indian Railway contractors. Now you can <strong className="font-semibold text-slate-800">upload your signed bill PDF and let AI extract</strong> the schedules, quantities, rates, and classifications automatically — or enter them yourself. Generate IR Standard PVC statements, manage bulk billing, and track indices instantly, with full Hindi (हिन्दी) support.
-              </p>
-
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
-                <Link href="/auth/signin?mode=signup">
-                  <Button size="lg" className="h-14 px-8 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg shadow-emerald-600/20 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300">
-                    Get Started Now
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </Link>
-                <Link href="/try-bill">
-                  <Button size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-all duration-300 flex items-center gap-2">
-                    <Calculator className="w-5 h-5 text-emerald-600" />
-                    Try it free — no signup
-                  </Button>
-                </Link>
-                <Link href="#tutorials">
-                  <Button size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-all duration-300 flex items-center gap-2">
-                    <Play className="w-5 h-5 text-emerald-600 fill-emerald-600" />
-                    Watch Tutorials
-                  </Button>
-                </Link>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-5 pt-6 text-sm text-slate-500 font-medium">
-                <span className="flex items-center gap-2"><ScanSearch className="w-5 h-5 text-emerald-500" /> AI PDF Extraction</span>
-                <span className="flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-500" /> Auto Indices</span>
-                <span className="flex items-center gap-2"><FileText className="w-5 h-5 text-emerald-500" /> IR Standard PDF</span>
-                <span className="flex items-center gap-2"><Layers className="w-5 h-5 text-emerald-500" /> Bulk Bills</span>
-                <span className="flex items-center gap-2"><Users className="w-5 h-5 text-emerald-500" /> Bilingual (English / हिन्दी)</span>
-              </div>
-            </div>
-
-            {/* Right Graphic — AI extraction mockup */}
-            <div className="flex-1 flex justify-center lg:justify-end z-10 w-full max-w-md lg:max-w-none">
-              <div className="relative w-full max-w-lg">
-                {/* Product window mockup */}
-                <div className="relative bg-white rounded-3xl border border-slate-200 shadow-2xl shadow-slate-300/40 overflow-hidden">
-                  {/* Subtle AI scan sweep */}
-                  <div aria-hidden="true" className="animate-scan pointer-events-none absolute inset-x-0 z-20 h-16 bg-gradient-to-b from-transparent via-emerald-400/15 to-transparent">
-                    <div className="absolute inset-x-0 bottom-0 h-px bg-emerald-400/70 shadow-[0_0_8px_1px_rgba(99,102,241,0.5)]" />
-                  </div>
-                  {/* Window bar */}
-                  <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100 bg-slate-50/80">
-                    <span className="h-3 w-3 rounded-full bg-red-400" />
-                    <span className="h-3 w-3 rounded-full bg-amber-400" />
-                    <span className="h-3 w-3 rounded-full bg-emerald-400" />
-                    <span className="ml-3 text-xs font-medium text-slate-400">IR-PVC · Create Bill</span>
-                  </div>
-
-                  <div className="p-5 sm:p-6">
-                    {/* Upload row */}
-                    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-500">
-                        <FileText className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-800">Signed Bill (16).pdf</p>
-                        <p className="text-xs text-slate-400">28 pages · uploaded</p>
-                      </div>
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white">
-                        <ScanSearch className="h-3 w-3" /> AI reading
-                      </span>
-                    </div>
-
-                    {/* Extracted table */}
-                    <div className="mt-4 overflow-hidden rounded-xl border border-slate-100">
-                      <div className="grid grid-cols-12 gap-2 bg-slate-900 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-300">
-                        <span className="col-span-2">Item</span>
-                        <span className="col-span-4">Description</span>
-                        <span className="col-span-2 text-right">Qty</span>
-                        <span className="col-span-2 text-right">Rate</span>
-                        <span className="col-span-2 text-right">Class</span>
-                      </div>
-                      {[
-                        { it: '052090', d: 'Shotcrete 40mm', q: '4000.0', r: '707.35', c: '5A' },
-                        { it: '051010', d: 'TMT bars Fe-500', q: '12.480', r: '61,310', c: '6B' },
-                        { it: '061010', d: 'OPC 53 grade', q: '20.02', r: '6,138', c: '6C' },
-                        { it: '052091', d: 'Wire mesh fixing', q: '850.0', r: '243.10', c: '5A' },
-                      ].map((row, i) => (
-                        <div key={i} className={`grid grid-cols-12 items-center gap-2 px-3 py-2.5 text-[11px] ${i % 2 ? 'bg-slate-50/60' : 'bg-white'}`}>
-                          <span className="col-span-2 font-mono font-medium text-slate-700">{row.it}</span>
-                          <span className="col-span-4 truncate text-slate-500">{row.d}</span>
-                          <span className="col-span-2 text-right font-medium text-slate-700">{row.q}</span>
-                          <span className="col-span-2 text-right font-medium text-slate-700">{row.r}</span>
-                          <span className="col-span-2 text-right"><span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">{row.c}</span></span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Footer stat */}
-                    <div className="mt-4 flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3">
-                      <span className="flex items-center gap-2 text-sm font-semibold text-emerald-800"><CheckCircle className="h-4 w-4 text-emerald-600" /> 74 items extracted &amp; classified</span>
-                      <span className="text-xs font-medium text-emerald-600">ready to review</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Floating badge */}
-                <div className="absolute -top-4 -right-2 hidden sm:flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 shadow-lg ring-1 ring-slate-100">
-                  <Sparkles className="h-3.5 w-3.5 text-emerald-500" /> Powered by AI
-                </div>
-
-                {/* SRCA / ILLALL credit */}
-                <div className="mt-6 flex items-center justify-center gap-3 text-center">
-                  <div className="relative h-9 w-9 shrink-0">
-                    <Image src="/srca-logo-official.png" alt="Southern Railway Contractors Association" fill className="object-contain" priority />
-                  </div>
-                  <p className="text-xs text-slate-400 leading-tight">
-                    Developed for <span className="font-semibold text-slate-500">Southern Railway Contractors Association</span>, Tiruchirappalli Division
-                    · Powered by <strong className="font-semibold text-emerald-600">ILLALL TECH</strong>
-                  </p>
-                </div>
-              </div>
-            </div>
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl relative pt-16 pb-20 lg:pt-24 lg:pb-24">
+          <div className="text-center max-w-3xl mx-auto mb-10 lg:mb-14 space-y-4">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 leading-[1.1]">
+              Two ways to get your <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-sky-600">ready PVC bill.</span>
+            </h1>
+            <p className="text-lg text-slate-500 font-light">
+              Indian Railway contractors — use the full web app, or get your PVC in seconds on Telegram.
+            </p>
           </div>
-        </div>
-      </section>
 
-      {/* --- TELEGRAM HIGHLIGHT --- */}
-      <section id="telegram" className="w-full py-20 bg-gradient-to-b from-sky-50 to-white border-b border-sky-100">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-sky-600 to-sky-800 border border-sky-500 shadow-2xl shadow-sky-900/20 p-8 lg:p-14">
-            <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full blur-3xl -translate-y-1/3 translate-x-1/4 pointer-events-none" />
-            <div className="relative grid lg:grid-cols-2 gap-10 items-center">
-              <div className="space-y-6 text-white">
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-sm font-semibold backdrop-blur">
-                  <Send className="w-4 h-4" /> New — PVC on Telegram
-                </div>
-                <h2 className="text-4xl lg:text-5xl font-black tracking-tight leading-[1.1]">
-                  Get your PVC right inside Telegram.
-                </h2>
-                <p className="text-lg text-sky-100 font-light">
-                  No login, no forms. Send your <span className="font-semibold text-white">agreement</span> and
-                  <span className="font-semibold text-white"> running bill</span> PDFs to our bot and get the PVC amount
-                  in seconds — pay in chat to download the full IR-standard statement.
-                </p>
-                <ul className="space-y-3">
-                  {[
-                    'PVC amount free — no account needed',
-                    'Reads the bill & classifies items automatically',
-                    'Official IR statement with index documents',
-                    'Pay by UPI / card, right in the chat',
-                  ].map((t) => (
-                    <li key={t} className="flex items-start gap-3">
-                      <CheckCircle className="w-5 h-5 text-sky-200 shrink-0 mt-0.5" />
-                      <span className="text-sky-50">{t}</span>
-                    </li>
-                  ))}
-                </ul>
+          <div className="grid md:grid-cols-2 gap-6 lg:gap-8 items-stretch">
+
+            {/* LEFT — Web app */}
+            <div className="relative flex flex-col rounded-3xl border border-emerald-100 bg-gradient-to-b from-emerald-50/60 to-white p-8 lg:p-10 shadow-lg shadow-emerald-900/5">
+              <div className="inline-flex self-start items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-100 text-sm font-semibold text-emerald-700">
+                <Sparkles className="h-4 w-4" /> Web app · AI extraction
+              </div>
+              <h2 className="mt-5 text-3xl lg:text-4xl font-black tracking-tight text-slate-900 leading-tight">
+                Upload the bill PDF,<br /> get a ready PVC bill.
+              </h2>
+              <p className="mt-4 text-slate-600 font-light leading-relaxed">
+                Upload your signed bill PDF and let AI extract the schedules, quantities, rates and classifications — or enter them yourself. IR Standard statements, bulk billing, live indices, full Hindi (हिन्दी) support.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-500 font-medium">
+                <span className="flex items-center gap-1.5"><ScanSearch className="w-4 h-4 text-emerald-500" /> AI PDF Extraction</span>
+                <span className="flex items-center gap-1.5"><FileText className="w-4 h-4 text-emerald-500" /> IR Standard PDF</span>
+                <span className="flex items-center gap-1.5"><Layers className="w-4 h-4 text-emerald-500" /> Bulk Bills</span>
+              </div>
+              <div className="mt-auto pt-7 flex flex-col sm:flex-row gap-3">
+                <Link href="/auth/signin?mode=signup" className="flex-1">
+                  <Button size="lg" className="w-full h-13 px-6 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg shadow-emerald-600/20 hover:-translate-y-0.5 transition-all">
+                    Get Started Now <ArrowRight className="ml-2 h-5 w-5" />
+                  </Button>
+                </Link>
+                <Link href="/try-bill" className="flex-1">
+                  <Button size="lg" variant="outline" className="w-full h-13 px-6 text-base font-semibold bg-white text-slate-700 border-slate-200 hover:bg-slate-50 rounded-xl flex items-center justify-center gap-2">
+                    <Calculator className="w-5 h-5 text-emerald-600" /> Try it free
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            {/* RIGHT — Telegram */}
+            <div className="relative flex flex-col overflow-hidden rounded-3xl border border-sky-500 bg-gradient-to-br from-sky-600 to-sky-800 p-8 lg:p-10 shadow-2xl shadow-sky-900/20 text-white">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/3 translate-x-1/4 pointer-events-none" />
+              <div className="relative inline-flex self-start items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/15 text-sm font-semibold backdrop-blur">
+                <Send className="h-4 w-4" /> New · Telegram
+              </div>
+              <h2 className="relative mt-5 text-3xl lg:text-4xl font-black tracking-tight leading-tight">
+                Get your PVC<br /> right inside Telegram.
+              </h2>
+              <p className="relative mt-4 text-sky-100 font-light leading-relaxed">
+                No login, no forms. Send your <span className="font-semibold text-white">agreement</span> and <span className="font-semibold text-white">running bill</span> PDFs to the bot and get the PVC amount in seconds — pay in chat for the full IR statement.
+              </p>
+              <ul className="relative mt-5 space-y-2.5">
+                {[
+                  'PVC amount free — no account needed',
+                  'Reads & classifies the bill automatically',
+                  'Official IR statement with index docs',
+                  'Pay by UPI / card, right in the chat',
+                ].map((t) => (
+                  <li key={t} className="flex items-start gap-2.5">
+                    <CheckCircle className="w-5 h-5 text-sky-200 shrink-0 mt-0.5" />
+                    <span className="text-sky-50 text-sm">{t}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="relative mt-auto pt-7">
                 <a href="https://t.me/Pvcbill_bot" target="_blank" rel="noopener noreferrer"
-                   className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sky-700 font-bold shadow-lg hover:bg-sky-50 hover:-translate-y-0.5 transition-all">
+                   className="inline-flex w-full sm:w-auto justify-center items-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sky-700 font-bold shadow-lg hover:bg-sky-50 hover:-translate-y-0.5 transition-all">
                   <Send className="w-5 h-5" /> Open @Pvcbill_bot <ArrowRight className="w-4 h-4" />
                 </a>
               </div>
-
-              {/* three-step chat mock */}
-              <div className="relative">
-                <div className="rounded-2xl bg-white/95 backdrop-blur p-5 shadow-xl ring-1 ring-black/5 space-y-3">
-                  <TgStep icon={<Upload className="w-4 h-4" />} n={1} title="Send the agreement PDF" sub="Bot reads the schedules, rates & base month" />
-                  <TgStep icon={<Upload className="w-4 h-4" />} n={2} title="Send the running bill PDF" sub="Items classified automatically for PVC" />
-                  <TgStep icon={<IndianRupee className="w-4 h-4" />} n={3} title="Get PVC + pay for the report" sub="Amount free · statement PDF after payment" />
-                </div>
-              </div>
             </div>
+          </div>
+
+          {/* SRCA / ILLALL credit */}
+          <div className="mt-10 flex items-center justify-center gap-3 text-center">
+            <div className="relative h-9 w-9 shrink-0">
+              <Image src="/srca-logo-official.png" alt="Southern Railway Contractors Association" fill className="object-contain" priority />
+            </div>
+            <p className="text-xs text-slate-400 leading-tight">
+              Developed for <span className="font-semibold text-slate-500">Southern Railway Contractors Association</span>, Tiruchirappalli Division
+              · Powered by <strong className="font-semibold text-emerald-600">ILLALL TECH</strong>
+            </p>
           </div>
         </div>
       </section>
@@ -622,21 +526,6 @@ export default function HomePage() {
       </section>
 
       <Footer />
-    </div>
-  );
-}
-
-function TgStep({ icon, n, title, sub }: { icon: React.ReactNode; n: number; title: string; sub: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
-      <div className="relative shrink-0 w-10 h-10 rounded-lg bg-sky-600 text-white flex items-center justify-center">
-        {icon}
-        <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white text-sky-700 text-[11px] font-black flex items-center justify-center ring-2 ring-sky-100">{n}</span>
-      </div>
-      <div className="min-w-0">
-        <div className="font-bold text-slate-900 text-sm truncate">{title}</div>
-        <div className="text-xs text-slate-500 truncate">{sub}</div>
-      </div>
     </div>
   );
 }
