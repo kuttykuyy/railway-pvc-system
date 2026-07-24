@@ -276,8 +276,8 @@ export default function Navigation() {
     <nav className="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-200">
       <div className="container mx-auto px-2 sm:px-4 max-w-7xl">
         <div className="flex justify-between items-center h-16">
-          {/* Brand */}
-          <Link href="/contracts" className="flex items-center space-x-2 sm:space-x-3 group">
+          {/* Brand — landing page when logged out, dashboard when logged in */}
+          <Link href={session ? '/contracts' : '/'} className="flex items-center space-x-2 sm:space-x-3 group">
             <img
               src="/logo.png"
               alt="IR-PVC logo"
