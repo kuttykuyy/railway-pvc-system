@@ -113,7 +113,8 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     (groupCode ? subs.find((s) => s.code.toUpperCase().startsWith(groupCode)) : undefined) ||
     subs.find((s) => s.code.toUpperCase().endsWith('A'));
 
-  type EntryAgg = { subClassificationId: string; amount: number; steel: number; steelTypes: Set<string> };
+  type ItemRow = { itemNumber: string; quantity: number | ''; agreementRate: number | ''; cementMt?: number };
+  type EntryAgg = { subClassificationId: string; amount: number; steel: number; steelTypes: Set<string>; rows: ItemRow[] };
   const agg = new Map<string, EntryAgg>();
   let unclassifiedAmount = 0;
 
@@ -126,9 +127,17 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       unclassifiedAmount += amt;
       continue;
     }
-    const cur = agg.get(sub.id) || { subClassificationId: sub.id, amount: 0, steel: sub.steel, steelTypes: new Set<string>() };
+    const cur = agg.get(sub.id) || { subClassificationId: sub.id, amount: 0, steel: sub.steel, steelTypes: new Set<string>(), rows: [] as ItemRow[] };
     cur.amount = round2(cur.amount + amt);
     if (it.isSteelItem && it.steelType) cur.steelTypes.add(it.steelType);
+    // Keep the item detail so the report can show item no / qty / agreement rate.
+    const q = Number(it.quantitySinceLastBill);
+    const r = Number(it.agreementRate);
+    cur.rows.push({
+      itemNumber: String(it.itemNo || it.dsrCode || '').trim(),
+      quantity: Number.isFinite(q) && q > 0 ? q : '',
+      agreementRate: Number.isFinite(r) && r > 0 ? r : '',
+    });
     agg.set(sub.id, cur);
   }
 
@@ -215,6 +224,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     steelTypes: e.steelTypes.size > 0
       ? [...e.steelTypes]
       : (e.steel > 0 && extractedSteelTypes.length > 0 ? extractedSteelTypes : []),
+    rows: e.rows,
   }));
 
   // Total PVC + component split for one fuel basis.
@@ -254,11 +264,19 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   }
 
   const { totalPvc, labour, plant, fuel, materials, cement, steel, explosives } = chosen;
-  const entriesForReport = preparedEntries.map((pe) => ({
-    amount: pe.amount,
-    steelTypes: pe.steelTypes,
-    subClassification: subById.get(pe.subClassificationId),
-  }));
+  const entriesForReport = preparedEntries.map((pe) => {
+    const first = pe.rows[0];
+    return {
+      amount: pe.amount,
+      steelTypes: pe.steelTypes,
+      subClassification: subById.get(pe.subClassificationId),
+      // Item detail so the report shows item no / quantity / agreement rate.
+      itemRows: pe.rows,
+      itemNumber: first?.itemNumber || '',
+      quantity: first?.quantity ?? '',
+      agreementRate: first?.agreementRate ?? '',
+    };
+  });
 
   // 5. Reply with the PVC estimate + component breakdown.
   const comp = (label: string, v: number) => (Math.abs(v) >= 0.005 ? `\n   ${label}: ₹${formatMoney(v)}` : '');
