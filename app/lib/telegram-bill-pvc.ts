@@ -30,6 +30,12 @@ import { extractSteelTypesFromEntries } from './steel-type-handler';
 import { inferMainClassification } from './work-classification';
 import { matchCementCoefficient, normalizeDsrCode, calculateDsrCementRequirement } from './dsr-cement-calculation';
 
+/** Strip the internal per-chat namespace suffix from a guest contract's agreement
+ *  number for display. (Kept local to avoid a circular import with the flow.) */
+function displayAgreementNo(stored: string | null | undefined): string {
+  return String(stored || '').replace(/\s*·\s*tg:\S+$/i, '').trim();
+}
+
 export interface ProcessUploadedBillArgs {
   chatId: string;
   conversationId: string;
@@ -312,7 +318,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   await sendTelegramMessage(
     chatId,
     `✅ <b>PVC estimate${billNoLabel}</b>\n\n` +
-      `📄 Agreement: <b>${escapeHtml(contract.agreementNo)}</b>\n` +
+      `📄 Agreement: <b>${escapeHtml(displayAgreementNo(contract.agreementNo))}</b>\n` +
       `📆 Date of measurement: <b>${new Date(measurementDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}</b>\n` +
       `📅 Quarter: <b>${quarter}</b>\n` +
       `💰 Gross bill: <b>₹${formatMoney(grossBillAmount)}</b>\n` +
@@ -360,7 +366,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     const link = await createReportPaymentLink({
       chatId,
       amountRupees: price,
-      agreementNo: contract.agreementNo,
+      agreementNo: displayAgreementNo(contract.agreementNo),
       billNo: payload.billNo,
     });
 
@@ -444,7 +450,8 @@ export async function renderAndSendPaidReport(chatId: string): Promise<boolean> 
   });
   console.log(`[Telegram] paid report built (${(pdfBuf.length / 1024).toFixed(0)} KB); sending…`);
 
-  const safeAgr = String(contract.agreementNo).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const realAgr = displayAgreementNo(contract.agreementNo);
+  const safeAgr = realAgr.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const safeBill = String(payload.billNo || 'bill').replace(/[^A-Za-z0-9]+/g, '-');
 
   // Send FIRST; only clear the pending report once it actually went out, so a failed
@@ -453,7 +460,7 @@ export async function renderAndSendPaidReport(chatId: string): Promise<boolean> 
     chatId,
     pdfBuf,
     `PVC-${safeAgr}-${safeBill}.pdf`,
-    `✅ Here is your PVC statement.\n📎 ${escapeHtml(contract.agreementNo)}`,
+    `✅ Here is your PVC statement.\n📎 ${escapeHtml(realAgr)}`,
   );
 
   await prisma.telegramConversation.update({
@@ -621,7 +628,7 @@ async function buildIrReport(o: {
     zone: o.zone,
     fuelPriceType: 'four_city_avg',
     contract: {
-      agreementNo: contract.agreementNo,
+      agreementNo: displayAgreementNo(contract.agreementNo),
       contractorName: contract.contractorName,
       workDescription: contract.workDescription,
       dateOfOpening: contract.dateOfOpening,

@@ -113,13 +113,13 @@ async function handleAgreementDoc(
     const contract = await findOrCreateContractFromAgreement(conversationId, data);
     await updateTelegramConversation(conversationId, TelegramStep.AWAITING_ZONE, {
       docContractId: contract.id,
-      docContractAgreementNo: contract.agreementNo,
+      docContractAgreementNo: displayAgreementNo(contract.agreementNo),
     });
 
     await sendTelegramMessage(
       chatId,
       `✅ <b>Agreement read</b>\n\n` +
-        `📄 Agreement No: <b>${escapeHtml(contract.agreementNo)}</b>\n` +
+        `📄 Agreement No: <b>${escapeHtml(displayAgreementNo(contract.agreementNo))}</b>\n` +
         (contract.contractorName ? `👤 Contractor: <b>${escapeHtml(contract.contractorName)}</b>\n` : '') +
         (contract.workDescription ? `🏗️ Work: <b>${escapeHtml(truncate(contract.workDescription, 80))}</b>\n` : ''),
     );
@@ -440,17 +440,37 @@ async function maybeProcess(conversationId: string, chatId: string) {
  * choice), otherwise create one — with schedules/rates so PVC is correct. The
  * owner is the chat's linked user, or the shared guest account.
  */
+/**
+ * The real agreement number as printed on the agreement, stripped of the internal
+ * per-chat namespace suffix guest contracts carry. Use this everywhere we DISPLAY
+ * the agreement number to the user or in the report.
+ */
+export function displayAgreementNo(stored: string | null | undefined): string {
+  return String(stored || '').replace(/\s*·\s*tg:\S+$/i, '').trim();
+}
+
 async function findOrCreateContractFromAgreement(
   conversationId: string,
   data: ExtractedAgreement,
 ) {
-  const agreementNo = String(data.agreementNo).trim();
-
-  const existing = await prisma.contract.findUnique({ where: { agreementNo } });
-  if (existing) return existing;
+  const realNo = String(data.agreementNo).trim();
 
   const conv = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
-  const ownerId = conv?.userId || (await getTelegramGuestUserId());
+  const linkedUserId = conv?.userId || null;
+  const ownerId = linkedUserId || (await getTelegramGuestUserId());
+
+  // ISOLATION: agreementNo is globally unique, so a plain lookup/create would let an
+  // anonymous chat READ or OVERWRITE a real customer's contract (and squat unused
+  // numbers). Guest (unlinked) chats therefore store a per-chat namespaced key so
+  // their contracts live in a separate keyspace and can never touch real ones. Linked
+  // users keep their real contracts. Either way we only ever reuse a contract owned
+  // by THIS chat's owner.
+  const storedNo = linkedUserId ? realNo : `${realNo} · tg:${conv?.chatId || conversationId}`;
+
+  const existing = await prisma.contract.findFirst({ where: { agreementNo: storedNo, userId: ownerId } });
+  if (existing) return existing;
+
+  const agreementNo = storedNo;
 
   // Opening date drives the base month (month before the tender closing date).
   // Callers guarantee a date is present — never fall back to "today".
@@ -468,27 +488,37 @@ async function findOrCreateContractFromAgreement(
     return Number.isFinite(n) && n > 0 ? n : null;
   };
 
-  return prisma.contract.create({
-    data: {
-      agreementNo,
-      loaNo: data.loaNo || null,
-      loaDate: data.loaDate ? new Date(data.loaDate) : null,
-      contractorName: data.contractorName || 'Unknown',
-      contractorPhone: data.contractorPhone || null,
-      workDescription: data.workDescription || 'Work as per agreement',
-      dateOfOpening: openingDate,
-      baseMonth,
-      completionPeriodMonths: (() => {
-        const m = Number(data.completionPeriodMonths);
-        return Number.isFinite(m) && m > 0 ? Math.round(m) : null;
-      })(),
-      tenderAdvertisedValue: toNum(data.tenderAdvertisedValue),
-      contractValue: toNum(data.agreementAmount),
-      schedules: schedules as any,
-      userId: ownerId,
-      pvcApplicable: true,
-    },
-  });
+  try {
+    return await prisma.contract.create({
+      data: {
+        agreementNo,
+        loaNo: data.loaNo || null,
+        loaDate: data.loaDate ? new Date(data.loaDate) : null,
+        contractorName: data.contractorName || 'Unknown',
+        contractorPhone: data.contractorPhone || null,
+        workDescription: data.workDescription || 'Work as per agreement',
+        dateOfOpening: openingDate,
+        baseMonth,
+        completionPeriodMonths: (() => {
+          const m = Number(data.completionPeriodMonths);
+          return Number.isFinite(m) && m > 0 ? Math.round(m) : null;
+        })(),
+        tenderAdvertisedValue: toNum(data.tenderAdvertisedValue),
+        contractValue: toNum(data.agreementAmount),
+        schedules: schedules as any,
+        userId: ownerId,
+        pvcApplicable: true,
+      },
+    });
+  } catch (err: any) {
+    // A linked user's real agreement number is already owned by a DIFFERENT account.
+    // Never attach to it — tell them to use the website instead. (Guests can't hit
+    // this: their key is namespaced by chat id.)
+    if (err?.code === 'P2002') {
+      throw new Error(`Agreement ${realNo} already exists under another account. Please manage it on the website.`);
+    }
+    throw err;
+  }
 }
 
 /**
@@ -544,13 +574,13 @@ export async function handleTenderDateReply(conversation: any, msg: string, chat
       const contract = await findOrCreateContractFromAgreement(conversation.id, pending);
       await updateTelegramConversation(conversation.id, TelegramStep.IDLE, {
         docContractId: contract.id,
-        docContractAgreementNo: contract.agreementNo,
+        docContractAgreementNo: displayAgreementNo(contract.agreementNo),
         docPendingAgreement: undefined,
       });
       await sendTelegramMessage(
         chatId,
         `✅ Saved. Tender closing date <b>${fmt(date)}</b> → base month <b>${fmt(baseMonth)}</b>.\n\n` +
-          `Agreement: <b>${escapeHtml(contract.agreementNo)}</b>`,
+          `Agreement: <b>${escapeHtml(displayAgreementNo(contract.agreementNo))}</b>`,
       );
     } else if (data.docContractId) {
       // Correct an existing contract whose date/base month was wrong.
