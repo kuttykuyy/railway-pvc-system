@@ -94,14 +94,21 @@ export async function handleTelegramMessage(chatId: string, text: string) {
 
 async function sendHelpMessage(chatId: string) {
   const msg =
-    `📋 <b>IR-PVC Bill Management Bot</b>\n\n` +
-    `Available commands:\n\n` +
-    `▫️ /createcontract — Create a new contract\n` +
-    `▫️ /createbill — Create a new PVC bill\n` +
-    `▫️ /status — Check your recent bills\n` +
-    `▫️ /help — Show this menu\n` +
-    `▫️ /cancel — Cancel current operation\n\n` +
-    `Simply type the command to get started!`;
+    `📋 <b>IR-PVC Bot</b>\n\n` +
+    `<b>Quickest way — just send 2 PDFs:</b>\n` +
+    `1️⃣ Send the <b>tender agreement PDF</b>\n` +
+    `2️⃣ Send the <b>running bill (RA bill) PDF</b>\n` +
+    `➡️ You get the <b>PVC amount</b> and the <b>PVC statement PDF</b> right here.\n\n` +
+    `<b>After that:</b>\n` +
+    `▫️ Another bill for the same work — just send the next bill PDF\n` +
+    `▫️ A different work — send that agreement PDF\n` +
+    `▫️ Start fresh — /cancel\n\n` +
+    `<b>Or type the details instead:</b>\n` +
+    `▫️ /createcontract — enter a contract step by step\n` +
+    `▫️ /createbill — enter a bill step by step\n` +
+    `▫️ /status — your recent bills\n` +
+    `▫️ /help — this menu\n\n` +
+    `<i>The PVC from PDFs is an automatic estimate — check it on irpvc.in before filing.</i>`;
   return sendTelegramMessage(chatId, msg);
 }
 
