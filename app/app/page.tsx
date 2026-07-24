@@ -221,9 +221,9 @@ export default function HomePage() {
                     </li>
                   ))}
                 </ul>
-                <a href="https://t.me/irpvcbill_bot" target="_blank" rel="noopener noreferrer"
+                <a href="https://t.me/Pvcbill_bot" target="_blank" rel="noopener noreferrer"
                    className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sky-700 font-bold shadow-lg hover:bg-sky-50 hover:-translate-y-0.5 transition-all">
-                  <Send className="w-5 h-5" /> Open @irpvcbill_bot <ArrowRight className="w-4 h-4" />
+                  <Send className="w-5 h-5" /> Open @Pvcbill_bot <ArrowRight className="w-4 h-4" />
                 </a>
               </div>
 
@@ -464,7 +464,7 @@ export default function HomePage() {
             <MiniFeature icon={<Download />} title="Bulk PDF Download" desc="Download Detailed or IR Standard PDFs for multiple bills merged into one file" badge="New" />
             <MiniFeature icon={<FileSpreadsheet />} title="Excel Contract Import" desc="Import multiple contracts at once via Excel/CSV template — saves hours of manual entry" badge="New" />
             <MiniFeature icon={<ScanSearch />} title="Free PVC Preview" desc="See the full PVC breakdown before paying — no credits deducted for preview calculations" badge="New" />
-            <MiniFeature icon={<Send />} title="Telegram Bot" desc="Send agreement + bill PDFs to @irpvcbill_bot and get the PVC in chat — no login, pay per report" badge="New" />
+            <MiniFeature icon={<Send />} title="Telegram Bot" desc="Send agreement + bill PDFs to @Pvcbill_bot and get the PVC in chat — no login, pay per report" badge="New" />
             <MiniFeature icon={<MessageSquare />} title="WhatsApp Integration" desc="Receive bills and critical alerts directly on WhatsApp" />
             <MiniFeature icon={<BarChart3 />} title="Deep Analytics" desc="Custom abstract reports and visual summaries across contracts" />
             <MiniFeature icon={<Users />} title="Bilingual Support" desc="Switch seamlessly between English and Hindi (हिन्दी) across all dashboards, contracts, and bills" badge="New" />
