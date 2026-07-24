@@ -172,12 +172,22 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     return { needsInput: true };
   }
 
-  const zone = (contract as any).railwayZone || null;
+  // Zone and fuel basis come from the questions the bot asked in the flow — they
+  // decide the steel indices and which diesel price applies, so they must not be
+  // assumed.
+  const convForOpts = await prisma.telegramConversation.findUnique({
+    where: { id: args.conversationId },
+    select: { conversationData: true },
+  });
+  const convOpts = (convForOpts?.conversationData as any) || {};
+  const zone: string | null = convOpts.docZone || null;
+  const fuelPriceType: string = convOpts.docFuelPriceType || 'four_city_avg';
+
   const extractedSteelTypes = await extractSteelTypesFromEntries(
     entries.map((e) => ({ subClassificationId: e.subClassificationId, amount: e.amount, steelTypes: [...e.steelTypes] })),
   );
   const steelIndexNames = getSteelIndexNamesForZone(zone);
-  const fuelIndexName = getFuelIndexNameForBill(zone, 'four_city_avg');
+  const fuelIndexName = getFuelIndexNameForBill(zone, fuelPriceType);
   const allIndices = ['Labour', 'RBI Plant Machinery', fuelIndexName, 'RBI Other Materials', 'RBI Cement', 'RBI Explosives', ...steelIndexNames];
   const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, 'auto');
 

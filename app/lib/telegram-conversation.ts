@@ -10,8 +10,10 @@ export enum TelegramStep {
   IDLE = 'IDLE',
   AWAITING_COMMAND = 'AWAITING_COMMAND',
   AWAITING_PHONE = 'AWAITING_PHONE', // Link phone to account
-  // Guided PDF → PVC flow: ask for the agreement, then the bill.
+  // Guided PDF → PVC flow: agreement → zone → fuel basis → bill.
   AWAITING_AGREEMENT_PDF = 'AWAITING_AGREEMENT_PDF',
+  AWAITING_ZONE = 'AWAITING_ZONE',
+  AWAITING_FUEL_BASIS = 'AWAITING_FUEL_BASIS',
   AWAITING_BILL_PDF = 'AWAITING_BILL_PDF',
   // Document (PDF) PVC flow: the agreement had no tender closing date, or the
   // stored one is wrong (quarter came out Q0), so ask the user for it.
@@ -71,6 +73,10 @@ export interface TelegramConversationData {
   docPendingReport?: any;
   /** Razorpay payment link id, so /paid can verify payment without the webhook. */
   docPendingPaymentLinkId?: string;
+  /** Railway zone code (e.g. SR) — drives the steel indices and the zone-city fuel index. */
+  docZone?: string;
+  /** 'four_city_avg' or 'zone_city' — which fuel price basis this contract uses. */
+  docFuelPriceType?: string;
 }
 
 /**

@@ -21,7 +21,8 @@ import {
   getTelegramConversationData,
   TelegramStep,
 } from './telegram-conversation';
-import { sendTelegramMessage, sendTelegramChatAction, downloadTelegramFile } from './telegram-api';
+import { sendTelegramMessage, sendTelegramChatAction, downloadTelegramFile, inlineKeyboard } from './telegram-api';
+import { getRailwayZoneOptions } from './zone-steel-city-mapping';
 import { extractAgreementFromPdf, type ExtractedAgreement } from './ai/agreement-extractor';
 import { getTelegramGuestUserId } from './telegram-guest';
 import { getBaseMonth } from './pvc-calculations';
@@ -110,22 +111,22 @@ async function handleAgreementDoc(
   }
   try {
     const contract = await findOrCreateContractFromAgreement(conversationId, data);
-    await updateTelegramConversation(conversationId, TelegramStep.AWAITING_BILL_PDF, {
+    await updateTelegramConversation(conversationId, TelegramStep.AWAITING_ZONE, {
       docContractId: contract.id,
       docContractAgreementNo: contract.agreementNo,
     });
 
     await sendTelegramMessage(
       chatId,
-      `✅ <b>Step 1 of 2 done — agreement read</b>\n\n` +
+      `✅ <b>Agreement read</b>\n\n` +
         `📄 Agreement No: <b>${escapeHtml(contract.agreementNo)}</b>\n` +
         (contract.contractorName ? `👤 Contractor: <b>${escapeHtml(contract.contractorName)}</b>\n` : '') +
-        (contract.workDescription ? `🏗️ Work: <b>${escapeHtml(truncate(contract.workDescription, 80))}</b>\n` : '') +
-        `\n📎 <b>Step 2 of 2:</b> now send the <b>running bill (RA bill) PDF</b>.`,
+        (contract.workDescription ? `🏗️ Work: <b>${escapeHtml(truncate(contract.workDescription, 80))}</b>\n` : ''),
     );
 
-    // If the bill already arrived first, we can process now.
-    return maybeProcess(conversationId, chatId);
+    // The railway zone decides which steel indices (and the zone-city fuel index)
+    // apply, so confirm it before the bill — guessing it would skew the PVC.
+    return askZone(conversationId, chatId, data.railwayName || null);
   } catch (err: any) {
     console.error('[Telegram] contract create failed:', err);
     return sendTelegramMessage(chatId, `❌ Could not set up the contract: ${escapeHtml(err.message || 'unknown error')}`);
@@ -136,17 +137,27 @@ async function handleBillDoc(conversationId: string, chatId: string, doc: Telegr
   const conv0 = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
   const stored0 = getTelegramConversationData(conv0);
   const haveContract = !!stored0.docContractId;
+  const answeredQuestions = !!stored0.docFuelPriceType;
 
-  // Keep asking for the agreement until we have it — the bill alone can't be priced.
-  await updateTelegramConversation(
-    conversationId,
-    haveContract ? TelegramStep.IDLE : TelegramStep.AWAITING_AGREEMENT_PDF,
-    { docBillFileId: doc.file_id, docBillFileName: doc.file_name || 'bill.pdf' },
-  );
+  // Keep the bill, but don't skip ahead: the agreement (and the zone/fuel answers)
+  // are still needed before the PVC can be worked out.
+  const nextStep = !haveContract
+    ? TelegramStep.AWAITING_AGREEMENT_PDF
+    : answeredQuestions
+      ? TelegramStep.IDLE
+      : (conv0?.currentStep as TelegramStep) || TelegramStep.AWAITING_ZONE;
 
-  if (haveContract) {
-    await sendTelegramMessage(chatId, `✅ <b>Step 2 of 2 done — bill received.</b> Calculating your PVC…`);
+  await updateTelegramConversation(conversationId, nextStep, {
+    docBillFileId: doc.file_id,
+    docBillFileName: doc.file_name || 'bill.pdf',
+  });
+
+  if (haveContract && answeredQuestions) {
+    await sendTelegramMessage(chatId, `✅ <b>Bill received.</b> Calculating your PVC…`);
     return maybeProcess(conversationId, chatId);
+  }
+  if (haveContract) {
+    return sendTelegramMessage(chatId, `✅ <b>Bill received</b> — I'll keep it. Please answer the question above first.`);
   }
   return sendTelegramMessage(
     chatId,
@@ -167,6 +178,9 @@ export async function startPvcFlow(conversationId: string, chatId: string) {
     docBillFileName: undefined,
     docPendingAgreement: undefined,
     docPendingReport: undefined,
+    docPendingPaymentLinkId: undefined,
+    docZone: undefined,
+    docFuelPriceType: undefined,
   });
   return sendTelegramMessage(
     chatId,
@@ -175,6 +189,102 @@ export async function startPvcFlow(conversationId: string, chatId: string) {
       `📎 <b>Step 1 of 2:</b> send the <b>tender agreement PDF</b>.\n\n` +
       `<i>Tap the 📎 clip button and choose the file. Type /cancel to stop.</i>`,
   );
+}
+
+// ─── Zone + fuel basis questions ─────────────────────
+
+/** Best-guess zone code from the railway name printed on the agreement. */
+function guessZoneCode(railwayName: string | null): string | null {
+  if (!railwayName) return null;
+  const needle = String(railwayName).trim().toLowerCase();
+  if (!needle) return null;
+  const options = getRailwayZoneOptions();
+  const exact = options.find(o => o.label.toLowerCase() === needle);
+  if (exact) return exact.value;
+  const contains = options.find(
+    o => needle.includes(o.label.toLowerCase()) || o.label.toLowerCase().includes(needle),
+  );
+  return contains ? contains.value : null;
+}
+
+/** Asks the user to confirm (or type) the railway zone. */
+export async function askZone(conversationId: string, chatId: string, railwayName: string | null) {
+  const guess = guessZoneCode(railwayName);
+  await updateTelegramConversation(conversationId, TelegramStep.AWAITING_ZONE, {});
+
+  if (guess) {
+    const info = getRailwayZoneOptions().find(o => o.value === guess)!;
+    return sendTelegramMessage(
+      chatId,
+      `🚉 <b>Railway zone</b>\n\nThe agreement looks like <b>${escapeHtml(info.label)} (${guess})</b>.\n\n` +
+        `This sets the steel price indices used for the PVC. Is that right?`,
+      {
+        replyMarkup: inlineKeyboard([
+          [{ text: `✅ Yes — ${info.label}`, callback_data: `zone_${guess}` }],
+          [{ text: '✏️ No, choose another', callback_data: 'zone_other' }],
+        ]),
+      },
+    );
+  }
+  return sendZoneList(chatId);
+}
+
+async function sendZoneList(chatId: string) {
+  const list = getRailwayZoneOptions()
+    .map(o => `<b>${o.value}</b> — ${escapeHtml(o.label)}`)
+    .join('\n');
+  return sendTelegramMessage(
+    chatId,
+    `🚉 <b>Which railway zone?</b>\n\nReply with the code (e.g. <b>SR</b>):\n\n${list}`,
+  );
+}
+
+/** Handles the zone answer (button or typed code), then asks the fuel basis. */
+export async function handleZoneReply(conversation: any, msg: string, chatId: string) {
+  const raw = String(msg).trim();
+  if (raw.toLowerCase() === 'zone_other') return sendZoneList(chatId);
+
+  const code = raw.replace(/^zone_/i, '').toUpperCase();
+  const match = getRailwayZoneOptions().find(o => o.value.toUpperCase() === code);
+  if (!match) {
+    return sendTelegramMessage(chatId, `❌ I don't know the zone "<b>${escapeHtml(raw)}</b>". Please reply with a code from the list (e.g. SR).`);
+  }
+
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_FUEL_BASIS, { docZone: match.value });
+  return sendTelegramMessage(
+    chatId,
+    `⛽ <b>Fuel price basis</b>\n\nWhich diesel price does this contract's PVC use?`,
+    {
+      replyMarkup: inlineKeyboard([
+        [{ text: '🇮🇳 Average of 4 cities', callback_data: 'fuel_four' }],
+        [{ text: `📍 Zone city (${match.steelCity})`, callback_data: 'fuel_zone' }],
+      ]),
+    },
+  );
+}
+
+/** Handles the fuel-basis answer, then asks for the bill PDF. */
+export async function handleFuelBasisReply(conversation: any, msg: string, chatId: string) {
+  const raw = String(msg).trim().toLowerCase();
+  let fuelPriceType: string | null = null;
+  if (raw === 'fuel_four' || raw.includes('4') || raw.includes('four') || raw.includes('avg') || raw.includes('average')) {
+    fuelPriceType = 'four_city_avg';
+  } else if (raw === 'fuel_zone' || raw.includes('zone') || raw.includes('city')) {
+    fuelPriceType = 'zone_city';
+  }
+  if (!fuelPriceType) {
+    return sendTelegramMessage(chatId, 'Please tap one of the two buttons above — <b>Average of 4 cities</b> or <b>Zone city</b>.');
+  }
+
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_BILL_PDF, { docFuelPriceType: fuelPriceType });
+  const label = fuelPriceType === 'four_city_avg' ? 'Average of 4 cities' : 'Zone city';
+  await sendTelegramMessage(chatId, `✅ Fuel basis: <b>${label}</b>`);
+
+  // The bill may already be waiting (user sent it first) — process straight away.
+  const data = getTelegramConversationData(conversation);
+  if (data.docBillFileId) return maybeProcess(conversation.id, chatId);
+
+  return sendTelegramMessage(chatId, `📎 <b>Last step:</b> send the <b>running bill (RA bill) PDF</b> and I'll calculate the PVC.`);
 }
 
 /**
@@ -239,7 +349,8 @@ export async function remindToUpload(step: TelegramStep, chatId: string) {
 async function maybeProcess(conversationId: string, chatId: string) {
   const conv = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
   const data = getTelegramConversationData(conv);
-  if (!data.docContractId || !data.docBillFileId) return; // still waiting for the other file
+  // Need the contract, the bill, and the zone/fuel answers before pricing.
+  if (!data.docContractId || !data.docBillFileId || !data.docFuelPriceType) return;
 
   await sendTelegramChatAction(chatId, 'upload_document');
   let needsInput = false;
