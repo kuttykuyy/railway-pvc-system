@@ -1125,6 +1125,44 @@ ${markdownPart}
   return extractJsonWithRetry(apiKey, prompt, `part ${partNumber}/${partCount}`);
 }
 
+/**
+ * Direct (no-MarkItDown) bill extraction — the same path the web uploader uses
+ * (stage=direct): parse the IREPS PDF in-process, apply the deterministic
+ * classification, then let the AI refine descriptions/justifications.
+ *
+ * Exported so non-HTTP callers (e.g. the Telegram bot) can extract a bill without
+ * a session and without the external MarkItDown service.
+ */
+export async function extractBillDetailsDirect(pdfBuffer: Buffer, contractId?: string): Promise<ExtractedBillDetails> {
+  const parsed = await parseIrepsBillPdfDirect(pdfBuffer);
+
+  let contractDescription = '';
+  if (contractId) {
+    const contract = await prisma.contract.findUnique({
+      where: { id: contractId },
+      select: { workDescription: true },
+    });
+    contractDescription = contract?.workDescription || '';
+  }
+  const workDescription = contractDescription || parsed.workDescription;
+
+  const billDetails: ExtractedBillDetails = {
+    ...parsed,
+    workDescription,
+    classificationGroupCode: inferMainClassification(workDescription).code,
+    items: parsed.items
+      .map(normalizeExtractedItem)
+      .map(item => applyDeterministicClassification(item, workDescription)),
+  };
+
+  const aiReview = await enhanceDeterministicItemsWithAi(billDetails.items, workDescription, '');
+  billDetails.items = aiReview.items;
+  if (aiReview.warning) {
+    billDetails.warnings = [...(billDetails.warnings || []), aiReview.warning];
+  }
+  return billDetails;
+}
+
 export async function extractBillDetailsWithAi(file: File, requestOrigin: string, contractId?: string): Promise<ExtractedBillDetails> {
   const apiKey = process.env.ABACUSAI_API_KEY;
   if (!apiKey) {

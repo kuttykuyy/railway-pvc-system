@@ -22,7 +22,7 @@ import {
   downloadTelegramFile,
   getPublicSiteUrl,
 } from './telegram-api';
-import { extractBillDetailsWithAi } from '@/app/api/bills/cement-analysis/route';
+import { extractBillDetailsDirect } from '@/app/api/bills/cement-analysis/route';
 import { getQuarterFromDate, getQuarterMonths, calculateClassificationEntryPvc } from './pvc-calculations';
 import { getQuarterlyAverages } from './db-utils';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from './zone-steel-city-mapping';
@@ -59,23 +59,24 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   const baseUrl = getPublicSiteUrl();
   const contractLink = `${baseUrl}/contracts/${contractId}`;
 
-  // 1. Download the bill PDF and wrap it as a File for the extractor.
+  // 1. Download the bill PDF bytes.
   await sendTelegramMessage(chatId, '📊 Reading the bill items…');
   await sendTelegramChatAction(chatId, 'typing');
-  let file: File;
+  let pdfBytes: Buffer;
   try {
-    const bytes = await downloadTelegramFile(billFileId);
-    file = new File([bytes], billFileName, { type: 'application/pdf' });
+    pdfBytes = await downloadTelegramFile(billFileId);
   } catch (err) {
     console.error('[Telegram] bill download failed:', err);
     await sendTelegramMessage(chatId, '❌ Could not download the bill PDF. Please send it again.');
     return;
   }
 
-  // 2. Extract the bill line items (same engine as the website).
+  // 2. Extract the bill line items using the SAME path the web uploader uses
+  //    (stage=direct): an in-process IREPS PDF parse, so it needs no external
+  //    MarkItDown service.
   let billDetails;
   try {
-    billDetails = await extractBillDetailsWithAi(file, baseUrl, contractId);
+    billDetails = await extractBillDetailsDirect(pdfBytes, contractId);
   } catch (err: any) {
     console.error('[Telegram] bill extraction failed:', err);
     await sendTelegramMessage(
