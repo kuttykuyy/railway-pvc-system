@@ -69,6 +69,8 @@ export interface TelegramConversationData {
   docPendingAgreement?: any;
   /** Report data waiting on payment — rendered and sent by the Razorpay webhook. */
   docPendingReport?: any;
+  /** Razorpay payment link id, so /paid can verify payment without the webhook. */
+  docPendingPaymentLinkId?: string;
 }
 
 /**

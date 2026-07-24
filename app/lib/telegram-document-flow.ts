@@ -178,6 +178,47 @@ export async function startPvcFlow(conversationId: string, chatId: string) {
 }
 
 /**
+ * "/paid" — the user says they've paid but no report arrived (usually because the
+ * Razorpay webhook never reached us). Ask Razorpay directly and deliver if it's paid.
+ */
+export async function handlePaidCheck(conversation: any, chatId: string) {
+  const data = getTelegramConversationData(conversation);
+  if (!data.docPendingReport) {
+    return sendTelegramMessage(
+      chatId,
+      `I don't have a report waiting for payment on this chat.\n\n` +
+        `If you already received it, you're all set. Otherwise send /pvc to start again.`,
+    );
+  }
+  const linkId = data.docPendingPaymentLinkId;
+  if (!linkId) {
+    return sendTelegramMessage(chatId, `I couldn't find the payment reference for this chat. Please send /pvc and try again.`);
+  }
+
+  await sendTelegramMessage(chatId, '🔎 Checking your payment…');
+  const { isPaymentLinkPaid } = await import('./telegram-payment');
+  const paid = await isPaymentLinkPaid(linkId);
+  if (!paid) {
+    return sendTelegramMessage(
+      chatId,
+      `❌ Razorpay hasn't confirmed that payment yet.\n\n` +
+        `If you've just paid, wait a moment and send /paid again. If the money left your account but this keeps failing, contact support with your payment reference.`,
+    );
+  }
+
+  try {
+    const { renderAndSendPaidReport } = await import('./telegram-bill-pvc');
+    const sent = await renderAndSendPaidReport(chatId);
+    if (!sent) {
+      return sendTelegramMessage(chatId, '✅ Payment confirmed, but the report was already delivered. Check the messages above.');
+    }
+  } catch (err: any) {
+    console.error('[Telegram] /paid delivery failed:', err);
+    return sendTelegramMessage(chatId, `⚠️ Payment confirmed, but I hit a problem building the PDF: ${escapeHtml(err?.message || 'unknown error')}`);
+  }
+}
+
+/**
  * Nudge when the user sends text while a PDF is expected.
  */
 export async function remindToUpload(step: TelegramStep, chatId: string) {

@@ -27,10 +27,12 @@ export interface CreateReportPaymentLinkArgs {
 }
 
 /**
- * Creates a Razorpay payment link for one report and returns its short URL.
+ * Creates a Razorpay payment link for one report.
+ * Returns the short URL plus the link id (kept so we can ask Razorpay whether it
+ * was paid, as a fallback when the webhook doesn't reach us).
  * Throws when Razorpay isn't configured or the API call fails.
  */
-export async function createReportPaymentLink(args: CreateReportPaymentLinkArgs): Promise<string> {
+export async function createReportPaymentLink(args: CreateReportPaymentLinkArgs): Promise<{ url: string; id: string }> {
   const razorpay = getRazorpayInstance();
   if (!razorpay) throw new Error('Razorpay is not configured');
 
@@ -54,5 +56,25 @@ notify: { sms: false, email: false },
 
   const url = link?.short_url;
   if (!url) throw new Error('Razorpay did not return a payment link URL');
-  return url;
+  return { url, id: String(link?.id || '') };
+}
+
+/**
+ * Asks Razorpay directly whether a payment link has been paid.
+ *
+ * Fallback for when the dashboard webhook isn't configured (or fails) — without
+ * it a paying user would be stranded with no report. Returns false on any error
+ * so the caller can tell the user to try again rather than crash.
+ */
+export async function isPaymentLinkPaid(linkId: string): Promise<boolean> {
+  if (!linkId) return false;
+  const razorpay = getRazorpayInstance();
+  if (!razorpay) return false;
+  try {
+    const link: any = await razorpay.paymentLink.fetch(linkId);
+    return link?.status === 'paid';
+  } catch (err) {
+    console.error('[Telegram] payment link status check failed:', err);
+    return false;
+  }
 }

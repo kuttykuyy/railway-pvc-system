@@ -12,7 +12,7 @@ import {
   TelegramStep,
 } from './telegram-conversation';
 import { sendTelegramMessage, replyKeyboard, getPublicSiteUrl } from './telegram-api';
-import { handleTenderDateReply, resumeDocumentFlow, startPvcFlow, remindToUpload } from './telegram-document-flow';
+import { handleTenderDateReply, resumeDocumentFlow, startPvcFlow, remindToUpload, handlePaidCheck } from './telegram-document-flow';
 import { prisma } from './db';
 
 /**
@@ -30,6 +30,10 @@ export async function handleTelegramMessage(chatId: string, text: string) {
     }
     if (lower === '/help' || lower === 'help' || lower === 'menu') {
       return sendHelpMessage(chatId);
+    }
+    // Works from any step: rescue a paid-but-undelivered report.
+    if (lower === '/paid' || lower === 'paid') {
+      return handlePaidCheck(conversation, chatId);
     }
     if (lower === '/cancel' || lower === 'cancel' || lower === 'stop') {
       await resetTelegramConversation(conversation.id);

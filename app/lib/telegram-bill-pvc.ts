@@ -276,13 +276,15 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
 
     await updateTelegramConversation(args.conversationId, TelegramStep.IDLE, {
       docPendingReport: payload as any,
+      docPendingPaymentLinkId: link.id,
     });
 
     await sendTelegramMessage(
       chatId,
       `📎 <b>Get the full PVC statement (PDF) — ₹${formatMoney(price)}</b>\n\n` +
-        `Pay by UPI / card / net banking here:\n${link}\n\n` +
-        `The moment your payment is confirmed I'll send the signed-format PVC statement right here. No sign-up needed.`,
+        `Pay by UPI / card / net banking here:\n${link.url}\n\n` +
+        `The moment your payment is confirmed I'll send the signed-format PVC statement right here. No sign-up needed.\n\n` +
+        `<i>Already paid and nothing arrived? Send /paid and I'll check and deliver it.</i>`,
     );
   } catch (err: any) {
     console.error('[Telegram] payment link creation failed:', err);
