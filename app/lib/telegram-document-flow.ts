@@ -169,7 +169,7 @@ async function maybeProcess(conversationId: string, chatId: string) {
       billFileId: data.docBillFileId,
       billFileName: data.docBillFileName || 'bill.pdf',
     });
-    needsInput = !!result?.needsTenderDate;
+    needsInput = !!result?.needsInput;
   } catch (err: any) {
     console.error('[Telegram] PVC processing failed:', err);
     await sendTelegramMessage(chatId, `❌ PVC calculation failed: ${escapeHtml(err.message || 'unknown error')}`);
@@ -239,6 +239,14 @@ async function findOrCreateContractFromAgreement(
       pvcApplicable: true,
     },
   });
+}
+
+/**
+ * Continue a paused document run — used after the user links their account by
+ * phone, so the report they were waiting for is produced without re-uploading.
+ */
+export async function resumeDocumentFlow(conversationId: string, chatId: string) {
+  return maybeProcess(conversationId, chatId);
 }
 
 /**

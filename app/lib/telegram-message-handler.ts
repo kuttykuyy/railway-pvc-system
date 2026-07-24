@@ -12,7 +12,7 @@ import {
   TelegramStep,
 } from './telegram-conversation';
 import { sendTelegramMessage, replyKeyboard, getPublicSiteUrl } from './telegram-api';
-import { handleTenderDateReply } from './telegram-document-flow';
+import { handleTenderDateReply, resumeDocumentFlow } from './telegram-document-flow';
 import { prisma } from './db';
 
 /**
@@ -174,6 +174,15 @@ async function handlePhoneLinking(conversation: any, msg: string, chatId: string
 
   // Refresh conversation with linked user
   const refreshed = await getOrCreateTelegramConversation(chatId);
+  const linkedData = getTelegramConversationData(refreshed);
+
+  // If they were linking in order to get a PVC report they already uploaded,
+  // carry straight on instead of making them send the bill again.
+  if (linkedData.docContractId && linkedData.docBillFileId) {
+    await sendTelegramMessage(chatId, `✅ Account linked — welcome, <b>${user.name || user.email}</b>. Preparing your report…`);
+    return resumeDocumentFlow(refreshed.id, chatId);
+  }
+
   await sendTelegramMessage(chatId, `✅ Account linked! Welcome, <b>${user.name || user.email}</b>.\n\nType /createcontract to create a new contract or /createbill to create a new bill.`);
 }
 

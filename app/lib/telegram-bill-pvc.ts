@@ -28,6 +28,7 @@ import { getQuarterlyAverages } from './db-utils';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from './zone-steel-city-mapping';
 import { extractSteelTypesFromEntries } from './steel-type-handler';
 import { inferMainClassification } from './work-classification';
+import { getReportCharge, chargeForReport } from './telegram-report-billing';
 
 export interface ProcessUploadedBillArgs {
   chatId: string;
@@ -48,8 +49,12 @@ function escapeHtml(s: string): string {
 }
 
 export interface ProcessUploadedBillResult {
-  /** True when the run stopped to ask the user for the tender closing date. */
-  needsTenderDate?: boolean;
+  /**
+   * True when the run stopped to ask the user for something (the tender closing
+   * date, or the phone number to link their account). The caller keeps the
+   * uploaded bill so the run can resume once they answer.
+   */
+  needsInput?: boolean;
 }
 
 export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Promise<ProcessUploadedBillResult> {
@@ -165,7 +170,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
         `This usually means the tender closing date on the contract is wrong.\n\n` +
         `Please reply with the correct <b>tender closing date</b> in <b>DD/MM/YYYY</b> format (e.g. 15/03/2024) and I'll fix it and recalculate:`,
     );
-    return { needsTenderDate: true };
+    return { needsInput: true };
   }
 
   const zone = (contract as any).railwayZone || null;
@@ -240,7 +245,42 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
         : ''),
   );
 
-  // 6. Render the IR standard PDF report and send it as a document.
+  // 6. The PVC amount above is free; the PDF statement is paid. It needs the chat
+  //    linked to an irpvc account so the price can come off that account's credits.
+  const conv = await prisma.telegramConversation.findUnique({
+    where: { id: args.conversationId },
+    select: { userId: true },
+  });
+  const linkedUserId = conv?.userId || null;
+
+  if (!linkedUserId) {
+    const { updateTelegramConversation, TelegramStep } = await import('./telegram-conversation');
+    await updateTelegramConversation(args.conversationId, TelegramStep.AWAITING_PHONE, {});
+    await sendTelegramMessage(
+      chatId,
+      `📎 <b>Want the full PVC statement (PDF)?</b>\n\n` +
+        `The PVC amount above is free. The PDF statement is charged to your IR-PVC account.\n\n` +
+        `Reply with the <b>phone number registered on irpvc.in</b> (e.g. 9876543210) and I'll link this chat and send the report:`,
+    );
+    return { needsInput: true };
+  }
+
+  const charge = await getReportCharge(linkedUserId);
+  if (!charge) {
+    await sendTelegramMessage(chatId, '❌ Could not check your account. Please try again.');
+    return {};
+  }
+  if (!charge.canAfford) {
+    await sendTelegramMessage(
+      chatId,
+      `📎 <b>PDF statement — ₹${formatMoney(charge.cost)}</b>\n\n` +
+        `Your credit balance is <b>₹${formatMoney(charge.balance)}</b>, which isn't enough.\n\n` +
+        `Add credits here, then send the bill PDF again:\n${baseUrl}/pricing`,
+    );
+    return {};
+  }
+
+  // 7. Render the IR standard PDF report, charge, then send it as a document.
   await sendTelegramChatAction(chatId, 'upload_document');
   try {
     const pdfBuf = await buildIrReport({
@@ -258,13 +298,30 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       allIndices,
     });
 
+    // Charge only once the report actually rendered, so a failed render is free.
+    const paid = await chargeForReport(
+      linkedUserId,
+      charge.cost,
+      `Telegram PVC statement — ${contract.agreementNo}${billNo ? ` (Bill ${billNo})` : ''}`,
+    );
+    if (!paid) {
+      await sendTelegramMessage(
+        chatId,
+        `⚠️ I couldn't take the ₹${formatMoney(charge.cost)} for the report (balance may have changed). Please top up and send the bill again:\n${baseUrl}/pricing`,
+      );
+      return {};
+    }
+
     const safeAgr = String(contract.agreementNo).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     const safeBill = (billNo || 'bill').replace(/[^A-Za-z0-9]+/g, '-');
     await sendTelegramDocumentBytes(
       chatId,
       pdfBuf,
       `PVC-${safeAgr}-${safeBill}.pdf`,
-      `📎 IR PVC statement — ${escapeHtml(contract.agreementNo)}`,
+      `📎 IR PVC statement — ${escapeHtml(contract.agreementNo)}` +
+        (charge.cost > 0
+          ? `\n💳 ₹${formatMoney(charge.cost)} charged · balance ₹${formatMoney(charge.balance - charge.cost)}`
+          : ''),
     );
   } catch (err: any) {
     console.error('[Telegram] IR report generation failed:', err);
