@@ -66,7 +66,6 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   }
 
   const baseUrl = getPublicSiteUrl();
-  const contractLink = `${baseUrl}/contracts/${contractId}`;
 
   // 1. Download the bill PDF bytes.
   await sendTelegramMessage(chatId, '📊 Reading the bill items…');
@@ -135,7 +134,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
 
   const entries = [...agg.values()];
   if (!entries.length) {
-    await sendTelegramMessage(chatId, '❌ I read the bill but could not classify its items for PVC. Please review it on the site:\n' + contractLink);
+    await sendTelegramMessage(chatId, '❌ I read the bill but could not work out a PVC classification for its items. Please check it is the correct running bill and try /pvc again.');
     return {};
   }
 
@@ -283,8 +282,8 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       comp('Cement', cement) +
       comp('Steel', steel) +
       comp('Explosives', explosives) +
-      `\n\n<i>⚠️ Automatic estimate from the AI's reading — no review step in chat. ` +
-      `Open the contract to check the classification:</i>\n${contractLink}` +
+      `\n\n<i>⚠️ This is an automatic estimate from the AI's reading of your bill. ` +
+      `Please verify it before filing.</i>` +
       (unclassifiedAmount > 0
         ? `\n\n<i>Note: ₹${formatMoney(unclassifiedAmount)} of items couldn't be classified and were left out of the PVC.</i>`
         : ''),
