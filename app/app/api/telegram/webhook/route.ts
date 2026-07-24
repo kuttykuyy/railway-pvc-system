@@ -50,9 +50,13 @@ export async function POST(request: NextRequest) {
 
       logger.log(`[Telegram] Chat ${chatId}: ${text}`);
 
-      // Process asynchronously so we respond quickly to Telegram
-      handleTelegramMessage(chatId, text).catch(err =>
-        console.error('[Telegram] Handler error:', err)
+      // Must also run via after(): a bare fire-and-forget promise is killed once we
+      // return 200, which silently swallowed every text command (/help, /cancel,
+      // phone + date replies) on Vercel.
+      after(
+        handleTelegramMessage(chatId, text).catch(err =>
+          console.error('[Telegram] Handler error:', err),
+        ),
       );
     }
 
@@ -64,8 +68,10 @@ export async function POST(request: NextRequest) {
 
       logger.log(`[Telegram] Callback ${chatId}: ${data}`);
 
-      handleTelegramMessage(chatId, data).catch(err =>
-        console.error('[Telegram] Callback handler error:', err)
+      after(
+        handleTelegramMessage(chatId, data).catch(err =>
+          console.error('[Telegram] Callback handler error:', err),
+        ),
       );
     }
 
