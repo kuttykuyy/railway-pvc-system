@@ -534,7 +534,7 @@ async function buildIrReport(o: {
     classificationEntries: o.entriesForReport,
   };
 
-  return generateIRStandardReport({
+  const statementBytes = await generateIRStandardReport({
     bill: bill as any,
     quarterlyAverages: o.quarterlyAverages,
     baseMonth,
@@ -547,4 +547,28 @@ async function buildIrReport(o: {
     allHistoricalMonthlyData,
     previousCumulativePvc,
   });
+
+  // Append the supporting component index documents (labour/fuel/cement/steel
+  // index proofs) — same as the website's report, so it isn't just the statement.
+  // Best-effort: if embedding fails, return the statement alone rather than nothing.
+  try {
+    const { embedComponentIndicesRange } = await import('./pdf/utils/labour-index-embedder');
+    const { ComponentType } = await import('@prisma/client');
+    const STEEL_TYPES = [ComponentType.TMT_BARS, ComponentType.ANGLE_CHANNEL, ComponentType.PLATES, ComponentType.OTHER_SECTIONS];
+    const NON_STEEL = Object.values(ComponentType).filter((t) => !STEEL_TYPES.includes(t as any)) as any[];
+
+    const hasSteel = o.entriesForReport.some(
+      (e: any) => (Array.isArray(e.steelTypes) && e.steelTypes.length > 0) || (e.subClassification?.steel ?? 0) > 0,
+    );
+
+    const withDocs = await embedComponentIndicesRange(new Uint8Array(statementBytes), {
+      startDate: baseMonth,
+      endDate: new Date(o.measurementDate),
+      componentTypes: hasSteel ? undefined : NON_STEEL,
+    });
+    return Buffer.from(withDocs);
+  } catch (err) {
+    console.error('[Telegram] index-document embedding failed:', err);
+    return statementBytes;
+  }
 }
