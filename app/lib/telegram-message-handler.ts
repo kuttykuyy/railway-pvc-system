@@ -12,7 +12,7 @@ import {
   TelegramStep,
 } from './telegram-conversation';
 import { sendTelegramMessage, replyKeyboard, getPublicSiteUrl } from './telegram-api';
-import { handleTenderDateReply, resumeDocumentFlow } from './telegram-document-flow';
+import { handleTenderDateReply, resumeDocumentFlow, startPvcFlow, remindToUpload } from './telegram-document-flow';
 import { prisma } from './db';
 
 /**
@@ -24,8 +24,11 @@ export async function handleTelegramMessage(chatId: string, text: string) {
     const msg = text.trim();
     const lower = msg.toLowerCase();
 
-    // Global commands
-    if (lower === '/start' || lower === '/help' || lower === 'help' || lower === 'menu') {
+    // Global commands. /start begins the guided PVC flow; /help just shows the menu.
+    if (lower === '/start' || lower === '/pvc' || lower === '/newpvc' || lower === 'new pvc' || lower === 'start') {
+      return startPvcFlow(conversation.id, chatId);
+    }
+    if (lower === '/help' || lower === 'help' || lower === 'menu') {
       return sendHelpMessage(chatId);
     }
     if (lower === '/cancel' || lower === 'cancel' || lower === 'stop') {
@@ -42,6 +45,10 @@ export async function handleTelegramMessage(chatId: string, text: string) {
         return handlePhoneLinking(conversation, msg, chatId);
       case TelegramStep.AWAITING_TENDER_DATE:
         return handleTenderDateReply(conversation, msg, chatId);
+      // A PDF is expected, not text — nudge with the clip button.
+      case TelegramStep.AWAITING_AGREEMENT_PDF:
+      case TelegramStep.AWAITING_BILL_PDF:
+        return remindToUpload(conversation.currentStep as TelegramStep, chatId);
       // Contract creation steps
       case TelegramStep.AWAITING_AGREEMENT_NO:
         return handleAgreementNo(conversation, msg, chatId);
@@ -95,15 +102,17 @@ export async function handleTelegramMessage(chatId: string, text: string) {
 async function sendHelpMessage(chatId: string) {
   const msg =
     `📋 <b>IR-PVC Bot</b>\n\n` +
-    `<b>Quickest way — just send 2 PDFs:</b>\n` +
-    `1️⃣ Send the <b>tender agreement PDF</b>\n` +
-    `2️⃣ Send the <b>running bill (RA bill) PDF</b>\n` +
-    `➡️ You get the <b>PVC amount</b> and the <b>PVC statement PDF</b> right here.\n\n` +
+    `<b>Work out a PVC — /pvc</b>\n` +
+    `I'll ask you for two PDFs, one at a time:\n` +
+    `1️⃣ the <b>tender agreement PDF</b>\n` +
+    `2️⃣ the <b>running bill (RA bill) PDF</b>\n` +
+    `➡️ You get the <b>PVC amount free</b>, then can pay in this chat to get the <b>PVC statement PDF</b>.\n\n` +
     `<b>After that:</b>\n` +
     `▫️ Another bill for the same work — just send the next bill PDF\n` +
-    `▫️ A different work — send that agreement PDF\n` +
-    `▫️ Start fresh — /cancel\n\n` +
+    `▫️ A different work — /pvc to start again\n` +
+    `▫️ Stop anytime — /cancel\n\n` +
     `<b>Or type the details instead:</b>\n` +
+    `▫️ /pvc — start the two-PDF flow\n` +
     `▫️ /createcontract — enter a contract step by step\n` +
     `▫️ /createbill — enter a bill step by step\n` +
     `▫️ /status — your recent bills\n` +

@@ -110,18 +110,18 @@ async function handleAgreementDoc(
   }
   try {
     const contract = await findOrCreateContractFromAgreement(conversationId, data);
-    await updateTelegramConversation(conversationId, TelegramStep.IDLE, {
+    await updateTelegramConversation(conversationId, TelegramStep.AWAITING_BILL_PDF, {
       docContractId: contract.id,
       docContractAgreementNo: contract.agreementNo,
     });
 
     await sendTelegramMessage(
       chatId,
-      `✅ <b>Agreement read</b>\n\n` +
+      `✅ <b>Step 1 of 2 done — agreement read</b>\n\n` +
         `📄 Agreement No: <b>${escapeHtml(contract.agreementNo)}</b>\n` +
         (contract.contractorName ? `👤 Contractor: <b>${escapeHtml(contract.contractorName)}</b>\n` : '') +
         (contract.workDescription ? `🏗️ Work: <b>${escapeHtml(truncate(contract.workDescription, 80))}</b>\n` : '') +
-        `\nNow send the <b>running bill (RA bill) PDF</b> and I'll calculate the PVC.`,
+        `\n📎 <b>Step 2 of 2:</b> now send the <b>running bill (RA bill) PDF</b>.`,
     );
 
     // If the bill already arrived first, we can process now.
@@ -133,20 +133,61 @@ async function handleAgreementDoc(
 }
 
 async function handleBillDoc(conversationId: string, chatId: string, doc: TelegramDocument) {
-  await updateTelegramConversation(conversationId, TelegramStep.IDLE, {
-    docBillFileId: doc.file_id,
-    docBillFileName: doc.file_name || 'bill.pdf',
-  });
+  const conv0 = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
+  const stored0 = getTelegramConversationData(conv0);
+  const haveContract = !!stored0.docContractId;
 
-  const conv = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
-  const stored = getTelegramConversationData(conv);
-  if (stored.docContractId) {
-    await sendTelegramMessage(chatId, `✅ <b>Bill received.</b> Calculating PVC…`);
+  // Keep asking for the agreement until we have it — the bill alone can't be priced.
+  await updateTelegramConversation(
+    conversationId,
+    haveContract ? TelegramStep.IDLE : TelegramStep.AWAITING_AGREEMENT_PDF,
+    { docBillFileId: doc.file_id, docBillFileName: doc.file_name || 'bill.pdf' },
+  );
+
+  if (haveContract) {
+    await sendTelegramMessage(chatId, `✅ <b>Step 2 of 2 done — bill received.</b> Calculating your PVC…`);
     return maybeProcess(conversationId, chatId);
   }
   return sendTelegramMessage(
     chatId,
-    `✅ <b>Bill received.</b>\n\nNow send the <b>tender agreement PDF</b> so I can read the schedules and rates, then I'll calculate the PVC.`,
+    `✅ <b>Bill received</b> — I'll keep it.\n\n` +
+      `📎 <b>Now send the tender agreement PDF</b> (I need it for the schedules, rates and base month), and I'll calculate the PVC.`,
+  );
+}
+
+/**
+ * Starts the guided two-step flow. Clears any half-finished upload so the user
+ * always begins from a clean state.
+ */
+export async function startPvcFlow(conversationId: string, chatId: string) {
+  await updateTelegramConversation(conversationId, TelegramStep.AWAITING_AGREEMENT_PDF, {
+    docContractId: undefined,
+    docContractAgreementNo: undefined,
+    docBillFileId: undefined,
+    docBillFileName: undefined,
+    docPendingAgreement: undefined,
+    docPendingReport: undefined,
+  });
+  return sendTelegramMessage(
+    chatId,
+    `🚂 <b>Let's work out your PVC</b>\n\n` +
+      `I need two PDFs — one at a time.\n\n` +
+      `📎 <b>Step 1 of 2:</b> send the <b>tender agreement PDF</b>.\n\n` +
+      `<i>Tap the 📎 clip button and choose the file. Type /cancel to stop.</i>`,
+  );
+}
+
+/**
+ * Nudge when the user sends text while a PDF is expected.
+ */
+export async function remindToUpload(step: TelegramStep, chatId: string) {
+  const which = step === TelegramStep.AWAITING_BILL_PDF
+    ? { n: '2 of 2', what: 'running bill (RA bill) PDF' }
+    : { n: '1 of 2', what: 'tender agreement PDF' };
+  return sendTelegramMessage(
+    chatId,
+    `📎 <b>Step ${which.n}:</b> please attach the <b>${which.what}</b> using the 📎 clip button.\n\n` +
+      `<i>/cancel to stop.</i>`,
   );
 }
 

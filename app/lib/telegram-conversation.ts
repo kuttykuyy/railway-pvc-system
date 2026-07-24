@@ -10,6 +10,9 @@ export enum TelegramStep {
   IDLE = 'IDLE',
   AWAITING_COMMAND = 'AWAITING_COMMAND',
   AWAITING_PHONE = 'AWAITING_PHONE', // Link phone to account
+  // Guided PDF → PVC flow: ask for the agreement, then the bill.
+  AWAITING_AGREEMENT_PDF = 'AWAITING_AGREEMENT_PDF',
+  AWAITING_BILL_PDF = 'AWAITING_BILL_PDF',
   // Document (PDF) PVC flow: the agreement had no tender closing date, or the
   // stored one is wrong (quarter came out Q0), so ask the user for it.
   AWAITING_TENDER_DATE = 'AWAITING_TENDER_DATE',
