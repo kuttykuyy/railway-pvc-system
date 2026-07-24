@@ -165,10 +165,20 @@ async function handlePhoneLinking(conversation: any, msg: string, chatId: string
 
   const user = await linkTelegramToUser(conversation.id, phone);
   if (!user) {
+    // First-time user: spell out every step, otherwise "sign up first" is a dead end
+    // (they also have to save this number on their profile and add credits).
+    const site = getPublicSiteUrl();
+    const waiting = getTelegramConversationData(conversation).docBillFileId;
     return sendTelegramMessage(
       chatId,
-      '❌ No IR-PVC account found with this phone number.\n\n' +
-        `Please sign up first at ${getPublicSiteUrl()} and add your phone number.`
+      `❌ I couldn't find an IR-PVC account with the number <b>${phone}</b>.\n\n` +
+        `<b>To get the PDF statement:</b>\n` +
+        `1️⃣ Create an account — ${site}/auth/signup\n` +
+        `2️⃣ Save <b>this same phone number</b> on your profile\n` +
+        `3️⃣ Add credits — ${site}/pricing\n\n` +
+        `Then send me that phone number again and I'll send the report` +
+        (waiting ? ` — I've kept your bill, so no need to upload it again.` : `.`) +
+        `\n\n<i>The PVC amount above is free and needs no account.</i>`,
     );
   }
 
