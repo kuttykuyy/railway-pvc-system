@@ -165,26 +165,27 @@ export async function sendTelegramDocumentBytes(
   filename: string,
   caption?: string,
 ): Promise<any> {
-  try {
-    const form = new FormData();
-    form.append('chat_id', chatId);
-    if (caption) {
-      form.append('caption', caption);
-      form.append('parse_mode', 'HTML');
-    }
-    const blob = new Blob([Buffer.from(bytes)], { type: 'application/pdf' });
-    form.append('document', blob, filename);
-
-    const res = await fetch(apiUrl('sendDocument'), { method: 'POST', body: form });
-    const data = await res.json();
-    if (!data.ok) {
-      console.error('Telegram sendDocumentBytes error:', data);
-    }
-    return data;
-  } catch (err) {
-    console.error('Telegram sendDocumentBytes exception:', err);
-    throw err;
+  const sizeMb = (Buffer.from(bytes).length / (1024 * 1024)).toFixed(2);
+  console.log(`[Telegram] sendDocument ${filename} (${sizeMb} MB) to ${chatId}`);
+  const form = new FormData();
+  form.append('chat_id', chatId);
+  if (caption) {
+    form.append('caption', caption.slice(0, 1024));
+    form.append('parse_mode', 'HTML');
   }
+  const blob = new Blob([Buffer.from(bytes)], { type: 'application/pdf' });
+  form.append('document', blob, filename);
+
+  const res = await fetch(apiUrl('sendDocument'), { method: 'POST', body: form });
+  const data = await res.json().catch(() => ({ ok: false, description: `HTTP ${res.status}` }));
+  if (!data.ok) {
+    // Throw so the caller can tell the user and keep the report for a retry, instead
+    // of silently "delivering nothing".
+    console.error('[Telegram] sendDocument failed:', JSON.stringify(data).slice(0, 300));
+    throw new Error(`Telegram sendDocument failed: ${data.description || 'unknown'}`);
+  }
+  console.log(`[Telegram] sendDocument OK: ${filename}`);
+  return data;
 }
 
 /**

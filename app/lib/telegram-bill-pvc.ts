@@ -419,12 +419,7 @@ export async function renderAndSendPaidReport(chatId: string): Promise<boolean> 
   const contract = await prisma.contract.findUnique({ where: { id: payload.contractId } });
   if (!contract) return false;
 
-  // Clear first so a duplicate webhook can't produce a second send.
-  await prisma.telegramConversation.update({
-    where: { id: conversation.id },
-    data: { conversationData: { ...data, docPendingReport: undefined } as any },
-  });
-
+  console.log(`[Telegram] rendering paid report for chat ${chatId}, agreement ${contract.agreementNo}`);
   await sendTelegramChatAction(chatId, 'upload_document');
   const quarterlyAverages = await getQuarterlyAverages(
     payload.quarter,
@@ -447,15 +442,24 @@ export async function renderAndSendPaidReport(chatId: string): Promise<boolean> 
     pvcComponents: payload.pvcComponents,
     allIndices: payload.allIndices,
   });
+  console.log(`[Telegram] paid report built (${(pdfBuf.length / 1024).toFixed(0)} KB); sending…`);
 
   const safeAgr = String(contract.agreementNo).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const safeBill = String(payload.billNo || 'bill').replace(/[^A-Za-z0-9]+/g, '-');
+
+  // Send FIRST; only clear the pending report once it actually went out, so a failed
+  // send can be retried with /paid or the coupon instead of losing the report.
   await sendTelegramDocumentBytes(
     chatId,
     pdfBuf,
     `PVC-${safeAgr}-${safeBill}.pdf`,
-    `✅ Payment received — thank you!\n📎 IR PVC statement — ${escapeHtml(contract.agreementNo)}`,
+    `✅ Here is your PVC statement.\n📎 ${escapeHtml(contract.agreementNo)}`,
   );
+
+  await prisma.telegramConversation.update({
+    where: { id: conversation.id },
+    data: { conversationData: { ...data, docPendingReport: undefined } as any },
+  });
   return true;
 }
 
