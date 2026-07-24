@@ -38,6 +38,31 @@ export interface TelegramDocument {
 
 const MAX_PDF_BYTES = 25 * 1024 * 1024; // matches the bill extractor's 25MB cap
 
+// Each PDF triggers AI extraction (cost), so cap how many a chat can send per day.
+// Guests are anonymous; linked accounts get a higher allowance. Override via env.
+const GUEST_DAILY_PDF_LIMIT = Number(process.env.TELEGRAM_GUEST_DAILY_PDFS || 10);
+const LINKED_DAILY_PDF_LIMIT = Number(process.env.TELEGRAM_LINKED_DAILY_PDFS || 40);
+
+function istDateKey(): string {
+  // Day boundary in IST so "per day" matches the user's calendar.
+  const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  return ist.toISOString().slice(0, 10);
+}
+
+/**
+ * Increments the chat's per-day PDF counter and reports whether it's within the cap.
+ * Resets automatically when the (IST) date rolls over.
+ */
+async function bumpDailyPdfCount(conversation: any, limit: number): Promise<{ allowed: boolean; remaining: number }> {
+  const today = istDateKey();
+  const data = getTelegramConversationData(conversation);
+  const usage = data.dailyUsage && data.dailyUsage.date === today
+    ? { date: today, pdfs: data.dailyUsage.pdfs + 1 }
+    : { date: today, pdfs: 1 };
+  await updateTelegramConversation(conversation.id, conversation.currentStep, { dailyUsage: usage });
+  return { allowed: usage.pdfs <= limit, remaining: Math.max(0, limit - usage.pdfs) };
+}
+
 /**
  * Entry point from the webhook for an incoming document message.
  */
@@ -54,6 +79,18 @@ export async function handleTelegramDocument(chatId: string, doc: TelegramDocume
   }
   if (doc.file_size && doc.file_size > MAX_PDF_BYTES) {
     return sendTelegramMessage(chatId, '❌ That PDF is too large (max 25 MB). Please send a smaller file.');
+  }
+
+  // Rate limit: cap AI-extraction cost per chat per day.
+  const limit = conversation.userId ? LINKED_DAILY_PDF_LIMIT : GUEST_DAILY_PDF_LIMIT;
+  const { allowed } = await bumpDailyPdfCount(conversation, limit);
+  if (!allowed) {
+    return sendTelegramMessage(
+      chatId,
+      `⏳ You've reached today's limit of <b>${limit} PDFs</b> on this chat.\n\n` +
+        `Please try again tomorrow` +
+        (conversation.userId ? '.' : ', or sign up on irpvc.in for a higher limit.'),
+    );
   }
 
   await sendTelegramChatAction(chatId, 'typing');
@@ -264,25 +301,38 @@ export async function handleZoneReply(conversation: any, msg: string, chatId: st
 
 /**
  * Secret coupon codes that waive the report fee, from TELEGRAM_REPORT_COUPONS
- * (comma-separated, case-insensitive). Never advertised in chat.
+ * (comma-separated, case-insensitive). Each entry is `CODE` or `CODE:YYYY-MM-DD`,
+ * where the date is the last day the code is valid — so a leaked code stops working.
+ * Never advertised in chat.
  */
-function couponCodes(): string[] {
+interface CouponDef { code: string; expiry: string | null }
+
+function couponDefs(): CouponDef[] {
   return String(process.env.TELEGRAM_REPORT_COUPONS || '')
     .split(',')
-    .map((c) => c.trim().toLowerCase())
-    .filter(Boolean);
+    .map((part) => {
+      const [code, expiry] = part.split(':');
+      return { code: String(code || '').trim().toLowerCase(), expiry: (expiry || '').trim() || null };
+    })
+    .filter((c) => c.code);
+}
+
+/** A YYYY-MM-DD expiry is inclusive; expired once the (IST) date passes it. */
+function couponExpired(expiry: string | null): boolean {
+  if (!expiry) return false;
+  return istDateKey() > expiry;
 }
 
 /** True if any coupon codes are configured at all. */
 export function couponsEnabled(): boolean {
-  return couponCodes().length > 0;
+  return couponDefs().length > 0;
 }
 
-/** True if the text is a valid waiver coupon. */
+/** True if the text is a valid, unexpired waiver coupon. */
 export function isCoupon(text: string): boolean {
-  const codes = couponCodes();
-  if (!codes.length) return false;
-  return codes.includes(String(text).trim().toLowerCase());
+  const t = String(text).trim().toLowerCase();
+  const def = couponDefs().find((c) => c.code === t);
+  return !!def && !couponExpired(def.expiry);
 }
 
 /**

@@ -74,6 +74,10 @@ export interface TelegramConversationData {
   docPendingReport?: any;
   /** Razorpay payment link id, so /paid can verify payment without the webhook. */
   docPendingPaymentLinkId?: string;
+  /** Per-day usage counter for rate limiting (resets when the date changes). */
+  dailyUsage?: { date: string; pdfs: number };
+  /** ISO time a report render/send started — a soft lock against re-render spam. */
+  reportDeliveringAt?: string;
   /** Railway zone code (e.g. SR) — drives the steel indices and the zone-city fuel index. */
   docZone?: string;
   /** 'four_city_avg' or 'zone_city' — which fuel price basis this contract uses. */

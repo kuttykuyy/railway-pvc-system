@@ -425,49 +425,77 @@ export async function renderAndSendPaidReport(chatId: string): Promise<boolean> 
   const contract = await prisma.contract.findUnique({ where: { id: payload.contractId } });
   if (!contract) return false;
 
-  console.log(`[Telegram] rendering paid report for chat ${chatId}, agreement ${contract.agreementNo}`);
-  await sendTelegramChatAction(chatId, 'upload_document');
-  const quarterlyAverages = await getQuarterlyAverages(
-    payload.quarter,
-    payload.allIndices,
-    contract.baseMonth,
-    'auto',
-  );
-
-  const pdfBuf = await buildIrReport({
-    contract,
-    billNo: payload.billNo,
-    measurementDate: new Date(payload.measurementDate),
-    grossBillAmount: payload.grossBillAmount,
-    quarter: payload.quarter,
-    zone: payload.zone,
-    fuelIndexName: payload.fuelIndexName,
-    steelIndexNames: payload.steelIndexNames,
-    quarterlyAverages,
-    entriesForReport: payload.entriesForReport,
-    pvcComponents: payload.pvcComponents,
-    allIndices: payload.allIndices,
-  });
-  console.log(`[Telegram] paid report built (${(pdfBuf.length / 1024).toFixed(0)} KB); sending…`);
-
-  const realAgr = displayAgreementNo(contract.agreementNo);
-  const safeAgr = realAgr.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  const safeBill = String(payload.billNo || 'bill').replace(/[^A-Za-z0-9]+/g, '-');
-
-  // Send FIRST; only clear the pending report once it actually went out, so a failed
-  // send can be retried with /paid or the coupon instead of losing the report.
-  await sendTelegramDocumentBytes(
-    chatId,
-    pdfBuf,
-    `PVC-${safeAgr}-${safeBill}.pdf`,
-    `✅ Here is your PVC statement.\n📎 ${escapeHtml(realAgr)}`,
-  );
-
+  // Re-render lock: rendering + embedding index docs is heavy, so refuse to start a
+  // second render while one is in flight (guards against coupon/paid spam). The lock
+  // self-expires after 2 min so a crashed render can't wedge the chat forever.
+  const startedAt = data.reportDeliveringAt ? Date.parse(data.reportDeliveringAt) : 0;
+  if (startedAt && Date.now() - startedAt < 120000) {
+    console.log(`[Telegram] report already delivering for chat ${chatId}; skipping duplicate`);
+    return true;
+  }
+  const lockStamp = new Date().toISOString();
   await prisma.telegramConversation.update({
     where: { id: conversation.id },
-    data: { conversationData: { ...data, docPendingReport: undefined } as any },
+    data: { conversationData: { ...data, reportDeliveringAt: lockStamp } as any },
   });
-  return true;
+
+  try {
+    console.log(`[Telegram] rendering paid report for chat ${chatId}, agreement ${contract.agreementNo}`);
+    await sendTelegramChatAction(chatId, 'upload_document');
+    const quarterlyAverages = await getQuarterlyAverages(
+      payload.quarter,
+      payload.allIndices,
+      contract.baseMonth,
+      'auto',
+    );
+
+    const pdfBuf = await buildIrReport({
+      contract,
+      billNo: payload.billNo,
+      measurementDate: new Date(payload.measurementDate),
+      grossBillAmount: payload.grossBillAmount,
+      quarter: payload.quarter,
+      zone: payload.zone,
+      fuelIndexName: payload.fuelIndexName,
+      steelIndexNames: payload.steelIndexNames,
+      quarterlyAverages,
+      entriesForReport: payload.entriesForReport,
+      pvcComponents: payload.pvcComponents,
+      allIndices: payload.allIndices,
+    });
+    console.log(`[Telegram] paid report built (${(pdfBuf.length / 1024).toFixed(0)} KB); sending…`);
+
+    const realAgr = displayAgreementNo(contract.agreementNo);
+    const safeAgr = realAgr.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const safeBill = String(payload.billNo || 'bill').replace(/[^A-Za-z0-9]+/g, '-');
+
+    // Send FIRST; only clear the pending report once it actually went out, so a failed
+    // send can be retried with /paid or the coupon instead of losing the report.
+    await sendTelegramDocumentBytes(
+      chatId,
+      pdfBuf,
+      `PVC-${safeAgr}-${safeBill}.pdf`,
+      `✅ Here is your PVC statement.\n📎 ${escapeHtml(realAgr)}`,
+    );
+
+    // Clear the pending report AND the lock on success.
+    const fresh = await prisma.telegramConversation.findUnique({ where: { id: conversation.id } });
+    const freshData = (fresh?.conversationData as any) || {};
+    await prisma.telegramConversation.update({
+      where: { id: conversation.id },
+      data: { conversationData: { ...freshData, docPendingReport: undefined, reportDeliveringAt: undefined } as any },
+    });
+    return true;
+  } catch (err) {
+    // Release the lock so the user can retry (with /paid or the coupon).
+    const fresh = await prisma.telegramConversation.findUnique({ where: { id: conversation.id } });
+    const freshData = (fresh?.conversationData as any) || {};
+    await prisma.telegramConversation.update({
+      where: { id: conversation.id },
+      data: { conversationData: { ...freshData, reportDeliveringAt: undefined } as any },
+    });
+    throw err;
+  }
 }
 
 /**
