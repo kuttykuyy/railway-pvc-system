@@ -95,6 +95,19 @@ async function handleAgreementDoc(
   if (!data) {
     return sendTelegramMessage(chatId, '❌ I could not read the agreement clearly. Please try a clearer PDF.');
   }
+  // The base month is derived from the tender closing date, so without a date we
+  // cannot compute PVC. Never guess (defaulting to "today" produced a 2026 base
+  // month and a Q0/zero PVC) — ask the user instead.
+  if (!agreementOpeningDate(data)) {
+    await updateTelegramConversation(conversationId, TelegramStep.AWAITING_TENDER_DATE, {
+      docPendingAgreement: data,
+    });
+    return sendTelegramMessage(
+      chatId,
+      `📄 I read the agreement <b>${escapeHtml(String(data.agreementNo || ''))}</b>, but I couldn't find the <b>tender closing date</b> in it.\n\n` +
+        `That date sets the PVC base month, so I need it. Please reply with it in <b>DD/MM/YYYY</b> format (e.g. 15/03/2024):`,
+    );
+  }
   try {
     const contract = await findOrCreateContractFromAgreement(conversationId, data);
     await updateTelegramConversation(conversationId, TelegramStep.IDLE, {
@@ -147,20 +160,24 @@ async function maybeProcess(conversationId: string, chatId: string) {
   if (!data.docContractId || !data.docBillFileId) return; // still waiting for the other file
 
   await sendTelegramChatAction(chatId, 'upload_document');
+  let needsInput = false;
   try {
-    await processUploadedBillPvc({
+    const result = await processUploadedBillPvc({
       chatId,
       conversationId,
       contractId: data.docContractId,
       billFileId: data.docBillFileId,
       billFileName: data.docBillFileName || 'bill.pdf',
     });
+    needsInput = !!result?.needsTenderDate;
   } catch (err: any) {
     console.error('[Telegram] PVC processing failed:', err);
     await sendTelegramMessage(chatId, `❌ PVC calculation failed: ${escapeHtml(err.message || 'unknown error')}`);
-  } finally {
-    // Clear the uploaded bill so a fresh bill can be sent next, but keep the
-    // contract so the user can send more bills for the same agreement.
+  }
+  // Clear the uploaded bill so a fresh bill can be sent next, but keep the contract
+  // so more bills can follow. When we're waiting on the tender date, keep the bill
+  // so the recalculation can run as soon as the user answers.
+  if (!needsInput) {
     await updateTelegramConversation(conversationId, TelegramStep.IDLE, {
       docBillFileId: undefined,
       docBillFileName: undefined,
@@ -186,7 +203,8 @@ async function findOrCreateContractFromAgreement(
   const ownerId = conv?.userId || (await getTelegramGuestUserId());
 
   // Opening date drives the base month (month before the tender closing date).
-  const openingDate = data.dateOfOpening ? new Date(data.dateOfOpening) : new Date();
+  // Callers guarantee a date is present — never fall back to "today".
+  const openingDate = agreementOpeningDate(data)!;
   const baseMonth = getBaseMonth(openingDate);
 
   const schedules: ContractSchedule[] = (data.schedules || []).map((s) => ({
@@ -221,6 +239,82 @@ async function findOrCreateContractFromAgreement(
       pvcApplicable: true,
     },
   });
+}
+
+/**
+ * The tender closing date from an extracted agreement, or null when absent.
+ * Base month = month BEFORE this date, so a wrong value silently zeroes the PVC.
+ */
+function agreementOpeningDate(data: ExtractedAgreement): Date | null {
+  for (const raw of [data.dateOfOpening, data.closingDate, data.loaDate]) {
+    if (!raw) continue;
+    const d = new Date(raw);
+    if (!isNaN(d.getTime()) && d.getFullYear() > 1970 && d.getFullYear() < 2100) return d;
+  }
+  return null;
+}
+
+/** Parses DD/MM/YYYY (also accepts - or . separators). */
+function parseDdMmYyyy(input: string): Date | null {
+  const m = String(input).trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (!m) return null;
+  const [, dd, mm, yyyy] = m;
+  const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+  if (isNaN(d.getTime()) || d.getMonth() !== Number(mm) - 1) return null;
+  return d;
+}
+
+/**
+ * User replied with the tender closing date — either to finish creating a contract
+ * whose agreement had no date, or to correct one whose base month was wrong (Q0).
+ * Then the PVC run continues automatically.
+ */
+export async function handleTenderDateReply(conversation: any, msg: string, chatId: string) {
+  const date = parseDdMmYyyy(msg);
+  if (!date) {
+    return sendTelegramMessage(chatId, '❌ I need the date as <b>DD/MM/YYYY</b> (e.g. 15/03/2024). Please try again:');
+  }
+
+  const data = getTelegramConversationData(conversation);
+  const baseMonth = getBaseMonth(date);
+  const fmt = (d: Date) => d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
+
+  try {
+    if (data.docPendingAgreement) {
+      // Finish creating the contract now that we have the date.
+      const pending: ExtractedAgreement = { ...data.docPendingAgreement, dateOfOpening: date.toISOString() };
+      const contract = await findOrCreateContractFromAgreement(conversation.id, pending);
+      await updateTelegramConversation(conversation.id, TelegramStep.IDLE, {
+        docContractId: contract.id,
+        docContractAgreementNo: contract.agreementNo,
+        docPendingAgreement: undefined,
+      });
+      await sendTelegramMessage(
+        chatId,
+        `✅ Saved. Tender closing date <b>${fmt(date)}</b> → base month <b>${fmt(baseMonth)}</b>.\n\n` +
+          `Agreement: <b>${escapeHtml(contract.agreementNo)}</b>`,
+      );
+    } else if (data.docContractId) {
+      // Correct an existing contract whose date/base month was wrong.
+      await prisma.contract.update({
+        where: { id: data.docContractId },
+        data: { dateOfOpening: date, baseMonth },
+      });
+      await updateTelegramConversation(conversation.id, TelegramStep.IDLE, {});
+      await sendTelegramMessage(
+        chatId,
+        `✅ Updated. Tender closing date <b>${fmt(date)}</b> → base month <b>${fmt(baseMonth)}</b>. Recalculating…`,
+      );
+    } else {
+      await updateTelegramConversation(conversation.id, TelegramStep.IDLE, {});
+      return sendTelegramMessage(chatId, 'Please send the agreement PDF first.');
+    }
+  } catch (err: any) {
+    console.error('[Telegram] tender date update failed:', err);
+    return sendTelegramMessage(chatId, `❌ Could not save that date: ${escapeHtml(err?.message || 'unknown error')}`);
+  }
+
+  return maybeProcess(conversation.id, chatId);
 }
 
 // ─── small helpers ───────────────────────────────────

@@ -10,6 +10,9 @@ export enum TelegramStep {
   IDLE = 'IDLE',
   AWAITING_COMMAND = 'AWAITING_COMMAND',
   AWAITING_PHONE = 'AWAITING_PHONE', // Link phone to account
+  // Document (PDF) PVC flow: the agreement had no tender closing date, or the
+  // stored one is wrong (quarter came out Q0), so ask the user for it.
+  AWAITING_TENDER_DATE = 'AWAITING_TENDER_DATE',
   // Contract creation steps
   AWAITING_AGREEMENT_NO = 'AWAITING_AGREEMENT_NO',
   AWAITING_CONTRACTOR_NAME = 'AWAITING_CONTRACTOR_NAME',
@@ -59,6 +62,8 @@ export interface TelegramConversationData {
   docContractAgreementNo?: string;
   docBillFileId?: string;      // Telegram file_id of the uploaded bill PDF (downloaded on process)
   docBillFileName?: string;
+  /** Extracted agreement fields held back until the user supplies the tender closing date. */
+  docPendingAgreement?: any;
 }
 
 /**

@@ -12,6 +12,7 @@ import {
   TelegramStep,
 } from './telegram-conversation';
 import { sendTelegramMessage, replyKeyboard, getPublicSiteUrl } from './telegram-api';
+import { handleTenderDateReply } from './telegram-document-flow';
 import { prisma } from './db';
 
 /**
@@ -39,6 +40,8 @@ export async function handleTelegramMessage(chatId: string, text: string) {
         return handleCommand(conversation, lower, chatId);
       case TelegramStep.AWAITING_PHONE:
         return handlePhoneLinking(conversation, msg, chatId);
+      case TelegramStep.AWAITING_TENDER_DATE:
+        return handleTenderDateReply(conversation, msg, chatId);
       // Contract creation steps
       case TelegramStep.AWAITING_AGREEMENT_NO:
         return handleAgreementNo(conversation, msg, chatId);

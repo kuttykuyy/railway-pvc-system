@@ -47,13 +47,18 @@ function escapeHtml(s: string): string {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Promise<void> {
+export interface ProcessUploadedBillResult {
+  /** True when the run stopped to ask the user for the tender closing date. */
+  needsTenderDate?: boolean;
+}
+
+export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Promise<ProcessUploadedBillResult> {
   const { chatId, contractId, billFileId, billFileName } = args;
 
   const contract = await prisma.contract.findUnique({ where: { id: contractId } });
   if (!contract) {
     await sendTelegramMessage(chatId, '❌ Could not find the contract for this bill. Please resend the agreement PDF.');
-    return;
+    return {};
   }
 
   const baseUrl = getPublicSiteUrl();
@@ -68,7 +73,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   } catch (err) {
     console.error('[Telegram] bill download failed:', err);
     await sendTelegramMessage(chatId, '❌ Could not download the bill PDF. Please send it again.');
-    return;
+    return {};
   }
 
   // 2. Extract the bill line items using the SAME path the web uploader uses
@@ -84,12 +89,12 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       `❌ I couldn't read the bill: ${escapeHtml(err?.message || 'extraction failed')}\n\n` +
         `Make sure it's a digitally generated IREPS PDF (not a scan/photo).`,
     );
-    return;
+    return {};
   }
   const items = billDetails.items || [];
   if (!items.length) {
     await sendTelegramMessage(chatId, '❌ I could not find any bill items in that PDF. Please check it is the running bill.');
-    return;
+    return {};
   }
 
   // 3. Map each item to a PVC sub-classification by its suggested code, summing
@@ -127,7 +132,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   const entries = [...agg.values()];
   if (!entries.length) {
     await sendTelegramMessage(chatId, '❌ I read the bill but could not classify its items for PVC. Please review it on the site:\n' + contractLink);
-    return;
+    return {};
   }
 
   const grossFromItems = round2(entries.reduce((s, e) => s + e.amount, 0) + unclassifiedAmount);
@@ -142,6 +147,26 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     quarterDate = contract.originalCompletionDate;
   }
   const quarter = getQuarterFromDate(quarterDate, contract.baseMonth);
+
+  // Q0 means the measurement date falls on/before the base month, so no PVC period
+  // has elapsed and the PVC would be zero. Almost always the contract's tender
+  // closing date is wrong (e.g. it couldn't be read from the agreement), so ask for
+  // it and recalculate rather than quietly reporting Rs 0.00.
+  if (quarter === 'Q0') {
+    const fmtDate = (d: Date) => new Date(d).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
+    const { updateTelegramConversation, TelegramStep } = await import('./telegram-conversation');
+    await updateTelegramConversation(args.conversationId, TelegramStep.AWAITING_TENDER_DATE, {});
+    await sendTelegramMessage(
+      chatId,
+      `⚠️ I can't calculate the PVC yet — the dates don't line up.\n\n` +
+        `📅 Bill measured: <b>${fmtDate(measurementDate)}</b>\n` +
+        `📅 Contract base month: <b>${fmtDate(contract.baseMonth)}</b>\n\n` +
+        `The bill is <b>before</b> the base month, so no PVC period has passed. ` +
+        `This usually means the tender closing date on the contract is wrong.\n\n` +
+        `Please reply with the correct <b>tender closing date</b> in <b>DD/MM/YYYY</b> format (e.g. 15/03/2024) and I'll fix it and recalculate:`,
+    );
+    return { needsTenderDate: true };
+  }
 
   const zone = (contract as any).railwayZone || null;
   const extractedSteelTypes = await extractSteelTypesFromEntries(
@@ -158,7 +183,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       `⚠️ I read the bill (gross ₹${formatMoney(grossBillAmount)}, quarter <b>${quarter}</b>), but the price indices for this quarter aren't available yet, so I can't calculate the PVC.\n\n` +
         `This is the same rule as the website — the PVC can be worked out once the indices for ${quarter} are published.`,
     );
-    return;
+    return {};
   }
 
   let totalPvc = 0, labour = 0, plant = 0, fuel = 0, materials = 0, cement = 0, steel = 0, explosives = 0;
@@ -248,6 +273,8 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       `⚠️ The PVC amount above is ready, but I couldn't generate the PDF report this time. You can download it from the site:\n${contractLink}`,
     );
   }
+
+  return {};
 }
 
 /**
