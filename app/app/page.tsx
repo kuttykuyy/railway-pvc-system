@@ -11,7 +11,7 @@ import {
   IndianRupee, Smartphone, Lock,
   TrendingUp, Gift, Play,
   ChevronRight, Download, Layers, FileSpreadsheet,
-  CalendarDays, ReceiptText, ScanSearch, Sparkles
+  CalendarDays, ReceiptText, ScanSearch, Sparkles, Send, Upload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Footer } from '@/components/footer';
@@ -183,6 +183,56 @@ export default function HomePage() {
                     Developed for <span className="font-semibold text-slate-500">Southern Railway Contractors Association</span>, Tiruchirappalli Division
                     · Powered by <strong className="font-semibold text-emerald-600">ILLALL TECH</strong>
                   </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* --- TELEGRAM HIGHLIGHT --- */}
+      <section id="telegram" className="w-full py-20 bg-gradient-to-b from-sky-50 to-white border-b border-sky-100">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-sky-600 to-sky-800 border border-sky-500 shadow-2xl shadow-sky-900/20 p-8 lg:p-14">
+            <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full blur-3xl -translate-y-1/3 translate-x-1/4 pointer-events-none" />
+            <div className="relative grid lg:grid-cols-2 gap-10 items-center">
+              <div className="space-y-6 text-white">
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-sm font-semibold backdrop-blur">
+                  <Send className="w-4 h-4" /> New — PVC on Telegram
+                </div>
+                <h2 className="text-4xl lg:text-5xl font-black tracking-tight leading-[1.1]">
+                  Get your PVC right inside Telegram.
+                </h2>
+                <p className="text-lg text-sky-100 font-light">
+                  No login, no forms. Send your <span className="font-semibold text-white">agreement</span> and
+                  <span className="font-semibold text-white"> running bill</span> PDFs to our bot and get the PVC amount
+                  in seconds — pay in chat to download the full IR-standard statement.
+                </p>
+                <ul className="space-y-3">
+                  {[
+                    'PVC amount free — no account needed',
+                    'Reads the bill & classifies items automatically',
+                    'Official IR statement with index documents',
+                    'Pay by UPI / card, right in the chat',
+                  ].map((t) => (
+                    <li key={t} className="flex items-start gap-3">
+                      <CheckCircle className="w-5 h-5 text-sky-200 shrink-0 mt-0.5" />
+                      <span className="text-sky-50">{t}</span>
+                    </li>
+                  ))}
+                </ul>
+                <a href="https://t.me/irpvcbill_bot" target="_blank" rel="noopener noreferrer"
+                   className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sky-700 font-bold shadow-lg hover:bg-sky-50 hover:-translate-y-0.5 transition-all">
+                  <Send className="w-5 h-5" /> Open @irpvcbill_bot <ArrowRight className="w-4 h-4" />
+                </a>
+              </div>
+
+              {/* three-step chat mock */}
+              <div className="relative">
+                <div className="rounded-2xl bg-white/95 backdrop-blur p-5 shadow-xl ring-1 ring-black/5 space-y-3">
+                  <TgStep icon={<Upload className="w-4 h-4" />} n={1} title="Send the agreement PDF" sub="Bot reads the schedules, rates & base month" />
+                  <TgStep icon={<Upload className="w-4 h-4" />} n={2} title="Send the running bill PDF" sub="Items classified automatically for PVC" />
+                  <TgStep icon={<IndianRupee className="w-4 h-4" />} n={3} title="Get PVC + pay for the report" sub="Amount free · statement PDF after payment" />
                 </div>
               </div>
             </div>
@@ -414,6 +464,7 @@ export default function HomePage() {
             <MiniFeature icon={<Download />} title="Bulk PDF Download" desc="Download Detailed or IR Standard PDFs for multiple bills merged into one file" badge="New" />
             <MiniFeature icon={<FileSpreadsheet />} title="Excel Contract Import" desc="Import multiple contracts at once via Excel/CSV template — saves hours of manual entry" badge="New" />
             <MiniFeature icon={<ScanSearch />} title="Free PVC Preview" desc="See the full PVC breakdown before paying — no credits deducted for preview calculations" badge="New" />
+            <MiniFeature icon={<Send />} title="Telegram Bot" desc="Send agreement + bill PDFs to @irpvcbill_bot and get the PVC in chat — no login, pay per report" badge="New" />
             <MiniFeature icon={<MessageSquare />} title="WhatsApp Integration" desc="Receive bills and critical alerts directly on WhatsApp" />
             <MiniFeature icon={<BarChart3 />} title="Deep Analytics" desc="Custom abstract reports and visual summaries across contracts" />
             <MiniFeature icon={<Users />} title="Bilingual Support" desc="Switch seamlessly between English and Hindi (हिन्दी) across all dashboards, contracts, and bills" badge="New" />
@@ -571,6 +622,21 @@ export default function HomePage() {
       </section>
 
       <Footer />
+    </div>
+  );
+}
+
+function TgStep({ icon, n, title, sub }: { icon: React.ReactNode; n: number; title: string; sub: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
+      <div className="relative shrink-0 w-10 h-10 rounded-lg bg-sky-600 text-white flex items-center justify-center">
+        {icon}
+        <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white text-sky-700 text-[11px] font-black flex items-center justify-center ring-2 ring-sky-100">{n}</span>
+      </div>
+      <div className="min-w-0">
+        <div className="font-bold text-slate-900 text-sm truncate">{title}</div>
+        <div className="text-xs text-slate-500 truncate">{sub}</div>
+      </div>
     </div>
   );
 }
