@@ -64,6 +64,8 @@ export interface TelegramConversationData {
   docBillFileName?: string;
   /** Extracted agreement fields held back until the user supplies the tender closing date. */
   docPendingAgreement?: any;
+  /** Report data waiting on payment — rendered and sent by the Razorpay webhook. */
+  docPendingReport?: any;
 }
 
 /**

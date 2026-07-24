@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db';
 import { sendPaymentConfirmation } from '@/lib/whatsapp-mydreams';
 import { sendSlackAlert } from '@/lib/slack-webhook';
 import { processReferralReward } from '@/lib/referrals';
+import { TELEGRAM_REPORT_NOTE_KIND } from '@/lib/telegram-payment';
 
 /**
  * POST /api/razorpay/webhook
@@ -86,6 +87,39 @@ export async function POST(request: NextRequest) {
     logger.log(`[${requestId}] Event type: ${eventType}`);
     logger.log(`[${requestId}] Order ID: ${order?.id || payment?.order_id || 'N/A'}`);
     logger.log(`[${requestId}] Payment ID: ${payment?.id || 'N/A'}`);
+
+    // Telegram pay-per-report payments carry our marker in the notes and have no
+    // RazorpayTransaction row, so they're handled here before the wallet flow (which
+    // would otherwise log "transaction not found" and alert).
+    const telegramNotes =
+      event.payload?.payment_link?.entity?.notes || payment?.notes || null;
+    if (telegramNotes?.kind === TELEGRAM_REPORT_NOTE_KIND) {
+      if (
+        eventType === 'payment.captured' ||
+        eventType === 'payment.authorized' ||
+        eventType === 'payment_link.paid'
+      ) {
+        const chatId = String(telegramNotes.telegramChatId || '');
+        logger.log(`[${requestId}] Telegram PVC report payment for chat ${chatId}`);
+        if (chatId) {
+          try {
+            const { renderAndSendPaidReport } = await import('@/lib/telegram-bill-pvc');
+            const sent = await renderAndSendPaidReport(chatId);
+            logger.log(`[${requestId}] Telegram report ${sent ? 'sent' : 'not pending (already sent?)'}`);
+          } catch (err: any) {
+            console.error(`[${requestId}] Telegram report delivery failed:`, err);
+            try {
+              const { sendTelegramMessage } = await import('@/lib/telegram-api');
+              await sendTelegramMessage(
+                chatId,
+                '⚠️ Your payment went through, but I hit a problem building the PDF. Please send the bill PDF again and I will deliver it — you will not be charged twice.',
+              );
+            } catch { /* nothing more we can do */ }
+          }
+        }
+      }
+      return NextResponse.json({ success: true });
+    }
 
     // Handle payment events
     if (eventType === 'payment.authorized' || eventType === 'payment.captured') {

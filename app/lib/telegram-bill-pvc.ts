@@ -28,7 +28,6 @@ import { getQuarterlyAverages } from './db-utils';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from './zone-steel-city-mapping';
 import { extractSteelTypesFromEntries } from './steel-type-handler';
 import { inferMainClassification } from './work-classification';
-import { getReportCharge, chargeForReport } from './telegram-report-billing';
 
 export interface ProcessUploadedBillArgs {
   chatId: string;
@@ -245,93 +244,127 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
         : ''),
   );
 
-  // 6. The PVC amount above is free; the PDF statement is paid. It needs the chat
-  //    linked to an irpvc account so the price can come off that account's credits.
-  const conv = await prisma.telegramConversation.findUnique({
-    where: { id: args.conversationId },
-    select: { userId: true },
-  });
-  const linkedUserId = conv?.userId || null;
+  // 6. The PVC amount above is free; the PDF statement is paid — and paid right
+  //    here in the chat via a Razorpay link (UPI/card), with no account needed.
+  //    Everything the report needs is parked on the conversation so the Razorpay
+  //    webhook can render and send it the moment the payment lands.
+  const payload: StoredReportPayload = {
+    contractId: contract.id,
+    billNo: billNo || 'RA Bill',
+    measurementDate: measurementDate.toISOString(),
+    grossBillAmount,
+    quarter,
+    zone,
+    fuelIndexName,
+    steelIndexNames,
+    allIndices,
+    entriesForReport,
+    pvcComponents: { labour, plant, fuel, materials, cement, steel, explosives, totalPvc },
+  };
 
-  if (!linkedUserId) {
-    const { updateTelegramConversation, TelegramStep } = await import('./telegram-conversation');
-    await updateTelegramConversation(args.conversationId, TelegramStep.AWAITING_PHONE, {});
-    await sendTelegramMessage(
-      chatId,
-      `📎 <b>Want the full PVC statement (PDF)?</b>\n\n` +
-        `The PVC amount above is free. The PDF statement is charged to your IR-PVC account.\n\n` +
-        `Reply with the <b>phone number registered on irpvc.in</b> (e.g. 9876543210) and I'll link this chat and send the report:`,
-    );
-    return { needsInput: true };
-  }
-
-  const charge = await getReportCharge(linkedUserId);
-  if (!charge) {
-    await sendTelegramMessage(chatId, '❌ Could not check your account. Please try again.');
-    return {};
-  }
-  if (!charge.canAfford) {
-    await sendTelegramMessage(
-      chatId,
-      `📎 <b>PDF statement — ₹${formatMoney(charge.cost)}</b>\n\n` +
-        `Your credit balance is <b>₹${formatMoney(charge.balance)}</b>, which isn't enough.\n\n` +
-        `Add credits here, then send the bill PDF again:\n${baseUrl}/pricing`,
-    );
-    return {};
-  }
-
-  // 7. Render the IR standard PDF report, charge, then send it as a document.
-  await sendTelegramChatAction(chatId, 'upload_document');
   try {
-    const pdfBuf = await buildIrReport({
-      contract,
-      billNo: billNo || 'RA Bill',
-      measurementDate,
-      grossBillAmount,
-      quarter,
-      zone,
-      fuelIndexName,
-      steelIndexNames,
-      quarterlyAverages,
-      entriesForReport,
-      pvcComponents: { labour, plant, fuel, materials, cement, steel, explosives, totalPvc },
-      allIndices,
+    const { updateTelegramConversation, TelegramStep } = await import('./telegram-conversation');
+    const { getReportPriceRupees, createReportPaymentLink } = await import('./telegram-payment');
+
+    const price = await getReportPriceRupees();
+    const link = await createReportPaymentLink({
+      chatId,
+      amountRupees: price,
+      agreementNo: contract.agreementNo,
+      billNo: payload.billNo,
     });
 
-    // Charge only once the report actually rendered, so a failed render is free.
-    const paid = await chargeForReport(
-      linkedUserId,
-      charge.cost,
-      `Telegram PVC statement — ${contract.agreementNo}${billNo ? ` (Bill ${billNo})` : ''}`,
-    );
-    if (!paid) {
-      await sendTelegramMessage(
-        chatId,
-        `⚠️ I couldn't take the ₹${formatMoney(charge.cost)} for the report (balance may have changed). Please top up and send the bill again:\n${baseUrl}/pricing`,
-      );
-      return {};
-    }
+    await updateTelegramConversation(args.conversationId, TelegramStep.IDLE, {
+      docPendingReport: payload as any,
+    });
 
-    const safeAgr = String(contract.agreementNo).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-    const safeBill = (billNo || 'bill').replace(/[^A-Za-z0-9]+/g, '-');
-    await sendTelegramDocumentBytes(
-      chatId,
-      pdfBuf,
-      `PVC-${safeAgr}-${safeBill}.pdf`,
-      `📎 IR PVC statement — ${escapeHtml(contract.agreementNo)}` +
-        (charge.cost > 0
-          ? `\n💳 ₹${formatMoney(charge.cost)} charged · balance ₹${formatMoney(charge.balance - charge.cost)}`
-          : ''),
-    );
-  } catch (err: any) {
-    console.error('[Telegram] IR report generation failed:', err);
     await sendTelegramMessage(
       chatId,
-      `⚠️ The PVC amount above is ready, but I couldn't generate the PDF report this time. You can download it from the site:\n${contractLink}`,
+      `📎 <b>Get the full PVC statement (PDF) — ₹${formatMoney(price)}</b>\n\n` +
+        `Pay by UPI / card / net banking here:\n${link}\n\n` +
+        `The moment your payment is confirmed I'll send the signed-format PVC statement right here. No sign-up needed.`,
+    );
+  } catch (err: any) {
+    console.error('[Telegram] payment link creation failed:', err);
+    await sendTelegramMessage(
+      chatId,
+      `⚠️ The PVC amount above is ready, but I couldn't create the payment link just now. Please try sending the bill again in a moment.`,
     );
   }
 
   return {};
+}
+
+/** Everything needed to render the report later, once payment is confirmed. */
+export interface StoredReportPayload {
+  contractId: string;
+  billNo: string;
+  measurementDate: string;
+  grossBillAmount: number;
+  quarter: string;
+  zone: string | null;
+  fuelIndexName: string;
+  steelIndexNames: string[];
+  allIndices: string[];
+  entriesForReport: any[];
+  pvcComponents: { labour: number; plant: number; fuel: number; materials: number; cement: number; steel: number; explosives: number; totalPvc: number };
+}
+
+/**
+ * Renders and sends the PVC statement for a chat's pending (now paid) report.
+ *
+ * Called from the Razorpay webhook. Clearing the pending payload doubles as the
+ * idempotency guard: a webhook retry finds nothing and won't send twice.
+ */
+export async function renderAndSendPaidReport(chatId: string): Promise<boolean> {
+  const conversation = await prisma.telegramConversation.findUnique({ where: { chatId } });
+  if (!conversation) return false;
+
+  const data = (conversation.conversationData as any) || {};
+  const payload: StoredReportPayload | undefined = data.docPendingReport;
+  if (!payload) return false;
+
+  const contract = await prisma.contract.findUnique({ where: { id: payload.contractId } });
+  if (!contract) return false;
+
+  // Clear first so a duplicate webhook can't produce a second send.
+  await prisma.telegramConversation.update({
+    where: { id: conversation.id },
+    data: { conversationData: { ...data, docPendingReport: undefined } as any },
+  });
+
+  await sendTelegramChatAction(chatId, 'upload_document');
+  const quarterlyAverages = await getQuarterlyAverages(
+    payload.quarter,
+    payload.allIndices,
+    contract.baseMonth,
+    'auto',
+  );
+
+  const pdfBuf = await buildIrReport({
+    contract,
+    billNo: payload.billNo,
+    measurementDate: new Date(payload.measurementDate),
+    grossBillAmount: payload.grossBillAmount,
+    quarter: payload.quarter,
+    zone: payload.zone,
+    fuelIndexName: payload.fuelIndexName,
+    steelIndexNames: payload.steelIndexNames,
+    quarterlyAverages,
+    entriesForReport: payload.entriesForReport,
+    pvcComponents: payload.pvcComponents,
+    allIndices: payload.allIndices,
+  });
+
+  const safeAgr = String(contract.agreementNo).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const safeBill = String(payload.billNo || 'bill').replace(/[^A-Za-z0-9]+/g, '-');
+  await sendTelegramDocumentBytes(
+    chatId,
+    pdfBuf,
+    `PVC-${safeAgr}-${safeBill}.pdf`,
+    `✅ Payment received — thank you!\n📎 IR PVC statement — ${escapeHtml(contract.agreementNo)}`,
+  );
+  return true;
 }
 
 /**
