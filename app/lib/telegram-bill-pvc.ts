@@ -270,6 +270,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     chatId,
     `✅ <b>PVC estimate${billNoLabel}</b>\n\n` +
       `📄 Agreement: <b>${escapeHtml(contract.agreementNo)}</b>\n` +
+      `📆 Date of measurement: <b>${new Date(measurementDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}</b>\n` +
       `📅 Quarter: <b>${quarter}</b>\n` +
       `💰 Gross bill: <b>₹${formatMoney(grossBillAmount)}</b>\n` +
       `⛽ Fuel basis: <b>${fuelBasisLabel}</b> <i>(better of the two)</i>\n` +

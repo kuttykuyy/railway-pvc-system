@@ -263,6 +263,49 @@ export async function handleZoneReply(conversation: any, msg: string, chatId: st
 }
 
 /**
+ * Secret coupon codes that waive the report fee, from TELEGRAM_REPORT_COUPONS
+ * (comma-separated, case-insensitive). Never advertised in chat.
+ */
+function couponCodes(): string[] {
+  return String(process.env.TELEGRAM_REPORT_COUPONS || '')
+    .split(',')
+    .map((c) => c.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** True if the text is a valid waiver coupon. */
+export function isCoupon(text: string): boolean {
+  const codes = couponCodes();
+  if (!codes.length) return false;
+  return codes.includes(String(text).trim().toLowerCase());
+}
+
+/**
+ * A valid coupon was sent — deliver the pending report for free (no payment).
+ */
+export async function handleCoupon(conversation: any, chatId: string) {
+  const data = getTelegramConversationData(conversation);
+  if (!data.docPendingReport) {
+    return sendTelegramMessage(
+      chatId,
+      `🎟️ Coupon noted, but there's no report waiting on this chat right now.\n\n` +
+        `Send /pvc, upload the agreement + bill, then send the coupon again to get the PDF free.`,
+    );
+  }
+  await sendTelegramMessage(chatId, '🎟️ <b>Coupon accepted — fee waived.</b> Preparing your report…');
+  try {
+    const { renderAndSendPaidReport } = await import('./telegram-bill-pvc');
+    const sent = await renderAndSendPaidReport(chatId);
+    if (!sent) {
+      return sendTelegramMessage(chatId, 'That report was already delivered — check the messages above.');
+    }
+  } catch (err: any) {
+    console.error('[Telegram] coupon delivery failed:', err);
+    return sendTelegramMessage(chatId, `⚠️ Couldn't build the PDF: ${escapeHtml(err?.message || 'unknown error')}`);
+  }
+}
+
+/**
  * "/paid" — the user says they've paid but no report arrived (usually because the
  * Razorpay webhook never reached us). Ask Razorpay directly and deliver if it's paid.
  */

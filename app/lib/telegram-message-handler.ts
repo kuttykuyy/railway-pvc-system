@@ -19,6 +19,8 @@ import {
   remindToUpload,
   handlePaidCheck,
   handleZoneReply,
+  isCoupon,
+  handleCoupon,
 } from './telegram-document-flow';
 import { prisma } from './db';
 
@@ -41,6 +43,11 @@ export async function handleTelegramMessage(chatId: string, text: string) {
     // Works from any step: rescue a paid-but-undelivered report.
     if (lower === '/paid' || lower === 'paid') {
       return handlePaidCheck(conversation, chatId);
+    }
+    // Secret fee-waiver coupon (never advertised). Checked before step routing so
+    // it works right after the payment link is shown.
+    if (isCoupon(msg)) {
+      return handleCoupon(conversation, chatId);
     }
     if (lower === '/cancel' || lower === 'cancel' || lower === 'stop') {
       await resetTelegramConversation(conversation.id);
