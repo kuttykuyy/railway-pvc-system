@@ -266,6 +266,19 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   const billNo = billDetails.billNo ? String(billDetails.billNo) : '';
   const billNoLabel = billNo ? ` (Bill ${escapeHtml(billNo)})` : '';
 
+  // Classification list — how the bill value was split across GCC classifications.
+  // Shown in the chat so the user can sanity-check it without logging in anywhere.
+  const classLines = [...agg.values()]
+    .map((e) => {
+      const sub = subById.get(e.subClassificationId);
+      const code = sub?.code || '—';
+      const name = sub?.name || 'Unclassified';
+      return { code, name, amount: e.amount };
+    })
+    .sort((a, b) => b.amount - a.amount)
+    .map((c) => `\n   <b>${escapeHtml(c.code)}</b> ${escapeHtml(c.name)} — ₹${formatMoney(c.amount)}`)
+    .join('');
+
   await sendTelegramMessage(
     chatId,
     `✅ <b>PVC estimate${billNoLabel}</b>\n\n` +
@@ -283,6 +296,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       comp('Cement', cement) +
       comp('Steel', steel) +
       comp('Explosives', explosives) +
+      `\n\n📋 <b>Classification of the bill value:</b>` + classLines +
       `\n\n<i>⚠️ This is an automatic estimate from the AI's reading of your bill. ` +
       `Please verify it before filing.</i>` +
       (unclassifiedAmount > 0
@@ -330,7 +344,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       `📎 <b>Get the full PVC statement (PDF) — ₹${formatMoney(price)}</b>\n\n` +
         `Pay by UPI / card / net banking here:\n${link.url}\n\n` +
         `The moment your payment is confirmed I'll send the signed-format PVC statement right here. No sign-up needed.\n\n` +
-        `<i>Already paid and nothing arrived? Send /paid and I'll check and deliver it.</i>`,
+        `<i>Have a coupon? Send /coupon.\nAlready paid and nothing arrived? Send /paid.</i>`,
     );
   } catch (err: any) {
     console.error('[Telegram] payment link creation failed:', err);

@@ -21,6 +21,8 @@ import {
   handleZoneReply,
   isCoupon,
   handleCoupon,
+  startCoupon,
+  handleCouponInput,
 } from './telegram-document-flow';
 import { prisma } from './db';
 
@@ -44,8 +46,10 @@ export async function handleTelegramMessage(chatId: string, text: string) {
     if (lower === '/paid' || lower === 'paid') {
       return handlePaidCheck(conversation, chatId);
     }
-    // Secret fee-waiver coupon (never advertised). Checked before step routing so
-    // it works right after the payment link is shown.
+    // Coupon: /coupon prompts for the code; typing a valid code directly also works.
+    if (lower === '/coupon' || lower === 'coupon') {
+      return startCoupon(conversation, chatId);
+    }
     if (isCoupon(msg)) {
       return handleCoupon(conversation, chatId);
     }
@@ -65,6 +69,8 @@ export async function handleTelegramMessage(chatId: string, text: string) {
         return handleTenderDateReply(conversation, msg, chatId);
       case TelegramStep.AWAITING_ZONE:
         return handleZoneReply(conversation, msg, chatId);
+      case TelegramStep.AWAITING_COUPON:
+        return handleCouponInput(conversation, msg, chatId);
       // A PDF is expected, not text — nudge with the clip button.
       case TelegramStep.AWAITING_AGREEMENT_PDF:
       case TelegramStep.AWAITING_BILL_PDF:

@@ -15,6 +15,7 @@ export enum TelegramStep {
   AWAITING_ZONE = 'AWAITING_ZONE',
   AWAITING_FUEL_BASIS = 'AWAITING_FUEL_BASIS',
   AWAITING_BILL_PDF = 'AWAITING_BILL_PDF',
+  AWAITING_COUPON = 'AWAITING_COUPON',
   // Document (PDF) PVC flow: the agreement had no tender closing date, or the
   // stored one is wrong (quarter came out Q0), so ask the user for it.
   AWAITING_TENDER_DATE = 'AWAITING_TENDER_DATE',

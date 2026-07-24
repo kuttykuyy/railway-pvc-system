@@ -273,11 +273,50 @@ function couponCodes(): string[] {
     .filter(Boolean);
 }
 
+/** True if any coupon codes are configured at all. */
+export function couponsEnabled(): boolean {
+  return couponCodes().length > 0;
+}
+
 /** True if the text is a valid waiver coupon. */
 export function isCoupon(text: string): boolean {
   const codes = couponCodes();
   if (!codes.length) return false;
   return codes.includes(String(text).trim().toLowerCase());
+}
+
+/**
+ * "/coupon" — prompt the user to type their waiver code. Gives clear feedback so a
+ * misconfigured env or a missing pending report is obvious.
+ */
+export async function startCoupon(conversation: any, chatId: string) {
+  if (!couponsEnabled()) {
+    return sendTelegramMessage(
+      chatId,
+      `🎟️ Coupons aren't set up on this bot yet. (Admin: set TELEGRAM_REPORT_COUPONS in the environment and redeploy.)`,
+    );
+  }
+  const data = getTelegramConversationData(conversation);
+  if (!data.docPendingReport) {
+    return sendTelegramMessage(
+      chatId,
+      `🎟️ There's no report waiting on this chat.\n\nSend /pvc, upload the agreement + bill, and once the PVC shows, send /coupon to redeem your code.`,
+    );
+  }
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_COUPON, {});
+  return sendTelegramMessage(chatId, `🎟️ <b>Enter your coupon code:</b>`);
+}
+
+/** Validates a code typed after /coupon. */
+export async function handleCouponInput(conversation: any, msg: string, chatId: string) {
+  if (!isCoupon(msg)) {
+    await updateTelegramConversation(conversation.id, TelegramStep.IDLE, {});
+    return sendTelegramMessage(chatId, `❌ That coupon code isn't valid. You can pay with the link above, or send /coupon to try another code.`);
+  }
+  // Reset the step but keep the pending report, then deliver free.
+  await updateTelegramConversation(conversation.id, TelegramStep.IDLE, {});
+  const refreshed = await getOrCreateTelegramConversation(chatId);
+  return handleCoupon(refreshed, chatId);
 }
 
 /**
