@@ -121,8 +121,7 @@ export default function SpreadsheetPage() {
   // Steel (JPC) import state
   const [showSteelDialog, setShowSteelDialog] = useState(false);
   const [steelMonth, setSteelMonth] = useState<string>("");
-  const [steelInputType, setSteelInputType] = useState<"csv" | "manual" | "excel">("excel");
-  const [steelData, setSteelData] = useState("");
+  const [steelInputType, setSteelInputType] = useState<"manual" | "excel">("excel");
   const [steelManualData, setSteelManualData] = useState({
     tmt: "",
     angleChannel: "",
@@ -503,19 +502,6 @@ export default function SpreadsheetPage() {
     }
   };
 
-  // Steel (JPC) Import handlers
-  const handleSteelCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const content = event.target?.result as string;
-        setSteelData(content);
-      };
-      reader.readAsText(file);
-    }
-  };
-  
   // JPC PDF extraction handler
 
   // Calculate average of F1 and F2 for a single item
@@ -584,7 +570,7 @@ export default function SpreadsheetPage() {
     }
     
     // Prepare data based on input type
-    let dataToSend = steelData;
+    let dataToSend = "";
     
     if (steelInputType === 'excel') {
       // Convert Excel-style data to text format with averages
@@ -608,9 +594,6 @@ export default function SpreadsheetPage() {
       }
       
       dataToSend = parts.join('\n');
-    } else if (!steelData) {
-      toast.error('Please upload a CSV file');
-      return;
     }
     
     try {
@@ -646,7 +629,7 @@ export default function SpreadsheetPage() {
     }
     
     // Prepare data based on input type
-    let dataToSend = steelData;
+    let dataToSend = "";
     
     if (steelInputType === 'excel') {
       dataToSend = convertExcelDataToText();
@@ -668,9 +651,6 @@ export default function SpreadsheetPage() {
       }
       
       dataToSend = parts.join('\n');
-    } else if (!steelData) {
-      toast.error('Please upload a CSV file');
-      return;
     }
     
     try {
@@ -693,7 +673,6 @@ export default function SpreadsheetPage() {
         toast.success(`Steel indices: ${summary.new} new, ${summary.updated} updated`);
         setShowSteelDialog(false);
         setSteelPreview(null);
-        setSteelData("");
         setSteelManualData({ tmt: "", angleChannel: "", plates: "", otherSections: "" });
         setSteelExcelData({
           tmt: { mm10_f1: "", mm10_f2: "", mm25_f1: "", mm25_f2: "" },
@@ -1064,7 +1043,6 @@ export default function SpreadsheetPage() {
             setShowSteelDialog(open);
             if (!open) {
               setSteelPreview(null);
-              setSteelData("");
               setSteelManualData({ tmt: "", angleChannel: "", plates: "", otherSections: "" });
               setSteelExcelData({
                 tmt: { mm10_f1: "", mm10_f2: "", mm25_f1: "", mm25_f2: "" },
@@ -1101,14 +1079,13 @@ export default function SpreadsheetPage() {
                 
                 <div className="space-y-2">
                   <Label>Input Type</Label>
-                  <Select value={steelInputType} onValueChange={(v: "csv" | "manual" | "excel") => setSteelInputType(v)}>
+                  <Select value={steelInputType} onValueChange={(v: "manual" | "excel") => setSteelInputType(v)}>
                     <SelectTrigger className="max-w-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="excel">Manual Entry (F1 & F2 Fortnights)</SelectItem>
                       <SelectItem value="manual">Simple Entry (Single Average)</SelectItem>
-                      <SelectItem value="csv">CSV File</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1491,29 +1468,13 @@ export default function SpreadsheetPage() {
                       All prices in ₹ per Metric Ton (MT). Leave blank if not available.
                     </p>
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Label>Upload JPC CSV File</Label>
-                    <Input 
-                      type="file" 
-                      accept=".csv"
-                      onChange={handleSteelCSVUpload}
-                    />
-                    {steelData && (
-                      <p className="text-xs text-green-600">✓ CSV file loaded ({steelData.split('\n').length - 1} rows)</p>
-                    )}
-                    <p className="text-xs text-gray-500">
-                      Expected format: Product,Delhi,Mumbai,Chennai,Kolkata
-                    </p>
-                  </div>
-                )}
+                ) : null}
                 
               </div>
               
               {/* Fixed Footer Buttons */}
               <div className="flex-shrink-0 pt-4 border-t mt-2">
-                {((steelInputType === 'csv' && steelData) || 
-                  (steelInputType === 'manual' && (steelManualData.tmt || steelManualData.angleChannel || steelManualData.plates || steelManualData.otherSections)) ||
+                {((steelInputType === 'manual' && (steelManualData.tmt || steelManualData.angleChannel || steelManualData.plates || steelManualData.otherSections)) ||
                   (steelInputType === 'excel' && (
                     steelExcelData.tmt.mm10_f1 || steelExcelData.tmt.mm10_f2 || steelExcelData.tmt.mm25_f1 || steelExcelData.tmt.mm25_f2 ||
                     steelExcelData.angleChannel.isa75_f1 || steelExcelData.angleChannel.isa75_f2 ||

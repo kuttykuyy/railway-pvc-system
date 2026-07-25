@@ -234,7 +234,21 @@ export async function POST(request: NextRequest) {
       nonScheduleItems = [],
       classificationEntries = [],
       isAiUploaded,
+      railwaySuppliedMaterialValue = 0,
     } = body;
+
+    // GCC-2022 Cl.46A: W (the PVC base) is the gross value of work done EXCLUDING the
+    // "cost of materials supplied by Railway either free or at fixed rate". The billed
+    // entry amounts stay as-is (that is the real work value); only the base the PVC is
+    // computed on is reduced, spread across entries in proportion to their amounts.
+    const railwaySupplied = Math.max(0, parseFloat(railwaySuppliedMaterialValue) || 0);
+    const entriesTotalAmount = (classificationEntries || []).reduce(
+      (sum: number, e: any) => sum + (parseFloat(e?.amount) || 0),
+      0,
+    );
+    const pvcBaseFactor = railwaySupplied > 0 && entriesTotalAmount > railwaySupplied
+      ? (entriesTotalAmount - railwaySupplied) / entriesTotalAmount
+      : 1;
 
     // ===== STEP 2: Payment Validation =====
     const paymentValidation = await validateBillProcessing(request, isAiUploaded);
@@ -528,6 +542,7 @@ export async function POST(request: NextRequest) {
         nonScheduleItems: nonScheduleItems || [],
         isChargeable: !isBillFree,
         processingFee: isBillFree ? 0 : calculatedBillCost,
+        railwaySuppliedMaterialValue: railwaySupplied,
         subClassifications: []
       }
     });
@@ -561,9 +576,9 @@ export async function POST(request: NextRequest) {
     
     if (classificationEntries && classificationEntries.length > 0) {
       logger.log(`\n📋 Creating ${classificationEntries.length} classification entries with per-entry PVC calculations...`);
-      
+
       const { calculateClassificationEntryPvc } = await import('@/lib/pvc-calculations');
-      
+
       for (const entry of classificationEntries) {
         const hasValidAmount = entry.amount !== '' && entry.amount !== null && entry.amount !== undefined;
         
@@ -601,7 +616,8 @@ export async function POST(request: NextRequest) {
             {
               subClassificationId: entry.subClassificationId,
               classificationId: entry.classificationId,
-              amount: parseFloat(entry.amount),
+              // PVC base excludes railway-supplied material (factor is 1 when none).
+              amount: parseFloat(entry.amount) * pvcBaseFactor,
               steelTypes: entrySteelTypes
             },
             quarterlyAverages,

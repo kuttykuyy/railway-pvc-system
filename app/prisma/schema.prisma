@@ -452,6 +452,11 @@ model Bill {
   hasBeenEditedOnce        Boolean                   @default(false)
   lastEditedBy             String?
   lastEditedAt             DateTime?
+  /// Value of materials supplied by the Railway (free or at fixed rate) included in
+  /// this bill. GCC-2022 Cl.46A defines W as the gross value of work done EXCLUDING
+  /// "cost of materials supplied by Railway either free or at fixed rate", so this is
+  /// deducted from the PVC base. Null/0 = nothing supplied by the Railway.
+  railwaySuppliedMaterialValue Float?                @default(0)
   approvalHistory          BillApprovalHistory[]
   classificationEntries    BillClassificationEntry[]
   billTransaction          BillTransaction?

@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminAccess } from '@/lib/role-auth';
 import {
-  parseJpcCSV,
   parseManualEntry,
-  calculateIndexAverages,
   getSteelIndexComparison,
   importSteelPrices,
   getSteelIndices,
-  JPC_STEEL_MAPPINGS
 } from '@/lib/jpc-fetcher';
 
 /**
@@ -24,17 +21,9 @@ export async function GET(request: NextRequest) {
     }
 
     const indices = await getSteelIndices();
-    const mappings = Object.entries(JPC_STEEL_MAPPINGS).map(([key, value]) => ({
-      key,
-      indexName: value.indexName,
-      jpcNames: value.jpcNames.slice(0, 5), // First 5 matching names
-      description: value.description
-    }));
 
     return NextResponse.json({
       indices,
-      mappings,
-      csvFormat: 'Product,Delhi,Mumbai,Chennai,Kolkata\nTMT 8MM,54000,55500,56000,55000\n...',
       manualFormat: 'TMT: 72000\nAngle/Channel: 71000\nPlates: 75000\nOther Sections: 72500'
     });
   } catch (error) {
@@ -82,26 +71,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid month format. Use YYYY-MM' }, { status: 400 });
     }
 
-    // Parse input data
+    // CSV import is deliberately not supported: it derived each index from a product
+    // basket that did NOT match GCC-2022 Clause 46A.9(1) (it averaged TMT 8/12/16mm,
+    // Angle 50x50x6, Plate 6/8mm). The entry screens send already-averaged values
+    // built from the correct GCC items, so only that form is accepted here.
+    if (inputType === 'csv') {
+      return NextResponse.json(
+        { error: 'CSV import has been removed. Use the F1/F2 fortnight entry screen, which follows GCC-2022 Clause 46A.9(1).' },
+        { status: 400 },
+      );
+    }
+
+    // Parse input data — already-averaged index values, one per line.
     let averages: Map<string, number>;
     let parsedEntries: Array<{ product: string; average: number }> = [];
 
     try {
-      if (inputType === 'csv') {
-        const entries = parseJpcCSV(data);
-        averages = calculateIndexAverages(entries);
-        parsedEntries = entries.map(e => ({ 
-          product: e.product, 
-          average: e.average || 0 
-        }));
-      } else {
-        // Manual entry
-        averages = parseManualEntry(data);
-        parsedEntries = Array.from(averages.entries()).map(([index, value]) => ({
-          product: index,
-          average: value
-        }));
-      }
+      averages = parseManualEntry(data);
+      parsedEntries = Array.from(averages.entries()).map(([index, value]) => ({
+        product: index,
+        average: value
+      }));
     } catch (parseError) {
       return NextResponse.json(
         { error: `Failed to parse data: ${parseError instanceof Error ? parseError.message : 'Unknown error'}` },
