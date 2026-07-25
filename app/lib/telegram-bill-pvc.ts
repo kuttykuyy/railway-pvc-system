@@ -201,22 +201,22 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   );
   const steelIndexNames = getSteelIndexNamesForZone(zone);
 
-  // Fuel basis is auto-chosen: compute the PVC with the 4-city average diesel index
-  // and with the zone-city diesel index, and keep whichever gives the higher PVC.
-  // The two index sets differ ONLY in the fuel index (the engine's findFuelIndex
-  // prefers exact 'MPNG Fuel', so the two names must never be in the same set).
-  const fuelNameFour = getFuelIndexNameForBill(zone, 'four_city_avg'); // 'MPNG Fuel'
-  const fuelNameZone = getFuelIndexNameForBill(zone, 'zone_city');     // 'MPNG Fuel - City'
-  const baseIndices = ['Labour', 'RBI Plant Machinery', 'RBI Other Materials', 'RBI Cement', 'RBI Explosives', ...steelIndexNames];
-  const indicesFour = [...baseIndices, fuelNameFour];
-  const indicesZone = [...baseIndices, fuelNameZone];
+  // Fuel basis: the AVERAGE of the official PPAC diesel prices (index 'MPNG Fuel').
+  // Per SWR letter SWR/W.496 dated 23.01.2026 (issued after a Vigilance finding that
+  // IRGCC 2022 PVC provisions weren't being followed): "PVC bill for fuel shall be
+  // calculated based on the average of official diesel prices, as published on the
+  // official website of the Petroleum Planning and Analysis Cell (PPAC)". So the
+  // average is used — NOT a zone-city price, and never "whichever pays more".
+  const fuelIndexName = getFuelIndexNameForBill(zone, 'four_city_avg'); // 'MPNG Fuel'
+  const fuelBasisLabel = 'average of official diesel prices (PPAC)';
+  const allIndices = [
+    'Labour', 'RBI Plant Machinery', 'RBI Other Materials', 'RBI Cement', 'RBI Explosives',
+    ...steelIndexNames, fuelIndexName,
+  ];
 
-  const [qaFour, qaZone] = await Promise.all([
-    getQuarterlyAverages(quarter, indicesFour, contract.baseMonth, 'auto'),
-    getQuarterlyAverages(quarter, indicesZone, contract.baseMonth, 'auto'),
-  ]);
+  const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, 'auto');
 
-  if ((!qaFour || qaFour.length === 0) && (!qaZone || qaZone.length === 0)) {
+  if (!quarterlyAverages || quarterlyAverages.length === 0) {
     await sendTelegramMessage(
       chatId,
       `⚠️ I read the bill (gross ₹${formatMoney(grossBillAmount)}, quarter <b>${quarter}</b>), but the price indices for this quarter aren't available yet, so I can't calculate the PVC.\n\n` +
@@ -234,43 +234,16 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     rows: e.rows,
   }));
 
-  // Total PVC + component split for one fuel basis.
-  const totalsFor = async (qa: any[]) => {
-    const c = { totalPvc: 0, labour: 0, plant: 0, fuel: 0, materials: 0, cement: 0, steel: 0, explosives: 0 };
-    for (const pe of preparedEntries) {
-      const pvc = await calculateClassificationEntryPvc(
-        { subClassificationId: pe.subClassificationId, amount: pe.amount, steelTypes: pe.steelTypes },
-        qa,
-      );
-      c.labour += pvc.labourPvc; c.plant += pvc.plantMachineryPvc; c.fuel += pvc.fuelPowerPvc;
-      c.materials += pvc.otherMaterialsPvc; c.cement += pvc.cementPvc; c.steel += pvc.steelPvc;
-      c.explosives += pvc.explosivesPvc; c.totalPvc += pvc.totalPvc;
-    }
-    return c;
-  };
-
-  const resFour = qaFour && qaFour.length ? await totalsFor(qaFour) : null;
-  const resZone = qaZone && qaZone.length ? await totalsFor(qaZone) : null;
-
-  // Keep the higher-PVC basis (only compare when both are available).
-  let chosen: NonNullable<typeof resFour>;
-  let quarterlyAverages: any[];
-  let fuelIndexName: string;
-  let allIndices: string[];
-  let fuelBasisLabel: string;
-  if (resFour && resZone) {
-    if (resZone.totalPvc > resFour.totalPvc) {
-      chosen = resZone; quarterlyAverages = qaZone; fuelIndexName = fuelNameZone; allIndices = indicesZone; fuelBasisLabel = 'zone city';
-    } else {
-      chosen = resFour; quarterlyAverages = qaFour; fuelIndexName = fuelNameFour; allIndices = indicesFour; fuelBasisLabel = '4-city average';
-    }
-  } else if (resFour) {
-    chosen = resFour; quarterlyAverages = qaFour; fuelIndexName = fuelNameFour; allIndices = indicesFour; fuelBasisLabel = '4-city average';
-  } else {
-    chosen = resZone!; quarterlyAverages = qaZone!; fuelIndexName = fuelNameZone; allIndices = indicesZone; fuelBasisLabel = 'zone city';
+  let totalPvc = 0, labour = 0, plant = 0, fuel = 0, materials = 0, cement = 0, steel = 0, explosives = 0;
+  for (const pe of preparedEntries) {
+    const pvc = await calculateClassificationEntryPvc(
+      { subClassificationId: pe.subClassificationId, amount: pe.amount, steelTypes: pe.steelTypes },
+      quarterlyAverages,
+    );
+    labour += pvc.labourPvc; plant += pvc.plantMachineryPvc; fuel += pvc.fuelPowerPvc;
+    materials += pvc.otherMaterialsPvc; cement += pvc.cementPvc; steel += pvc.steelPvc;
+    explosives += pvc.explosivesPvc; totalPvc += pvc.totalPvc;
   }
-
-  const { totalPvc, labour, plant, fuel, materials, cement, steel, explosives } = chosen;
   const entriesForReport: any[] = preparedEntries.map((pe) => {
     const first = pe.rows[0];
     return {
@@ -322,7 +295,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       `📆 Date of measurement: <b>${new Date(measurementDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}</b>\n` +
       `📅 Quarter: <b>${quarter}</b>\n` +
       `💰 Gross bill: <b>₹${formatMoney(grossBillAmount)}</b>\n` +
-      `⛽ Fuel basis: <b>${fuelBasisLabel}</b> <i>(better of the two)</i>\n` +
+      `⛽ Fuel basis: <b>${fuelBasisLabel}</b>\n` +
       `📈 <b>PVC amount: ${sign}₹${formatMoney(Math.abs(totalPvc))}</b>\n` +
       `<i>Breakdown:</i>` +
       comp('Labour', labour) +
@@ -344,7 +317,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   // contract (in the bills list / admin). Best-effort — a save failure never blocks
   // the estimate or the report.
   try {
-    const fuelPriceTypeChosen = fuelIndexName === fuelNameZone ? 'zone_city' : 'four_city_avg';
+    const fuelPriceTypeChosen = 'four_city_avg';
     await persistTelegramBill({
       contractId: contract.id,
       billNo: billNo || `RA-${quarter}`,
