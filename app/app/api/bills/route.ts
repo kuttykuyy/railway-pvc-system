@@ -542,10 +542,25 @@ export async function POST(request: NextRequest) {
         nonScheduleItems: nonScheduleItems || [],
         isChargeable: !isBillFree,
         processingFee: isBillFree ? 0 : calculatedBillCost,
-        railwaySuppliedMaterialValue: railwaySupplied,
         subClassifications: []
       }
     });
+
+    // Stored separately and best-effort: the railwaySuppliedMaterialValue column is
+    // added by a migration, and until that migration is deployed the column may not
+    // exist yet. Writing it inline would make bill creation fail outright, so record
+    // it after the bill exists and never let it break the save. (The PVC itself is
+    // already correct either way — pvcBaseFactor is applied above.)
+    if (railwaySupplied > 0) {
+      try {
+        await prisma.bill.update({
+          where: { id: bill.id },
+          data: { railwaySuppliedMaterialValue: railwaySupplied },
+        });
+      } catch (err) {
+        console.error('Could not store railwaySuppliedMaterialValue (migration pending?):', err);
+      }
+    }
     
     logger.log(`✅ Bill created with ID: ${bill.id}`);
     logger.log(`   Steel types stored: [${(bill.steelTypes as string[])?.join(', ') || 'None'}]`);
