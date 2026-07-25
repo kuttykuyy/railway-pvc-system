@@ -50,18 +50,53 @@ export async function GET(_req: NextRequest) {
         grossBillAmount: true,
         billAmount: true,
         createdAt: true,
+        steelAmount: true,
+        steelTmtBarsAmount: true,
+        steelAngleChannelAmount: true,
+        steelPlatesAmount: true,
+        steelOtherSectionsAmount: true,
         contract: { select: { agreementNo: true, contractorName: true, userId: true } },
         pvcCalculation: { select: { steelPvc: true, totalPvc: true } },
+        classificationEntries: { select: { steelTypes: true, steelPvc: true } },
       },
       orderBy: { dateOfMeasurement: 'desc' },
     });
 
-    // Only bills that actually have a steel component are affected — a bill with no
-    // steel PVC used no steel index, so the wrong city changed nothing.
+    /**
+     * Did this bill actually involve steel? Dedicated steel amounts or any entry
+     * carrying steel types both mean steel was billed. Used to tell "genuinely no
+     * steel" apart from "steel was billed but priced at zero".
+     */
+    const hasSteelWork = (b: (typeof bills)[number]): boolean => {
+      const dedicated =
+        (b.steelAmount ?? 0) + (b.steelTmtBarsAmount ?? 0) + (b.steelAngleChannelAmount ?? 0) +
+        (b.steelPlatesAmount ?? 0) + (b.steelOtherSectionsAmount ?? 0);
+      if (dedicated > 0.005) return true;
+      return (b.classificationEntries || []).some((e) => {
+        const t = e.steelTypes as unknown;
+        return Array.isArray(t) && t.length > 0;
+      });
+    };
+
     const rows = bills.map((b) => {
       const zone = String(b.zone || '');
       const fix = CORRECTED_ZONES[zone];
       const steelPvc = b.pvcCalculation?.steelPvc ?? 0;
+      const billedSteel = hasSteelWork(b);
+      const paidSteel = Math.abs(steelPvc) > 0.005;
+
+      // Three outcomes:
+      //  - no_steel      : no steel billed, so the city never mattered.
+      //  - wrong_city    : steel was priced, but against the wrong city's index.
+      //  - steel_zero    : steel WAS billed yet priced at zero — the steel index for
+      //                    that city is missing, so the contractor was under-paid.
+      //                    This is worse than the wrong city and needs index data.
+      const status = !billedSteel && !paidSteel
+        ? 'no_steel'
+        : paidSteel
+          ? 'wrong_city'
+          : 'steel_zero';
+
       return {
         id: b.id,
         billNo: b.billNo,
@@ -76,21 +111,23 @@ export async function GET(_req: NextRequest) {
         totalPvc: b.pvcCalculation?.totalPvc ?? 0,
         usedCity: fix?.wrongCity ?? null,
         correctCity: fix?.correctCity ?? getSteelCityForZone(zone),
-        // Steel PVC is what the city choice affects; no steel => no impact.
-        affected: Math.abs(steelPvc) > 0.005,
+        billedSteel,
+        status,
+        affected: status !== 'no_steel',
       };
     });
 
-    const affected = rows.filter((r) => r.affected);
-    const byZone: Record<string, { total: number; affected: number; steelPvcSum: number }> = {};
+    const order: Record<string, number> = { steel_zero: 0, wrong_city: 1, no_steel: 2 };
+    const sorted = [...rows].sort((a, b) => order[a.status] - order[b.status]);
+
+    const byZone: Record<string, { total: number; wrongCity: number; steelZero: number; noSteel: number }> = {};
     for (const r of rows) {
       const z = r.zone || 'unknown';
-      byZone[z] = byZone[z] || { total: 0, affected: 0, steelPvcSum: 0 };
+      byZone[z] = byZone[z] || { total: 0, wrongCity: 0, steelZero: 0, noSteel: 0 };
       byZone[z].total++;
-      if (r.affected) {
-        byZone[z].affected++;
-        byZone[z].steelPvcSum = Math.round((byZone[z].steelPvcSum + r.steelPvc) * 100) / 100;
-      }
+      if (r.status === 'wrong_city') byZone[z].wrongCity++;
+      else if (r.status === 'steel_zero') byZone[z].steelZero++;
+      else byZone[z].noSteel++;
     }
 
     return NextResponse.json({
@@ -98,11 +135,12 @@ export async function GET(_req: NextRequest) {
       correctedZones: CORRECTED_ZONES,
       summary: {
         billsInCorrectedZones: rows.length,
-        billsWithSteelComponent: affected.length,
+        wrongCity: rows.filter((r) => r.status === 'wrong_city').length,
+        steelZero: rows.filter((r) => r.status === 'steel_zero').length,
+        noSteel: rows.filter((r) => r.status === 'no_steel').length,
         byZone,
       },
-      // Affected first, then the rest for reference.
-      bills: [...affected, ...rows.filter((r) => !r.affected)],
+      bills: sorted,
     });
   } catch (error: any) {
     console.error('steel-city-audit error:', error);

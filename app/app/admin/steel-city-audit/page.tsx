@@ -23,6 +23,8 @@ interface Row {
   totalPvc: number;
   usedCity: string | null;
   correctCity: string;
+  billedSteel: boolean;
+  status: 'no_steel' | 'wrong_city' | 'steel_zero';
   affected: boolean;
 }
 
@@ -82,22 +84,31 @@ export default function SteelCityAuditPage() {
       </div>
 
       {data && (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Bills in SWR / NER</CardTitle></CardHeader>
             <CardContent><div className="text-2xl font-bold">{data.summary.billsInCorrectedZones}</div></CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Affected (have steel)</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Priced on wrong city</CardTitle></CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${affected.length ? 'text-amber-700' : 'text-emerald-700'}`}>
-                {data.summary.billsWithSteelComponent}
+              <div className={`text-2xl font-bold ${data.summary.wrongCity ? 'text-amber-700' : 'text-emerald-700'}`}>
+                {data.summary.wrongCity}
               </div>
             </CardContent>
           </Card>
+          <Card className={data.summary.steelZero ? 'border-red-300' : ''}>
+            <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Steel billed but ₹0 PVC</CardTitle></CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${data.summary.steelZero ? 'text-red-700' : 'text-emerald-700'}`}>
+                {data.summary.steelZero}
+              </div>
+              <div className="text-xs text-slate-500 mt-1">missing steel index</div>
+            </CardContent>
+          </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Rule</CardTitle></CardHeader>
-            <CardContent><div className="text-sm font-semibold text-slate-700">{data.rule}</div></CardContent>
+            <CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">No steel billed</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold text-slate-700">{data.summary.noSteel}</div></CardContent>
           </Card>
         </div>
       )}
@@ -125,7 +136,7 @@ export default function SteelCityAuditPage() {
                 </TableCell></TableRow>
               )}
               {rows.map((r) => (
-                <TableRow key={r.id} className={r.affected ? 'bg-amber-50/40' : ''}>
+                <TableRow key={r.id} className={r.status === 'steel_zero' ? 'bg-red-50/50' : r.status === 'wrong_city' ? 'bg-amber-50/40' : ''}>
                   <TableCell className="font-medium text-sm">{r.billNo}</TableCell>
                   <TableCell className="text-sm">{r.agreementNo || '—'}</TableCell>
                   <TableCell><Badge variant="outline">{r.zone}</Badge></TableCell>
@@ -140,9 +151,15 @@ export default function SteelCityAuditPage() {
                     {format(new Date(r.dateOfMeasurement), 'dd MMM yyyy')}
                   </TableCell>
                   <TableCell>
-                    {r.affected
-                      ? <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50">needs review</Badge>
-                      : <span className="text-xs text-slate-400 flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> no steel</span>}
+                    {r.status === 'steel_zero' && (
+                      <Badge variant="outline" className="text-red-700 border-red-300 bg-red-50">steel billed, ₹0 paid</Badge>
+                    )}
+                    {r.status === 'wrong_city' && (
+                      <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50">wrong city</Badge>
+                    )}
+                    {r.status === 'no_steel' && (
+                      <span className="text-xs text-slate-400 flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> no steel</span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
