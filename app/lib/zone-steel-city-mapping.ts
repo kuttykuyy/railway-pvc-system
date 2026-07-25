@@ -1,11 +1,31 @@
 /**
  * Railway Zone to Steel City Mapping
- * 
- * Maps Indian Railway zones to the nearest JPC steel price city.
+ *
  * JPC (Joint Plant Committee) publishes steel prices for 4 metro cities:
- * Delhi, Mumbai, Chennai, Kolkata
- * 
- * Each railway zone is mapped to the nearest steel city for PVC calculations.
+ * Delhi, Mumbai, Chennai, Kolkata.
+ *
+ * SOURCE OF TRUTH — GCC-2022 Clause 46A.9(2) ("Relevant city for referring JPC rates
+ * of steel items (SQ/SB) in different Zonal Railways"):
+ *
+ *   Delhi   — Northern, North Central, North Eastern, North Western
+ *   Kolkata — Eastern, East Central, East Coast, Northeast Frontier,
+ *             South Eastern, South East Central
+ *   Mumbai  — Central, Western, West Central
+ *   Chennai — Southern, South Central, South Western
+ *
+ * This assignment is PRESCRIBED BY CIRCULAR and is NOT geographic — do not infer it
+ * from a zone's headquarters. Counterexamples: South East Central (HQ Bilaspur) uses
+ * Kolkata; North Eastern (HQ Gorakhpur) uses Delhi; South Western (HQ Hubballi) uses
+ * Chennai. Clause 46A.9 has not been amended by any ACS to date (ACS-1..11).
+ *
+ * Note: the 46A.9(2) table covers the 16 zones above. South Coast Railway (SCoR) was
+ * created after GCC-2022 and has no assigned city in any circular found; Konkan (KRCL)
+ * and Metro Kolkata are likewise not listed — their values here are fallbacks, not
+ * circular-backed.
+ *
+ * Fuel is NOT zone-specific: GCC 46A.7 uses the average of PPAC diesel prices across
+ * Delhi, Kolkata, Mumbai & Chennai for every zone.
+ *
  * The zone value stored in bills is the zone code (e.g., 'SR', 'CR').
  */
 
@@ -52,7 +72,10 @@ export const RAILWAY_ZONE_STEEL_CITY_MAP: Record<string, RailwayZoneInfo> = {
     code: 'NER',
     name: 'North Eastern Railway',
     headquarters: 'Gorakhpur',
-    steelCity: 'Kolkata',
+    // GCC-2022 Clause 46A.9(2) assigns Delhi to North Eastern Railway. The mapping is
+    // prescribed by circular, NOT geographic — don't infer it from the HQ city, and
+    // don't confuse NER with NFR (Northeast Frontier), which is Kolkata.
+    steelCity: 'Delhi',
   },
   'NFR': {
     code: 'NFR',
@@ -82,7 +105,10 @@ export const RAILWAY_ZONE_STEEL_CITY_MAP: Record<string, RailwayZoneInfo> = {
     code: 'SWR',
     name: 'South Western Railway',
     headquarters: 'Hubballi',
-    steelCity: 'Mumbai',
+    // GCC-2022 Clause 46A.9(2) assigns Chennai to South Western Railway (confirmed by
+    // SWR letter SWR/W.496 dated 23.01.2026). Prescribed by circular, not geographic —
+    // SWR's HQ is Hubballi.
+    steelCity: 'Chennai',
   },
   'WCR': {
     code: 'WCR',

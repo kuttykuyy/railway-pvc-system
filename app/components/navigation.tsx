@@ -90,6 +90,7 @@ const navigationGroups = [
       { name: 'Credit Statements', href: '/admin/credit-statements', icon: Wallet, adminOnly: true },
       { name: 'WhatsApp Logs', href: '/admin/whatsapp-logs', icon: MessageSquare, adminOnly: true },
       { name: 'Telegram Usage', href: '/admin/telegram', icon: Send, adminOnly: true },
+      { name: 'Steel City Audit', href: '/admin/steel-city-audit', icon: AlertCircle, adminOnly: true },
       { name: 'AI Usage & Credit', href: '/admin/ai-usage', icon: Sparkles, adminOnly: true },
     ]
   }
