@@ -340,6 +340,25 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
         : ''),
   );
 
+  // Persist the bill + its PVC calculation so Telegram bills show up alongside the
+  // contract (in the bills list / admin). Best-effort — a save failure never blocks
+  // the estimate or the report.
+  try {
+    const fuelPriceTypeChosen = fuelIndexName === fuelNameZone ? 'zone_city' : 'four_city_avg';
+    await persistTelegramBill({
+      contractId: contract.id,
+      billNo: billNo || `RA-${quarter}`,
+      grossBillAmount,
+      dateOfMeasurement: measurementDate,
+      quarter,
+      zone,
+      fuelPriceType: fuelPriceTypeChosen,
+      components: { labour, plant, fuel, materials, cement, steel, explosives, totalPvc },
+    });
+  } catch (err) {
+    console.error('[Telegram] persist bill failed:', err);
+  }
+
   // 6. The PVC amount above is free; the PDF statement is paid — and paid right
   //    here in the chat via a Razorpay link (UPI/card), with no account needed.
   //    Everything the report needs is parked on the conversation so the Razorpay
@@ -391,6 +410,78 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   }
 
   return {};
+}
+
+/**
+ * Saves (or updates) the Telegram-computed bill and its PVC calculation so it
+ * appears in the bills list / admin, next to the contract. Deduped by
+ * contract + bill number + measurement date, so re-running the same bill updates
+ * it rather than creating a duplicate. Cumulative continues from the contract's
+ * other bills.
+ */
+async function persistTelegramBill(o: {
+  contractId: string;
+  billNo: string;
+  grossBillAmount: number;
+  dateOfMeasurement: Date;
+  quarter: string;
+  zone: string | null;
+  fuelPriceType: string;
+  components: { labour: number; plant: number; fuel: number; materials: number; cement: number; steel: number; explosives: number; totalPvc: number };
+}): Promise<void> {
+  const c = o.components;
+  const existing = await prisma.bill.findFirst({
+    where: { contractId: o.contractId, billNo: o.billNo, dateOfMeasurement: o.dateOfMeasurement },
+    select: { id: true },
+  });
+
+  // Cumulative continues from the contract's OTHER bills (exclude this one on update).
+  const others = await prisma.bill.findMany({
+    where: { contractId: o.contractId, ...(existing ? { id: { not: existing.id } } : {}) },
+    include: { pvcCalculation: true },
+    orderBy: { dateOfMeasurement: 'desc' },
+    take: 1,
+  });
+  const previousPvcTotal = others[0]?.pvcCalculation?.cumulativePvc ?? 0;
+  const cumulativePvc = round2(previousPvcTotal + c.totalPvc);
+
+  const billData = {
+    billNo: o.billNo,
+    billAmount: o.grossBillAmount,
+    grossBillAmount: o.grossBillAmount,
+    dateOfMeasurement: o.dateOfMeasurement,
+    quarter: o.quarter,
+    zone: o.zone,
+    fuelPriceType: o.fuelPriceType,
+    isChargeable: false,
+    processingFee: 0,
+    isFinalPvc: false,
+    status: 'draft',
+  };
+  const pvcData = {
+    labourPvc: c.labour,
+    plantMachineryPvc: c.plant,
+    fuelPowerPvc: c.fuel,
+    otherMaterialsPvc: c.materials,
+    cementPvc: c.cement,
+    explosivesPvc: c.explosives,
+    steelPvc: c.steel,
+    totalPvc: c.totalPvc,
+    previousPvcTotal,
+    cumulativePvc,
+  };
+
+  if (existing) {
+    await prisma.bill.update({ where: { id: existing.id }, data: billData });
+    await prisma.pvcCalculation.upsert({
+      where: { billId: existing.id },
+      update: pvcData,
+      create: { ...pvcData, contractId: o.contractId, billId: existing.id },
+    });
+    return;
+  }
+  const bill = await prisma.bill.create({ data: { ...billData, contractId: o.contractId } });
+  await prisma.pvcCalculation.create({ data: { ...pvcData, contractId: o.contractId, billId: bill.id } });
 }
 
 /** Everything needed to render the report later, once payment is confirmed. */

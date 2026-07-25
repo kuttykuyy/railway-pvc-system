@@ -34,7 +34,7 @@ export async function GET(_req: NextRequest) {
 
     const guestUserId = await getTelegramGuestUserId();
 
-    const [totalChats, linkedChats, active24h, active7d, guestContracts, guestContracts7d] =
+    const [totalChats, linkedChats, active24h, active7d, guestContracts, guestContracts7d, guestBills, guestBills7d] =
       await Promise.all([
         prisma.telegramConversation.count(),
         prisma.telegramConversation.count({ where: { userId: { not: null } } }),
@@ -42,6 +42,8 @@ export async function GET(_req: NextRequest) {
         prisma.telegramConversation.count({ where: { lastMessageAt: { gte: since7d } } }),
         prisma.contract.count({ where: { userId: guestUserId } }),
         prisma.contract.count({ where: { userId: guestUserId, createdAt: { gte: since7d } } }),
+        prisma.bill.count({ where: { contract: { userId: guestUserId } } }),
+        prisma.bill.count({ where: { contract: { userId: guestUserId }, createdAt: { gte: since7d } } }),
       ]);
 
     // Most recent chats — small page for the activity table.
@@ -76,6 +78,8 @@ export async function GET(_req: NextRequest) {
         active7d,
         pvcContracts: guestContracts,
         pvcContracts7d: guestContracts7d,
+        pvcBills: guestBills,
+        pvcBills7d: guestBills7d,
         awaitingPayment,
       },
       recent,

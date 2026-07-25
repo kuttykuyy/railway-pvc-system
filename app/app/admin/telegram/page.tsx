@@ -28,6 +28,8 @@ interface Stats {
   active7d: number;
   pvcContracts: number;
   pvcContracts7d: number;
+  pvcBills: number;
+  pvcBills7d: number;
   awaitingPayment: number;
 }
 
@@ -58,7 +60,8 @@ export default function TelegramUsagePage() {
   const cards = stats ? [
     { label: 'Total chats', value: stats.totalChats, icon: Users, sub: `${stats.linkedChats} linked · ${stats.guestChats} guest` },
     { label: 'Active (24h)', value: stats.active24h, icon: Activity, sub: `${stats.active7d} in last 7 days` },
-    { label: 'PVC flows', value: stats.pvcContracts, icon: FileText, sub: `${stats.pvcContracts7d} in last 7 days` },
+    { label: 'Contracts', value: stats.pvcContracts, icon: FileText, sub: `${stats.pvcContracts7d} in last 7 days` },
+    { label: 'PVC bills', value: stats.pvcBills, icon: FileText, sub: `${stats.pvcBills7d} in last 7 days` },
     { label: 'Awaiting payment', value: stats.awaitingPayment, icon: CreditCard, sub: 'reports quoted, not yet paid' },
   ] : [];
 
