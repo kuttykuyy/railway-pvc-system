@@ -42,6 +42,13 @@ export async function handleTelegramMessage(chatId: string, text: string) {
     if (lower === '/help' || lower === 'help' || lower === 'menu') {
       return sendHelpMessage(chatId);
     }
+    // Setup helper: shows this chat's id, which is what TELEGRAM_ADMIN_CHAT_ID needs.
+    if (lower === '/whoami' || lower === '/chatid') {
+      return sendTelegramMessage(
+        chatId,
+        `🆔 <b>Your chat ID</b>\n\n<code>${chatId}</code>\n\n<i>Set this as TELEGRAM_ADMIN_CHAT_ID to receive admin alerts when someone uses the bot.</i>`,
+      );
+    }
     // Works from any step: rescue a paid-but-undelivered report.
     if (lower === '/paid' || lower === 'paid') {
       return handlePaidCheck(conversation, chatId);

@@ -112,6 +112,29 @@ export async function sendTelegramDocument(
 }
 
 /**
+ * Notify the bot's admin(s) that someone used it.
+ *
+ * Recipients come from TELEGRAM_ADMIN_CHAT_ID (one chat id, or several separated by
+ * commas). Each admin must have messaged the bot at least once — Telegram won't let
+ * a bot open a conversation. Send /whoami to the bot to get your chat id.
+ *
+ * Best-effort by design: a failed or unconfigured alert must never interrupt what
+ * the user is doing, so this never throws.
+ */
+export async function notifyTelegramAdmin(text: string): Promise<void> {
+  const raw = process.env.TELEGRAM_ADMIN_CHAT_ID;
+  if (!raw) return; // not configured — silently skip
+  const ids = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  for (const id of ids) {
+    try {
+      await sendTelegramMessage(id, text);
+    } catch (err) {
+      console.error('[Telegram] admin notification failed:', err);
+    }
+  }
+}
+
+/**
  * Download a file that a user sent to the bot.
  *
  * Telegram is two steps: getFile turns a file_id into a temporary file_path, then

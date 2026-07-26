@@ -21,6 +21,7 @@ import {
   sendTelegramDocumentBytes,
   downloadTelegramFile,
   getPublicSiteUrl,
+  notifyTelegramAdmin,
 } from './telegram-api';
 import { extractBillDetailsDirect } from '@/app/api/bills/cement-analysis/route';
 import { getQuarterFromDate, getQuarterMonths, calculateClassificationEntryPvc } from './pvc-calculations';
@@ -313,6 +314,17 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
         : ''),
   );
 
+  // Tell the admin someone used the bot (no-op unless TELEGRAM_ADMIN_CHAT_ID is set).
+  notifyTelegramAdmin(
+    `📊 <b>PVC calculated on the bot</b>\n\n` +
+      `👤 Chat: <code>${chatId}</code>\n` +
+      `📄 Agreement: ${escapeHtml(displayAgreementNo(contract.agreementNo))}\n` +
+      `${billNo ? `🔢 Bill: ${escapeHtml(billNo)}\n` : ''}` +
+      `📅 Quarter: ${quarter}\n` +
+      `💰 Gross: ₹${formatMoney(grossBillAmount)}\n` +
+      `📈 PVC: ₹${formatMoney(totalPvc)}`,
+  ).catch(() => {});
+
   // Persist the bill + its PVC calculation so Telegram bills show up alongside the
   // contract (in the bills list / admin). Best-effort — a save failure never blocks
   // the estimate or the report.
@@ -549,6 +561,14 @@ export async function renderAndSendPaidReport(chatId: string): Promise<boolean> 
       where: { id: conversation.id },
       data: { conversationData: { ...freshData, docPendingReport: undefined, reportDeliveringAt: undefined } as any },
     });
+
+    notifyTelegramAdmin(
+      `📎 <b>PVC report delivered</b>\n\n` +
+        `👤 Chat: <code>${chatId}</code>\n` +
+        `📄 Agreement: ${escapeHtml(realAgr)}\n` +
+        `🔢 Bill: ${escapeHtml(String(payload.billNo || '-'))}\n` +
+        `📈 PVC: ₹${formatMoney(payload.pvcComponents?.totalPvc ?? 0)}`,
+    ).catch(() => {});
     return true;
   } catch (err) {
     // Release the lock so the user can retry (with /paid or the coupon).

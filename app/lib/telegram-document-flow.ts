@@ -21,7 +21,7 @@ import {
   getTelegramConversationData,
   TelegramStep,
 } from './telegram-conversation';
-import { sendTelegramMessage, sendTelegramChatAction, downloadTelegramFile, inlineKeyboard } from './telegram-api';
+import { sendTelegramMessage, sendTelegramChatAction, downloadTelegramFile, inlineKeyboard, notifyTelegramAdmin } from './telegram-api';
 import { getRailwayZoneOptions } from './zone-steel-city-mapping';
 import { extractAgreementFromPdf, type ExtractedAgreement } from './ai/agreement-extractor';
 import { getTelegramGuestUserId } from './telegram-guest';
@@ -208,6 +208,19 @@ async function handleBillDoc(conversationId: string, chatId: string, doc: Telegr
  * always begins from a clean state.
  */
 export async function startPvcFlow(conversationId: string, chatId: string) {
+  // Alert the admin the first time a chat ever starts a PVC run, so new users are
+  // visible without waiting for them to finish. No-op unless an admin id is set.
+  try {
+    const conv = await prisma.telegramConversation.findUnique({
+      where: { id: conversationId },
+      select: { createdAt: true, lastMessageAt: true },
+    });
+    const isNew = conv && conv.lastMessageAt.getTime() - conv.createdAt.getTime() < 60_000;
+    if (isNew) {
+      notifyTelegramAdmin(`👋 <b>New user started the bot</b>\n\n👤 Chat: <code>${chatId}</code>`).catch(() => {});
+    }
+  } catch { /* never block the flow for an alert */ }
+
   await updateTelegramConversation(conversationId, TelegramStep.AWAITING_AGREEMENT_PDF, {
     docContractId: undefined,
     docContractAgreementNo: undefined,
