@@ -55,6 +55,23 @@ export default function TelegramUsagePage() {
     }
   };
 
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const sendTestAlert = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/admin/telegram-test-alert', { method: 'POST' });
+      const data = await res.json();
+      setTestResult({ ok: res.ok && data.sent, text: data.message || data.error || 'Unknown response' });
+    } catch (e: any) {
+      setTestResult({ ok: false, text: e.message });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   useEffect(() => { load(); }, []);
 
   const cards = stats ? [
@@ -77,10 +94,21 @@ export default function TelegramUsagePage() {
           <Send className="h-5 w-5 text-sky-600" />
           <h1 className="text-xl font-semibold">Telegram bot usage</h1>
         </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={sendTestAlert} disabled={testing}>
+            <Send className="h-4 w-4 mr-1.5" /> {testing ? 'Sending…' : 'Send test alert'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </Button>
+        </div>
       </div>
+
+      {testResult && (
+        <div className={`rounded-md border px-4 py-3 text-sm ${testResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+          {testResult.text}
+        </div>
+      )}
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
