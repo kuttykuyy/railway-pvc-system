@@ -57,6 +57,28 @@ export default function TelegramUsagePage() {
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [nudgingId, setNudgingId] = useState<string | null>(null);
+  const [nudgeResults, setNudgeResults] = useState<Record<string, { ok: boolean; text: string }>>({});
+
+  const nudge = async (chatId: string) => {
+    setNudgingId(chatId);
+    try {
+      const res = await fetch('/api/admin/telegram-nudge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId }),
+      });
+      const data = await res.json();
+      setNudgeResults((cur) => ({
+        ...cur,
+        [chatId]: { ok: res.ok && data.sent, text: data.message || data.error || 'Unknown response' },
+      }));
+    } catch (e: any) {
+      setNudgeResults((cur) => ({ ...cur, [chatId]: { ok: false, text: e.message } }));
+    } finally {
+      setNudgingId(null);
+    }
+  };
 
   const sendTestAlert = async () => {
     setTesting(true);
@@ -143,11 +165,12 @@ export default function TelegramUsagePage() {
                 <TableHead>Agreement</TableHead>
                 <TableHead>Current step</TableHead>
                 <TableHead>Last active</TableHead>
+                <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {recent.length === 0 && !loading && (
-                <TableRow><TableCell colSpan={5} className="text-center text-sm text-slate-500 py-8">No Telegram activity yet.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-sm text-slate-500 py-8">No Telegram activity yet.</TableCell></TableRow>
               )}
               {recent.map((r) => (
                 <TableRow key={r.chatId}>
@@ -165,6 +188,25 @@ export default function TelegramUsagePage() {
                   </TableCell>
                   <TableCell className="text-xs text-slate-500 whitespace-nowrap">
                     {format(new Date(r.lastMessageAt), 'dd MMM, HH:mm')}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col items-end gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => nudge(r.chatId)}
+                        disabled={nudgingId === r.chatId}
+                      >
+                        <Send className="h-3 w-3 mr-1" />
+                        {nudgingId === r.chatId ? 'Sending…' : 'Nudge'}
+                      </Button>
+                      {nudgeResults[r.chatId] && (
+                        <span className={`text-[10px] max-w-[180px] text-right leading-tight ${nudgeResults[r.chatId].ok ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {nudgeResults[r.chatId].text}
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
