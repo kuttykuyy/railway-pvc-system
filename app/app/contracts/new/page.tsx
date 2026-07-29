@@ -1,11 +1,31 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2 } from 'lucide-react';
+import { Building2, Sparkles } from 'lucide-react';
 import { BackButton } from '@/components/ui/back-button';
 import ContractForm from '@/components/contract-form';
 
-export default function NewContractPage() {
+export default function NewContractPage({
+  searchParams,
+}: {
+  searchParams?: { welcome?: string };
+}) {
+  const isWelcome = searchParams?.welcome === '1';
   return (
     <div className="space-y-6 sm:space-y-8 px-4 sm:px-0">
+      {/* Shown when a first-time user is routed here straight after signup. */}
+      {isWelcome && (
+        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-50/40 p-5 flex items-start gap-3">
+          <div className="rounded-xl bg-emerald-600 p-2 text-white shrink-0">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="font-semibold text-emerald-900">Welcome! Let&apos;s set up your first contract.</p>
+            <p className="mt-1 text-sm text-emerald-800/80">
+              The fast way: <strong>upload your railway agreement PDF below</strong> and AI fills the form
+              for you — free. Once the contract is saved, you can create PVC bills against it.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
           <BackButton 

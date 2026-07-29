@@ -176,6 +176,16 @@ export const authOptions: NextAuthOptions = {
           console.error('Customer account provisioning error:', error);
         }
       }
+
+      // Record the login time — the column existed but nothing ever wrote it, so
+      // retention ("who came back?") was unmeasurable. Best-effort: a stats write
+      // must never block a sign-in.
+      if (user.email) {
+        prisma.user.update({
+          where: { email: user.email },
+          data: { lastLoginAt: new Date() },
+        }).catch((err) => console.error('lastLoginAt update failed:', err));
+      }
       return true;
     },
     async jwt({ token, user, trigger, session, account }) {

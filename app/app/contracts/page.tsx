@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import {
@@ -283,6 +284,7 @@ function DeleteButton({ contract, onDelete }: { contract: Contract; onDelete: (i
 }
 
 export default function ContractsPage() {
+  const router = useRouter();
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -315,7 +317,17 @@ export default function ContractsPage() {
     if (saved === 'grid' || saved === 'table') setViewMode(saved);
     fetch('/api/contracts')
       .then((r) => { if (!r.ok) throw new Error('Failed to fetch'); return r.json(); })
-      .then(setContracts)
+      .then((data) => {
+        setContracts(data);
+        // First-time users: land them on the upload-first contract form instead of an
+        // empty list — creating the first contract is where most signups stall (84%
+        // never make one, and those who will, do it within 24h). Once per session, so
+        // pressing Back never traps anyone in a redirect loop.
+        if (Array.isArray(data) && data.length === 0 && !sessionStorage.getItem('irpvc-onboard-redirect')) {
+          sessionStorage.setItem('irpvc-onboard-redirect', '1');
+          router.push('/contracts/new?welcome=1');
+        }
+      })
       .catch((err) => setError(err.message))
       .finally(() => setIsLoading(false));
     fetch('/api/user/quota')
