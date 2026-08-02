@@ -9,36 +9,34 @@ interface BillStatusBadgeProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
+// Light tinted background + dark text of the same hue, so the label always reads.
+// (The previous config put dark emerald text on the Badge's solid dark 'default'
+// background — dark on dark, unreadable.)
 const statusConfig = {
   draft: {
     label: 'Draft',
-    variant: 'secondary' as const,
     icon: FileEdit,
-    color: 'text-gray-600'
+    classes: 'bg-slate-100 text-slate-700 border-slate-200'
   },
   submitted: {
     label: 'Pending Approval',
-    variant: 'default' as const,
     icon: Clock,
-    color: 'text-emerald-600'
+    classes: 'bg-amber-50 text-amber-700 border-amber-200'
   },
   approved: {
     label: 'Approved',
-    variant: 'default' as const,
     icon: CheckCircle2,
-    color: 'text-green-600'
+    classes: 'bg-emerald-50 text-emerald-700 border-emerald-200'
   },
   rejected: {
     label: 'Rejected',
-    variant: 'destructive' as const,
     icon: XCircle,
-    color: 'text-red-600'
+    classes: 'bg-red-50 text-red-700 border-red-200'
   },
   revision_requested: {
     label: 'Revision Required',
-    variant: 'default' as const,
     icon: FileClock,
-    color: 'text-orange-600'
+    classes: 'bg-orange-50 text-orange-700 border-orange-200'
   }
 };
 
@@ -59,9 +57,9 @@ export function BillStatusBadge({ status, size = 'md' }: BillStatusBadgeProps) {
   };
 
   return (
-    <Badge 
-      variant={config.variant} 
-      className={`${sizeClasses[size]} flex items-center gap-1.5 ${config.color}`}
+    <Badge
+      variant="outline"
+      className={`${sizeClasses[size]} flex items-center gap-1.5 ${config.classes}`}
     >
       <Icon size={iconSizes[size]} />
       {config.label}
