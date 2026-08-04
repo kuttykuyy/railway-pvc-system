@@ -181,7 +181,20 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
   // and the DSR path works even when the printed Chapter Name is missing.
   const scheduleLabel = item.sourceBook === 'USSR_2021' ? 'USSOR 2021 chapter' : 'CPWD DSR sub-head';
   const subHead = inferScheduleSubHead({ itemNo: item.itemNo, chapter: item.chapter, sourceBook: item.sourceBook });
-  if (subHead && subHead.gccGroup !== DSR_CONTEXT) {
+
+  // The GCC group is a property of the WORK, not of each individual item, so the
+  // contract's Name of Work governs the whole bill whenever it names a group. An
+  // agreement for a bridge does not become a building contract because one of its
+  // items is masonry: every item stays in the contract's group and is distinguished
+  // only by its A/B/C/D/E suffix. Item-level inference is still used below when the
+  // Name of Work yields nothing better than Group 9 (Any Other Works), which is what
+  // inferMainClassification returns when no keyword matched at all.
+  const contractGovernsGroup = contractMain.code !== '9' && contractMain.matchedKeywords.length > 0;
+
+  if (contractGovernsGroup) {
+    resolvedCode = contractMain.code;
+    resolvedReason = `The contract's Name of Work mentions ${quoteKeywords(contractMain.matchedKeywords)}, placing the whole work under GCC Group ${contractMain.code} (${contractMain.label}); every item of this bill takes that group and is distinguished only by its sub-classification.`;
+  } else if (subHead && subHead.gccGroup !== DSR_CONTEXT) {
     resolvedCode = subHead.gccGroup;
     resolvedReason = `Item number ${item.itemNo} falls under ${scheduleLabel} ${subHead.number} (${subHead.name}), which is classified as GCC Group ${subHead.gccGroup}.`;
   } else if (subHead && subHead.gccGroup === DSR_CONTEXT) {
