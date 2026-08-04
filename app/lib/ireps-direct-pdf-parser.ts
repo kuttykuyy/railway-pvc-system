@@ -48,6 +48,32 @@ function cellText(
     .replace(/\s+/g, '');
 }
 
+// A table row can straddle a page break: IREPS prints the integer part of each
+// figure at the foot of one page and the remaining digits on the very first line
+// of the next, in the same columns. Returns that first line's items.
+function pageTopItems(page: PositionedPdfPage | undefined): PositionedPdfTextItem[] {
+  if (!page || !page.items.length) return [];
+  const topY = Math.min(...page.items.map(item => item.y));
+  return page.items.filter(item => item.y <= topY + 3);
+}
+
+// The digits continuing a column, taken from the next page's first line.
+function continuationDigits(
+  nextPage: PositionedPdfPage | undefined,
+  topItems: PositionedPdfTextItem[],
+  range: readonly [number, number],
+) {
+  if (!nextPage) return '';
+  return topItems
+    .filter(item => {
+      const x = normalizedX(nextPage, item);
+      return x >= range[0] && x < range[1] && /^\d+$/.test(item.text.trim());
+    })
+    .sort((left, right) => left.x - right.x)
+    .map(item => item.text.trim())
+    .join('');
+}
+
 function pageLines(page: PositionedPdfPage) {
   const sorted = [...page.items].sort((left, right) => left.y - right.y || left.x - right.x);
   const lines: Array<{ y: number; text: string }> = [];
@@ -63,7 +89,14 @@ function pagePlainText(page: PositionedPdfPage) {
   return pageLines(page).map(line => line.text.replace(/\s+/g, ' ').trim()).join('\n');
 }
 
-function extractItemCode(page: PositionedPdfPage, rowY: number, nextRowY: number) {
+function extractItemCode(
+  page: PositionedPdfPage,
+  rowY: number,
+  nextRowY: number,
+  // Item-column tokens carried over from the next page when this row straddles a
+  // page break — a six-digit USSOR code prints as "0510" + "80" across the join.
+  continuedTokens: string[] = [],
+) {
   const itemTokens = page.items
     .filter(item => {
       const x = normalizedX(page, item);
@@ -71,7 +104,8 @@ function extractItemCode(page: PositionedPdfPage, rowY: number, nextRowY: number
     })
     .sort((left, right) => left.y - right.y)
     .map(item => item.text.replace(/[()IG\s-]/gi, '').trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .concat(continuedTokens.map(token => token.replace(/[()IG\s-]/gi, '').trim()).filter(Boolean));
   const base = itemTokens.find(token => /^\d+(?:\.\d+)*\.?$/.test(token))?.replace(/\.$/, '') || '';
   if (/^\d{4}$/.test(base)) {
     const suffix = itemTokens.find(token => token !== base && /^\d{1,2}$/.test(token));
@@ -314,7 +348,10 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   let currentChapter = '';
   let currentGroupName = '';
 
-  for (const page of pages) {
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+    const page = pages[pageIndex];
+    const nextPage = pages[pageIndex + 1];
+    const nextPageTop = pageTopItems(nextPage);
     const lines = pageLines(page);
     const updateContext = (lineText: string) => {
       const scheduleMatch = lineText.match(/Schedule\s+([A-Z]\d*[A-Za-z]?)\b/i);
@@ -352,10 +389,24 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         updateContext(line.text);
       }
 
-      const agreementRateRaw = cellText(page, page.items, X.agreementRate, unitItem.y);
-      const quantityRaw = cellText(page, page.items, X.qtySinceLast, unitItem.y);
-      const agreementAmountRaw = cellText(page, page.items, X.amountSinceLast, unitItem.y);
-      const specialAmountRaw = cellText(page, page.items, X.specialAmount, unitItem.y);
+      // A figure ending in a decimal point is proof this row was cut in half by a
+      // page break — no complete number ends that way. When it happens, every one of
+      // the row's columns continues on the next page's first line, so each is
+      // rejoined with the digits printed there. Nothing is read across pages unless
+      // that proof is present, so an ordinary page header can never be mistaken for
+      // a continuation. (SR/MDU/Civil/2024/0037/B7 splits "1705841." | "95" this way.)
+      const straddlesPageBreak = ([X.agreementRate, X.qtySinceLast, X.amountSinceLast, X.specialAmount] as const)
+        .some(range => cellText(page, page.items, range, unitItem.y).endsWith('.'));
+      const readCell = (range: readonly [number, number]) => {
+        const base = cellText(page, page.items, range, unitItem.y);
+        if (!base || !straddlesPageBreak) return base;
+        return `${base}${continuationDigits(nextPage, nextPageTop, range)}`;
+      };
+
+      const agreementRateRaw = readCell(X.agreementRate);
+      const quantityRaw = readCell(X.qtySinceLast);
+      const agreementAmountRaw = readCell(X.amountSinceLast);
+      const specialAmountRaw = readCell(X.specialAmount);
       const agreementRate = numericValue(agreementRateRaw) || 0;
       const quantity = numericValue(quantityRaw) || 0;
       const agreementAmount = numericValue(agreementAmountRaw) || 0;
@@ -366,7 +417,14 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       // minus quantity, and that row reduces the bill just like any other.
       const payableAmount = specialAmount !== 0 ? specialAmount : agreementAmount;
       const nextRowY = candidates[index + 1]?.y || page.height - 5;
-      const itemNo = extractItemCode(page, unitItem.y, nextRowY);
+      const itemNo = extractItemCode(page, unitItem.y, nextRowY, straddlesPageBreak && nextPage
+        ? nextPageTop
+            .filter(topItem => {
+              const x = normalizedX(nextPage, topItem);
+              return x >= X.item[0] && x < X.item[1];
+            })
+            .map(topItem => topItem.text.trim())
+        : []);
 
       // Nothing measured this period. Silent: most rows of a long bill are idle,
       // and listing them would bury the rows that actually failed to read.
