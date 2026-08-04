@@ -235,7 +235,22 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
     + `it is not a separate steel supply item (${resolvedCode}B), not a separate cement supply item (${resolvedCode}C), `
     + `and contains no fabrication/assembly/erection wording that would indicate ${resolvedCode}D or ${resolvedCode}E.`;
 
-  if (aiSuffix && (supportsFabricationClasses || !['D', 'E'].includes(aiSuffix))) {
+  // A separate steel-supply item, billed by weight with no fabrication/erection
+  // wording (which would make it D or E). Cement supply already overrides the AI
+  // outright above; steel had no equivalent, so its deterministic rule below only
+  // ran when the AI offered no suffix at all. When the AI returns the generic 'A'
+  // — what it gives when it recognised nothing in particular — a TMT item billed
+  // in Kg was silently filed as general work instead of supply of steel.
+  const isSteelSupplyItem = (() => {
+    const unit = item.unit.trim().toUpperCase().replace(/[\s.]+/g, '');
+    if (!['KG', 'KGS', 'MT', 'TONNE', 'TON', 'METRICTONNE', 'QUINTAL'].includes(unit)) return false;
+    if (/fabricat|assembl|erect|launch/.test(text)) return false;
+    return item.isSteelItem || /item\s*-?\s*steel|steel supply/.test(text);
+  })();
+
+  if (aiSuffix
+    && (supportsFabricationClasses || !['D', 'E'].includes(aiSuffix))
+    && !(aiSuffix === 'A' && isSteelSupplyItem)) {
     suffix = aiSuffix;
     const suffixMeaning: Record<string, string> = {
       A: 'general works with composite labour/material components',
@@ -257,9 +272,11 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
     } else if (looksLikeDirectCementSupply(item)) {
       suffix = 'C';
       subReason = `The item is billed in a cement supply unit (${item.unit}) and its description refers to cement supply rather than composite work, so ${resolvedCode}C (separate cement supply) applies.`;
-    } else if (item.isSteelItem || /item\s*-?\s*steel|steel supply/.test(text)) {
+    } else if (isSteelSupplyItem || item.isSteelItem || /item\s*-?\s*steel|steel supply/.test(text)) {
       suffix = 'B';
-      subReason = `The item is a separate steel supply item (steel supplied by the contractor as its own billed item), so ${resolvedCode}B (items for supply of steel) applies.`;
+      subReason = isSteelSupplyItem
+        ? `The item is steel billed by weight (${item.unit}) with no fabrication or erection wording, so it is a separate steel supply item and ${resolvedCode}B (items for supply of steel) applies.`
+        : `The item is a separate steel supply item (steel supplied by the contractor as its own billed item), so ${resolvedCode}B (items for supply of steel) applies.`;
     }
   }
 

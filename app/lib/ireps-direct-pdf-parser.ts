@@ -151,14 +151,24 @@ function extractDescription(page: PositionedPdfPage, rowY: number, nextRowY: num
 
 function materialFlags(description: string) {
   const text = description.toLowerCase();
-  const isSteelItem = /\b(?:steel|tmt|reinforcement|angle|channel|plate|wire rope|rail)\b/.test(text);
-  const directCement = /\b(?:supply|supplying)\b.{0,80}\bcement\b|ordinary portland cement|\bopc\b|\bppc\b/.test(text);
+  // Cement being supplied as its own item, rather than consumed by a work item.
+  // The spelled-out grade names matter as much as the abbreviations: IREPS prints
+  // "Pozzolana Portland Cement approved brands/makes" with no "PPC" anywhere, and
+  // that was being read as a work item that merely uses cement.
+  const directCement = /\b(?:supply|supplying)\b.{0,80}\bcement\b|ordinary portland cement|(?:portland pozzolana|pozzolana portland) cement|portland slag cement|\bopc\b|\bppc\b|\bpsc\b/.test(text);
   const isCementAffected = !directCement && /\b(?:cement|concrete|rcc|pcc|mortar|grout|shotcrete|1\s*:\s*\d)\b/.test(text);
   let steelType: DeterministicBillItem['steelType'] = '';
-  if (/\b(?:tmt|reinforcement|thermo-mechanically treated|bars?)\b/.test(text)) steelType = 'TMT';
+  if (/\b(?:tmt|reinforcement|thermo-?\s*mechanically treated|fe-?500|fe-?550|bars?)\b/.test(text)) steelType = 'TMT';
   else if (/\b(?:angle|channel|joist)\b/.test(text)) steelType = 'ANGLE_CHANNEL';
   else if (/\bplates?\b/.test(text)) steelType = 'PLATES';
-  else if (isSteelItem) steelType = 'OTHER_SECTIONS';
+  else if (/\b(?:steel|wire rope|rail)\b/.test(text)) steelType = 'OTHER_SECTIONS';
+  // Recognising a steel type IS what makes this a steel item. The two used to be
+  // decided separately, by keyword lists that disagreed, so a DSR sub-item came
+  // out as TMT yet not steel: IREPS prints only the leaf variant on the row
+  // ("Thermo-Mechanically Treated bars of grade Fe-500D or more"), while the word
+  // "steel" sits in the parent heading above it. Downstream reads isSteelItem, so
+  // reinforcement worth lakhs was never offered as a steel supply item.
+  const isSteelItem = steelType !== '';
   return { isSteelItem, isCementAffected, steelType };
 }
 
