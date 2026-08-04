@@ -1075,114 +1075,141 @@ export default function BulkBillCreationPage() {
                 />
               )}
 
-              <div className="border rounded-lg overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted">
-                      <tr>
-                        <th className="px-2 py-2 text-left text-xs font-medium sticky left-0 bg-muted z-10">#</th>
-                        <th className="px-2 py-2 text-left text-xs font-medium">Bill No *</th>
-                        <th className="px-2 py-2 text-left text-xs font-medium">Date of Measurement *</th>
-                        <th className="px-2 py-2 text-left text-xs font-medium">Classifications *</th>
-                        <th className="px-2 py-2 text-left text-xs font-medium">Class Total</th>
-                        <th className="px-2 py-2 text-right text-xs font-medium">PVC (preview)</th>
-                        <th className="px-2 py-2 text-center text-xs font-medium">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {billRows.map((row, index) => (
-                        <tr key={row.id} className="hover:bg-muted/50">
-                          <td className="px-2 py-2 text-xs sticky left-0 bg-white">{index + 1}</td>
-                          <td className="px-2 py-2">
-                            <Input
-                              type="text"
-                              value={row.billNo}
-                              onChange={(e) => updateBillRow(row.id, 'billNo', e.target.value)}
-                              placeholder="B1"
-                              disabled={isSaving}
-                              className="w-24 h-8 text-xs"
-                            />
-                          </td>
-                          <td className="px-2 py-2">
-                            <Input
-                              type="date"
-                              value={row.dateOfMeasurement}
-                              onChange={(e) => updateBillRow(row.id, 'dateOfMeasurement', e.target.value)}
-                              disabled={isSaving}
-                              className="w-36 h-8 text-xs"
-                            />
-                          </td>
-                          <td className="px-2 py-2">
-                            <div className="flex flex-col gap-1">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openClassificationDialog(row.id)}
-                                disabled={isSaving}
-                                className="h-7 text-xs"
-                              >
-                                <Edit className="h-3 w-3 mr-1" />
-                                {row.classificationEntries.length > 0
-                                  ? `${row.classificationEntries.length} item${row.classificationEntries.length > 1 ? 's' : ''}`
-                                  : 'Add Classifications'}
-                              </Button>
-                              {row.classificationEntries.length > 0 && (
-                                <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">
-                                  {row.classificationEntries.map(e => {
-                                    const sub = classificationGroups.flatMap(g => g.subClassifications).find(s => s.id === e.subClassificationId);
-                                    return sub?.code || '';
-                                  }).filter(Boolean).join(', ')}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-2 py-2">
-                            <div className="text-xs font-medium">
-                              ₹{formatAmount(getClassificationTotal(row))}
-                            </div>
-                          </td>
-                          <td className="px-2 py-2 text-right">
-                            {(() => {
-                              const preview = previews[row.id];
-                              if (!preview) {
-                                return <span className="text-xs text-slate-400">{previewingRows ? '…' : '—'}</span>;
-                              }
-                              if ('error' in preview) {
-                                return <span className="text-xs text-red-600" title={preview.error}>Failed</span>;
-                              }
-                              return (
-                                <div className="text-xs font-medium text-emerald-700">
-                                  ₹{formatAmount(preview.totalPvc)}
-                                  <div className="text-[10px] font-normal text-slate-500">
-                                    {preview.quarter}{preview.isProvisional ? ' · provisional' : ''}
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                          </td>
-                          <td className="px-2 py-2 text-center">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeBillRow(row.id)}
-                              disabled={isSaving || billRows.length === 1}
-                              className="text-destructive hover:text-destructive h-7 w-7 p-0"
+              {/* One card per bill. The table this replaced gave the bill number a 96px box
+                  — every number in a batch shares the agreement prefix, so they all read
+                  "SR/MDU/Civ…" — hid the classifications behind a dialog, and still scrolled
+                  sideways. A card gives each field the width it actually needs. */}
+              <div className="space-y-3">
+                {billRows.map((row, index) => {
+                  const preview = previews[row.id];
+                  const codes = row.classificationEntries
+                    .map(entry => classificationGroups
+                      .flatMap(group => group.subClassifications)
+                      .find(sub => sub.id === entry.subClassificationId)?.code || '')
+                    .filter(Boolean);
+                  // "1A, 1A, 1A, 1B" says less than "1A x3, 1B" and takes more room.
+                  const codeCounts = codes.reduce<Record<string, number>>((counts, code) => {
+                    counts[code] = (counts[code] || 0) + 1;
+                    return counts;
+                  }, {});
+                  return (
+                    <div key={row.id} className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+                      <div className="flex flex-wrap items-end gap-3">
+                        <span className="text-xs text-slate-400 pb-2.5 w-4 shrink-0">{index + 1}</span>
+                        <div className="flex-1 min-w-[200px]">
+                          <Label className="text-xs text-slate-600">Bill No *</Label>
+                          <Input
+                            type="text"
+                            value={row.billNo}
+                            onChange={(e) => updateBillRow(row.id, 'billNo', e.target.value)}
+                            placeholder="SR/MDU/Civil/2024/0037/B8"
+                            disabled={isSaving}
+                            className="mt-1 h-9"
+                          />
+                        </div>
+                        <div className="w-44">
+                          <Label className="text-xs text-slate-600">Date of Measurement *</Label>
+                          <Input
+                            type="date"
+                            value={row.dateOfMeasurement}
+                            onChange={(e) => updateBillRow(row.id, 'dateOfMeasurement', e.target.value)}
+                            disabled={isSaving}
+                            className="mt-1 h-9"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeBillRow(row.id)}
+                          disabled={isSaving || billRows.length === 1}
+                          className="text-destructive hover:text-destructive h-9 w-9 p-0 shrink-0"
+                          aria-label={`Remove bill ${index + 1}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-slate-100 pt-3">
+                        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                          {Object.entries(codeCounts).map(([code, count]) => (
+                            <span
+                              key={code}
+                              className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                                code.endsWith('B') ? 'bg-emerald-50 text-emerald-800'
+                                  : code.endsWith('C') ? 'bg-amber-50 text-amber-800'
+                                    : 'bg-slate-100 text-slate-700'
+                              }`}
                             >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                              {code}{count > 1 ? ` ×${count}` : ''}
+                            </span>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openClassificationDialog(row.id)}
+                            disabled={isSaving}
+                            className="h-7 text-xs"
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            {codes.length > 0 ? 'Edit' : 'Add Classifications'}
+                          </Button>
+                        </div>
+
+                        <div className="flex items-start gap-6 shrink-0">
+                          <div className="text-right">
+                            <div className="text-[11px] text-slate-500">Bill value</div>
+                            <div className="text-sm font-medium tabular-nums">₹{formatAmount(getClassificationTotal(row))}</div>
+                          </div>
+                          <div className="text-right min-w-[86px]">
+                            <div className="text-[11px] text-slate-500">PVC</div>
+                            {!preview ? (
+                              <div className="text-sm text-slate-400">{previewingRows ? '…' : '—'}</div>
+                            ) : 'error' in preview ? (
+                              <div className="text-sm text-red-600" title={preview.error}>Failed</div>
+                            ) : (
+                              <>
+                                <div className="text-sm font-medium tabular-nums text-emerald-700">₹{formatAmount(preview.totalPvc)}</div>
+                                <div className="text-[10px] text-slate-500">
+                                  {preview.quarter}{preview.isProvisional ? ' · provisional' : ''}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="flex items-center justify-between pt-4 border-t">
-                <div className="text-sm text-muted-foreground">
-                  Total Bills: <Badge variant="secondary">{billRows.length}</Badge>
+                {/* The cards give up the table's totals row, so the batch is summed here
+                    — a bulk entry is worth checking as a whole before it is committed. */}
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted-foreground">
+                  <span>Total Bills: <Badge variant="secondary">{billRows.length}</Badge></span>
+                  <span>
+                    Batch value: <span className="font-medium text-slate-800 tabular-nums">
+                      ₹{formatAmount(billRows.reduce((sum, row) => sum + getClassificationTotal(row), 0))}
+                    </span>
+                  </span>
+                  {(() => {
+                    const priced = billRows.filter(row => {
+                      const preview = previews[row.id];
+                      return preview && !('error' in preview);
+                    });
+                    if (priced.length === 0) return null;
+                    const total = priced.reduce((sum, row) => sum + (previews[row.id] as { totalPvc: number }).totalPvc, 0);
+                    return (
+                      <span>
+                        PVC: <span className="font-medium text-emerald-700 tabular-nums">₹{formatAmount(total)}</span>
+                        {priced.length < billRows.length && (
+                          <span className="text-xs"> ({priced.length} of {billRows.length})</span>
+                        )}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="flex gap-3">
                   <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSaving}>Cancel</Button>
