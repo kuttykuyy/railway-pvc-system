@@ -468,8 +468,36 @@ export async function POST(request: NextRequest) {
           value: mv.value
         }));
 
+        // Per-item JPC steel readings (fortnightly F1/F2 per size) for this bill's steel
+        // city, which the report turns into the AVERAGE JPC STEEL INDICES page showing how
+        // each section's monthly index is derived. The single-bill route has always built
+        // this; the bulk route did not, so a batch download simply lost that page.
+        let steelBreakdown: any[] | undefined;
+        try {
+          const { buildSteelBreakdown } = await import('@/lib/jpc-items');
+          const jpcRows = await prisma.jpcSteelItem.findMany({
+            where: {
+              city: getSteelCityForZone(bill.zone),
+              month: { gte: new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1), lt: bulkQtrEndDate },
+            },
+            select: { month: true, itemCode: true, f1: true, f2: true, average: true },
+          });
+          if (jpcRows.length > 0) {
+            const itemsByMonth = new Map<string, Map<string, { f1: number | null; f2: number | null; average: number | null }>>();
+            for (const row of jpcRows) {
+              const monthKey = new Date(row.month).toISOString().slice(0, 7);
+              if (!itemsByMonth.has(monthKey)) itemsByMonth.set(monthKey, new Map());
+              itemsByMonth.get(monthKey)!.set(row.itemCode, { f1: row.f1, f2: row.f2, average: row.average });
+            }
+            steelBreakdown = buildSteelBreakdown(steelIdxNames, itemsByMonth);
+          }
+        } catch (err) {
+          console.error('Bulk IR PDF: error building steel breakdown:', err);
+        }
+
         const billPdfBuf = await generateIRStandardReport({
           cementCoefficients,
+          steelBreakdown,
           bill: bill as any,
           quarterlyAverages: qaverages,
           baseMonth,
