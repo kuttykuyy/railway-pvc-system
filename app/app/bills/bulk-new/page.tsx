@@ -106,6 +106,10 @@ export default function BulkBillCreationPage() {
   // Global zone and fuel — selected once for all bills
   const [globalZone, setGlobalZone] = useState<string>('');
   const [globalFuelPriceType, setGlobalFuelPriceType] = useState<string>('four_city_avg');
+  // Per-row PVC preview, keyed by row id. The single-bill form has always been able to
+  // show the PVC before saving; entering bills in bulk meant committing them unseen.
+  const [previews, setPreviews] = useState<Record<string, { totalPvc: number; quarter: string; isProvisional: boolean } | { error: string }>>({});
+  const [previewingRows, setPreviewingRows] = useState(false);
   // How the user wants to build the bills: pick first, then show the rest.
   const [billMode, setBillMode] = useState<'choose' | 'manual' | 'ai'>('choose');
 
@@ -223,6 +227,59 @@ export default function BulkBillCreationPage() {
 
   const updateBillRow = (id: string, field: keyof BillRow, value: any) => {
     setBillRows((prev) => prev.map((row) => row.id === id ? { ...row, [field]: value } : row));
+    // Any edit invalidates that row's preview — a figure computed from earlier values
+    // is worse than none, because it still looks authoritative.
+    setPreviews((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  // Runs each row through the same preview endpoint the single-bill form uses, one at
+  // a time so a long list cannot flood the server.
+  const previewAllRows = async () => {
+    if (!selectedContract?.id) { toast.error('Please select a contract first'); return; }
+    if (!globalZone) { toast.error('Please select a Railway Zone first'); return; }
+    const ready = billRows.filter(row => row.dateOfMeasurement && row.classificationEntries.length > 0);
+    if (ready.length === 0) { toast.error('Add a date of measurement and classifications first'); return; }
+
+    setPreviewingRows(true);
+    setPreviews({});
+    try {
+      for (const row of ready) {
+        const total = getClassificationTotal(row);
+        try {
+          const res = await fetch('/api/bills/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contractId: selectedContract.id,
+              grossBillAmount: total,
+              billAmount: total,
+              dateOfMeasurement: row.dateOfMeasurement,
+              zone: globalZone,
+              fuelPriceType: globalFuelPriceType || 'four_city_avg',
+              calculationMethod: 'auto',
+              classificationEntries: row.classificationEntries,
+              isAiUploaded: row.isAiUploaded || false,
+            }),
+          });
+          const data = await res.json();
+          setPreviews(prev => ({
+            ...prev,
+            [row.id]: res.ok
+              ? { totalPvc: Number(data.totalPvc) || 0, quarter: data.quarter, isProvisional: !!data.isProvisional }
+              : { error: data.error || 'Preview failed' },
+          }));
+        } catch {
+          setPreviews(prev => ({ ...prev, [row.id]: { error: 'Preview failed' } }));
+        }
+      }
+    } finally {
+      setPreviewingRows(false);
+    }
   };
 
   const parseAmount = (value: number | string | null | undefined): number => {
@@ -986,6 +1043,15 @@ export default function BulkBillCreationPage() {
                   <Button type="button" variant="outline" size="sm" onClick={addBillRow} disabled={isSaving}>
                     <Plus className="h-4 w-4 mr-2" />Add Bill
                   </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void previewAllRows()}
+                    disabled={isSaving || previewingRows}
+                  >
+                    {previewingRows ? 'Checking PVC…' : 'Preview PVC'}
+                  </Button>
                 </div>
               </div>
 
@@ -1013,9 +1079,8 @@ export default function BulkBillCreationPage() {
                         <th className="px-2 py-2 text-left text-xs font-medium">Bill No *</th>
                         <th className="px-2 py-2 text-left text-xs font-medium">Date of Measurement *</th>
                         <th className="px-2 py-2 text-left text-xs font-medium">Classifications *</th>
-                        <th className="px-2 py-2 text-left text-xs font-medium">Cement Amount</th>
-                        <th className="px-2 py-2 text-left text-xs font-medium">Steel TMT Amount</th>
                         <th className="px-2 py-2 text-left text-xs font-medium">Class Total</th>
+                        <th className="px-2 py-2 text-right text-xs font-medium">PVC (preview)</th>
                         <th className="px-2 py-2 text-center text-xs font-medium">Action</th>
                       </tr>
                     </thead>
@@ -1068,33 +1133,28 @@ export default function BulkBillCreationPage() {
                             </div>
                           </td>
                           <td className="px-2 py-2">
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={row.cementAmount}
-                              onChange={(e) => updateBillRow(row.id, 'cementAmount', e.target.value)}
-                              placeholder="0.00"
-                              disabled={isSaving}
-                              className="w-28 h-8 text-xs"
-                            />
-                          </td>
-                          <td className="px-2 py-2">
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={row.steelTmtBarsAmount}
-                              onChange={(e) => updateBillRow(row.id, 'steelTmtBarsAmount', e.target.value)}
-                              placeholder="0.00"
-                              disabled={isSaving}
-                              className="w-28 h-8 text-xs"
-                            />
-                          </td>
-                          <td className="px-2 py-2">
                             <div className="text-xs font-medium">
                               ₹{formatAmount(getClassificationTotal(row))}
                             </div>
+                          </td>
+                          <td className="px-2 py-2 text-right">
+                            {(() => {
+                              const preview = previews[row.id];
+                              if (!preview) {
+                                return <span className="text-xs text-slate-400">{previewingRows ? '…' : '—'}</span>;
+                              }
+                              if ('error' in preview) {
+                                return <span className="text-xs text-red-600" title={preview.error}>Failed</span>;
+                              }
+                              return (
+                                <div className="text-xs font-medium text-emerald-700">
+                                  ₹{formatAmount(preview.totalPvc)}
+                                  <div className="text-[10px] font-normal text-slate-500">
+                                    {preview.quarter}{preview.isProvisional ? ' · provisional' : ''}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="px-2 py-2 text-center">
                             <Button
