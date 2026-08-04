@@ -437,6 +437,12 @@ export async function POST(request: NextRequest) {
         for (const p of summaryPages) mergedPdf.addPage(p);
       }
 
+      // Fetched once for the whole batch. Lets each report reconstruct the cement
+      // working for bills saved before the derivation was kept on the item row.
+      const cementCoefficients = await prisma.dsrCementCoefficient.findMany({
+        select: { dsrCode: true, workUnit: true, cementQuantityPerUnit: true },
+      }).catch(() => []);
+
       for (const bill of irBills) {
         const baseMonth = new Date(bill.contract.baseMonth);
         const fuelIdxName = getFuelName(bill.zone, bill.fuelPriceType);
@@ -463,6 +469,7 @@ export async function POST(request: NextRequest) {
         }));
 
         const billPdfBuf = await generateIRStandardReport({
+          cementCoefficients,
           bill: bill as any,
           quarterlyAverages: qaverages,
           baseMonth,

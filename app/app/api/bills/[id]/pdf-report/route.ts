@@ -727,8 +727,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         console.error('IR PDF: error building steel breakdown:', err);
       }
 
+      // Lets the report reconstruct the cement working for bills saved before the
+      // derivation was kept on the item row, instead of printing "-" for ever.
+      const cementCoefficients = await prisma.dsrCementCoefficient.findMany({
+        select: { dsrCode: true, workUnit: true, cementQuantityPerUnit: true },
+      }).catch(() => []);
+
       let irPdfBytes = await generateIRStandardReport({
         steelBreakdown,
+        cementCoefficients,
         bill: bill as any,
         quarterlyAverages: irQuarterlyAverages,
         baseMonth,

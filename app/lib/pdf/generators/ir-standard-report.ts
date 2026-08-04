@@ -115,6 +115,12 @@ interface IRStandardReportOptions {
   allHistoricalMonthlyData?: { indexName: string; month: string; value: number; isProvisional?: boolean; isBorrowed?: boolean }[];
   previousCumulativePvc?: number;
   steelBreakdown?: SteelBreakdownSection[];
+  /** The DSR cement coefficient library. Bills saved before the derivation was stored
+   *  on the item row have no working to print, so it is reconstructed from this: the
+   *  work item's own quantity is already in the schedule listing, and this supplies the
+   *  coefficient and the unit it is quoted per. Without it those bills show "-" for
+   *  ever, since the missing values cannot be recovered from the bill alone. */
+  cementCoefficients?: Array<{ dsrCode: string; workUnit: string; cementQuantityPerUnit: number }>;
   /** Which sections to render (from the chosen report template). Omitted keys default to shown. */
   sections?: {
     contractDetails?: boolean;
@@ -263,6 +269,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     allHistoricalMonthlyData = [],
     previousCumulativePvc,
     steelBreakdown = [],
+    cementCoefficients = [],
     sections = {},
   } = opts;
 
@@ -902,7 +909,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     return rows.length > 0 && rows.every((r: any) => /\(\s*cement\s*\)\s*$/i.test(String(r?.itemNumber || '')));
   };
   const scheduleRows: ScheduleRow[] = [];
-  type CementBreakupRow = ScheduleRow & { sourceQty?: number; coefficient?: number; workUnit?: string };
+  type CementBreakupRow = ScheduleRow & { sourceQty?: number; coefficient?: number; workUnit?: string; sourceItemNo?: string };
   const cementBreakupRows: CementBreakupRow[] = []; // derived cement, shown separately (not summed)
   for (const entry of entries) {
     if (isSplitCementEntry(entry)) {
@@ -913,6 +920,9 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         cementBreakupRows.push({
           itemNumber: String(r?.itemNumber || '').trim() || '-', schedule, qty, rate, amount: qty * rate,
           sourceQty: (r as any)?.sourceQty, coefficient: (r as any)?.coefficient, workUnit: (r as any)?.workUnit,
+          // The work item this cement was taken out of: "4.1.6-CEM" and "4.1.6 (Cement)"
+          // both point back at 4.1.6, whose quantity is listed in the schedule items.
+          sourceItemNo: String(r?.itemNumber || '').replace(/\s*[-(]\s*cement\s*\)?\s*$/i, '').trim(),
         });
       }
       continue;
@@ -1037,6 +1047,27 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     // schedule lines plus the cement value reproduce W, and the cement is a genuine part
     // of the bill total. Saying "not added to the bill total" in that second case
     // contradicts the schedule summary, which has to add it back to reach W.
+    // Fill in the working for bills saved before the derivation was kept on the row.
+    // The work item's quantity is in the schedule listing and the coefficient library
+    // supplies the rest, so the statement can show its arithmetic either way.
+    if (cementCoefficients.length > 0) {
+      const normalise = (code: string) => String(code || '').replace(/[\s()]/g, '').toUpperCase();
+      const byCode = new Map(cementCoefficients.map(c => [normalise(c.dsrCode), c]));
+      const lookup = (code: string) => {
+        const key = normalise(code);
+        return byCode.get(key) || byCode.get(key.match(/^\d+(?:\.\d+)+/)?.[0] || '') || undefined;
+      };
+      for (const row of cementBreakupRows) {
+        if (row.sourceQty != null && row.coefficient != null) continue;
+        const coefficient = lookup(row.sourceItemNo || '');
+        const workItem = scheduleRows.find(s => normalise(s.itemNumber) === normalise(row.sourceItemNo || ''));
+        if (!coefficient || !workItem?.qty) continue;
+        row.sourceQty = workItem.qty;
+        row.coefficient = coefficient.cementQuantityPerUnit;
+        row.workUnit = coefficient.workUnit;
+      }
+    }
+
     const derivedCementTotal = Math.round(cementBreakupRows.reduce((sum, r) => sum + r.amount, 0) * 100) / 100;
     const scheduleItemsTotal = Math.round(scheduleRows.reduce((sum, r) => sum + r.amount, 0) * 100) / 100;
     const billW = Math.round((Number(bill.grossBillAmount ?? bill.billAmount) || scheduleItemsTotal) * 100) / 100;
