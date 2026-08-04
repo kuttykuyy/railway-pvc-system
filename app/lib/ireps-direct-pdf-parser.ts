@@ -351,17 +351,21 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       const agreementAmount = numericValue(agreementAmountRaw) || 0;
       const specialAmount = numericValue(specialAmountRaw) || 0;
       // What this row actually adds to the bill: the special-condition amount when
-      // the bill carries one, otherwise the plain amount at agreement rate.
-      const payableAmount = specialAmount > 0 ? specialAmount : agreementAmount;
+      // the bill carries one, otherwise the plain amount at agreement rate. Either
+      // can be negative — a bill reverses an earlier over-measurement by billing a
+      // minus quantity, and that row reduces the bill just like any other.
+      const payableAmount = specialAmount !== 0 ? specialAmount : agreementAmount;
       const nextRowY = candidates[index + 1]?.y || page.height - 5;
       const itemNo = extractItemCode(page, unitItem.y, nextRowY);
 
-      if (!(agreementRate > 0 && payableAmount > 0)) {
-        skippedRows.push({ reason: 'no payable amount could be read', itemNo, amount: 0 });
-        continue;
-      }
+      // Nothing measured this period. Silent: most rows of a long bill are idle,
+      // and listing them would bury the rows that actually failed to read.
       if (quantity === 0) {
         excludedZeroQtyAmount += payableAmount;
+        continue;
+      }
+      if (!(agreementRate > 0 && payableAmount !== 0)) {
+        skippedRows.push({ reason: 'no payable amount could be read', itemNo, amount: 0 });
         continue;
       }
       // Verify the row by re-doing its arithmetic: Qty x Rate must reproduce the
@@ -369,9 +373,9 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       // by rupees on large items - hence 0.1% (min Re 1) rather than paise. The
       // whole-bill reconciliation below is the real guard: a misread column cannot
       // survive it, so this check does not need to be tighter than the print.
-      if (agreementAmount > 0) {
+      if (agreementAmount !== 0) {
         const arithmeticDifference = Math.abs(quantity * agreementRate - agreementAmount);
-        if (arithmeticDifference > Math.max(1, agreementAmount * 0.001)) {
+        if (arithmeticDifference > Math.max(1, Math.abs(agreementAmount) * 0.001)) {
           skippedRows.push({
             reason: `Qty x Rate did not reproduce the printed amount (off by Rs ${arithmeticDifference.toFixed(2)})`,
             itemNo,
