@@ -215,7 +215,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Check cache before running heavy PDF compiling.
         // The watermark-waiver state is part of the key so a post-top-up download
         // regenerates a clean PDF instead of serving a stale watermarked one.
-        const cacheKey = `pdf-report:${billId}:${templateId || 'default'}:${pdfFormat}:${includeIndexDocs ? 'docs' : 'nodocs'}:${isAdminRequester ? 'admin' : 'standard'}:${trialWatermarkWaived ? 'wmoff' : 'wmon'}`;
+        // The build is part of the key so a change to how the report is drawn can never
+        // be masked by a PDF cached from the previous build. There is no "regenerate"
+        // button — downloading again is the regenerate — so a stale hit reads as the
+        // fix not having worked.
+        const build = process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || 'dev';
+        const cacheKey = `pdf-report:${build}:${billId}:${templateId || 'default'}:${pdfFormat}:${includeIndexDocs ? 'docs' : 'nodocs'}:${isAdminRequester ? 'admin' : 'standard'}:${trialWatermarkWaived ? 'wmoff' : 'wmon'}`;
         const cachedPdf = advancedCache.get(cacheKey);
         if (cachedPdf) {
           console.log(`[PDF Cache] Hit for: ${cacheKey}`);
