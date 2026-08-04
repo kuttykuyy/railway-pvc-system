@@ -21,7 +21,7 @@ import { scheduleNames, normalizeSchedules } from '@/lib/contract-schedules';
 import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr-cement-calculator';
 import { applyCementSplit, type CementBreakdownItem } from '@/lib/cement-split';
 import { inferMainClassification } from '@/lib/work-classification';
-import { BillPdfCementAnalyzer, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
+import { BillPdfCementAnalyzer, type AppliedExtractionContext, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
 import { calculateTotalPvc, formatPvcAmount, pvcComparisonAllowsSuffix } from '@/lib/classification-pvc';
@@ -96,6 +96,20 @@ interface BillRow {
   classificationEntries: ClassificationEntry[];
 }
 
+function createEmptyBillRow(id?: string): BillRow {
+  return {
+    id: id || Math.random().toString(36).substr(2, 9),
+    billNo: '',
+    dateOfMeasurement: '',
+    cementAmount: '',
+    steelTmtBarsAmount: '',
+    steelAngleChannelAmount: '',
+    steelPlatesAmount: '',
+    steelOtherSectionsAmount: '',
+    classificationEntries: [],
+  };
+}
+
 export default function BulkBillCreationPage() {
   const router = useRouter();
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -116,19 +130,7 @@ export default function BulkBillCreationPage() {
   // How the user wants to build the bills: pick first, then show the rest.
   const [billMode, setBillMode] = useState<'choose' | 'manual' | 'ai'>('choose');
 
-  const [billRows, setBillRows] = useState<BillRow[]>([
-    {
-      id: Math.random().toString(36).substr(2, 9),
-      billNo: '',
-      dateOfMeasurement: '',
-      cementAmount: '',
-      steelTmtBarsAmount: '',
-      steelAngleChannelAmount: '',
-      steelPlatesAmount: '',
-      steelOtherSectionsAmount: '',
-      classificationEntries: [],
-    },
-  ]);
+  const [billRows, setBillRows] = useState<BillRow[]>([createEmptyBillRow()]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -207,20 +209,7 @@ export default function BulkBillCreationPage() {
   };
 
   const addBillRow = () => {
-    setBillRows([
-      ...billRows,
-      {
-        id: Math.random().toString(36).substr(2, 9),
-        billNo: '',
-        dateOfMeasurement: '',
-        cementAmount: '',
-        steelTmtBarsAmount: '',
-        steelAngleChannelAmount: '',
-        steelPlatesAmount: '',
-        steelOtherSectionsAmount: '',
-        classificationEntries: [],
-      },
-    ]);
+    setBillRows([...billRows, createEmptyBillRow()]);
   };
 
   const removeBillRow = (id: string) => {
@@ -692,7 +681,7 @@ export default function BulkBillCreationPage() {
     }
   };
 
-  const applyExtractedBillDetailsToBulkRow = async (data: CementAnalysisData) => {
+  const applyExtractedBillDetailsToBulkRow = async (data: CementAnalysisData, context?: AppliedExtractionContext) => {
     const billDetails = data.billDetails;
 
     // Auto-select the contract from the extracted Agreement No. when none is chosen yet
@@ -734,32 +723,61 @@ export default function BulkBillCreationPage() {
       toast.success(`Rebate${pct ? ` of ${pct}%` : ''} applied — components scaled to the net Bill Amount`, { icon: '↓' });
     }
 
-    setBillRows((prev) => {
-      const emptyIndex = prev.findIndex(row => !row.billNo.trim() && row.classificationEntries.length === 0);
-      const targetIndex = emptyIndex >= 0 ? emptyIndex : 0;
-      return prev.map((row, index) => index === targetIndex
-        ? {
-            ...row,
-            billNo: billDetails?.billNo || row.billNo,
-            dateOfMeasurement: normalizeExtractedDate(billDetails?.measurementDate) || row.dateOfMeasurement,
-            isAiUploaded: true,
-            // AI items stay in classification entries; dedicated component
-            // inputs are only for additional manually entered amounts.
-            cementAmount: '',
-            steelTmtBarsAmount: '',
-            steelAngleChannelAmount: '',
-            steelPlatesAmount: '',
-            steelOtherSectionsAmount: '',
-            classificationEntries: mappedEntries.length > 0 ? mappedEntries : row.classificationEntries,
-          }
-        : row
-      );
+    // Each upload owns one bill, named after the upload. Everything that upload produces
+    // later — an unlock, a cement figure derived from its DSR items — carries the same id
+    // and so keeps landing on that bill rather than starting another.
+    const boundRowId = context ? `pdf-${context.uploadId}` : null;
+
+    const fillRow = (row: BillRow): BillRow => ({
+      ...row,
+      id: boundRowId || row.id,
+      billNo: billDetails?.billNo || row.billNo,
+      dateOfMeasurement: normalizeExtractedDate(billDetails?.measurementDate) || row.dateOfMeasurement,
+      isAiUploaded: true,
+      // AI items stay in classification entries; dedicated component
+      // inputs are only for additional manually entered amounts.
+      cementAmount: '',
+      steelTmtBarsAmount: '',
+      steelAngleChannelAmount: '',
+      steelPlatesAmount: '',
+      steelOtherSectionsAmount: '',
+      classificationEntries: mappedEntries.length > 0 ? mappedEntries : row.classificationEntries,
     });
 
-    if (mappedEntries.length > 0) {
+    setBillRows((prev) => {
+      const boundIndex = boundRowId ? prev.findIndex(row => row.id === boundRowId) : -1;
+      if (boundIndex >= 0) {
+        return prev.map((row, index) => index === boundIndex ? fillRow(row) : row);
+      }
+
+      const emptyIndex = prev.findIndex(row => !row.billNo.trim() && row.classificationEntries.length === 0);
+      // Nothing blank left to fill — the previous PDFs took the rows. Add one. Falling
+      // back to the first row, as this used to, overwrote a bill already read: uploading
+      // a second PDF replaced the first bill instead of adding to the batch.
+      if (emptyIndex < 0) {
+        return [...prev, fillRow(createEmptyBillRow(boundRowId || undefined))];
+      }
+      return prev.map((row, index) => index === emptyIndex ? fillRow(row) : row);
+    });
+
+    // The bill just changed underneath any PVC already previewed for it — deriving a
+    // cement cost after previewing the batch is the usual way in. A figure computed from
+    // the earlier amounts still reads as authoritative, so drop it.
+    if (boundRowId) {
+      setPreviews((prev) => {
+        if (!prev[boundRowId]) return prev;
+        const next = { ...prev };
+        delete next[boundRowId];
+        return next;
+      });
+    }
+
+    if (mappedEntries.length === 0) {
+      toast(`${context?.fileName || 'Bill'}: details extracted, classification mapping needs review.`);
+    } else if (!context?.batch) {
+      // A run of PDFs already reports itself per file and once at the end; one more toast
+      // per bill would bury those.
       toast.success(`Applied bill details and ${mappedEntries.length} classification item(s)`);
-    } else {
-      toast('Bill details extracted. Classification mapping needs review.');
     }
   };
 
@@ -954,9 +972,9 @@ export default function BulkBillCreationPage() {
                     <div className="bg-emerald-50 group-hover:bg-emerald-100 text-emerald-600 p-2.5 rounded-xl transition-colors">
                       <Sparkles className="h-6 w-6" />
                     </div>
-                    <div className="font-bold text-slate-900">Upload signed bill PDF</div>
+                    <div className="font-bold text-slate-900">Upload signed bill PDFs</div>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-3">Let AI read each PDF and fill the row. Charged the AI rate only when you save.</p>
+                  <p className="text-sm text-muted-foreground mt-3">Pick the whole batch at once. Each PDF is read in turn and becomes its own bill. Charged the AI rate only when you save.</p>
                 </button>
               </div>
             </div>
@@ -1070,6 +1088,7 @@ export default function BulkBillCreationPage() {
                 <BillPdfCementAnalyzer
                   disabled={isSaving}
                   title="AI PDF Bill Extraction"
+                  multiple
                   onApplyBillDetails={applyExtractedBillDetailsToBulkRow}
                   openFilePickerRef={openPdfPickerRef}
                 />
@@ -1315,7 +1334,7 @@ export default function BulkBillCreationPage() {
                 disabled={isSaving}
                 className="rounded-full bg-slate-900 text-white hover:bg-slate-800"
               >
-                <Upload className="h-4 w-4 mr-1.5" />Upload bill PDF
+                <Upload className="h-4 w-4 mr-1.5" />Upload bill PDFs
               </Button>
             )}
           </div>
