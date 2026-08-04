@@ -721,9 +721,9 @@ export default function BulkBillCreationPage() {
         // Recover the id from the classification object if the id string was lost upstream.
         const subId = entry.subClassificationId || (entry.subClassification as any)?.id || '';
         if (!subId) return `Bill ${i + 1}: Classification ${j + 1} must have a sub-classification`;
-        const numAmount = entry.amount === '' || entry.amount === null || entry.amount === undefined
-          ? 0 : typeof entry.amount === 'string' ? parseFloat(entry.amount) || 0 : entry.amount;
-        if (numAmount < 0) return `Bill ${i + 1}: Classification ${j + 1} amount must be zero or greater`;
+        // A single entry may be negative — a running bill reverses an earlier
+        // over-measurement with a minus quantity. The classification total above is
+        // what has to stay positive.
       }
     }
 

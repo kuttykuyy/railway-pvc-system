@@ -1283,11 +1283,14 @@ function NewBillPageContent() {
         setClassificationEntries(cleanedEntries);
       }
 
-      // Validate that all remaining entries have a sub-classification and non-negative amount
+      // Every entry needs a sub-classification. A negative amount is NOT an error:
+      // a running bill reverses an earlier over-measurement by billing a minus
+      // quantity, so that item's classification carries a minus amount. Rejecting
+      // those made any bill containing a reversal impossible to save.
       if (cleanedEntries.length > 0) {
-        const invalidIndex = cleanedEntries.findIndex(entry => !entry.subClassificationId || amountOf(entry.amount) < 0);
+        const invalidIndex = cleanedEntries.findIndex(entry => !entry.subClassificationId);
         if (invalidIndex >= 0) {
-          toast.error(`Entry ${invalidIndex + 1} needs a valid sub-classification and a non-negative amount.`);
+          toast.error(`Entry ${invalidIndex + 1} needs a valid sub-classification.`);
           setSaving(false);
           return;
         }
@@ -1295,6 +1298,14 @@ function NewBillPageContent() {
 
       // Calculate total classification amount, treating blank/undefined/null as 0
       const totalClassificationAmount = cleanedEntries.reduce((sum, entry) => sum + amountOf(entry.amount), 0);
+
+      // What must hold is the total, not each line: individual reversals may be
+      // negative, but the bill as a whole cannot be worth nothing or less.
+      if (cleanedEntries.length > 0 && totalClassificationAmount <= 0) {
+        toast.error('The classification amounts add up to zero or less. Check the entries — a reversal may have been entered against the wrong line.');
+        setSaving(false);
+        return;
+      }
 
       // Convert sub-classifications to proper format with numeric amounts (legacy support)
       const formattedSubClassifications = subClassifications
