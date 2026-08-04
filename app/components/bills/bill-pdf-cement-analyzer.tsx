@@ -104,13 +104,27 @@ export interface CementAnalysisData {
   };
 }
 
+export interface AppliedExtractionContext {
+  /** Identifies the upload these details came from. Stable across every re-application of
+   *  the same extraction — an unlock, or a cement figure derived afterwards — so a page
+   *  that fills one bill per PDF keeps updating that bill instead of starting another. */
+  uploadId: string;
+  fileName: string;
+  /** Set only when this PDF is one of several read in a single run. */
+  batch?: { index: number; total: number };
+}
+
 interface BillPdfCementAnalyzerProps {
   title?: string;
   compact?: boolean;
   disabled?: boolean;
   contractId?: string;
   onApplyCementAmount?: (amount: number, data: CementAnalysisData) => void;
-  onApplyBillDetails?: (data: CementAnalysisData) => void;
+  onApplyBillDetails?: (data: CementAnalysisData, context?: AppliedExtractionContext) => void | Promise<void>;
+  /** Take several bill PDFs in one go, read one after another. A batch of bills arrives
+   *  as a batch of PDFs, and picking them singly meant sitting through each extraction
+   *  before you could choose the next file. */
+  multiple?: boolean;
   /** Filled with a function that opens this component's file picker, so a page can put
    *  "Upload bill PDF" somewhere else — a sticky bar, say — without duplicating the
    *  upload logic or the checks that run before it. */
@@ -171,6 +185,7 @@ export function BillPdfCementAnalyzer({
   contractId,
   onApplyCementAmount,
   onApplyBillDetails,
+  multiple = false,
   openFilePickerRef,
 }: BillPdfCementAnalyzerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -196,6 +211,16 @@ export function BillPdfCementAnalyzer({
   const [isUnlocked, setIsUnlocked] = useState(true);
   const [unlocking, setUnlocking] = useState(false);
   const [unlockCost, setUnlockCost] = useState(0);
+
+  // The upload whose result is on screen. Handed to the page with every application of
+  // that result so it can tell "the same bill again" from "another bill".
+  const uploadCounterRef = useRef(0);
+  const [activeUpload, setActiveUpload] = useState<AppliedExtractionContext | null>(null);
+  // Where we are in a multi-PDF run, and which of its files could not be read. Failures
+  // stay on screen after the run: a toast is gone by the time the last bill lands, and
+  // "one of these nine did not come through" is not a thing to leave the user guessing.
+  const [queueProgress, setQueueProgress] = useState<{ index: number; total: number } | null>(null);
+  const [queueFailures, setQueueFailures] = useState<Array<{ fileName: string; reason: string }>>([]);
 
   const [loadingStep, setLoadingStep] = useState(0);
   const [uploadPercent, setUploadPercent] = useState(0);
@@ -295,7 +320,7 @@ export function BillPdfCementAnalyzer({
       }
 
       if (onApplyBillDetails) {
-        onApplyBillDetails(unlockedData);
+        await onApplyBillDetails(unlockedData, activeUpload ?? undefined);
       }
 
       toast.success(json.message || 'Bill details unlocked and applied successfully!');
@@ -522,7 +547,7 @@ export function BillPdfCementAnalyzer({
       };
       setResult(updated);
       setCoefficientDrafts(current => ({ ...current, [item.dsrCode]: '' }));
-      onApplyBillDetails?.(updated);
+      onApplyBillDetails?.(updated, activeUpload ?? undefined);
       toast.success(`${item.dsrCode} coefficient saved for current and future bills.`);
     } catch (error: any) {
       toast.error(error.message || 'Failed to save coefficient.');
@@ -559,7 +584,7 @@ export function BillPdfCementAnalyzer({
       extractedItems: result.extractedItems ? updatedItems : undefined,
     };
     setResult(updated);
-    onApplyBillDetails?.(updated);
+    onApplyBillDetails?.(updated, activeUpload ?? undefined);
     toast.success('Item removed from the extracted list.');
   };
 
@@ -614,7 +639,7 @@ export function BillPdfCementAnalyzer({
       warnings,
     };
     setResult(updated);
-    onApplyBillDetails?.(updated);
+    onApplyBillDetails?.(updated, activeUpload ?? undefined);
     toast.success('Coefficient row removed. Its cement is excluded from the calculation.');
   };
 
@@ -676,15 +701,19 @@ export function BillPdfCementAnalyzer({
       onApplyCementAmount(amount, updated);
     }
     if (onApplyBillDetails) {
-      onApplyBillDetails(updated);
+      onApplyBillDetails(updated, activeUpload ?? undefined);
     }
     toast.success(`Applied derived cement cost: ${formatAmount(amount)} and deducted from cement-affected DSR items.`);
   };
 
-  const analyzePdfFile = async (file: File) => {
+  /** Outcome of one PDF. The reason is returned rather than shown, so a single upload can
+   *  announce it immediately while a run of PDFs collects the failures and reports them
+   *  once at the end instead of firing a toast per file. */
+  type AnalyzeOutcome = { ok: true; locked: boolean } | { ok: false; reason: string };
+
+  const analyzePdfFile = async (file: File, batch?: { index: number; total: number }): Promise<AnalyzeOutcome> => {
     if (file.type !== 'application/pdf') {
-      toast.error('Please upload a PDF bill file.');
-      return;
+      return { ok: false, reason: 'Not a PDF — please upload the bill PDF downloaded from IREPS.' };
     }
     // The hosting platform rejects a request body over 4.5 MB before it ever reaches
     // the reader, so uploading a larger file only wastes the wait and comes back as a
@@ -692,14 +721,21 @@ export function BillPdfCementAnalyzer({
     // size is a few hundred KB, so several MB means scanned or photographed pages —
     // which carry no text layer and could not be read at any size.
     if (file.size > MAX_UPLOAD_BYTES) {
-      toast.error(
-        `This PDF is ${(file.size / 1024 / 1024).toFixed(1)} MB — over the ${(MAX_UPLOAD_BYTES / 1024 / 1024).toFixed(1)} MB upload limit. `
-        + 'A scanned or photographed bill is usually the reason, and a scan has no readable text in any case. '
-        + 'Please download this bill from IREPS and upload that file.',
-        { duration: 10000 },
-      );
-      return;
+      return {
+        ok: false,
+        reason: `This PDF is ${(file.size / 1024 / 1024).toFixed(1)} MB — over the ${(MAX_UPLOAD_BYTES / 1024 / 1024).toFixed(1)} MB upload limit. `
+          + 'A scanned or photographed bill is usually the reason, and a scan has no readable text in any case. '
+          + 'Please download this bill from IREPS and upload that file.',
+      };
     }
+
+    uploadCounterRef.current += 1;
+    const upload: AppliedExtractionContext = {
+      uploadId: `upl_${uploadCounterRef.current}_${Math.random().toString(36).slice(2, 8)}`,
+      fileName: file.name,
+      batch,
+    };
+    setActiveUpload(upload);
 
     try {
       analysisStartedAtRef.current = Date.now();
@@ -788,32 +824,89 @@ export function BillPdfCementAnalyzer({
         }
 
         if (onApplyBillDetails) {
-          onApplyBillDetails(data);
+          // Awaited so a run of PDFs stays strictly one at a time: the page may do its own
+          // asynchronous work — a PVC comparison, a contract match — before the bill it is
+          // filling settles, and the next extraction must not land in the middle of it.
+          await onApplyBillDetails(data, upload);
         }
         toast.success(`Extracted ${data.billDetails?.items?.length || data.extractedItems?.length || 0} bill item(s)`);
       } else {
         toast.success(`Direct PDF extraction completed. Click "Unlock & Import" below to apply the details.`);
       }
+      return { ok: true, locked: !unlocked };
     } catch (error: any) {
       console.error('Bill PDF cement analysis failed:', error);
-      toast.error(error.message || 'Failed to analyze bill PDF');
+      return { ok: false, reason: error.message || 'Failed to analyze bill PDF' };
     } finally {
       setIsAnalyzing(false);
     }
   };
 
+  /** Reads the chosen PDFs one after another. Sequential on purpose: extraction is a long
+   *  AI call, and firing a folder of them at once would both swamp the endpoint and make
+   *  the progress panel meaningless. */
+  const analyzePdfFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+
+    if (files.length === 1) {
+      setQueueFailures([]);
+      const outcome = await analyzePdfFile(files[0]);
+      if (outcome.ok === false) toast.error(outcome.reason, { duration: 10000 });
+      return;
+    }
+
+    const failures: Array<{ fileName: string; reason: string }> = [];
+    setQueueFailures([]);
+    let extracted = 0;
+
+    for (let index = 0; index < files.length; index++) {
+      const file = files[index];
+      setQueueProgress({ index: index + 1, total: files.length });
+      const outcome = await analyzePdfFile(file, { index: index + 1, total: files.length });
+
+      if (outcome.ok === false) {
+        failures.push({ fileName: file.name, reason: outcome.reason });
+        continue;
+      }
+
+      extracted += 1;
+      if (outcome.locked) {
+        // A locked result has to be imported by hand, and the panel showing it would be
+        // replaced by the next file's. Stop rather than lose it.
+        const skipped = files.slice(index + 1);
+        skipped.forEach(remaining => failures.push({
+          fileName: remaining.name,
+          reason: 'Not read — unlock the extraction above, then upload the rest.',
+        }));
+        break;
+      }
+    }
+
+    setQueueProgress(null);
+    setQueueFailures(failures);
+
+    if (failures.length === 0) {
+      toast.success(`Read all ${extracted} bill PDFs.`);
+    } else {
+      toast.error(
+        `Read ${extracted} of ${files.length} bill PDFs. ${failures.length} could not be read — see the list below.`,
+        { duration: 10000 },
+      );
+    }
+  };
+
   const handlePdfUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files || []);
     event.target.value = '';
-    if (file) void analyzePdfFile(file);
+    void analyzePdfFiles(files);
   };
 
   const handlePdfDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDraggingFile(false);
     if (disabled || isAnalyzing) return;
-    const file = event.dataTransfer.files?.[0];
-    if (file) void analyzePdfFile(file);
+    const files = Array.from(event.dataTransfer.files || []);
+    void analyzePdfFiles(multiple ? files : files.slice(0, 1));
   };
 
   const showGrandUploader = !isAnalyzing && !result;
@@ -829,6 +922,30 @@ export function BillPdfCementAnalyzer({
         </CardHeader>
       )}
       <CardContent className={showGrandUploader ? 'p-0' : compact ? 'p-4 pt-0 space-y-3' : 'p-5 pt-0 space-y-4'}>
+        {queueFailures.length > 0 && (
+          <div className={`rounded-md border border-amber-200 bg-amber-50 p-3.5 ${showGrandUploader ? 'm-4' : ''}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {queueFailures.length} PDF{queueFailures.length === 1 ? '' : 's'} could not be read
+              </div>
+              <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-amber-900" onClick={() => setQueueFailures([])}>
+                Dismiss
+              </Button>
+            </div>
+            <p className="mt-1.5 text-xs text-amber-800">
+              No bill was created for these. The rest came through — upload these again once fixed.
+            </p>
+            <ul className="mt-2.5 space-y-1.5">
+              {queueFailures.map((failure, index) => (
+                <li key={`${failure.fileName}-${index}`} className="text-xs text-amber-900">
+                  <span className="font-medium">{failure.fileName}</span>
+                  <span className="text-amber-800"> — {failure.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {isAnalyzing ? (
           <div className="rounded-md border border-slate-200 bg-white p-5 space-y-5 shadow-sm">
             {/* Top title and scanning bar animation */}
@@ -838,7 +955,11 @@ export function BillPdfCementAnalyzer({
                   <Cpu className="h-5 w-5 animate-spin" style={{ animationDuration: '4s' }} />
                 </div>
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-800">Processing Document</h4>
+                  <h4 className="text-sm font-semibold text-slate-800">
+                    {queueProgress
+                      ? `Processing Document ${queueProgress.index} of ${queueProgress.total}`
+                      : 'Processing Document'}
+                  </h4>
                   <p className="text-[11px] text-slate-500">
                     {uploadPercent < 100
                       ? `Uploading ${formatFileSize(uploadedBytes)} of ${formatFileSize(fileSize)}`
@@ -848,10 +969,18 @@ export function BillPdfCementAnalyzer({
                   </p>
                 </div>
               </div>
-              <Badge className="gap-1 bg-emerald-100 text-emerald-700 font-bold hover:bg-emerald-100 border-none px-2.5 py-1">
-                <Clock3 className="h-3 w-3" />
-                {formatElapsed(elapsedSeconds)}
-              </Badge>
+              <div className="flex items-center gap-2">
+                {queueProgress && (
+                  <Badge variant="outline" className="gap-1 border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                    <FileText className="h-3 w-3" />
+                    {queueProgress.total - queueProgress.index} left
+                  </Badge>
+                )}
+                <Badge className="gap-1 bg-emerald-100 text-emerald-700 font-bold hover:bg-emerald-100 border-none px-2.5 py-1">
+                  <Clock3 className="h-3 w-3" />
+                  {formatElapsed(elapsedSeconds)}
+                </Badge>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -971,6 +1100,7 @@ export function BillPdfCementAnalyzer({
                 ref={inputRef}
                 type="file"
                 accept="application/pdf,.pdf"
+                multiple={multiple}
                 className="hidden"
                 onChange={handlePdfUpload}
               />
@@ -988,10 +1118,18 @@ export function BillPdfCementAnalyzer({
                   <Upload className="h-7 w-7" />
                 </span>
                 <span className="mt-5 text-lg font-bold text-slate-900">
-                  {isDraggingFile ? 'Release to start extraction' : 'Drop signed bill PDF here'}
+                  {isDraggingFile
+                    ? 'Release to start extraction'
+                    : multiple ? 'Drop signed bill PDFs here' : 'Drop signed bill PDF here'}
                 </span>
-                <span className="mt-2 text-sm text-slate-500">or click to choose a document</span>
-                <span className="mt-5 text-xs font-medium text-slate-400">PDF only, up to 25 MB</span>
+                <span className="mt-2 text-sm text-slate-500">
+                  {multiple ? 'or click to choose one or more documents' : 'or click to choose a document'}
+                </span>
+                {/* The stated limit has to be the one actually enforced — a bill offered up
+                    to 25 MB is turned away at 4.5 MB by the check above. */}
+                <span className="mt-5 text-xs font-medium text-slate-400">
+                  PDF only, up to {(MAX_UPLOAD_BYTES / 1024 / 1024).toFixed(1)} MB each
+                </span>
               </button>
             </div>
           </div>
@@ -1003,6 +1141,7 @@ export function BillPdfCementAnalyzer({
                   ref={inputRef}
                   type="file"
                   accept="application/pdf,.pdf"
+                  multiple={multiple}
                   className="hidden"
                   onChange={handlePdfUpload}
                 />
@@ -1018,7 +1157,7 @@ export function BillPdfCementAnalyzer({
                   ) : (
                     <Upload className="mr-2 h-4 w-4" />
                   )}
-                  {isAnalyzing ? 'Analyzing...' : 'Upload Bill PDF'}
+                  {isAnalyzing ? 'Analyzing...' : multiple ? 'Upload More Bill PDFs' : 'Upload Bill PDF'}
                 </Button>
               </div>
             </div>
