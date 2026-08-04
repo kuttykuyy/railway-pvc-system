@@ -110,6 +110,9 @@ export default function BulkBillCreationPage() {
   // show the PVC before saving; entering bills in bulk meant committing them unseen.
   const [previews, setPreviews] = useState<Record<string, { totalPvc: number; quarter: string; isProvisional: boolean } | { error: string }>>({});
   const [previewingRows, setPreviewingRows] = useState(false);
+  // Opens the PDF analyzer's file picker from the sticky bar, so the analyzer stays the
+  // single place that knows how to take a bill PDF.
+  const openPdfPickerRef = useRef<(() => void) | null>(null);
   // How the user wants to build the bills: pick first, then show the rest.
   const [billMode, setBillMode] = useState<'choose' | 'manual' | 'ai'>('choose');
 
@@ -891,7 +894,8 @@ export default function BulkBillCreationPage() {
   if (isLoading) return <div className="container mx-auto p-6"><LoadingSpinner /></div>;
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
+    // pb-24 keeps the page's own submit button clear of the sticky bar below.
+    <div className="container mx-auto p-6 pb-24 max-w-7xl">
       <div className="mb-6"><BackButton href="/bills" /></div>
 
       {isMaintenanceMode && (
@@ -1067,6 +1071,7 @@ export default function BulkBillCreationPage() {
                   disabled={isSaving}
                   title="AI PDF Bill Extraction"
                   onApplyBillDetails={applyExtractedBillDetailsToBulkRow}
+                  openFilePickerRef={openPdfPickerRef}
                 />
               )}
 
@@ -1266,6 +1271,29 @@ export default function BulkBillCreationPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* The two actions used over and over while filling a batch. A long list pushes
+          them off the top of the screen, so they stay within reach at the bottom. */}
+      {selectedContract && billMode !== 'choose' && (
+        <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4 print:hidden">
+          <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur">
+            <Button type="button" size="sm" variant="outline" onClick={addBillRow} disabled={isSaving} className="rounded-full">
+              <Plus className="h-4 w-4 mr-1.5" />Add Bill
+            </Button>
+            {billMode === 'ai' && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => openPdfPickerRef.current?.()}
+                disabled={isSaving}
+                className="rounded-full bg-slate-900 text-white hover:bg-slate-800"
+              >
+                <Upload className="h-4 w-4 mr-1.5" />Upload bill PDF
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

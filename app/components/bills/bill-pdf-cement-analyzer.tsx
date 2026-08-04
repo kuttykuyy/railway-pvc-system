@@ -1,6 +1,6 @@
 'use client';
 
-import { ChangeEvent, DragEvent, useRef, useState, useEffect } from 'react';
+import { ChangeEvent, DragEvent, MutableRefObject, useRef, useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle2, Clock3, Cpu, FileCheck2, FileText, HardDrive, Lightbulb, ListChecks, Loader2, Lock, RotateCcw, Save, ScanText, Trash2, Unlock, Upload } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -111,6 +111,10 @@ interface BillPdfCementAnalyzerProps {
   contractId?: string;
   onApplyCementAmount?: (amount: number, data: CementAnalysisData) => void;
   onApplyBillDetails?: (data: CementAnalysisData) => void;
+  /** Filled with a function that opens this component's file picker, so a page can put
+   *  "Upload bill PDF" somewhere else — a sticky bar, say — without duplicating the
+   *  upload logic or the checks that run before it. */
+  openFilePickerRef?: MutableRefObject<(() => void) | null>;
 }
 
 interface CementRateSettings {
@@ -167,11 +171,17 @@ export function BillPdfCementAnalyzer({
   contractId,
   onApplyCementAmount,
   onApplyBillDetails,
+  openFilePickerRef,
 }: BillPdfCementAnalyzerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const analysisStartedAtRef = useRef<number | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<CementAnalysisData | null>(null);
+  useEffect(() => {
+    if (!openFilePickerRef) return;
+    openFilePickerRef.current = () => inputRef.current?.click();
+    return () => { openFilePickerRef.current = null; };
+  }, [openFilePickerRef]);
   const [coefficientDrafts, setCoefficientDrafts] = useState<Record<string, string>>({});
   // The unit the typed coefficient is quoted PER. DSR publishes cement consumption
   // per a block — "0.117 MT per 100 Sqm" — so this must be captured, not assumed to
