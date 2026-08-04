@@ -27,6 +27,10 @@ export interface CementCalculationResult {
   cementUnit: string | null;
   cementAmount: number | null;
   coefficient: number | null;
+  /** The unit the coefficient is quoted PER — "100 Sqm", "10 Cum", "Cum". Without it
+   *  a reader cannot check the figure: 4443.92 Sqm x 0.117 looks like 519.94 MT until
+   *  you know the 0.117 is per 100 Sqm, so the answer is 5.199 MT. */
+  coefficientWorkUnit: string | null;
   coefficientSource: string | null;
   reason: string;
 }
@@ -146,12 +150,14 @@ export function calculateDsrCementRequirement(
         cementUnit: null,
         cementAmount: null,
         coefficient: null,
+        coefficientWorkUnit: null,
         coefficientSource: null,
         reason: 'No DSR 2021 cement coefficient found for this item.',
       };
     }
 
-    const cementQuantity = quantity * coefficient.cementQuantityPerUnit / unitBlockSize(coefficient.workUnit);
+    const blockSize = unitBlockSize(coefficient.workUnit);
+    const cementQuantity = quantity * coefficient.cementQuantityPerUnit / blockSize;
     const cementAmount = cementRatePerUnit && cementRatePerUnit > 0
       ? cementQuantity * cementRatePerUnit
       : null;
@@ -167,8 +173,11 @@ export function calculateDsrCementRequirement(
       cementUnit: coefficient.cementUnit,
       cementAmount,
       coefficient: coefficient.cementQuantityPerUnit,
+      coefficientWorkUnit: coefficient.workUnit || null,
       coefficientSource: coefficient.source || 'DSR 2021 Analysis of Rates',
-      reason: `Quantity ${quantity} x coefficient ${coefficient.cementQuantityPerUnit} ${coefficient.cementUnit}/${coefficient.workUnit}`,
+      reason: `Quantity ${quantity} ${item.unit} x ${coefficient.cementQuantityPerUnit} ${coefficient.cementUnit} per ${coefficient.workUnit}`
+        + (blockSize !== 1 ? ` = ${quantity} x ${coefficient.cementQuantityPerUnit} / ${blockSize}` : '')
+        + ` = ${cementQuantity.toFixed(4)} ${coefficient.cementUnit}`,
     };
   });
 }

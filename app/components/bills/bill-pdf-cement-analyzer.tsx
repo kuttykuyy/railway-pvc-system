@@ -28,6 +28,7 @@ interface CementAnalysisResultItem {
   coefficient?: number | null;
   matched?: boolean;
   cementUnit?: string | null;
+  coefficientWorkUnit?: string | null;
   coefficientSource?: string | null;
   reason?: string;
 }
@@ -478,6 +479,7 @@ export function BillPdfCementAnalyzer({
           cementAmount: result.cementRatePerUnit && result.cementRatePerUnit > 0
             ? cementQuantity * result.cementRatePerUnit
             : null,
+          coefficientWorkUnit: workUnit,
           coefficientSource: 'DSR 2021 Analysis of Rates - admin verified',
           reason: `Quantity ${existing.quantity} x coefficient ${coefficient} MT/${workUnit}`
             + (blockSize !== 1 ? ` (divided by the ${blockSize}-unit block)` : ''),
@@ -1384,7 +1386,16 @@ export function BillPdfCementAnalyzer({
                           </td>
                           <td className="whitespace-nowrap px-2 py-2 text-right">
                             {item.coefficient ? (
-                              formatNumber(item.coefficient, 5)
+                              // Show what the coefficient is quoted PER. DSR gives cement
+                              // per a block, so the bare number reads as a wrong answer:
+                              // 4,443.92 Sqm x 0.117 looks like 519.94, not the correct
+                              // 5.199 MT that 0.117 per 100 Sqm gives.
+                              <span title={item.reason || undefined}>
+                                {formatNumber(item.coefficient, 5)}
+                                <span className="text-slate-400">
+                                  {' '}/ {item.coefficientWorkUnit || item.unit}
+                                </span>
+                              </span>
                             ) : item.dsrCode && !item.dsrCode.startsWith('REVIEW-') ? (
                               <div className="flex items-center justify-end gap-1">
                                 <Input
