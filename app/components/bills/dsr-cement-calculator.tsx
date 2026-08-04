@@ -148,7 +148,7 @@ export function DsrCementCalculator({
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 p-4 space-y-4">
+    <div className="rounded-lg border border-slate-200 p-4 space-y-4 min-w-0">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-emerald-600" />
@@ -184,14 +184,25 @@ export function DsrCementCalculator({
         const { perQuintal, perMt } = derivedRates(s.name);
         return (
           <div key={s.name} className="rounded-lg border border-slate-100 bg-slate-50/60 p-3 space-y-3">
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">Schedule {s.name}</Badge>
+            {/* A schedule name carries its full IREPS title — "Schedule A1b-(List of works
+                which are covered in the printed Delhi Schedule of Rates 2021)". On one
+                unbreakable line that set the width of everything below it and pushed the
+                whole dialog into a horizontal scroll. Only the code identifies the
+                schedule here, so show that and keep the full title on hover. */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+              <Badge
+                variant="secondary"
+                className="max-w-full whitespace-normal break-words text-left"
+                title={s.name}
+              >
+                Schedule {s.name.replace(/^schedule\s*/i, '').split(/\s*-\s*\(/)[0].trim() || s.name}
+              </Badge>
               <span className="text-xs text-slate-500">({s.affectedItemCount} cement-affected items · {money(s.cementQtyMT)} MT)</span>
             </div>
             {s.items && s.items.length > 0 && (
               <details className="text-[11px] text-slate-500">
                 <summary className="cursor-pointer text-slate-600 hover:text-slate-800">How is the cement quantity worked out?</summary>
-                <div className="mt-1.5 space-y-0.5 font-mono">
+                <div className="mt-1.5 space-y-0.5 font-mono break-words">
                   {s.items.map((it, i) => {
                     const block = (() => { const m = String(it.workUnit || '').match(/(\d+(?:\.\d+)?)/); const n = m ? parseFloat(m[1]) : 1; return n > 0 ? n : 1; })();
                     return (
