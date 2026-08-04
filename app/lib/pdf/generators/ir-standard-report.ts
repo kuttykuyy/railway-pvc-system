@@ -1164,9 +1164,15 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         { content: fmt(netAmount), styles: { fontStyle: 'bold' as const, halign: 'right' as const } },
       ]);
     } else if (Math.abs(totalAdjust) >= 0.01) {
-      // Rates don't fully reconcile — show the whole reduction as one bid-rate line to W.
+      // The contract's bid/escalation/rebate rates do not account for this gap, so it
+      // must NOT be called a bid rate: a statement submitted to an accounts office
+      // cannot assert a rate that does not exist. It is the residual between the item
+      // values recomputed here and the amount the bill prints — IREPS prints rounded
+      // quantities, so Qty x Rate does not reproduce the printed amount to the paisa
+      // (item 0510 of SR/MDU/Civil/2024/0037/B8: 127.1 x 3517.49 is Rs 161.72 below
+      // the printed 4,47,234.70, because the true quantity is 127.146).
       summaryBody.push([
-        `${totalAdjust < 0 ? 'Less' : 'Add'}: Bid rate (per schedule)`,
+        `${totalAdjust < 0 ? 'Less' : 'Add'}: Difference to printed Bill Amount (rounded quantities)`,
         { content: signed(totalAdjust), styles: { halign: 'right' as const } },
       ]);
       summaryBody.push([
