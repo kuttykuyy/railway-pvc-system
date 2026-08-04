@@ -10,6 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { unitBlockSize } from '@/lib/dsr-cement-calculation';
 
+/** Vercel rejects a serverless request body larger than this, before any of our code runs. */
+const MAX_UPLOAD_BYTES = 4.5 * 1024 * 1024;
+
 interface CementAnalysisSummary {
   matchedItemCount: number;
   unmatchedItemCount: number;
@@ -665,6 +668,20 @@ export function BillPdfCementAnalyzer({
       toast.error('Please upload a PDF bill file.');
       return;
     }
+    // The hosting platform rejects a request body over 4.5 MB before it ever reaches
+    // the reader, so uploading a larger file only wastes the wait and comes back as a
+    // bare 413. Say so up front, and name the usual cause: an IREPS PDF of a bill this
+    // size is a few hundred KB, so several MB means scanned or photographed pages —
+    // which carry no text layer and could not be read at any size.
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error(
+        `This PDF is ${(file.size / 1024 / 1024).toFixed(1)} MB — over the ${(MAX_UPLOAD_BYTES / 1024 / 1024).toFixed(1)} MB upload limit. `
+        + 'A scanned or photographed bill is usually the reason, and a scan has no readable text in any case. '
+        + 'Please download this bill from IREPS and upload that file.',
+        { duration: 10000 },
+      );
+      return;
+    }
 
     try {
       analysisStartedAtRef.current = Date.now();
@@ -720,7 +737,7 @@ export function BillPdfCementAnalyzer({
               [502, 503, 504].includes(status)
                 ? `Direct PDF extraction timed out (HTTP ${status}). Please retry.`
                 : status === 413
-                  ? 'The bill PDF is too large to upload. Please send the IREPS PDF rather than a scanned copy.'
+                  ? `The bill PDF exceeded the ${(MAX_UPLOAD_BYTES / 1024 / 1024).toFixed(1)} MB upload limit. Please download the bill from IREPS and upload that file.`
                   : status === 0
                     ? 'The upload was interrupted before the server replied. Please retry.'
                     : `The server replied HTTP ${status} instead of a result — usually a deploy in progress. `
