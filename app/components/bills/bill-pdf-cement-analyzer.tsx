@@ -620,7 +620,8 @@ export function BillPdfCementAnalyzer({
         
         // Find cement quantity in MT from result (matched by item number)
         const coeffIndex = findCoeffIndex(result.coefficientItems, item);
-        const cementQtyMT = coeffIndex !== -1 ? result.results[coeffIndex]?.cementQuantity || 0 : 0;
+        const cementResult = coeffIndex !== -1 ? result.results[coeffIndex] : undefined;
+        const cementQtyMT = cementResult?.cementQuantity || 0;
         const cementQuantityQuintals = cementQtyMT * 10;
 
         const sched = item.schedule || item.scheduleGroup || 'Default';
@@ -632,6 +633,13 @@ export function BillPdfCementAnalyzer({
           cementDeduction: deduction,
           cementQuantityQuintals,
           cementRatePerQuintal: derivedRatePerQuintal,
+          // How the cement quantity was arrived at. Carried onto the item so the saved
+          // bill keeps it and the report can print the working (Qty x Coeff / block)
+          // instead of a dash — without it the cement figure is unverifiable on the
+          // statement, which is the first thing an accounts office asks about.
+          cementSourceQty: cementResult?.quantity,
+          cementCoefficient: cementResult?.coefficient ?? undefined,
+          cementWorkUnit: cementResult?.coefficientWorkUnit ?? undefined,
           amountSinceLastBill: originalAmount - deduction,
         };
       }

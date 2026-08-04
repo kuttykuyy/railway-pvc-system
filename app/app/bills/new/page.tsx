@@ -640,6 +640,12 @@ function NewBillPageContent() {
                   itemNumber: item.itemNo ? `${item.itemNo}-CEM` : 'CEM',
                   quantity: cementQty || '',
                   agreementRate: cementRate,
+                  // Keep the derivation with the row so the report prints the working.
+                  // The "derive cement from items" path already carries these; the PDF
+                  // upload path did not, so its bills showed "-" in that column.
+                  sourceQty: (item as any).cementSourceQty,
+                  coefficient: (item as any).cementCoefficient,
+                  workUnit: (item as any).cementWorkUnit,
                 }],
                 classificationJustification: `Under GCC Clause 46A, this is the cement portion of item ${item.itemNo || ''} (${item.description || ''}). Its cement cost is derived from the DSR cement coefficient and classified under Sub-classification ${cementSub.code}${cementSub.name ? ` (${cementSub.name})` : ''} so that the cement price index is applied to this value.`,
               },
