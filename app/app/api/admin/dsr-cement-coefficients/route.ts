@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Description and work unit are required.' }, { status: 400 });
     }
     if (!Number.isFinite(cementQuantityPerUnit) || cementQuantityPerUnit <= 0 || cementQuantityPerUnit > 1000) {
-      return NextResponse.json({ error: 'Coefficient must be greater than 0 and entered in MT per item unit.' }, { status: 400 });
+      return NextResponse.json({ error: 'Coefficient must be greater than 0, in MT per the work unit given (e.g. 0.117 per "100 Sqm").' }, { status: 400 });
     }
 
     // Callers may pass their own note (the admin page does); the PDF analyzer doesn't,

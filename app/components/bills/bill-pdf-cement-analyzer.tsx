@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { unitBlockSize } from '@/lib/dsr-cement-calculation';
 
 interface CementAnalysisSummary {
   matchedItemCount: number;
@@ -168,6 +169,10 @@ export function BillPdfCementAnalyzer({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<CementAnalysisData | null>(null);
   const [coefficientDrafts, setCoefficientDrafts] = useState<Record<string, string>>({});
+  // The unit the typed coefficient is quoted PER. DSR publishes cement consumption
+  // per a block — "0.117 MT per 100 Sqm" — so this must be captured, not assumed to
+  // be the bill's own unit, or the stored row means 100x more cement than the book.
+  const [coefficientUnitDrafts, setCoefficientUnitDrafts] = useState<Record<string, string>>({});
   const [savingCoefficientCode, setSavingCoefficientCode] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
@@ -436,9 +441,13 @@ export function BillPdfCementAnalyzer({
     if (!result || !item.dsrCode) return;
     const coefficient = Number(coefficientDrafts[item.dsrCode]);
     if (!Number.isFinite(coefficient) || coefficient <= 0) {
-      toast.error('Enter a valid coefficient in MT per item unit.');
+      toast.error('Enter a valid cement coefficient in MT.');
       return;
     }
+    // Copied straight from DSR this is a per-block figure ("0.117 MT per 100 Sqm").
+    // Default to the bill's own unit for books that quote per single unit.
+    const workUnit = (coefficientUnitDrafts[item.dsrCode] || item.unit).trim();
+    const blockSize = unitBlockSize(workUnit);
 
     try {
       setSavingCoefficientCode(item.dsrCode);
@@ -448,7 +457,7 @@ export function BillPdfCementAnalyzer({
         body: JSON.stringify({
           dsrCode: item.dsrCode,
           description: item.description,
-          workUnit: item.unit,
+          workUnit,
           cementQuantityPerUnit: coefficient,
         }),
       });
@@ -457,7 +466,9 @@ export function BillPdfCementAnalyzer({
 
       const updatedResults = result.results.map(existing => {
         if (existing.dsrCode !== item.dsrCode) return existing;
-        const cementQuantity = existing.quantity * coefficient;
+        // Divide the block out exactly as calculateDsrCementRequirement does on the
+        // server, so this preview can never disagree with the saved calculation.
+        const cementQuantity = existing.quantity * coefficient / blockSize;
         return {
           ...existing,
           matched: true,
@@ -468,7 +479,8 @@ export function BillPdfCementAnalyzer({
             ? cementQuantity * result.cementRatePerUnit
             : null,
           coefficientSource: 'DSR 2021 Analysis of Rates - admin verified',
-          reason: `Quantity ${existing.quantity} x coefficient ${coefficient} MT/${existing.unit}`,
+          reason: `Quantity ${existing.quantity} x coefficient ${coefficient} MT/${workUnit}`
+            + (blockSize !== 1 ? ` (divided by the ${blockSize}-unit block)` : ''),
         };
       });
       const matchedResults = updatedResults.filter(existing => existing.matched);
@@ -1385,10 +1397,22 @@ export function BillPdfCementAnalyzer({
                                     ...current,
                                     [item.dsrCode]: event.target.value,
                                   }))}
-                                  placeholder="MT/unit"
-                                  aria-label={`Cement coefficient for ${item.dsrCode} in MT per ${item.unit}`}
-                                  title={`Enter MT of cement required per ${item.unit}`}
+                                  placeholder="MT"
+                                  aria-label={`Cement coefficient for ${item.dsrCode} in MT`}
+                                  title="Enter the cement figure exactly as DSR prints it, then the unit it is quoted per"
                                   className="h-7 w-20 px-2 text-right text-xs"
+                                />
+                                <span className="text-xs text-slate-400">per</span>
+                                <Input
+                                  value={coefficientUnitDrafts[item.dsrCode] ?? item.unit}
+                                  onChange={event => setCoefficientUnitDrafts(current => ({
+                                    ...current,
+                                    [item.dsrCode]: event.target.value,
+                                  }))}
+                                  placeholder={item.unit}
+                                  aria-label={`Unit the coefficient for ${item.dsrCode} is quoted per`}
+                                  title={`DSR quotes cement per a block, e.g. "100 ${item.unit}". Enter it exactly as printed.`}
+                                  className="h-7 w-20 px-2 text-xs"
                                 />
                                 <Button
                                   type="button"
