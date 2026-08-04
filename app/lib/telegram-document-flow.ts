@@ -174,7 +174,7 @@ async function handleBillDoc(conversationId: string, chatId: string, doc: Telegr
   const conv0 = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
   const stored0 = getTelegramConversationData(conv0);
   const haveContract = !!stored0.docContractId;
-  const answeredQuestions = !!stored0.docZone;
+  const answeredQuestions = !!stored0.docZone && !!stored0.docFuelPriceType;
 
   // Keep the bill, but don't skip ahead: the agreement (and the zone/fuel answers)
   // are still needed before the PVC can be worked out.
@@ -300,15 +300,54 @@ export async function handleZoneReply(conversation: any, msg: string, chatId: st
     return sendTelegramMessage(chatId, `❌ I don't know the zone "<b>${escapeHtml(raw)}</b>". Please reply with a code from the list (e.g. SR).`);
   }
 
-  // Fuel basis is chosen automatically (whichever of 4-city vs zone-city gives the
-  // higher PVC), so no fuel question — go straight to the bill.
-  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_BILL_PDF, { docZone: match.value });
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_FUEL_BASIS, { docZone: match.value });
   await sendTelegramMessage(chatId, `✅ Zone: <b>${escapeHtml(match.label)}</b>`);
 
-  // The bill may already be waiting (user sent it first) — process straight away.
-  const data = getTelegramConversationData(conversation);
-  if (data.docBillFileId) return maybeProcess(conversation.id, chatId);
+  // Ask the fuel basis — it must NOT be assumed. GCC-2022 Cl.46A.7 defines the PPAC
+  // four-city average, and SWR's letter directs that; but Southern Railway (Sr.DFM/MDU)
+  // has returned a PVC proposal demanding the zone's own city rate instead, and older
+  // agreements may sit under a pre-2022 GCC. Only the contract's own terms settle it.
+  return sendTelegramMessage(
+    chatId,
+    `⛽ <b>Fuel price basis</b>\n\nWhich diesel price does <b>this agreement</b> use for PVC?\n\n` +
+      `<i>Check your tender's PVC clause — railways differ. If unsure, ask the accounts office which one they vet against.</i>`,
+    {
+      replyMarkup: inlineKeyboard([
+        [{ text: '🇮🇳 Average of 4 cities (GCC 46A.7)', callback_data: 'fuel_four' }],
+        [{ text: `📍 Zone city rate (${match.steelCity})`, callback_data: 'fuel_zone' }],
+      ]),
+    },
+  );
+}
 
+/** Handles the fuel-basis answer, stores it on the contract, then asks for the bill. */
+export async function handleFuelBasisReply(conversation: any, msg: string, chatId: string) {
+  const raw = String(msg).trim().toLowerCase();
+  let fuelPriceType: string | null = null;
+  if (raw === 'fuel_four' || raw.includes('4') || raw.includes('four') || raw.includes('avg') || raw.includes('average')) {
+    fuelPriceType = 'four_city_avg';
+  } else if (raw === 'fuel_zone' || raw.includes('zone') || raw.includes('city')) {
+    fuelPriceType = 'zone_city';
+  }
+  if (!fuelPriceType) {
+    return sendTelegramMessage(chatId, 'Please tap one of the two buttons above — <b>Average of 4 cities</b> or <b>Zone city rate</b>.');
+  }
+
+  const data = getTelegramConversationData(conversation);
+  // Remember it on the agreement so later bills for the same contract don't re-ask.
+  if (data.docContractId) {
+    try {
+      await prisma.contract.update({ where: { id: data.docContractId }, data: { fuelPriceType } });
+    } catch (err) {
+      console.error('[Telegram] could not store contract fuelPriceType:', err);
+    }
+  }
+
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_BILL_PDF, { docFuelPriceType: fuelPriceType });
+  const label = fuelPriceType === 'four_city_avg' ? 'Average of 4 cities' : 'Zone city rate';
+  await sendTelegramMessage(chatId, `✅ Fuel basis: <b>${label}</b>`);
+
+  if (data.docBillFileId) return maybeProcess(conversation.id, chatId);
   return sendTelegramMessage(chatId, `📎 <b>Last step:</b> send the <b>running bill (RA bill) PDF</b> and I'll calculate the PVC.`);
 }
 
@@ -470,7 +509,7 @@ async function maybeProcess(conversationId: string, chatId: string) {
   const conv = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
   const data = getTelegramConversationData(conv);
   // Need the contract, the bill, and the confirmed zone before pricing.
-  if (!data.docContractId || !data.docBillFileId || !data.docZone) return;
+  if (!data.docContractId || !data.docBillFileId || !data.docZone || !data.docFuelPriceType) return;
 
   await sendTelegramChatAction(chatId, 'upload_document');
   let needsInput = false;

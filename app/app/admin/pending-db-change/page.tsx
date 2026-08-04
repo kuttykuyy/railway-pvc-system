@@ -59,14 +59,18 @@ export default function PendingDbChangePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Railway-supplied material column</CardTitle>
+          <CardTitle className="text-base">Pending columns</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-slate-600 leading-relaxed">
-            GCC-2022 Clause 46A excludes the cost of materials supplied by the Railway from the
-            PVC base. Storing the entered value needs one extra column on the bills table. The
-            calculation already works without it — only the recorded figure depends on this.
+            These columns ship as migrations, but applying them normally needs the production
+            database URL, which Vercel keeps hidden. The app already holds that connection, so it
+            can add them here. Each is a single additive column — nothing is dropped or changed.
           </p>
+          <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
+            <li><code>bills.railwaySuppliedMaterialValue</code> — GCC-2022 Cl.46A excludes railway-supplied material from the PVC base.</li>
+            <li><code>contracts.fuelPriceType</code> — fuel basis per agreement (4-city average vs zone city rate).</li>
+          </ul>
 
           {loading ? (
             <p className="text-sm text-slate-500">Checking…</p>
@@ -74,18 +78,17 @@ export default function PendingDbChangePage() {
             <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3">
               <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-emerald-900">Already applied</p>
-                <p className="text-xs text-emerald-700 mt-0.5">Nothing to do — the column is present.</p>
+                <p className="text-sm font-medium text-emerald-900">All applied</p>
+                <p className="text-xs text-emerald-700 mt-0.5">Nothing to do — every column is present.</p>
               </div>
             </div>
           ) : (
             <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
               <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-amber-900">Not applied yet</p>
+                <p className="text-sm font-medium text-amber-900">Some columns missing</p>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  Adds one column with a default of 0. It creates nothing else, changes no existing
-                  data, and is safe to run twice.
+                  Adds the missing columns with safe defaults. Creates nothing else, changes no existing data, and is safe to run twice.
                 </p>
               </div>
             </div>

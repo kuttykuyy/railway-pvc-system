@@ -230,6 +230,13 @@ model Contract {
   /// Rebate % is agreed once for the whole agreement (not per schedule).
   /// Escalation % and bid rate % are per-schedule and live in `schedules`.
   rebatePercentage             Float?
+  /// Which diesel price this agreement's PVC uses: "four_city_avg" (PPAC average of
+  /// Delhi/Kolkata/Mumbai/Chennai, per GCC-2022 Cl.46A.7) or "zone_city" (the zone's
+  /// own city). Kept per contract because railways differ in practice: SWR's letter
+  /// dated 23.01.2026 directs the PPAC average, while Sr.DFM/MDU (Southern Railway)
+  /// returned a proposal demanding the Chennai rate. Older agreements may also sit
+  /// under a pre-2022 GCC. Bills default to this, and it must never be hardcoded.
+  fuelPriceType                String?              @default("four_city_avg")
   schedules                    Json?                @default("[]")
   bills                        Bill[]
   extensions                   ContractExtension[]

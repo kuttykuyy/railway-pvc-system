@@ -1672,6 +1672,34 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         columnStyles: histColStyles,
       });
 
+      // CPI-IW linking note. Accounts offices vet the labour index against the older
+      // 2001=100 series (link factor 2.88), and a proposal has been returned for the
+      // factor "not being applied". Stating both series — and that the variation is
+      // identical either way — answers that without changing any figure, since the
+      // factor cancels in (Lq - Lb) / Lb.
+      if (orderedIdxNames.includes('Labour')) {
+        let noteY = ((pdf as any).lastAutoTable?.finalY ?? y) + 5;
+        const lb = baseValLookup.get('Labour') ?? 0;
+        const lq = getIndexAvg(quarterlyAverages, 'Labour');
+        if (lb > 0) {
+          pdf.setFontSize(7.5);
+          pdf.setFont('helvetica', 'italic');
+          pdf.setTextColor(80, 80, 80);
+          const linked = (v: number) => (v * 2.88).toFixed(2);
+          pdf.text(
+            pdfSafe(`* Labour = CPI-IW (Industrial Workers), base 2016=100. Equivalent 2001=100 figures (link factor 2.88): base ${linked(lb)}, quarter average ${linked(lq)}.`),
+            mL, noteY,
+          );
+          noteY += 3.6;
+          pdf.text(
+            pdfSafe('  The link factor applies to both base and quarter equally, so (Lq - Lb) / Lb - and therefore the labour PVC - is identical under either series.'),
+            mL, noteY,
+          );
+          pdf.setTextColor(0, 0, 0);
+          y = noteY + 3;
+        }
+      }
+
       // Legend for the P / (b) markers — shown whenever any cell is provisional or borrowed.
       if (isProvisional || provLookup.size > 0 || borrowLookup.size > 0) {
         let afterY = ((pdf as any).lastAutoTable?.finalY ?? y) + 5;

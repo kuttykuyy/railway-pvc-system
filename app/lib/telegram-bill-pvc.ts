@@ -26,7 +26,7 @@ import {
 import { extractBillDetailsDirect } from '@/app/api/bills/cement-analysis/route';
 import { getQuarterFromDate, getQuarterMonths, calculateClassificationEntryPvc } from './pvc-calculations';
 import { getQuarterlyAverages } from './db-utils';
-import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from './zone-steel-city-mapping';
+import { getSteelIndexNamesForZone, getFuelIndexNameForBill, getSteelCityForZone } from './zone-steel-city-mapping';
 import { extractSteelTypesFromEntries } from './steel-type-handler';
 import { inferMainClassification } from './work-classification';
 import { matchCementCoefficient, normalizeDsrCode, calculateDsrCementRequirement } from './dsr-cement-calculation';
@@ -202,14 +202,17 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   );
   const steelIndexNames = getSteelIndexNamesForZone(zone);
 
-  // Fuel basis: the AVERAGE of the official PPAC diesel prices (index 'MPNG Fuel').
-  // Per SWR letter SWR/W.496 dated 23.01.2026 (issued after a Vigilance finding that
-  // IRGCC 2022 PVC provisions weren't being followed): "PVC bill for fuel shall be
-  // calculated based on the average of official diesel prices, as published on the
-  // official website of the Petroleum Planning and Analysis Cell (PPAC)". So the
-  // average is used — NOT a zone-city price, and never "whichever pays more".
-  const fuelIndexName = getFuelIndexNameForBill(zone, 'four_city_avg'); // 'MPNG Fuel'
-  const fuelBasisLabel = 'average of official diesel prices (PPAC)';
+  // Fuel basis comes from the AGREEMENT — never hardcoded. GCC-2022 Cl.46A.7 defines
+  // the PPAC four-city average and SWR's letter (23.01.2026) directs that, but
+  // Sr.DFM/MDU (Southern Railway) returned a PVC proposal demanding the zone's own
+  // city rate, and pre-2022 agreements may differ again. Only the contract's terms
+  // decide, so the flow asks and stores it.
+  const fuelPriceType: string =
+    convOpts.docFuelPriceType || (contract as any).fuelPriceType || 'four_city_avg';
+  const fuelIndexName = getFuelIndexNameForBill(zone, fuelPriceType);
+  const fuelBasisLabel = fuelPriceType === 'zone_city'
+    ? `zone city rate (${getSteelCityForZone(zone)})`
+    : 'average of 4 cities (PPAC)';
   const allIndices = [
     'Labour', 'RBI Plant Machinery', 'RBI Other Materials', 'RBI Cement', 'RBI Explosives',
     ...steelIndexNames, fuelIndexName,
@@ -329,7 +332,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   // contract (in the bills list / admin). Best-effort — a save failure never blocks
   // the estimate or the report.
   try {
-    const fuelPriceTypeChosen = 'four_city_avg';
+    const fuelPriceTypeChosen = fuelPriceType;
     await persistTelegramBill({
       contractId: contract.id,
       billNo: billNo || `RA-${quarter}`,

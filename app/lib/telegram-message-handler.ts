@@ -19,6 +19,7 @@ import {
   remindToUpload,
   handlePaidCheck,
   handleZoneReply,
+  handleFuelBasisReply,
   isCoupon,
   handleCoupon,
   startCoupon,
@@ -76,6 +77,8 @@ export async function handleTelegramMessage(chatId: string, text: string) {
         return handleTenderDateReply(conversation, msg, chatId);
       case TelegramStep.AWAITING_ZONE:
         return handleZoneReply(conversation, msg, chatId);
+      case TelegramStep.AWAITING_FUEL_BASIS:
+        return handleFuelBasisReply(conversation, msg, chatId);
       case TelegramStep.AWAITING_COUPON:
         return handleCouponInput(conversation, msg, chatId);
       // A PDF is expected, not text — nudge with the clip button.
