@@ -692,15 +692,26 @@ export function BillPdfCementAnalyzer({
           try {
             resolve({ status: request.status, json: JSON.parse(request.responseText) });
           } catch {
-            const isGatewayFailure = [502, 503, 504].includes(request.status);
-            resolve({
-              status: request.status,
-              json: {
-                error: isGatewayFailure
-                  ? 'Direct PDF extraction timed out. Please retry.'
-                  : 'The extraction server returned an invalid response.',
-              },
-            });
+            // A non-JSON body means the request never reached the route: a gateway
+            // timeout, a deploy swapping the function out, or a size rejection. Say
+            // which, and carry the status through — the old message named none of
+            // them, so a report of it could not be acted on.
+            const status = request.status;
+            const snippet = (request.responseText || '')
+              .replace(/<[^>]*>/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 200);
+            const error =
+              [502, 503, 504].includes(status)
+                ? `Direct PDF extraction timed out (HTTP ${status}). Please retry.`
+                : status === 413
+                  ? 'The bill PDF is too large to upload. Please send the IREPS PDF rather than a scanned copy.'
+                  : status === 0
+                    ? 'The upload was interrupted before the server replied. Please retry.'
+                    : `The server replied HTTP ${status} instead of a result — usually a deploy in progress. `
+                      + `Please retry in a minute.${snippet ? ` (${snippet})` : ''}`;
+            resolve({ status: status || 500, json: { error } });
           }
         };
         request.send(formData);
