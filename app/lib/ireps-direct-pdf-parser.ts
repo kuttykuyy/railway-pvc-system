@@ -437,7 +437,12 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       // Nothing measured this period. Silent: most rows of a long bill are idle,
       // and listing them would bury the rows that actually failed to read.
       if (quantity === 0) {
-        excludedZeroQtyAmount += payableAmount;
+        // Only a special-condition amount is genuinely part of the bill's total for a
+        // row with no quantity, so only that is subtracted from the expected total.
+        // A stray figure in the plain amount column is not: B-8 of
+        // SER/KGP/Civil/2024/0066 reads Re 1 against a zero quantity, and deducting it
+        // failed a bill whose rows already summed to the printed total to the rupee.
+        if (specialAmount > 0) excludedZeroQtyAmount += specialAmount;
         continue;
       }
       if (!(agreementRate > 0 && payableAmount !== 0)) {
