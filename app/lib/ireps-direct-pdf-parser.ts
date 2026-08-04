@@ -1,7 +1,15 @@
 import { extractPositionedPdfPages, PositionedPdfPage, PositionedPdfTextItem } from './pdf-layout-extract';
 import type { DeterministicBillDetails, DeterministicBillItem } from './ireps-bill-parser';
 
-const UNIT_PATTERN = /^(?:Cum|Cu\.?m\.?|Sqm|Sq\.?m\.?|Kg|MT|M\.?T\.?|Metre|Meter|Each|Num|Nos?\.?|RM|Km|Litre|Set|Job|LS)$/i;
+// The unit column anchors a data row: a row whose unit is not listed here is never
+// even considered. "Hour" was missing, so a dewatering item billed in HP Hour went
+// unread and B-7 of SER/KGP/Civil/2024/0066 came out Rs 73,139 short.
+//
+// Note "HP" is deliberately absent. That unit prints as "HP" and "Hour" on two lines,
+// and matching both would anchor the same physical row twice and count its amount
+// twice — silently inflating the bill, which is far worse than failing to read it.
+// The duplicate guard below is the backstop if a pair like that ever slips in.
+const UNIT_PATTERN = /^(?:Cum|Cu\.?m\.?|Sqm|Sq\.?m\.?|Kg|MT|M\.?T\.?|Metre|Meter|Each|Num|Nos?\.?|RM|Rmt|Km|Litre|Ltr|Set|Job|LS|Hours?|Hrs?|Days?|Quintal|Qtl|Tonne|Pair|Bags?|Sqft|Cft)$/i;
 const NUMBER_PATTERN = /^-?[\d,]+(?:\.\d*)?$/;
 const X = {
   serial: [50, 88],
@@ -391,8 +399,20 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         && (numericValue(specialRaw) !== undefined || numericValue(amountRaw) !== undefined);
     });
 
-    for (let index = 0; index < candidates.length; index += 1) {
-      const unitItem = candidates[index];
+    // A two-word unit prints on two lines ("HP" above "Hour"), and if both words were
+    // ever unit-like the same physical row would be anchored twice and its amount
+    // counted twice. Two anchors reading identical rate, quantity and amount cells
+    // within a row's height are the same row, so keep only the first.
+    const deduped = candidates.filter((unitItem, index) => {
+      const previous = candidates[index - 1];
+      if (!previous || unitItem.y - previous.y > 20) return true;
+      const signature = (y: number) => ([X.agreementRate, X.qtySinceLast, X.amountSinceLast, X.specialAmount] as const)
+        .map(range => cellText(page, page.items, range, y)).join('|');
+      return signature(unitItem.y) !== signature(previous.y);
+    });
+
+    for (let index = 0; index < deduped.length; index += 1) {
+      const unitItem = deduped[index];
       for (const line of lines.filter(line => line.y < unitItem.y)) {
         updateContext(line.text);
       }
@@ -424,7 +444,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       // can be negative — a bill reverses an earlier over-measurement by billing a
       // minus quantity, and that row reduces the bill just like any other.
       const payableAmount = specialAmount !== 0 ? specialAmount : agreementAmount;
-      const nextRowY = candidates[index + 1]?.y || page.height - 5;
+      const nextRowY = deduped[index + 1]?.y || page.height - 5;
       const itemNo = extractItemCode(page, unitItem.y, nextRowY, straddlesPageBreak && nextPage
         ? nextPageTop
             .filter(topItem => {
