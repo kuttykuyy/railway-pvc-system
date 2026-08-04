@@ -263,6 +263,28 @@ function metadata(pages: PositionedPdfPage[]) {
   };
 }
 
+// Turns the skipped-row log into something a contractor can act on: which item
+// numbers were left out, how much they were worth, and why. Without this the
+// reconciliation failure only reports that money is missing, not where from.
+function describeSkippedRows(skipped: Array<{ reason: string; itemNo: string; amount: number }>) {
+  if (!skipped.length) {
+    return 'No item rows were skipped, so a line item is likely printed in a layout the reader does not recognise. '
+      + 'Please send this PDF to support so the reader can be taught it.';
+  }
+  const byReason = new Map<string, { count: number; amount: number; rows: string[] }>();
+  for (const row of skipped) {
+    const entry = byReason.get(row.reason) || { count: 0, amount: 0, rows: [] };
+    entry.count += 1;
+    entry.amount += row.amount;
+    if (entry.rows.length < 6) entry.rows.push(`${row.itemNo || 'item ?'} (Rs ${row.amount.toFixed(2)})`);
+    byReason.set(row.reason, entry);
+  }
+  const lines = Array.from(byReason, ([reason, entry]) =>
+    `- ${entry.count} row(s) worth Rs ${entry.amount.toFixed(2)} — ${reason}: `
+    + `${entry.rows.join(', ')}${entry.count > entry.rows.length ? ', …' : ''}`);
+  return `Rows skipped while reading:\n${lines.join('\n')}`;
+}
+
 export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<DeterministicBillDetails> {
   const pages = await extractPositionedPdfPages(pdfBuffer);
   if (!pages.length || pages.reduce((sum, page) => sum + page.items.length, 0) < 20) {
@@ -273,6 +295,9 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   }
 
   const items: DeterministicBillItem[] = [];
+  // Rows the reader saw but did not take. Tracked so a failed reconciliation can
+  // say WHICH money went missing instead of only that some did.
+  const skippedRows: Array<{ reason: string; itemNo: string; amount: number }> = [];
   let excludedZeroQtyAmount = 0;
   let currentSchedule = 'Schedule UNASSIGNED';
   let currentScheduleHeading = '';
@@ -302,9 +327,13 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       const agreementRaw = cellText(page, page.items, X.agreementRate, unitItem.y);
       const quantityRaw = cellText(page, page.items, X.qtySinceLast, unitItem.y);
       const specialRaw = cellText(page, page.items, X.specialAmount, unitItem.y);
+      const amountRaw = cellText(page, page.items, X.amountSinceLast, unitItem.y);
       return (numericValue(agreementRaw) || 0) > 0
         && numericValue(quantityRaw) !== undefined
-        && numericValue(specialRaw) !== undefined;
+        // Bills with no special condition leave that column blank, so also accept
+        // a readable plain "Amt since last Bill". Requiring the special column
+        // used to drop those rows before they were ever considered.
+        && (numericValue(specialRaw) !== undefined || numericValue(amountRaw) !== undefined);
     });
 
     for (let index = 0; index < candidates.length; index += 1) {
@@ -321,16 +350,37 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       const quantity = numericValue(quantityRaw) || 0;
       const agreementAmount = numericValue(agreementAmountRaw) || 0;
       const specialAmount = numericValue(specialAmountRaw) || 0;
-      if (!(agreementRate > 0 && specialAmount > 0)) continue;
-      if (quantity === 0) {
-        excludedZeroQtyAmount += specialAmount;
-        continue;
-      }
-      const arithmeticDifference = Math.abs(quantity * agreementRate - agreementAmount);
-      if (arithmeticDifference > Math.max(0.15, agreementAmount * 0.00002)) continue;
-
+      // What this row actually adds to the bill: the special-condition amount when
+      // the bill carries one, otherwise the plain amount at agreement rate.
+      const payableAmount = specialAmount > 0 ? specialAmount : agreementAmount;
       const nextRowY = candidates[index + 1]?.y || page.height - 5;
       const itemNo = extractItemCode(page, unitItem.y, nextRowY);
+
+      if (!(agreementRate > 0 && payableAmount > 0)) {
+        skippedRows.push({ reason: 'no payable amount could be read', itemNo, amount: 0 });
+        continue;
+      }
+      if (quantity === 0) {
+        excludedZeroQtyAmount += payableAmount;
+        continue;
+      }
+      // Verify the row by re-doing its arithmetic: Qty x Rate must reproduce the
+      // printed amount. IREPS prints rounded quantities, so the product can differ
+      // by rupees on large items - hence 0.1% (min Re 1) rather than paise. The
+      // whole-bill reconciliation below is the real guard: a misread column cannot
+      // survive it, so this check does not need to be tighter than the print.
+      if (agreementAmount > 0) {
+        const arithmeticDifference = Math.abs(quantity * agreementRate - agreementAmount);
+        if (arithmeticDifference > Math.max(1, agreementAmount * 0.001)) {
+          skippedRows.push({
+            reason: `Qty x Rate did not reproduce the printed amount (off by Rs ${arithmeticDifference.toFixed(2)})`,
+            itemNo,
+            amount: payableAmount,
+          });
+          continue;
+        }
+      }
+
       const description = extractDescription(page, unitItem.y, nextRowY) || `IREPS item ${itemNo || items.length + 1}`;
       // Detect the source book from the schedule heading. CPWD headings vary
       // ("CPWD SOR DSR Vol-I & II(2021)", "CPWD-DSR 2021", "DSR Vol-I"), so match
@@ -353,8 +403,8 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         agreementRate,
         agreementRateRaw,
         amountAtAgreementRateSinceLastBill: agreementAmount,
-        amountIncludingSpecialConditionSinceLastBill: specialAmount,
-        amountSinceLastBill: specialAmount,
+        amountIncludingSpecialConditionSinceLastBill: payableAmount,
+        amountSinceLastBill: payableAmount,
         schedule: currentSchedule,
         scheduleGroup: currentSchedule,
         chapter: currentChapter,
@@ -388,7 +438,9 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   if (!amountsReconciled) {
     throw new Error(
       `Direct PDF item total Rs ${itemAmountTotal.toFixed(2)} does not match Total Amount Rs ${grossTotal.toFixed(2)}` +
-      (excludedZeroQtyAmount > 0 ? ` (minus Rs ${excludedZeroQtyAmount.toFixed(2)} from zero-quantity rows excluded).` : '.'),
+      (excludedZeroQtyAmount > 0 ? ` (minus Rs ${excludedZeroQtyAmount.toFixed(2)} from zero-quantity rows excluded)` : '') +
+      `. ${amountDifference < 0 ? 'Short' : 'Over'} by Rs ${Math.abs(amountDifference).toFixed(2)} after reading ${items.length} row(s).\n` +
+      describeSkippedRows(skippedRows),
     );
   }
   const scheduleTotals = new Map<string, number>();
