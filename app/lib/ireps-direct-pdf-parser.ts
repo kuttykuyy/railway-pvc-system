@@ -434,7 +434,11 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   const itemAmountTotal = Math.round(items.reduce((sum, item) => sum + item.amountSinceLastBill, 0) * 100) / 100;
   const expectedAmount = Math.round((grossTotal - excludedZeroQtyAmount) * 100) / 100;
   const amountDifference = Math.round((itemAmountTotal - expectedAmount) * 100) / 100;
-  const amountsReconciled = Math.abs(amountDifference) <= 0.05;
+  // IREPS prints each row's amount rounded to two decimals, so the sum of the rows
+  // can drift from the printed total by about a paisa per row. Allow for that, and
+  // no more: a genuinely missing item row is worth thousands, nowhere near this.
+  const roundingTolerance = 0.05 + items.length * 0.01;
+  const amountsReconciled = Math.abs(amountDifference) <= roundingTolerance;
   if (!amountsReconciled) {
     throw new Error(
       `Direct PDF item total Rs ${itemAmountTotal.toFixed(2)} does not match Total Amount Rs ${grossTotal.toFixed(2)}` +
