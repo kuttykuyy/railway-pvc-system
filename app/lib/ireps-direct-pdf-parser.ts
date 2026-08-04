@@ -308,6 +308,48 @@ function extractMeasurementDate(flatText: string): string {
   return '';
 }
 
+// The bill header is a grid of label/value pairs, and a value that runs to several
+// lines starts ABOVE its own label — "Name Of Contractor" prints alongside the third
+// line of a four-line name. Reading forward from the label through flattened text
+// therefore returns whatever happens to follow it: across the bills tested that was a
+// tail fragment of the name ("CORPORATION-", "LIMITED-"), or a piece of the Name of
+// Work entirely. Read the value column by position instead, taking every line of it.
+function labelledValue(
+  pages: PositionedPdfPage[],
+  labelPattern: RegExp,
+  lastWord: string,
+  // How far right the value column runs. The header grid puts label columns at roughly
+  // x 60 / 311 / 561, so a value in the last column is narrow while the Name of Work
+  // spans almost the whole form and needs the room.
+  columnWidth = 230,
+): string {
+  for (const page of pages.slice(0, 2)) {
+    const line = pageLines(page).find(candidate => labelPattern.test(candidate.text));
+    if (!line) continue;
+    // Right-most occurrence of the label's final word on that line fixes the column.
+    const anchor = page.items
+      .filter(item => Math.abs(item.y - line.y) <= 2.5 && item.text.trim().toLowerCase() === lastWord.toLowerCase())
+      .sort((left, right) => right.x - left.x)[0];
+    if (!anchor) continue;
+    const anchorX = normalizedX(page, anchor);
+    const value = page.items
+      .filter(item => {
+        const x = normalizedX(page, item);
+        // Its own value column only, and near enough in y to belong to this label
+        // rather than the header rows above or below it.
+        return x > anchorX + 20 && x < anchorX + columnWidth && Math.abs(item.y - line.y) <= 22;
+      })
+      .sort((left, right) => left.y - right.y || normalizedX(page, left) - normalizedX(page, right))
+      .map(item => item.text.trim())
+      .filter(Boolean)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (value) return value.slice(0, 200);
+  }
+  return '';
+}
+
 function metadata(pages: PositionedPdfPage[]) {
   const text = pages.slice(0, 2).map(pagePlainText).join('\n');
   const flatText = pages.slice(0, 2)
@@ -317,8 +359,14 @@ function metadata(pages: PositionedPdfPage[]) {
   return {
     billNo: text.match(/Bill No\.\s*([^\r\n]+)/i)?.[1]?.trim() || '',
     agreementNo: flatText.match(/Agreement No\.\s*([^\s]+)/i)?.[1]?.trim() || '',
-    contractorName: text.match(/Name Of Contractor\s+(.+?)(?=\s+LOA|\n)/i)?.[1]?.trim() || '',
-    workDescription: text.match(/Name Of Work\s+(.+?)(?=\s+Name Of Contractor|\n)/i)?.[1]?.trim() || '',
+    contractorName: labelledValue(pages, /Name\s+Of\s+Contractor/i, 'Contractor')
+      || text.match(/Name Of Contractor\s+(.+?)(?=\s+LOA|\n)/i)?.[1]?.trim() || '',
+    // The Name of Work sits in the form's first column and runs almost its full width,
+    // so it needs the wider window. Reading it forward from the label returned the
+    // literal text "Name Of Contractor" — the next label on the line — on every bill
+    // tested, and this text is what decides the GCC work group.
+    workDescription: labelledValue(pages, /Name\s+Of\s+Work/i, 'Work', 460)
+      || text.match(/Name Of Work\s+(.+?)(?=\s+Name Of Contractor|\n)/i)?.[1]?.trim() || '',
     measurementDate: extractMeasurementDate(flatText),
   };
 }
