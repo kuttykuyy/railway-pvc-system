@@ -587,8 +587,15 @@ function NewBillPageContent() {
 
       if (hasDeduction) {
         const cementCost = (item as any).cementDeduction || (originalAmount - netAmount);
-        const cementQty = (item as any).cementQuantityQuintals || 0;
-        const cementRate = (item as any).cementRatePerQuintal || '';
+        // Store cement in MT at a per-MT rate. The "derive cement from items" path
+        // already does, and the report's cement breakup is headed MT — carrying
+        // quintals here made the statement read "243.87 MT at Rs 599.78/MT", ten times
+        // the quantity at a tenth of the rate. The product was right, so the amount
+        // was never wrong, but both figures on the page were.
+        const quintals = Number((item as any).cementQuantityQuintals) || 0;
+        const ratePerQuintal = Number((item as any).cementRatePerQuintal) || 0;
+        const cementQty = quintals / 10;
+        const cementRate = ratePerQuintal ? ratePerQuintal * 10 : '';
 
         const mainCode = subClassification.code.charAt(0);
         const cementSub = allSubClassifications.find(sub => sub.code.toUpperCase() === `${mainCode}C`);

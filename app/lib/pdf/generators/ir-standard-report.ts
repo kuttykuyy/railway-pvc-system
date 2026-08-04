@@ -1031,12 +1031,26 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
 
     y = pdf.lastAutoTable.finalY + 6;
 
-    // ── CEMENT BREAKUP (derived) — shown for reference; already part of the items above ──
+    // Cement is handled two ways. Either it is derived purely for reference, leaving the
+    // work items whole — then it is already inside the schedule lines. Or it is split OUT
+    // of the work items, which are then carried at a rate net of cement — then the
+    // schedule lines plus the cement value reproduce W, and the cement is a genuine part
+    // of the bill total. Saying "not added to the bill total" in that second case
+    // contradicts the schedule summary, which has to add it back to reach W.
+    const derivedCementTotal = Math.round(cementBreakupRows.reduce((sum, r) => sum + r.amount, 0) * 100) / 100;
+    const scheduleItemsTotal = Math.round(scheduleRows.reduce((sum, r) => sum + r.amount, 0) * 100) / 100;
+    const billW = Math.round((Number(bill.grossBillAmount ?? bill.billAmount) || scheduleItemsTotal) * 100) / 100;
+    const cementSplitOutOfItems = derivedCementTotal > 0
+      && Math.abs(scheduleItemsTotal + derivedCementTotal - billW) <= Math.max(1, Math.abs(billW) * 0.001);
+
+    // ── CEMENT BREAKUP (derived) ──
     if (cementBreakupRows.length > 0) {
       ensureSpace(28 + cementBreakupRows.length * 8);
       pdf.setFontSize(9);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('CEMENT BREAKUP (derived from the items above — not added to the bill total)', mL, y);
+      pdf.text(cementSplitOutOfItems
+        ? 'CEMENT BREAKUP (cement value separated out of the work items above — the item rates below are net of cement)'
+        : 'CEMENT BREAKUP (derived from the items above — not added to the bill total)', mL, y);
       y += 2;
       let cSl = 0;
       let cTotal = 0;
@@ -1172,7 +1186,12 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       // (item 0510 of SR/MDU/Civil/2024/0037/B8: 127.1 x 3517.49 is Rs 161.72 below
       // the printed 4,47,234.70, because the true quantity is 127.146).
       summaryBody.push([
-        `${totalAdjust < 0 ? 'Less' : 'Add'}: Difference to printed Bill Amount (rounded quantities)`,
+        cementSplitOutOfItems
+          // The schedule lines above are net of cement, so the cement value has to come
+          // back to reach W. Naming it "rounded quantities" hid an entire component of
+          // the bill behind a rounding note.
+          ? 'Add: Cement value separated out of the work items (per cement breakup above)'
+          : `${totalAdjust < 0 ? 'Less' : 'Add'}: Difference to printed Bill Amount (rounded quantities)`,
         { content: signed(totalAdjust), styles: { halign: 'right' as const } },
       ]);
       summaryBody.push([
