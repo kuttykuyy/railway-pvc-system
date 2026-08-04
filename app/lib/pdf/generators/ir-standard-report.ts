@@ -1733,26 +1733,57 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       // factor "not being applied". Stating both series — and that the variation is
       // identical either way — answers that without changing any figure, since the
       // factor cancels in (Lq - Lb) / Lb.
+      // Set in a tinted, bordered box rather than a footnote. This is the answer to a
+      // query that has already had a proposal returned, so the officer has to be able
+      // to find it — at 7.5pt italic grey it read as small print and was missed.
       if (orderedIdxNames.includes('Labour')) {
-        let noteY = ((pdf as any).lastAutoTable?.finalY ?? y) + 5;
         const lb = baseValLookup.get('Labour') ?? 0;
         const lq = getIndexAvg(quarterlyAverages, 'Labour');
         if (lb > 0) {
-          pdf.setFontSize(7.5);
-          pdf.setFont('helvetica', 'italic');
-          pdf.setTextColor(80, 80, 80);
           const linked = (v: number) => (v * 2.88).toFixed(2);
-          pdf.text(
-            pdfSafe(`* Labour = CPI-IW (Industrial Workers), base 2016=100. Equivalent 2001=100 figures (link factor 2.88): base ${linked(lb)}, quarter average ${linked(lq)}.`),
-            mL, noteY,
-          );
-          noteY += 3.6;
-          pdf.text(
-            pdfSafe('  The link factor applies to both base and quarter equally, so (Lq - Lb) / Lb - and therefore the labour PVC - is identical under either series.'),
-            mL, noteY,
-          );
+          const variation = ((lq - lb) / lb) * 100;
+          const lines = [
+            `Labour index = CPI-IW (Industrial Workers), base 2016=100, applied to BOTH the base month and the quarter.`,
+            `Equivalent 2001=100 figures using the linking factor of 2.88:  base ${linked(lb)}   quarter average ${linked(lq)}`,
+            `Variation is ${variation.toFixed(4)}% on either series - the factor applies to base and quarter alike, so it cancels in (Lq - Lb) / Lb and the labour price variation is unchanged.`,
+          ];
+
+          // Wrap first, then size the box to what actually wrapped — a long sentence
+          // measured as one line would have spilled out of the bottom of the border.
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8);
+          const wrapped = lines.flatMap(line => pdf.splitTextToSize(pdfSafe(line), contentW - 6) as string[]);
+          const lineH = 4.2;
+          const boxH = 9 + wrapped.length * lineH + 2;
+          // Move y to where the box would start BEFORE asking for room: ensureSpace
+          // measures from y and resets it to the top margin if it has to break the
+          // page, and reading lastAutoTable afterwards would point at the old page.
+          y = ((pdf as any).lastAutoTable?.finalY ?? y) + 6;
+          ensureSpace(boxH + 4);
+          const boxTop = y;
+          pdf.setFillColor(247, 243, 226);
+          pdf.setDrawColor(190, 165, 95);
+          pdf.setLineWidth(0.4);
+          pdf.rect(mL, boxTop, contentW, boxH, 'FD');
+
+          pdf.setFontSize(8.5);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(90, 70, 10);
+          pdf.text(pdfSafe('NOTE ON THE CPI-IW LINKING FACTOR (2.88)'), mL + 3, boxTop + 5.5);
+
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8);
+          pdf.setTextColor(40, 40, 40);
+          let noteY = boxTop + 11;
+          for (const line of wrapped) {
+            pdf.text(line, mL + 3, noteY);
+            noteY += lineH;
+          }
+
           pdf.setTextColor(0, 0, 0);
-          y = noteY + 3;
+          pdf.setDrawColor(0, 0, 0);
+          pdf.setLineWidth(0.2);
+          y = boxTop + boxH + 4;
         }
       }
 
