@@ -346,227 +346,115 @@ export async function GET(request: NextRequest) {
     pdf.text(format(new Date(contract.baseMonth), 'MMM yyyy'), marginLeft + 90, yPosition);
     yPosition += 20;
 
-    // TABLE 1: General Classifications (Labour, Fuel, Materials, Plant & Machinery + Non-TMT Steel)
-    const generalTableData: any[] = [];
-    billDataArray.forEach(billData => {
-      const generalTotal = billData.labour + billData.material + billData.fuel + billData.plantMachinery + 
-                          billData.steelAngleChannel + billData.steelPlates + billData.steelOtherSections;
-      generalTableData.push([
-        billData.quarter,
-        billData.billNo,
-        billData.billAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-        billData.labour.toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-        billData.material.toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-        billData.fuel.toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-        billData.plantMachinery.toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-        billData.steelAngleChannel.toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-        billData.steelPlates.toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-        billData.steelOtherSections.toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-        generalTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })
-      ]);
-    });
-
-    // Add column totals for general table
-    const totalForGeneralClassifications = totalForLabourFuelMaterialsPlant + totalForSteelAngleChannel + totalForSteelPlates + totalForSteelOtherSections;
-    generalTableData.push([
-      'COLUMN TOTALS',
-      '',
-      billDataArray.reduce((sum, row) => sum + row.billAmount, 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-      billDataArray.reduce((sum, row) => sum + row.labour, 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-      billDataArray.reduce((sum, row) => sum + row.material, 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-      billDataArray.reduce((sum, row) => sum + row.fuel, 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-      billDataArray.reduce((sum, row) => sum + row.plantMachinery, 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-      totalForSteelAngleChannel.toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-      totalForSteelPlates.toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-      totalForSteelOtherSections.toLocaleString('en-IN', { maximumFractionDigits: 2 }),
-      totalForGeneralClassifications.toLocaleString('en-IN', { maximumFractionDigits: 2 })
-    ]);
-
-    // Section header for General Classifications
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('GENERAL CLASSIFICATIONS', marginLeft, yPosition);
-    yPosition += 15;
-
-    // Table 1: General Classifications
-    autoTable(pdf, {
-      head: [['Quarter', 'Bill No', 'Bill Amount', 'Labour', 'Material', 'Fuel', 'Plant Machinery', 'Angle/Channel', 'Plates', 'Other Sections', 'Total']],
-      body: generalTableData,
-      startY: yPosition,
-      theme: 'grid',
-      margin: { left: marginLeft, right: marginRight },
-      tableWidth: 'auto',
-      headStyles: { 
-        fillColor: [33, 150, 243], // Blue background
-        textColor: [255, 255, 255], // White text
-        fontSize: 8,
-        fontStyle: 'bold',
-        lineWidth: 0.5,
-        lineColor: [0, 0, 0],
-        cellPadding: 3,
-        halign: 'center'
-      },
-      bodyStyles: { 
-        fontSize: 7,
-        textColor: [0, 0, 0],
-        lineWidth: 0.5,
-        lineColor: [0, 0, 0],
-        cellPadding: 2
-      },
-      columnStyles: {
-        0: { cellWidth: 'auto', overflow: 'linebreak', halign: 'left', minCellWidth: 35 }, // Quarter
-        1: { cellWidth: 'auto', overflow: 'linebreak', halign: 'left', minCellWidth: 65 }, // Bill No
-        2: { halign: 'right', cellWidth: 'auto', minCellWidth: 55 }, // Bill Amount
-        3: { halign: 'right', cellWidth: 'auto', minCellWidth: 50 }, // Labour
-        4: { halign: 'right', cellWidth: 'auto', minCellWidth: 50 }, // Material
-        5: { halign: 'right', cellWidth: 'auto', minCellWidth: 45 }, // Fuel
-        6: { halign: 'right', cellWidth: 'auto', minCellWidth: 55 }, // Plant Machinery
-        7: { halign: 'right', cellWidth: 'auto', minCellWidth: 50 }, // Angle/Channel
-        8: { halign: 'right', cellWidth: 'auto', minCellWidth: 45 }, // Plates
-        9: { halign: 'right', cellWidth: 'auto', minCellWidth: 50 }, // Other Sections
-        10: { halign: 'right', fontStyle: 'bold', cellWidth: 'auto', minCellWidth: 55 } // Total
-      },
-      didParseCell: function(data: any) {
-        // Highlight total row
-        if (data.row.index === generalTableData.length - 1) {
-          data.cell.styles.fillColor = [187, 222, 251]; // Light blue
-          data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.lineWidth = 1;
-        }
+    // Bill-wise abstract in the railway proforma: one row per bill, every component its
+    // own column, so the sheet adds up across and down. The three tables this replaced
+    // (General / Cement / TMT) kept the steel sections inside "General" while cement and
+    // TMT sat apart, so no row ever showed a bill's own total.
+    const money = (n: number) => (n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+      'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    const twoDigits = (n: number): string =>
+      n < 20 ? ONES[n] : `${TENS[Math.floor(n / 10)]}${n % 10 ? ` ${ONES[n % 10]}` : ''}`;
+    /** Indian numbering: crore, lakh, thousand, hundred. */
+    const amountInWords = (amount: number): string => {
+      const negative = amount < 0;
+      let n = Math.abs(Math.round(amount));
+      if (n === 0) return 'Rupees Nil';
+      const parts: string[] = [];
+      const units: Array<[number, string]> = [[10000000, 'Crore'], [100000, 'Lakh'], [1000, 'Thousand'], [100, 'Hundred']];
+      for (const [value, label] of units) {
+        const count = Math.floor(n / value);
+        if (count > 0) { parts.push(`${twoDigits(count)} ${label}`); n -= count * value; }
       }
-    });
-
-    yPosition = (pdf as any).lastAutoTable?.finalY ? (pdf as any).lastAutoTable.finalY + 25 : yPosition + 200;
-
-    // TABLE 2: Cement Components
-    const cementTableData: any[] = [];
-    billDataArray.forEach(billData => {
-      cementTableData.push([
-        billData.quarter,
+      if (n > 0) parts.push(twoDigits(n));
+      return `Rupees ${parts.join(' ')} only${negative ? ' (recoverable from the contractor)' : ''}`;
+    };
+    const abstractRows: any[] = [];
+    let colLabour = 0, colPlant = 0, colFuel = 0, colMaterial = 0, colSteel = 0, colValue = 0;
+    billDataArray.forEach((billData, index) => {
+      const steel = billData.steelTmt + billData.steelAngleChannel + billData.steelPlates + billData.steelOtherSections;
+      colValue += billData.billAmount;
+      colLabour += billData.labour;
+      colPlant += billData.plantMachinery;
+      colFuel += billData.fuel;
+      colMaterial += billData.material;
+      colSteel += steel;
+      abstractRows.push([
+        String(index + 1),
         billData.billNo,
-        billData.cement.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+        billData.quarter,
+        money(billData.billAmount),
+        money(billData.labour),
+        money(billData.plantMachinery),
+        money(billData.fuel),
+        money(billData.cement),
+        money(steel),
+        money(billData.material),
+        money(billData.total),
       ]);
     });
-
-    // Add total row for cement
-    cementTableData.push([
-      'TOTAL FOR CEMENT',
-      '',
-      totalForCement.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+    abstractRows.push([
+      '', 'TOTAL', '',
+      money(colValue),
+      money(colLabour),
+      money(colPlant),
+      money(colFuel),
+      money(totalForCement),
+      money(colSteel),
+      money(colMaterial),
+      money(grandTotal),
     ]);
 
-    // Section header for Cement Components
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('CEMENT COMPONENTS', marginLeft, yPosition);
-    yPosition += 15;
-
-    // Table 2: Cement Components
     autoTable(pdf, {
-      head: [['Quarter', 'Bill No', 'Cement PVC']],
-      body: cementTableData,
+      head: [['Sl.', 'Bill No.', 'Quarter', 'Value of work (W)', 'Labour', 'P & M', 'Fuel', 'Cement', 'Steel', 'Other materials', 'Total PVC']],
+      body: abstractRows,
       startY: yPosition,
       theme: 'grid',
       margin: { left: marginLeft, right: marginRight },
       tableWidth: 'auto',
-      headStyles: { 
-        fillColor: [255, 152, 0], // Orange background
-        textColor: [255, 255, 255], // White text
-        fontSize: 9,
+      headStyles: {
+        fillColor: [33, 150, 243],
+        textColor: [255, 255, 255],
         fontStyle: 'bold',
-        lineWidth: 0.5,
-        lineColor: [0, 0, 0],
+        fontSize: 8,
+        halign: 'center',
+        valign: 'middle',
         cellPadding: 4,
-        halign: 'center'
       },
-      bodyStyles: { 
-        fontSize: 8,
-        textColor: [0, 0, 0],
-        lineWidth: 0.5,
-        lineColor: [0, 0, 0],
-        cellPadding: 3
-      },
+      bodyStyles: { fontSize: 8, cellPadding: 3, textColor: [0, 0, 0] },
+      styles: { lineColor: [120, 120, 120], lineWidth: 0.5, font: 'helvetica', overflow: 'linebreak' },
       columnStyles: {
-        0: { cellWidth: 'auto', overflow: 'linebreak', halign: 'left', minCellWidth: 60 }, // Quarter
-        1: { cellWidth: 'auto', overflow: 'linebreak', halign: 'left', minCellWidth: 120 }, // Bill No
-        2: { halign: 'right', cellWidth: 'auto', minCellWidth: 80 } // Cement PVC
+        0: { halign: 'center', cellWidth: 24 },
+        1: { halign: 'left', cellWidth: 'auto', minCellWidth: 70 },
+        2: { halign: 'left', cellWidth: 'auto', minCellWidth: 46 },
+        3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' },
+        6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' },
+        9: { halign: 'right' }, 10: { halign: 'right', fontStyle: 'bold' },
       },
-      didParseCell: function(data: any) {
-        // Highlight total row
-        if (data.row.index === cementTableData.length - 1) {
-          data.cell.styles.fillColor = [255, 224, 178]; // Light orange
+      didParseCell: function (data: any) {
+        if (data.row.index === abstractRows.length - 1) {
+          data.cell.styles.fillColor = [207, 216, 220];
           data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.lineWidth = 1;
         }
-      }
+      },
     });
 
-    yPosition = (pdf as any).lastAutoTable?.finalY ? (pdf as any).lastAutoTable.finalY + 25 : yPosition + 200;
+    yPosition = ((pdf as any).lastAutoTable?.finalY ?? yPosition) + 16;
 
-    // TABLE 3: TMT Steel Components
-    const steelTableData: any[] = [];
-    billDataArray.forEach(billData => {
-      steelTableData.push([
-        billData.quarter,
-        billData.billNo,
-        billData.steelTmt.toLocaleString('en-IN', { maximumFractionDigits: 2 })
-      ]);
-    });
+    // The four steel categories price against different JPC baskets, so the single Steel
+    // column above is broken out rather than dropped.
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(70, 70, 70);
+    pdf.text(
+      `Steel comprises  -  TMT bars: ${money(totalForSteelTmt)}   Angle / channel: ${money(totalForSteelAngleChannel)}`
+      + `   Plates: ${money(totalForSteelPlates)}   Other sections: ${money(totalForSteelOtherSections)}`,
+      marginLeft, yPosition,
+    );
+    pdf.setTextColor(0, 0, 0);
+    yPosition += 24;
 
-    // Add total row for TMT steel
-    steelTableData.push([
-      'TOTAL FOR TMT STEEL',
-      '',
-      totalForSteelTmt.toLocaleString('en-IN', { maximumFractionDigits: 2 })
-    ]);
-
-    // Section header for TMT Steel Components
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('TMT STEEL COMPONENTS', marginLeft, yPosition);
-    yPosition += 15;
-
-    // Table 3: TMT Steel Components
-    autoTable(pdf, {
-      head: [['Quarter', 'Bill No', 'TMT Bars PVC']],
-      body: steelTableData,
-      startY: yPosition,
-      theme: 'grid',
-      margin: { left: marginLeft, right: marginRight },
-      tableWidth: 'auto',
-      headStyles: { 
-        fillColor: [96, 125, 139], // Grey background
-        textColor: [255, 255, 255], // White text
-        fontSize: 9,
-        fontStyle: 'bold',
-        lineWidth: 0.5,
-        lineColor: [0, 0, 0],
-        cellPadding: 4,
-        halign: 'center'
-      },
-      bodyStyles: { 
-        fontSize: 8,
-        textColor: [0, 0, 0],
-        lineWidth: 0.5,
-        lineColor: [0, 0, 0],
-        cellPadding: 3
-      },
-      columnStyles: {
-        0: { cellWidth: 'auto', overflow: 'linebreak', halign: 'left', minCellWidth: 60 }, // Quarter
-        1: { cellWidth: 'auto', overflow: 'linebreak', halign: 'left', minCellWidth: 120 }, // Bill No
-        2: { halign: 'right', cellWidth: 'auto', minCellWidth: 80 } // TMT Bars PVC
-      },
-      didParseCell: function(data: any) {
-        // Highlight total row
-        if (data.row.index === steelTableData.length - 1) {
-          data.cell.styles.fillColor = [207, 216, 220]; // Light grey
-          data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.lineWidth = 1;
-        }
-      }
-    });
-
-    yPosition = (pdf as any).lastAutoTable?.finalY ? (pdf as any).lastAutoTable.finalY + 30 : yPosition + 200;
 
     // Grand Total - already calculated above
     const totalSay = Math.round(grandTotal);
@@ -587,6 +475,38 @@ export async function GET(request: NextRequest) {
     pdf.text(grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 }), pageWidth - marginRight - 10, yPosition + 15, { align: 'right' });
     pdf.text('Say:', marginLeft + 10, yPosition + 37);
     pdf.text(totalSay.toLocaleString('en-IN'), pageWidth - marginRight - 10, yPosition + 37, { align: 'right' });
+    yPosition += 45;
+
+    // The figure in words, so it cannot be altered after signing without the two
+    // disagreeing — a railway money statement always carries both.
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(amountInWords(totalSay), marginLeft, yPosition + 16);
+    yPosition += 34;
+
+    // Certification and signatures. This statement goes to an accounts office, and one
+    // has already been returned to be "duly signed by the competent authority".
+    pdf.setFontSize(9);
+    pdf.text(
+      pdf.splitTextToSize(
+        'Certified that the price variation shown above has been calculated as per the conditions of the '
+        + 'contract and the indices published by the competent authority.',
+        contentWidth,
+      ),
+      marginLeft, yPosition,
+    );
+    yPosition += 46;
+
+    const signWidth = contentWidth / 3;
+    ['Prepared by', 'Checked by', 'Accepted by'].forEach((role, i) => {
+      const x = marginLeft + i * signWidth;
+      pdf.setLineWidth(0.5);
+      pdf.line(x, yPosition, x + signWidth - 24, yPosition);
+      pdf.setFontSize(8);
+      pdf.setTextColor(90, 90, 90);
+      pdf.text(role, x, yPosition + 11);
+    });
+    pdf.setTextColor(0, 0, 0);
 
     // Add footer to all pages if footer text is provided
     if (brandingSettings.reportFooterText) {

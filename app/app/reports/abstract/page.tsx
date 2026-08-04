@@ -81,6 +81,35 @@ const fmt = (n: number, decimals = 2) =>
 
 const numClass = (n: number) => (n < 0 ? 'text-red-600' : '');
 
+// A railway money statement carries the figure in words as well as digits, so the
+// amount cannot be altered after signing without the two disagreeing.
+const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+  'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+function twoDigits(n: number): string {
+  if (n < 20) return ONES[n];
+  return `${TENS[Math.floor(n / 10)]}${n % 10 ? ` ${ONES[n % 10]}` : ''}`;
+}
+
+/** Indian numbering: crore, lakh, thousand, hundred. */
+function amountInWords(amount: number): string {
+  const negative = amount < 0;
+  let n = Math.abs(Math.round(amount));
+  if (n === 0) return 'Rupees Nil';
+  const parts: string[] = [];
+  const units: Array<[number, string]> = [[10000000, 'Crore'], [100000, 'Lakh'], [1000, 'Thousand'], [100, 'Hundred']];
+  for (const [value, label] of units) {
+    const count = Math.floor(n / value);
+    if (count > 0) {
+      parts.push(`${twoDigits(count)} ${label}`);
+      n -= count * value;
+    }
+  }
+  if (n > 0) parts.push(twoDigits(n));
+  return `Rupees ${parts.join(' ')} only${negative ? ' (recoverable from the contractor)' : ''}`;
+}
+
 function Th({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
     <th className={`border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 bg-gray-50 ${right ? 'text-right' : 'text-left'}`}>
@@ -168,6 +197,20 @@ function AbstractPageContent() {
     }
   };
 
+  // Column totals for the abstract's TOTAL row. Cement, steel-by-category and the grand
+  // total already come from the API; these are the columns it does not send.
+  const totals = (abstractData?.billData || []).reduce(
+    (sum, row) => ({
+      billAmount: sum.billAmount + (row.billAmount || 0),
+      labour: sum.labour + row.labour,
+      plantMachinery: sum.plantMachinery + row.plantMachinery,
+      fuel: sum.fuel + row.fuel,
+      material: sum.material + row.material,
+      steel: sum.steel + row.steelTmt + row.steelAngleChannel + row.steelPlates + row.steelOtherSections,
+    }),
+    { billAmount: 0, labour: 0, plantMachinery: 0, fuel: 0, material: 0, steel: 0 },
+  );
+
   if (isLoading) return <div className="flex justify-center py-16"><LoadingSpinner size="lg" text="Loading..." /></div>;
 
   return (
@@ -211,120 +254,95 @@ function AbstractPageContent() {
         <div className="flex justify-center py-16"><LoadingSpinner size="lg" text="Generating abstract..." /></div>
       ) : abstractData ? (
         <div className="space-y-6">
-          {/* Contract details */}
-          <div className="border border-gray-200 rounded-lg p-4 bg-white">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
-              <div><span className="text-gray-500">Agreement No</span><p className="font-medium">{abstractData.contract.agreementNo}</p></div>
+          {/* Proforma heading and contract block, matching the single-bill IR statement so
+              the two documents read as one set when submitted together. */}
+          <div className="border border-gray-300 rounded-lg bg-white">
+            <div className="border-b border-gray-300 px-4 py-3 text-center">
+              <h2 className="text-base font-semibold text-gray-900">STATEMENT SHOWING PRICE VARIATION CLAUSE &mdash; ABSTRACT</h2>
+              <p className="text-xs text-gray-500 mt-0.5">(As per GCC Clause 46A / Railway Board Guidelines)</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-2 p-4 text-sm">
+              <div className="md:col-span-3"><span className="text-gray-500">Name of Work</span><p className="font-medium">{abstractData.contract.workDescription}</p></div>
+              <div><span className="text-gray-500">Agreement No.</span><p className="font-medium">{abstractData.contract.agreementNo}</p></div>
               <div><span className="text-gray-500">Contractor</span><p className="font-medium">{abstractData.contract.contractorName}</p></div>
               <div><span className="text-gray-500">Date of Opening</span><p className="font-medium">{abstractData.contract.dateOfOpening}</p></div>
-              <div className="col-span-2"><span className="text-gray-500">Work</span><p className="font-medium">{abstractData.contract.workDescription}</p></div>
-              <div><span className="text-gray-500">Base Month</span><p className="font-medium">{abstractData.contract.baseMonth}</p></div>
+              <div><span className="text-gray-500">Base Month (T0)</span><p className="font-medium">{abstractData.contract.baseMonth}</p></div>
+              <div><span className="text-gray-500">Bills covered</span><p className="font-medium">{abstractData.billData?.length || 0}</p></div>
             </div>
           </div>
 
-          {/* Table 1: General Classifications */}
-          <div>
-            <SectionTitle>General Classifications</SectionTitle>
-            <div className="overflow-x-auto border border-gray-200 rounded-lg">
+          {/* Bill-wise abstract in the railway proforma: every component gets its own
+              column, so the sheet adds up across and down on one page. The three-table
+              split this replaced kept steel sections inside "General" while cement and
+              TMT sat in tables of their own, so no single row ever showed a bill's total. */}
+          <div className="border border-gray-300 rounded-lg overflow-hidden bg-white">
+            <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr>
+                    <Th>Sl.</Th>
+                    <Th>Bill No.</Th>
                     <Th>Quarter</Th>
-                    <Th>Bill No</Th>
-                    <Th right>Bill Amount</Th>
+                    <Th right>Value of work (W)</Th>
                     <Th right>Labour</Th>
-                    <Th right>Material</Th>
+                    <Th right>P &amp; M</Th>
                     <Th right>Fuel</Th>
-                    <Th right>Plant</Th>
-                    <Th right>Angle/Channel</Th>
-                    <Th right>Plates</Th>
-                    <Th right>Other Sections</Th>
-                    <Th right>Total</Th>
+                    <Th right>Cement</Th>
+                    <Th right>Steel</Th>
+                    <Th right>Other materials</Th>
+                    <Th right>Total PVC</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {abstractData.billData?.map((row, i) => {
-                    const genTotal = row.labour + row.material + row.fuel + row.plantMachinery +
-                      row.steelAngleChannel + row.steelPlates + row.steelOtherSections;
+                    const steel = row.steelTmt + row.steelAngleChannel + row.steelPlates + row.steelOtherSections;
                     return (
                       <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <Td bold>{row.quarter}</Td>
-                        <Td>{row.billNo || '-'}</Td>
+                        <Td>{i + 1}</Td>
+                        <Td bold>{row.billNo || '-'}</Td>
+                        <Td>{row.quarter}</Td>
                         <Td right>{fmt(row.billAmount)}</Td>
                         <Td right><span className={numClass(row.labour)}>{fmt(row.labour)}</span></Td>
-                        <Td right><span className={numClass(row.material)}>{fmt(row.material)}</span></Td>
-                        <Td right><span className={numClass(row.fuel)}>{fmt(row.fuel)}</span></Td>
                         <Td right><span className={numClass(row.plantMachinery)}>{fmt(row.plantMachinery)}</span></Td>
-                        <Td right><span className={numClass(row.steelAngleChannel)}>{fmt(row.steelAngleChannel)}</span></Td>
-                        <Td right><span className={numClass(row.steelPlates)}>{fmt(row.steelPlates)}</span></Td>
-                        <Td right><span className={numClass(row.steelOtherSections)}>{fmt(row.steelOtherSections)}</span></Td>
-                        <Td right bold><span className={numClass(genTotal)}>{fmt(genTotal)}</span></Td>
+                        <Td right><span className={numClass(row.fuel)}>{fmt(row.fuel)}</span></Td>
+                        <Td right><span className={numClass(row.cement)}>{fmt(row.cement)}</span></Td>
+                        <Td right><span className={numClass(steel)}>{fmt(steel)}</span></Td>
+                        <Td right><span className={numClass(row.material)}>{fmt(row.material)}</span></Td>
+                        <Td right bold><span className={numClass(row.total)}>{fmt(row.total)}</span></Td>
                       </tr>
                     );
                   })}
                   <tr className="bg-gray-100 font-semibold">
-                    <td className="border border-gray-200 px-3 py-2 text-xs text-gray-600" colSpan={2}>TOTAL</td>
-                    <Td right>{fmt(abstractData.billData?.reduce((s, r) => s + (r.billAmount || 0), 0))}</Td>
-                    <Td right><span className={numClass(abstractData.billData?.reduce((s, r) => s + r.labour, 0))}>{fmt(abstractData.billData?.reduce((s, r) => s + r.labour, 0))}</span></Td>
-                    <Td right><span className={numClass(abstractData.billData?.reduce((s, r) => s + r.material, 0))}>{fmt(abstractData.billData?.reduce((s, r) => s + r.material, 0))}</span></Td>
-                    <Td right><span className={numClass(abstractData.billData?.reduce((s, r) => s + r.fuel, 0))}>{fmt(abstractData.billData?.reduce((s, r) => s + r.fuel, 0))}</span></Td>
-                    <Td right><span className={numClass(abstractData.billData?.reduce((s, r) => s + r.plantMachinery, 0))}>{fmt(abstractData.billData?.reduce((s, r) => s + r.plantMachinery, 0))}</span></Td>
-                    <Td right><span className={numClass(abstractData.totalForSteelAngleChannel)}>{fmt(abstractData.totalForSteelAngleChannel)}</span></Td>
-                    <Td right><span className={numClass(abstractData.totalForSteelPlates)}>{fmt(abstractData.totalForSteelPlates)}</span></Td>
-                    <Td right><span className={numClass(abstractData.totalForSteelOtherSections)}>{fmt(abstractData.totalForSteelOtherSections)}</span></Td>
-                    <Td right bold><span className={numClass(abstractData.totalForLabourFuelMaterialsPlant)}>{fmt(abstractData.totalForLabourFuelMaterialsPlant)}</span></Td>
+                    <td className="border border-gray-200 px-3 py-2 text-xs text-gray-600" colSpan={3}>TOTAL</td>
+                    <Td right>{fmt(totals.billAmount)}</Td>
+                    <Td right><span className={numClass(totals.labour)}>{fmt(totals.labour)}</span></Td>
+                    <Td right><span className={numClass(totals.plantMachinery)}>{fmt(totals.plantMachinery)}</span></Td>
+                    <Td right><span className={numClass(totals.fuel)}>{fmt(totals.fuel)}</span></Td>
+                    <Td right><span className={numClass(abstractData.totalForCement)}>{fmt(abstractData.totalForCement)}</span></Td>
+                    <Td right><span className={numClass(totals.steel)}>{fmt(totals.steel)}</span></Td>
+                    <Td right><span className={numClass(totals.material)}>{fmt(totals.material)}</span></Td>
+                    <Td right bold><span className={numClass(abstractData.grandTotal)}>{fmt(abstractData.grandTotal)}</span></Td>
                   </tr>
                 </tbody>
               </table>
             </div>
-          </div>
 
-          {/* Table 2 + 3 side by side */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Cement */}
-            <div>
-              <SectionTitle>Cement</SectionTitle>
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <table className="w-full border-collapse text-sm">
-                  <thead><tr><Th>Quarter</Th><Th>Bill No</Th><Th right>Cement PVC</Th></tr></thead>
-                  <tbody>
-                    {abstractData.billData?.map((row, i) => (
-                      <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <Td bold>{row.quarter}</Td>
-                        <Td>{row.billNo || '-'}</Td>
-                        <Td right><span className={numClass(row.cement)}>{fmt(row.cement)}</span></Td>
-                      </tr>
-                    ))}
-                    <tr className="bg-gray-100 font-semibold">
-                      <td className="border border-gray-200 px-3 py-2 text-xs text-gray-600" colSpan={2}>TOTAL</td>
-                      <Td right><span className={numClass(abstractData.totalForCement)}>{fmt(abstractData.totalForCement)}</span></Td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            {/* The four steel categories are priced against different JPC baskets, so the
+                single Steel column is split out here rather than lost. */}
+            <div className="flex flex-wrap gap-x-8 gap-y-1 border-t border-gray-200 px-4 py-2.5 text-xs text-gray-600">
+              <span className="font-medium text-gray-500">Steel comprises:</span>
+              <span>TMT bars <span className={`font-medium ${numClass(abstractData.totalForSteelTmt)}`}>{fmt(abstractData.totalForSteelTmt)}</span></span>
+              <span>Angle / channel <span className={`font-medium ${numClass(abstractData.totalForSteelAngleChannel)}`}>{fmt(abstractData.totalForSteelAngleChannel)}</span></span>
+              <span>Plates <span className={`font-medium ${numClass(abstractData.totalForSteelPlates)}`}>{fmt(abstractData.totalForSteelPlates)}</span></span>
+              <span>Other sections <span className={`font-medium ${numClass(abstractData.totalForSteelOtherSections)}`}>{fmt(abstractData.totalForSteelOtherSections)}</span></span>
             </div>
 
-            {/* TMT Steel */}
-            <div>
-              <SectionTitle>TMT Steel</SectionTitle>
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <table className="w-full border-collapse text-sm">
-                  <thead><tr><Th>Quarter</Th><Th>Bill No</Th><Th right>TMT PVC</Th></tr></thead>
-                  <tbody>
-                    {abstractData.billData?.map((row, i) => (
-                      <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <Td bold>{row.quarter}</Td>
-                        <Td>{row.billNo || '-'}</Td>
-                        <Td right><span className={numClass(row.steelTmt)}>{fmt(row.steelTmt)}</span></Td>
-                      </tr>
-                    ))}
-                    <tr className="bg-gray-100 font-semibold">
-                      <td className="border border-gray-200 px-3 py-2 text-xs text-gray-600" colSpan={2}>TOTAL</td>
-                      <Td right><span className={numClass(abstractData.totalForSteelTmt)}>{fmt(abstractData.totalForSteelTmt)}</span></Td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            <div className="border-t border-gray-200 px-4 py-3">
+              <p className="text-sm">
+                <span className="text-gray-500">Total price variation {abstractData.totalSay < 0 ? 'recoverable' : 'payable'}:</span>{' '}
+                <span className={`font-semibold ${numClass(abstractData.totalSay)}`}>Rs. {fmt(abstractData.totalSay, 0)}</span>
+              </p>
+              <p className="mt-1 text-sm text-gray-700">{amountInWords(abstractData.totalSay)}</p>
             </div>
           </div>
 
@@ -369,19 +387,20 @@ function AbstractPageContent() {
             </div>
           )}
 
-          {/* Grand Total */}
-          <div className="flex justify-end gap-4">
-            <div className="border border-gray-200 rounded-lg px-6 py-4 bg-white text-right min-w-40">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Total</p>
-              <p className={`text-xl font-bold ${abstractData.grandTotal < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                ₹{fmt(abstractData.grandTotal)}
-              </p>
-            </div>
-            <div className="border border-emerald-200 rounded-lg px-6 py-4 bg-emerald-50 text-right min-w-40">
-              <p className="text-xs text-emerald-500 uppercase tracking-wide">Say</p>
-              <p className={`text-xl font-bold ${abstractData.totalSay < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
-                ₹{fmt(abstractData.totalSay, 0)}
-              </p>
+          {/* Certification and signatures. A statement that goes to an accounts office is
+              a signed document; leaving nowhere to sign is what gets one returned —
+              "the calculation sheet may be revised duly signed by the competent authority". */}
+          <div className="border border-gray-300 rounded-lg bg-white p-4">
+            <p className="text-sm text-gray-700">
+              Certified that the price variation shown above has been calculated as per the
+              conditions of the contract and the indices published by the competent authority.
+            </p>
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-6">
+              {['Prepared by', 'Checked by', 'Accepted by'].map(role => (
+                <div key={role} className="border-t border-gray-400 pt-1.5">
+                  <p className="text-xs text-gray-500">{role}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
