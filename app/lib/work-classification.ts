@@ -11,8 +11,9 @@ const MAIN_CLASSIFICATION_RULES: Array<{ code: string; label: string; patterns: 
     label: 'Earthwork in Formation', 
     patterns: [
       /\bearth\s*work\b/i, 
-      /\bformation\b/i, 
-      /\bembankment\b/i, 
+      /\bformation\b/i,
+      // "embankement" is a persistent misspelling in real Names of Work.
+      /\bembanke?ment\b/i,
       /\bcutting\b/i, 
       /\bcompaction\b/i,
       /\bfilling\b/i,
@@ -123,12 +124,27 @@ export function inferMainClassification(workDescription: string): MainWorkClassi
     };
   }
 
+  // Score by how OFTEN each group is referred to, not merely whether it was named
+  // once. A Name of Work states its scope repeatedly ("standardization of formation
+  // ... strengthening of existing formation"), while an unrelated group often appears
+  // a single time in passing ("including retaining wall") or not as scope at all —
+  // an addressee's designation, "Senior Section Engineer /Permanent way/BG", used to
+  // score Permanent Way Linking exactly as highly as the real subject of the work.
+  // Counting distinct patterns left those cases tied, and a tie was settled silently
+  // by the order of this array: for group 7, which has no B/C sub-divisions, that
+  // would have stripped a TMT item of its steel index.
   const scored = MAIN_CLASSIFICATION_RULES
     .map(rule => {
-      const matchedKeywords = rule.patterns
-        .map(pattern => contractText.match(pattern)?.[0]?.trim() || '')
-        .filter(Boolean);
-      return { ...rule, matchedKeywords, score: matchedKeywords.length };
+      const matchedKeywords: string[] = [];
+      let score = 0;
+      for (const pattern of rule.patterns) {
+        const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
+        const hits = contractText.match(new RegExp(pattern.source, flags));
+        if (!hits?.length) continue;
+        score += hits.length;
+        matchedKeywords.push(hits[0].trim());
+      }
+      return { ...rule, matchedKeywords, score };
     })
     .sort((left, right) => right.score - left.score);
   const best = scored[0];
