@@ -97,10 +97,18 @@ function extractItemCode(
   // page break — a six-digit USSOR code prints as "0510" + "80" across the join.
   continuedTokens: string[] = [],
 ) {
+  // A token in the item column belongs to whichever row it sits nearer to. The window
+  // used to run to nextRowY - 3, but a row's code is printed only about four units
+  // above its own line, so a widely-spaced row swallowed the NEXT row's code and
+  // glued it on as a suffix: item 5.9.2 of SR/MDU/Civil/2024/0037/B8 came out
+  // "5.9.2.0510", taking 0510 from the row below and inventing a DSR code that does
+  // not exist. A fixed margin cannot work — the code sits above its line on some rows
+  // and forty units below it on others — but the midpoint always separates them.
+  const rowBoundary = (rowY + nextRowY) / 2;
   const itemTokens = page.items
     .filter(item => {
       const x = normalizedX(page, item);
-      return x >= X.item[0] && x < X.item[1] && item.y >= rowY - 12 && item.y < nextRowY - 3;
+      return x >= X.item[0] && x < X.item[1] && item.y >= rowY - 12 && item.y < rowBoundary;
     })
     .sort((left, right) => left.y - right.y)
     .map(item => item.text.replace(/[()IG\s-]/gi, '').trim())
