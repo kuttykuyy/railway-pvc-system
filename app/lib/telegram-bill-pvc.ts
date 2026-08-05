@@ -403,16 +403,12 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       TelegramStep.IDLE,
     );
 
-    // With more than one statement waiting, paying them one link at a time is both a
-    // nuisance and dearer — point at the combined link and name the saving.
+    // With more than one statement waiting, paying them one link at a time is a
+    // nuisance — point at the combined link.
     const waitingCount = (stored.docPendingReports || []).length;
-    let payAllHint = '';
-    if (waitingCount > 1) {
-      const { getBulkReportPrice } = await import('./telegram-payment');
-      const bulk = await getBulkReportPrice(waitingCount);
-      payAllHint = `\n\n🧾 <b>${waitingCount} statements are now waiting.</b> Send <b>/payall</b> for one link covering all of them`
-        + (bulk.discount > 0 ? ` — ₹${formatMoney(bulk.total)} instead of ₹${formatMoney(bulk.gross)}, saving ₹${formatMoney(bulk.discount)}.` : '.');
-    }
+    const payAllHint = waitingCount > 1
+      ? `\n\n🧾 <b>${waitingCount} statements are now waiting.</b> Send <b>/payall</b> for one link covering all of them.`
+      : '';
 
     await sendTelegramMessage(
       chatId,
@@ -747,9 +743,16 @@ export async function renderAndSendPaidReport(chatId: string, paymentLinkId?: st
         ? (current.docPendingReports || []).filter((r) => r.linkId !== deliveredLinkId)
         : [];
       const newest = rest[rest.length - 1];
+      // Drop combined links with nothing left to deliver — a coupon can empty one,
+      // and a dead link that still takes money would be worse than no link.
+      const stillPending = new Set(rest.map((r) => r.linkId));
+      const bundles = (current.docBundlePayments || []).filter(
+        (b) => (b.coversLinkIds || []).some((id) => stillPending.has(id)),
+      );
       return {
         ...current,
         docPendingReports: rest.length ? rest : undefined,
+        docBundlePayments: bundles.length ? bundles : undefined,
         // The single slot follows: it must never still point at what was just sent.
         docPendingReport: newest?.payload,
         docPendingPaymentLinkId: newest?.linkId,

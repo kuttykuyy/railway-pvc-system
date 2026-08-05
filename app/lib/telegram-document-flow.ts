@@ -404,20 +404,35 @@ export async function handleFuelBasisReply(conversation: any, msg: string, chatI
 
 /**
  * Secret coupon codes that waive the report fee, from TELEGRAM_REPORT_COUPONS
- * (comma-separated, case-insensitive). Each entry is `CODE` or `CODE:YYYY-MM-DD`,
- * where the date is the last day the code is valid — so a leaked code stops working.
+ * (comma-separated, case-insensitive). Each entry is `CODE`, `CODE:YYYY-MM-DD` or
+ * `CODE:YYYY-MM-DD:N`, where the date is the last day the code is valid — so a
+ * leaked code stops working — and N caps how many statements one redemption covers.
+ * Without N a code covers every statement waiting, which is the point of it: a batch
+ * of bills is settled in one go. Use `CODE::1` to give away exactly one.
  * Never advertised in chat.
  */
-interface CouponDef { code: string; expiry: string | null }
+interface CouponDef { code: string; expiry: string | null; maxReports: number | null }
 
 function couponDefs(): CouponDef[] {
   return String(process.env.TELEGRAM_REPORT_COUPONS || '')
     .split(',')
     .map((part) => {
-      const [code, expiry] = part.split(':');
-      return { code: String(code || '').trim().toLowerCase(), expiry: (expiry || '').trim() || null };
+      const [code, expiry, max] = part.split(':');
+      const maxReports = Number(String(max || '').trim());
+      return {
+        code: String(code || '').trim().toLowerCase(),
+        expiry: (expiry || '').trim() || null,
+        maxReports: Number.isFinite(maxReports) && maxReports > 0 ? Math.floor(maxReports) : null,
+      };
     })
     .filter((c) => c.code);
+}
+
+/** How many statements a code covers, or null for "everything waiting". */
+function couponReportCap(code?: string): number | null {
+  if (!code) return null;
+  const def = couponDefs().find((c) => c.code === String(code).trim().toLowerCase());
+  return def?.maxReports ?? null;
 }
 
 /** A YYYY-MM-DD expiry is inclusive; expired once the (IST) date passes it. */
@@ -450,14 +465,20 @@ export async function startCoupon(conversation: any, chatId: string) {
     );
   }
   const data = getTelegramConversationData(conversation);
-  if (!data.docPendingReport) {
+  const waiting = (data.docPendingReports || []).length || (data.docPendingReport ? 1 : 0);
+  if (!waiting) {
     return sendTelegramMessage(
       chatId,
       `🎟️ There's no report waiting on this chat.\n\nSend /pvc, upload the agreement + bill, and once the PVC shows, send /coupon to redeem your code.`,
     );
   }
   await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_COUPON, {});
-  return sendTelegramMessage(chatId, `🎟️ <b>Enter your coupon code:</b>`);
+  return sendTelegramMessage(
+    chatId,
+    waiting > 1
+      ? `🎟️ <b>Enter your coupon code:</b>\n\n<i>${waiting} statements are waiting — a code covers all of them.</i>`
+      : `🎟️ <b>Enter your coupon code:</b>`,
+  );
 }
 
 /** Validates a code typed after /coupon. */
@@ -466,34 +487,83 @@ export async function handleCouponInput(conversation: any, msg: string, chatId: 
     await updateTelegramConversation(conversation.id, TelegramStep.IDLE, {});
     return sendTelegramMessage(chatId, `❌ That coupon code isn't valid. You can pay with the link above, or send /coupon to try another code.`);
   }
-  // Reset the step but keep the pending report, then deliver free.
+  // Reset the step but keep the pending reports, then deliver free.
   await updateTelegramConversation(conversation.id, TelegramStep.IDLE, {});
   const refreshed = await getOrCreateTelegramConversation(chatId);
-  return handleCoupon(refreshed, chatId);
+  return handleCoupon(refreshed, chatId, msg);
 }
 
 /**
- * A valid coupon was sent — deliver the pending report for free (no payment).
+ * A valid coupon was sent — deliver the waiting statements free of charge.
+ *
+ * A coupon covers the whole set, not one statement: the point of sending a batch of
+ * bills is to settle them together, and a code that freed only the last of them
+ * would leave the user paying for the rest one link at a time. A code may cap how
+ * many it covers (see couponDefs) — the oldest statements go first.
  */
-export async function handleCoupon(conversation: any, chatId: string) {
+export async function handleCoupon(conversation: any, chatId: string, code?: string) {
   const data = getTelegramConversationData(conversation);
-  if (!data.docPendingReport) {
+  const pending = data.docPendingReports || [];
+  const waiting = pending.length || (data.docPendingReport ? 1 : 0);
+
+  if (!waiting) {
     return sendTelegramMessage(
       chatId,
       `🎟️ Coupon noted, but there's no report waiting on this chat right now.\n\n` +
         `Send /pvc, upload the agreement + bill, then send the coupon again to get the PDF free.`,
     );
   }
-  await sendTelegramMessage(chatId, '🎟️ <b>Coupon accepted — fee waived.</b> Preparing your report…');
+
+  const cap = couponReportCap(code);
+  const covered = cap ? Math.min(cap, waiting) : waiting;
+
+  await sendTelegramMessage(
+    chatId,
+    covered > 1
+      ? `🎟️ <b>Coupon accepted — fee waived for ${covered} statements.</b> Preparing them now…`
+      : '🎟️ <b>Coupon accepted — fee waived.</b> Preparing your report…',
+  );
+
+  const { renderAndSendPaidReport } = await import('./telegram-bill-pvc');
+  // Oldest first, and the link ids are read up front: each delivery retires its own
+  // entry, so walking the live list would skip every other one.
+  const linkIds = pending.slice(0, covered).map((r) => r.linkId);
+  let delivered = 0;
+  let failures = 0;
+
   try {
-    const { renderAndSendPaidReport } = await import('./telegram-bill-pvc');
-    const sent = await renderAndSendPaidReport(chatId);
-    if (!sent) {
-      return sendTelegramMessage(chatId, 'That report was already delivered — check the messages above.');
+    if (!linkIds.length) {
+      // Older chat with only the single slot and no link to name.
+      if (await renderAndSendPaidReport(chatId)) delivered++;
+    } else {
+      for (const linkId of linkIds) {
+        try {
+          if (await renderAndSendPaidReport(chatId, linkId)) delivered++;
+        } catch (err: any) {
+          failures++;
+          console.error('[Telegram] coupon delivery failed for', linkId, err);
+        }
+      }
     }
   } catch (err: any) {
     console.error('[Telegram] coupon delivery failed:', err);
     return sendTelegramMessage(chatId, `⚠️ Couldn't build the PDF: ${escapeHtml(err?.message || 'unknown error')}`);
+  }
+
+  if (!delivered && !failures) {
+    return sendTelegramMessage(chatId, 'Those reports were already delivered — check the messages above.');
+  }
+  if (failures) {
+    return sendTelegramMessage(
+      chatId,
+      `⚠️ ${delivered} of ${covered} statements went out; ${failures} failed to build. Send the coupon again to retry the rest — it hasn't been used up.`,
+    );
+  }
+  if (cap && waiting > covered) {
+    return sendTelegramMessage(
+      chatId,
+      `🎟️ This code covers ${cap} statement${cap === 1 ? '' : 's'}, so ${waiting - covered} ${waiting - covered === 1 ? 'is' : 'are'} still waiting. Send /payall for a link covering ${waiting - covered === 1 ? 'it' : 'them'}.`,
+    );
   }
 }
 
@@ -516,8 +586,9 @@ export async function handlePayAll(conversation: any, chatId: string) {
   }
 
   try {
-    const { getBulkReportPrice, createReportPaymentLink } = await import('./telegram-payment');
-    const price = await getBulkReportPrice(pending.length);
+    const { getReportPriceRupees, createReportPaymentLink } = await import('./telegram-payment');
+    const unitPrice = await getReportPriceRupees();
+    const total = unitPrice * pending.length;
 
     // Unpaid statements survive a /pvc restart, so the set can span more than one
     // agreement — name them from the reports themselves rather than from whichever
@@ -536,7 +607,7 @@ export async function handlePayAll(conversation: any, chatId: string) {
 
     const link = await createReportPaymentLink({
       chatId,
-      amountRupees: price.total,
+      amountRupees: total,
       agreementNo,
       reportCount: pending.length,
     });
@@ -554,20 +625,15 @@ export async function handlePayAll(conversation: any, chatId: string) {
       .map((r) => `\n   • ${escapeHtml(String(r.payload?.billNo || 'RA Bill'))}`)
       .join('');
 
-    const pricing = price.discount > 0
-      ? `💰 ₹${formatRupees(price.unitPrice)} × ${price.count} = ₹${formatRupees(price.gross)}\n` +
-        `🎁 Bulk discount (${price.discountPercent}%) − ₹${formatRupees(price.discount)}\n` +
-        `👉 <b>You pay ₹${formatRupees(price.total)}</b>`
-      : `💰 ₹${formatRupees(price.unitPrice)} × ${price.count} = <b>₹${formatRupees(price.total)}</b>`;
-
     return sendTelegramMessage(
       chatId,
       `🧾 <b>One payment for all ${pending.length} statements</b>\n\n` +
         `📄 Agreement: <b>${escapeHtml(agreementNo)}</b>${billList}\n\n` +
-        pricing + `\n\n` +
+        `💰 ₹${formatRupees(unitPrice)} × ${pending.length} = <b>₹${formatRupees(total)}</b>\n\n` +
         `Pay by UPI / card / net banking here:\n${link.url}\n\n` +
         `When this is paid I'll send all ${pending.length} statements together. ` +
-        `<i>Use this link instead of the individual ones above — paying those as well would charge you twice.</i>`,
+        `<i>Use this link instead of the individual ones above — paying those as well would charge you twice.\n` +
+        `Have a coupon? Send /coupon — it covers every statement waiting.</i>`,
     );
   } catch (err: any) {
     console.error('[Telegram] /payall link creation failed:', err);
