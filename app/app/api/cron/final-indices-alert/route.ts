@@ -61,14 +61,14 @@ export async function GET(request: NextRequest) {
     }
 
     const byOwner = groupByOwner(affected);
-    const results: Array<{ owner: string; bills: number; sent: boolean; reason?: string }> = [];
+    const results: Array<{ owner: string; ownerName: string; bills: number; sent: boolean; reason?: string }> = [];
 
     for (const [ownerId, bills] of byOwner) {
       const first = bills[0];
       const phone = first.ownerPhone;
 
       if (!phone || !validatePhoneNumber(phone)) {
-        results.push({ owner: ownerId, bills: bills.length, sent: false, reason: 'no usable WhatsApp number' });
+        results.push({ owner: ownerId, ownerName: first.ownerName, bills: bills.length, sent: false, reason: 'no usable WhatsApp number' });
         continue;
       }
 
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
       });
 
       if (dryRun) {
-        results.push({ owner: ownerId, bills: bills.length, sent: false, reason: 'dry run' });
+        results.push({ owner: ownerId, ownerName: first.ownerName, bills: bills.length, sent: false, reason: 'dry run' });
         continue;
       }
 
@@ -94,6 +94,7 @@ export async function GET(request: NextRequest) {
       });
       results.push({
         owner: ownerId,
+        ownerName: first.ownerName,
         bills: bills.length,
         sent: sent.success,
         reason: sent.success ? undefined : sent.error,
@@ -105,11 +106,21 @@ export async function GET(request: NextRequest) {
       dryRun,
       billsAffected: affected.length,
       draftsRefreshed: recalculated.length,
+      // On a dry run nothing is recalculated, so list what a live run would touch —
+      // otherwise the output is a count with nothing to verify it against.
+      wouldRefresh: dryRun
+        ? affected.filter(b => b.status === 'draft').map(b => ({
+          billNo: b.billNo,
+          agreementNo: b.agreementNo,
+          quarter: b.quarter,
+          currentPvc: b.totalPvc,
+        }))
+        : undefined,
       // Named individually: a sweep that rewrites amounts unattended should leave a record
       // of exactly which, and from what to what.
       changes: recalculated,
       awaitingDecision: affected.filter(b => b.status !== 'draft').map(b => ({
-        billNo: b.billNo, status: b.status,
+        billNo: b.billNo, agreementNo: b.agreementNo, status: b.status, currentPvc: b.totalPvc,
       })),
       ownersNotified: results.filter(r => r.sent).length,
       results,
