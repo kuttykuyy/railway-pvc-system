@@ -99,6 +99,47 @@ function formatPhoneNumber(phone: string): string {
 }
 
 /**
+ * Send a template with no attachment.
+ *
+ * sendBillPDFWhatsApp always appends Fileurl, and MyDreams counts it toward the
+ * template's parameters — a text-only template sent that way is rejected for parameter
+ * count. This is the same call without it.
+ */
+export async function sendTextTemplateWhatsApp(params: {
+  contact: string;
+  template: string;
+  params?: string[];
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  try {
+    const credentials = await getMyDreamsCredentials();
+    if (!credentials) {
+      return { success: false, error: 'MyDreams WhatsApp API not configured' };
+    }
+
+    const url = new URL('https://wa.mydreamstechnology.in/api/sendtemplate.php');
+    url.searchParams.append('LicenseNumber', credentials.licenseNumber);
+    url.searchParams.append('APIKey', credentials.apiKey);
+    url.searchParams.append('Contact', formatPhoneNumber(params.contact));
+    url.searchParams.append('Template', params.template);
+    if (params.params?.length) {
+      url.searchParams.append('Param', params.params.join(','));
+    }
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      return { success: false, error: `MyDreams returned ${response.status}: ${text.slice(0, 200)}` };
+    }
+    return { success: true, messageId: text.slice(0, 120) };
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'WhatsApp send failed' };
+  }
+}
+
+/**
  * Send bill PDF via WhatsApp using MyDreams API
  */
 export async function sendBillPDFWhatsApp(

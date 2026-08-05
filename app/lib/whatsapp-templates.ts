@@ -45,6 +45,25 @@ export const WHATSAPP_TEMPLATES: Record<string, WhatsAppTemplate> = {
     ],
   },
   
+  pvc_indices_final: {
+    name: 'pvc_indices_final',
+    description:
+      'Sent to a bill owner when the provisional indices their bill was calculated on have '
+      + 'since been published as final, so the PVC can be regenerated. Text only, no attachment.',
+    parameters: [
+      'userName',      // {{1}} - Name of the bill owner
+      'billCount',     // {{2}} - How many of their bills are affected
+      'agreementNo',   // {{3}} - Agreement number of the first affected bill
+      'indexNames',    // {{4}} - Which indices went final, comma separated
+    ],
+    sampleValues: [
+      'Rajesh Kumar',
+      '2',
+      'SER/KGP/Civil/2024/0066',
+      'Labour, RBI Cement',
+    ],
+  },
+
   bill_created_with_pdf: {
     name: 'bill_created_with_pdf',
     description: 'Notification when a new bill is created (sent to contractor and admin)',
