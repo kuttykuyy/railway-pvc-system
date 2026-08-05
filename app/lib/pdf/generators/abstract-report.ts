@@ -15,6 +15,10 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getFileUrl } from '@/lib/s3';
 
+/** GST on a works contract, and so on its price variation. A rate, not tax advice —
+ *  the statement prints the figure and leaves the treatment to the contractor. */
+export const GST_RATE_ON_PVC = 0.18;
+
 export class AbstractNotAvailableError extends Error {}
 
 /** Renders the abstract for a contract. Throws AbstractNotAvailableError when the
@@ -466,6 +470,31 @@ export async function generateAbstractPdf(contractId: string): Promise<{ pdfBuff
     pdf.text(amountInWords(totalSay), marginLeft, yPosition + 16);
     yPosition += 34;
 
+    // The tax on the price variation, stated as a figure and nothing more. The
+    // contractor works this out by hand today; the guidance about what to DO with it
+    // goes on its own sheet at the end, not here, because this page is read by the
+    // railway's accounts office.
+    const gstOnPvc = Math.round(Math.abs(totalSay) * GST_RATE_ON_PVC);
+    pdf.setFontSize(9);
+    pdf.text(
+      `GST @ ${(GST_RATE_ON_PVC * 100).toFixed(0)}% thereon: ${money(gstOnPvc)}`
+      + `    Total ${totalSay < 0 ? 'recoverable' : 'payable'} including GST: ${money(Math.abs(totalSay) + gstOnPvc)}`,
+      marginLeft, yPosition,
+    );
+    yPosition += 14;
+    pdf.setFontSize(8);
+    pdf.setTextColor(90, 90, 90);
+    pdf.text(
+      pdf.splitTextToSize(
+        'The GST shown is indicative. Where this variation changes the value of tax invoices already '
+        + "raised, the adjustment is to be made through the contractor's GST records.",
+        contentWidth,
+      ),
+      marginLeft, yPosition,
+    );
+    pdf.setTextColor(0, 0, 0);
+    yPosition += 26;
+
     // Certification and signatures. This statement goes to an accounts office, and one
     // has already been returned to be "duly signed by the competent authority".
     pdf.setFontSize(9);
@@ -489,6 +518,85 @@ export async function generateAbstractPdf(contractId: string): Promise<{ pdfBuff
       pdf.text(role, x, yPosition + 11);
     });
     pdf.setTextColor(0, 0, 0);
+
+    // A recovery raises a tax question the statement itself must not answer. It goes on
+    // its own sheet, addressed to the contractor's own accounts, so the statement pages
+    // the railway reads stay factual. Only when the variation is actually negative.
+    if (totalSay < 0) {
+      const gstAmount = Math.round(Math.abs(totalSay) * GST_RATE_ON_PVC);
+      pdf.addPage();
+      let ny = marginTop;
+
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text("NOTE FOR THE CONTRACTOR'S ACCOUNTS", pageWidth / 2, ny, { align: 'center' });
+      ny += 12;
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setTextColor(90, 90, 90);
+      pdf.text('Not part of the statement submitted to the Railway. For the contractor and their accountant.', pageWidth / 2, ny, { align: 'center' });
+      pdf.setTextColor(0, 0, 0);
+      ny += 26;
+
+      const para = (heading: string, body: string) => {
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(heading, marginLeft, ny);
+        ny += 14;
+        pdf.setFontSize(9.5);
+        pdf.setFont('helvetica', 'normal');
+        const wrapped = pdf.splitTextToSize(body, contentWidth) as string[];
+        pdf.text(wrapped, marginLeft, ny);
+        ny += wrapped.length * 13 + 14;
+      };
+
+      para(
+        'This price variation is a recovery, not a payment',
+        `Prices fell below the base month, so ${money(Math.abs(totalSay))} is recoverable from the contractor `
+        + `rather than payable. The Railway normally recovers the GST on it as well, about ${money(gstAmount)} `
+        + `at ${(GST_RATE_ON_PVC * 100).toFixed(0)}%, making the total recovery ${money(Math.abs(totalSay) + gstAmount)}.`,
+      );
+
+      para(
+        'That GST has already been paid to the Government',
+        'It was paid when the running account bills were invoiced at their full value. Because this variation '
+        + 'reduces the value of that same work, the tax on the reduction can normally be reversed - but only '
+        + 'through the contractor\'s own GST records, and only within a time limit tied to the financial year '
+        + 'of each original invoice. Once that period closes the tax cannot be recovered from the Government '
+        + 'or from the Railway, and the contractor bears it.',
+      );
+
+      para(
+        'A bill still to be raised avoids the question entirely',
+        'If any bill remains to be raised on this agreement, the recovery can be adjusted there instead. The '
+        + 'bill is then invoiced at the reduced value, GST is charged on that lower figure, and nothing has to '
+        + 'be unwound afterwards. This is the simplest route where it is available.',
+      );
+
+      para(
+        'Take these three things to your accountant',
+        '1. The tax invoice numbers and dates of the running account bills this recovery relates to, so the '
+        + 'time limit for each can be checked.\n'
+        + '2. Whether a bill is still to be raised that the recovery can be set against instead.\n'
+        + '3. Whether the recovery should be grossed up with GST for any period where the tax can no longer '
+        + 'be reversed.',
+      );
+
+      ny += 6;
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setTextColor(90, 90, 90);
+      pdf.text(
+        pdf.splitTextToSize(
+          'The figures above are indicative and are derived from this statement. They are not tax advice, and '
+          + 'the treatment of the tax is for the contractor and their accountant to determine.',
+          contentWidth,
+        ),
+        marginLeft, ny,
+      );
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFont('helvetica', 'normal');
+    }
 
     // Add footer to all pages if footer text is provided
     if (brandingSettings.reportFooterText) {

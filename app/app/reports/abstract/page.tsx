@@ -387,6 +387,48 @@ function AbstractPageContent() {
             </div>
           )}
 
+          {/* A recovery raises a tax question the statement itself must not answer, so the
+              explanation lives here rather than on the page the railway reads. The PDF
+              carries the same text on a sheet of its own, marked as not part of the
+              submission. Shown only when the variation is actually negative. */}
+          {abstractData.totalSay < 0 && (() => {
+            const recovery = Math.abs(abstractData.totalSay);
+            const gst = Math.round(recovery * 0.18);
+            return (
+              <div className="border border-amber-300 bg-amber-50 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-amber-900">This price variation is a recovery, not a payment</h3>
+                <p className="mt-2 text-sm text-amber-900">
+                  Prices fell below the base month, so <span className="font-semibold">₹{fmt(recovery, 0)}</span> is
+                  recoverable from you rather than payable. The railway normally recovers the GST on it as
+                  well — about <span className="font-semibold">₹{fmt(gst, 0)}</span> at 18% — making the total
+                  recovery <span className="font-semibold">₹{fmt(recovery + gst, 0)}</span>.
+                </p>
+                <p className="mt-2 text-sm text-amber-900">
+                  You already paid that GST to the government when the running account bills were invoiced at
+                  their full value. Because this variation reduces the value of that same work, the tax on the
+                  reduction can normally be reversed — but only through your own GST records, and only within a
+                  time limit tied to the financial year of each original invoice. Once that period closes the
+                  tax cannot be recovered from the government or from the railway, and you bear it.
+                </p>
+                <p className="mt-2 text-sm text-amber-900">
+                  If any bill is still to be raised on this agreement, the recovery can be adjusted there
+                  instead. The bill is invoiced at the reduced value, GST is charged on the lower figure, and
+                  nothing has to be unwound afterwards.
+                </p>
+                <p className="mt-3 text-sm font-semibold text-amber-900">Three things to take to your accountant</p>
+                <ul className="mt-1 space-y-1 text-sm text-amber-900 list-disc pl-5">
+                  <li>The tax invoice numbers and dates of the running account bills this recovery relates to, so the time limit for each can be checked.</li>
+                  <li>Whether a bill is still to be raised that the recovery can be set against instead.</li>
+                  <li>Whether the recovery should be grossed up with GST for any period where the tax can no longer be reversed.</li>
+                </ul>
+                <p className="mt-3 text-xs text-amber-800 italic">
+                  These figures are derived from this statement and are indicative. They are not tax advice —
+                  the treatment is for you and your accountant to determine.
+                </p>
+              </div>
+            );
+          })()}
+
           {/* Certification and signatures. A statement that goes to an accounts office is
               a signed document; leaving nowhere to sign is what gets one returned —
               "the calculation sheet may be revised duly signed by the competent authority". */}
