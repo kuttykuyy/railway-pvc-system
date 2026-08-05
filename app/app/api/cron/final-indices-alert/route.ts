@@ -44,17 +44,21 @@ export async function GET(request: NextRequest) {
     // and quietly changing the amount underneath it is how a proposal and its statement
     // come to disagree. Those keep the Regenerate button, to be applied deliberately.
     const recalculated: Array<{ billNo: string; from: number; to: number }> = [];
+    let draftsProcessed = 0;
+    let draftsFailed = 0;
     if (!dryRun) {
       for (const bill of affected.filter(b => b.status === 'draft')) {
         try {
           const before = bill.totalPvc;
           const result = await recalculateBillPvc(bill.billId);
           const after = result.pvcCalculation?.totalPvc ?? before;
+          draftsProcessed += 1;
           if (Math.abs(after - before) >= 0.01) {
             recalculated.push({ billNo: bill.billNo, from: before, to: after });
           }
         } catch (err) {
           // One bad bill must not stop the sweep — the rest still need refreshing.
+          draftsFailed += 1;
           console.error(`[final-indices-alert] could not recalculate ${bill.billNo}:`, err);
         }
       }
@@ -105,7 +109,12 @@ export async function GET(request: NextRequest) {
       success: true,
       dryRun,
       billsAffected: affected.length,
-      draftsRefreshed: recalculated.length,
+      // Recalculated vs actually moved. Reporting only the movements read as though the
+      // other bills had been skipped, when in fact they were recomputed and came out the
+      // same — which is the normal case once an index is republished unchanged.
+      draftsRecalculated: draftsProcessed,
+      draftsChanged: recalculated.length,
+      draftsFailed,
       // On a dry run nothing is recalculated, so list what a live run would touch —
       // otherwise the output is a count with nothing to verify it against.
       wouldRefresh: dryRun
