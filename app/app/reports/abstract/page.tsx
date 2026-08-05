@@ -392,13 +392,21 @@ function AbstractPageContent() {
               carries the same text on a sheet of its own, marked as not part of the
               submission. Shown only when the variation is actually negative. */}
           {abstractData.totalSay < 0 && (() => {
+            // IREPS bills state "Rate is inclusive of GST", and on every bill seen it says
+            // Yes. The billed value already contains the tax, so a variation worked out
+            // from it does too. The GST is EXTRACTED, never added on top — adding it would
+            // count the tax twice and overstate a recovery by 18%.
+            const splitGst = (amountInclGst: number) => {
+              const taxable = Math.round((amountInclGst / 1.18) * 100) / 100;
+              return { taxable, gst: Math.round((amountInclGst - taxable) * 100) / 100 };
+            };
             const recovery = Math.abs(abstractData.totalSay);
-            const gst = Math.round(recovery * 0.18);
+            const net = splitGst(recovery);
             const rows = (abstractData.billData || []).map(row => ({
               billNo: row.billNo || '-',
               quarter: row.quarter,
               pvc: Math.abs(row.total),
-              gst: Math.round(Math.abs(row.total) * 0.18),
+              ...splitGst(Math.abs(row.total)),
               isCredit: row.total < 0,
             }));
             return (
@@ -406,13 +414,13 @@ function AbstractPageContent() {
                 <h3 className="text-sm font-semibold text-amber-900">This price variation is a recovery, not a payment</h3>
                 <p className="mt-2 text-sm text-amber-900">
                   Prices fell below the base month, so <span className="font-semibold">₹{fmt(recovery, 0)}</span> is
-                  recoverable from you rather than payable. The railway normally recovers the GST on it as
-                  well — about <span className="font-semibold">₹{fmt(gst, 0)}</span> at 18% — making the total
-                  recovery <span className="font-semibold">₹{fmt(recovery + gst, 0)}</span>.
+                  recoverable from you rather than payable. That figure is inclusive of GST: of it,
+                  <span className="font-semibold"> ₹{fmt(net.taxable, 0)}</span> is taxable value and
+                  <span className="font-semibold"> ₹{fmt(net.gst, 0)}</span> is GST at 18%.
                 </p>
                 <p className="mt-2 text-sm text-amber-900">
-                  Each bill below was invoiced with GST at its full value. This variation changes the value of
-                  that same work, so the tax follows it — and the financial year of each <em>original</em> tax
+                  These bills were billed at rates inclusive of GST, so each variation below already contains
+                  the tax rather than attracting it on top. The financial year of each <em>original</em> tax
                   invoice, not of this statement, decides how long that adjustment stays open.
                 </p>
 
@@ -424,9 +432,9 @@ function AbstractPageContent() {
                       <tr>
                         <th className="px-3 py-2 text-left font-medium">Bill No.</th>
                         <th className="px-3 py-2 text-left font-medium">Quarter</th>
-                        <th className="px-3 py-2 text-right font-medium">Price variation</th>
+                        <th className="px-3 py-2 text-right font-medium">Variation (incl. GST)</th>
+                        <th className="px-3 py-2 text-right font-medium">Taxable value</th>
                         <th className="px-3 py-2 text-right font-medium">GST @ 18%</th>
-                        <th className="px-3 py-2 text-right font-medium">Total</th>
                         <th className="px-3 py-2 text-left font-medium">Instrument</th>
                       </tr>
                     </thead>
@@ -436,8 +444,8 @@ function AbstractPageContent() {
                           <td className="px-3 py-1.5 font-medium">{row.billNo}</td>
                           <td className="px-3 py-1.5">{row.quarter}</td>
                           <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.pvc, 0)}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.taxable, 0)}</td>
                           <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.gst, 0)}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.pvc + row.gst, 0)}</td>
                           <td className="px-3 py-1.5">{row.isCredit ? 'Credit note' : 'Tax invoice'}</td>
                         </tr>
                       ))}
@@ -445,8 +453,8 @@ function AbstractPageContent() {
                         <td className="px-3 py-2">NET</td>
                         <td className="px-3 py-2"></td>
                         <td className="px-3 py-2 text-right tabular-nums">{fmt(recovery, 0)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{fmt(gst, 0)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{fmt(recovery + gst, 0)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmt(net.taxable, 0)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmt(net.gst, 0)}</td>
                         <td className="px-3 py-2">Net recovery</td>
                       </tr>
                     </tbody>
@@ -473,8 +481,9 @@ function AbstractPageContent() {
                   <li>
                     <span className="font-medium">Take up the closed years with the railway separately.</span>{' '}
                     Where the tax can no longer be reversed, ask that the recovery for that period be limited to the
-                    price variation itself and not grossed up with GST. Put the bills, invoice dates and figures in
-                    writing. The price fall is recoverable either way; the tax on it is the part worth arguing.
+                    taxable value and exclude the GST element, since you can no longer recover that tax from anyone.
+                    Put the bills, invoice dates and figures in writing. The price fall is recoverable either way;
+                    the tax inside it is the part worth arguing.
                   </li>
                 </ol>
                 <p className="mt-3 text-xs text-amber-800 italic">

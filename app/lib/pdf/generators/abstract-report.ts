@@ -19,6 +19,15 @@ import { getFileUrl } from '@/lib/s3';
  *  the statement prints the figure and leaves the treatment to the contractor. */
 export const GST_RATE_ON_PVC = 0.18;
 
+/** IREPS bills state "Rate is inclusive of GST", and on every bill seen it says Yes. The
+ *  billed value therefore already contains the tax, and so does a price variation worked
+ *  out from it. The GST is EXTRACTED from the figure, not added on top of it — adding it
+ *  would count the tax twice and overstate a recovery by 18%. */
+function splitGst(amountIncludingGst: number) {
+  const taxable = Math.round((amountIncludingGst / (1 + GST_RATE_ON_PVC)) * 100) / 100;
+  return { taxable, gst: Math.round((amountIncludingGst - taxable) * 100) / 100 };
+}
+
 export class AbstractNotAvailableError extends Error {}
 
 /** Renders the abstract for a contract. Throws AbstractNotAvailableError when the
@@ -474,11 +483,11 @@ export async function generateAbstractPdf(contractId: string): Promise<{ pdfBuff
     // contractor works this out by hand today; the guidance about what to DO with it
     // goes on its own sheet at the end, not here, because this page is read by the
     // railway's accounts office.
-    const gstOnPvc = Math.round(Math.abs(totalSay) * GST_RATE_ON_PVC);
+    const split = splitGst(Math.abs(totalSay));
     pdf.setFontSize(9);
     pdf.text(
-      `GST @ ${(GST_RATE_ON_PVC * 100).toFixed(0)}% thereon: ${money(gstOnPvc)}`
-      + `    Total ${totalSay < 0 ? 'recoverable' : 'payable'} including GST: ${money(Math.abs(totalSay) + gstOnPvc)}`,
+      `The amount above is inclusive of GST. Of it, taxable value ${money(split.taxable)}`
+      + ` and GST @ ${(GST_RATE_ON_PVC * 100).toFixed(0)}% ${money(split.gst)}.`,
       marginLeft, yPosition,
     );
     yPosition += 14;
@@ -523,7 +532,7 @@ export async function generateAbstractPdf(contractId: string): Promise<{ pdfBuff
     // its own sheet, addressed to the contractor's own accounts, so the statement pages
     // the railway reads stay factual. Only when the variation is actually negative.
     if (totalSay < 0) {
-      const gstAmount = Math.round(Math.abs(totalSay) * GST_RATE_ON_PVC);
+      const netSplit = splitGst(Math.abs(totalSay));
       pdf.addPage();
       let ny = marginTop;
 
@@ -556,14 +565,14 @@ export async function generateAbstractPdf(contractId: string): Promise<{ pdfBuff
       ny += 30;
 
       const noteRows = billDataArray.map((b, i) => {
-        const gst = Math.round(Math.abs(b.total) * GST_RATE_ON_PVC);
+        const row = splitGst(Math.abs(b.total));
         return [
           String(i + 1),
           b.billNo,
           b.quarter,
           money(Math.abs(b.total)),
-          money(gst),
-          money(Math.abs(b.total) + gst),
+          money(row.taxable),
+          money(row.gst),
           b.total < 0 ? 'Credit note' : 'Tax invoice',
         ];
       });
@@ -572,13 +581,13 @@ export async function generateAbstractPdf(contractId: string): Promise<{ pdfBuff
       noteRows.push([
         '', 'NET', '',
         money(Math.abs(totalSay)),
-        money(gstAmount),
-        money(Math.abs(totalSay) + gstAmount),
+        money(netSplit.taxable),
+        money(netSplit.gst),
         'Net recovery',
       ]);
 
       autoTable(pdf, {
-        head: [['Sl.', 'Bill No.', 'Quarter', 'Price variation', `GST @ ${(GST_RATE_ON_PVC * 100).toFixed(0)}%`, 'Total', 'Instrument']],
+        head: [['Sl.', 'Bill No.', 'Quarter', 'Variation (incl. GST)', 'Taxable value', `GST @ ${(GST_RATE_ON_PVC * 100).toFixed(0)}%`, 'Instrument']],
         body: noteRows,
         startY: ny,
         theme: 'grid',
@@ -652,9 +661,10 @@ export async function generateAbstractPdf(contractId: string): Promise<{ pdfBuff
         + 'applicable to each year.');
 
       step('4', 'Take up the closed years with the Railway separately',
-        'Where the tax can no longer be reversed, ask that the recovery for that period be limited to the price '
-        + 'variation itself and not grossed up with GST. Put the bills, invoice dates and figures in writing. '
-        + 'The price fall is recoverable either way; the tax on it is the part worth arguing.');
+        'Where the tax can no longer be reversed, ask that the recovery for that period be limited to the taxable '
+        + 'value and exclude the GST element, since that tax can no longer be recovered from anyone. Put the bills, '
+        + 'invoice dates and figures in writing. The price fall is recoverable either way; the tax inside it is the '
+        + 'part worth arguing.');
 
       ny += 6;
       pdf.setFontSize(8);
