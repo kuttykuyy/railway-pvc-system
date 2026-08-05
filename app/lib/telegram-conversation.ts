@@ -89,6 +89,11 @@ export interface TelegramConversationData {
    * to the single slot (older chats, /coupon and /paid, which carry no link).
    */
   docPendingReports?: Array<{ linkId: string; payload: any }>;
+  /**
+   * Links that pay for several statements at once (/payall), each naming the report
+   * links it covers. Paying one delivers every statement it covers.
+   */
+  docBundlePayments?: Array<{ linkId: string; coversLinkIds: string[] }>;
   /** Per-day usage counter for rate limiting (resets when the date changes). */
   dailyUsage?: { date: string; pdfs: number };
   /** ISO time a report render/send started — a soft lock against re-render spam. */

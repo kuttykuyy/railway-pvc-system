@@ -18,6 +18,7 @@ import {
   startPvcFlow,
   remindToUpload,
   handlePaidCheck,
+  handlePayAll,
   handleZoneReply,
   handleFuelBasisReply,
   isCoupon,
@@ -53,6 +54,10 @@ export async function handleTelegramMessage(chatId: string, text: string) {
     // Works from any step: rescue a paid-but-undelivered report.
     if (lower === '/paid' || lower === 'paid') {
       return handlePaidCheck(conversation, chatId);
+    }
+    // One link for every statement still waiting, instead of paying bill by bill.
+    if (lower === '/payall' || lower === 'payall' || lower === 'pay all') {
+      return handlePayAll(conversation, chatId);
     }
     // Coupon: /coupon prompts for the code; typing a valid code directly also works.
     if (lower === '/coupon' || lower === 'coupon') {
@@ -140,11 +145,12 @@ async function sendHelpMessage(chatId: string) {
     `📋 <b>IR-PVC Bot</b>\n\n` +
     `<b>Work out a PVC — /pvc</b>\n` +
     `I'll ask you for two PDFs, one at a time:\n` +
-    `1️⃣ the <b>tender agreement PDF</b>\n` +
-    `2️⃣ the <b>running bill (RA bill) PDF</b>\n` +
+    `1️⃣ the <b>tender agreement PDF</b> (or the <b>LOA</b>, if the agreement isn't signed yet)\n` +
+    `2️⃣ the <b>running bill (RA bill) PDF</b> — send as many bills as you like for the same agreement\n` +
     `➡️ You get the <b>PVC amount free</b>, then can pay in this chat to get the <b>PVC statement PDF</b>.\n\n` +
     `<b>After that:</b>\n` +
     `▫️ Another bill for the same work — just send the next bill PDF\n` +
+    `▫️ Several bills to pay for — /payall gives you one link for all of them\n` +
     `▫️ A different work — /pvc to start again\n` +
     `▫️ Stop anytime — /cancel\n\n` +
     `<b>Or type the details instead:</b>\n` +

@@ -389,7 +389,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     // Park it against its own payment link as well as in the single slot. Several
     // bills for one agreement means several unpaid links at once, and the single slot
     // alone would hand whoever pays the FIRST link the LAST bill's report.
-    await mutateTelegramConversationData(
+    const stored = await mutateTelegramConversationData(
       args.conversationId,
       (current) => ({
         ...current,
@@ -403,12 +403,20 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       TelegramStep.IDLE,
     );
 
+    // With more than one statement waiting, paying them one link at a time is a
+    // nuisance — point at the combined link.
+    const waitingCount = (stored.docPendingReports || []).length;
+    const payAllHint = waitingCount > 1
+      ? `\n\n🧾 <b>${waitingCount} statements are now waiting.</b> Send <b>/payall</b> to pay for them all with one link instead.`
+      : '';
+
     await sendTelegramMessage(
       chatId,
       `📎 <b>Get the full PVC statement (PDF) — ₹${formatMoney(price)}</b>\n\n` +
         `Pay by UPI / card / net banking here:\n${link.url}\n\n` +
-        `The moment your payment is confirmed I'll send the signed-format PVC statement right here. No sign-up needed.\n\n` +
-        `<i>Have a coupon? Send /coupon.\nAlready paid and nothing arrived? Send /paid.</i>`,
+        `The moment your payment is confirmed I'll send the signed-format PVC statement right here. No sign-up needed.` +
+        payAllHint +
+        `\n\n<i>Have a coupon? Send /coupon.\nAlready paid and nothing arrived? Send /paid.</i>`,
     );
   } catch (err: any) {
     console.error('[Telegram] payment link creation failed:', err);
@@ -419,6 +427,13 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   }
 
   return {};
+}
+
+/** How many of the given report links are still waiting to be delivered. */
+async function countPendingReports(conversationId: string, linkIds: string[]): Promise<number> {
+  const fresh = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
+  const pending: Array<{ linkId: string }> = ((fresh?.conversationData as any) || {}).docPendingReports || [];
+  return pending.filter((r) => linkIds.includes(r.linkId)).length;
 }
 
 /** Fields the running bill's header can supply about the contract itself. */
@@ -613,8 +628,41 @@ export async function renderAndSendPaidReport(chatId: string, paymentLinkId?: st
   if (!conversation) return false;
 
   const data = (conversation.conversationData as any) || {};
+
+  // A /payall link pays for several statements at once — deliver each of them. Each
+  // pass takes its own render lock and retires its own report, so a webhook retry
+  // sends only what didn't make it out the first time.
+  const bundle = paymentLinkId
+    ? (data.docBundlePayments || []).find((b: any) => b.linkId === paymentLinkId)
+    : undefined;
+  if (bundle) {
+    let delivered = 0;
+    for (const coveredLinkId of bundle.coversLinkIds || []) {
+      try {
+        if (await renderAndSendPaidReport(chatId, coveredLinkId)) delivered++;
+      } catch (err) {
+        console.error(`[Telegram] bundled report ${coveredLinkId} failed:`, err);
+      }
+    }
+    // Retire the bundle only once everything it covers has gone out, so /paid can
+    // still finish the job after a partial failure.
+    const stillPending = await countPendingReports(conversation.id, bundle.coversLinkIds || []);
+    if (stillPending === 0) {
+      const { mutateTelegramConversationData } = await import('./telegram-conversation');
+      await mutateTelegramConversationData(conversation.id, (current) => {
+        const rest = (current.docBundlePayments || []).filter((b) => b.linkId !== paymentLinkId);
+        return { ...current, docBundlePayments: rest.length ? rest : undefined };
+      });
+    }
+    return delivered > 0;
+  }
   const pendingList: Array<{ linkId: string; payload: StoredReportPayload }> = data.docPendingReports || [];
   const matched = paymentLinkId ? pendingList.find((r) => r.linkId === paymentLinkId) : undefined;
+  // A named link that isn't in the list has already been delivered (or isn't ours).
+  // Falling back to the single slot here would send some OTHER bill's statement —
+  // one nobody has paid for — so stop instead. The fallback is only for chats with
+  // no list at all: older ones, and /coupon or /paid, which name no link.
+  if (paymentLinkId && pendingList.length && !matched) return false;
   const payload: StoredReportPayload | undefined = matched?.payload ?? data.docPendingReport;
   if (!payload) return false;
   // Which entry to retire on success: the one paid for, or — with no link to go on —

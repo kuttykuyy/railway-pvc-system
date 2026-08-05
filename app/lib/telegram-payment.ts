@@ -24,6 +24,8 @@ export interface CreateReportPaymentLinkArgs {
   amountRupees: number;
   agreementNo: string;
   billNo?: string;
+  /** Set when one link pays for several statements at once (see /payall). */
+  reportCount?: number;
 }
 
 /**
@@ -36,7 +38,9 @@ export async function createReportPaymentLink(args: CreateReportPaymentLinkArgs)
   const razorpay = getRazorpayInstance();
   if (!razorpay) throw new Error('Razorpay is not configured');
 
-  const description = `PVC statement — ${args.agreementNo}${args.billNo ? ` (Bill ${args.billNo})` : ''}`;
+  const description = args.reportCount && args.reportCount > 1
+    ? `PVC statements — ${args.agreementNo} (${args.reportCount} bills)`
+    : `PVC statement — ${args.agreementNo}${args.billNo ? ` (Bill ${args.billNo})` : ''}`;
 
   const link: any = await razorpay.paymentLink.create({
     // Razorpay works in paise.

@@ -44,6 +44,10 @@ const MAX_PDF_BYTES = 25 * 1024 * 1024; // matches the bill extractor's 25MB cap
 // are dropped rather than kept forever.
 const MAX_QUEUED_BILLS = 10;
 
+// Combined payment links kept per chat. Each /payall supersedes the last, but a few
+// are retained so a link created a moment ago still works if the user pays it late.
+const MAX_BUNDLE_LINKS = 5;
+
 // Each PDF triggers AI extraction (cost), so cap how many a chat can send per day.
 // Guests are anonymous; linked accounts get a higher allowance. Override via env.
 const GUEST_DAILY_PDF_LIMIT = Number(process.env.TELEGRAM_GUEST_DAILY_PDFS || 10);
@@ -267,10 +271,11 @@ export async function startPvcFlow(conversationId: string, chatId: string) {
     docBillFileName: undefined,
     docPendingBills: undefined,
     docPendingAgreement: undefined,
-    docPendingReport: undefined,
-    docPendingPaymentLinkId: undefined,
     docZone: undefined,
     docFuelPriceType: undefined,
+    // Unpaid statements are deliberately NOT cleared. They are held against their own
+    // payment links, and someone starting a second agreement should still receive the
+    // statement they pay for from the first.
   });
   return sendTelegramMessage(
     chatId,
@@ -493,6 +498,82 @@ export async function handleCoupon(conversation: any, chatId: string) {
 }
 
 /**
+ * "/payall" — one payment link for every statement still waiting, instead of paying
+ * bill by bill. Each priced bill gets its own link as it is calculated, which is a
+ * nuisance when someone has just sent a year's bills; this replaces them with a
+ * single link that delivers the whole set once paid.
+ */
+export async function handlePayAll(conversation: any, chatId: string) {
+  const data = getTelegramConversationData(conversation);
+  const pending = data.docPendingReports || [];
+
+  if (!pending.length) {
+    return sendTelegramMessage(
+      chatId,
+      `There are no statements waiting for payment on this chat.\n\n` +
+        `Send /pvc, upload the agreement and your bills, and I'll price each one.`,
+    );
+  }
+
+  try {
+    const { getReportPriceRupees, createReportPaymentLink } = await import('./telegram-payment');
+    const price = await getReportPriceRupees();
+    const total = price * pending.length;
+
+    // Unpaid statements survive a /pvc restart, so the set can span more than one
+    // agreement — name them from the reports themselves rather than from whichever
+    // contract the chat happens to be working on now.
+    const contractIds = [...new Set(pending.map((r) => r.payload?.contractId).filter(Boolean))];
+    const contracts = await prisma.contract.findMany({
+      where: { id: { in: contractIds } },
+      select: { agreementNo: true },
+    });
+    const agreementNos = contracts.map((c) => displayAgreementNo(c.agreementNo)).filter(Boolean);
+    const agreementNo = agreementNos.length === 1
+      ? agreementNos[0]
+      : agreementNos.length > 1
+        ? `${agreementNos.length} agreements`
+        : displayAgreementNo(data.docContractAgreementNo) || 'PVC';
+
+    const link = await createReportPaymentLink({
+      chatId,
+      amountRupees: total,
+      agreementNo,
+      reportCount: pending.length,
+    });
+
+    const coversLinkIds = pending.map((r) => r.linkId);
+    await mutateTelegramConversationData(conversation.id, (current) => ({
+      ...current,
+      docBundlePayments: [
+        ...(current.docBundlePayments || []).filter((b) => b.linkId !== link.id),
+        { linkId: link.id, coversLinkIds },
+      ].slice(-MAX_BUNDLE_LINKS),
+    }));
+
+    const billList = pending
+      .map((r) => `\n   • ${escapeHtml(String(r.payload?.billNo || 'RA Bill'))}`)
+      .join('');
+
+    return sendTelegramMessage(
+      chatId,
+      `🧾 <b>One payment for all ${pending.length} statements</b>\n\n` +
+        `📄 Agreement: <b>${escapeHtml(agreementNo)}</b>${billList}\n\n` +
+        `💰 ₹${formatRupees(price)} × ${pending.length} = <b>₹${formatRupees(total)}</b>\n\n` +
+        `Pay by UPI / card / net banking here:\n${link.url}\n\n` +
+        `When this is paid I'll send all ${pending.length} statements together. ` +
+        `<i>Use this link instead of the individual ones above — paying those as well would charge you twice.</i>`,
+    );
+  } catch (err: any) {
+    console.error('[Telegram] /payall link creation failed:', err);
+    return sendTelegramMessage(
+      chatId,
+      `⚠️ I couldn't create the combined payment link just now. The individual links above still work — or send /payall again in a moment.`,
+    );
+  }
+}
+
+/**
  * "/paid" — the user says they've paid but no report arrived (usually because the
  * Razorpay webhook never reached us). Ask Razorpay directly and deliver if it's paid.
  */
@@ -509,6 +590,9 @@ export async function handlePaidCheck(conversation: any, chatId: string) {
   // well have paid for an earlier one, and checking only the last would tell them
   // (wrongly) that no payment had come through.
   const linkIds = [
+    // Combined links first: paying one of those covers several reports at once, so
+    // settling it up front saves checking each of them separately.
+    ...(data.docBundlePayments || []).map((b) => b.linkId),
     ...(data.docPendingReports || []).map((r) => r.linkId),
     ...(data.docPendingPaymentLinkId ? [data.docPendingPaymentLinkId] : []),
   ].filter((id, index, all) => id && all.indexOf(id) === index);
@@ -821,6 +905,9 @@ export async function handleTenderDateReply(conversation: any, msg: string, chat
 // ─── small helpers ───────────────────────────────────
 function nonEmpty(value: unknown): boolean {
   return !!(value && String(value).trim());
+}
+function formatRupees(value: number): string {
+  return (Number(value) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 }
 function escapeHtml(s: string): string {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
