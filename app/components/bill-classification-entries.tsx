@@ -518,10 +518,16 @@ export function BillClassificationEntries({
             Including GST
           </button>
         </div>
-        <span className="text-[11px] text-slate-500">
+        {/* GCC-2022 defines W as the "Gross value of work done as per on-account bill(s)",
+            and lists what comes out of it — the supply buckets and railway-supplied
+            material. GST is not among them, and IREPS bills are raised at rates marked
+            "Rate is inclusive of GST: Yes". So the bill value as billed IS the base, and
+            stripping 18% understates the PVC. The old wording asserted the opposite
+            ("PVC uses the GST-free value"), which is how this became a trap. */}
+        <span className={`text-[11px] ${ratesIncludeGst ? 'text-amber-700' : 'text-slate-500'}`}>
           {ratesIncludeGst
-            ? `Rates include ${(AGREEMENT_GST_RATE * 100).toFixed(0)}% GST — the ${(AGREEMENT_GST_RATE * 100).toFixed(0)}% is removed from items entered as quantity × rate, and PVC uses the GST-free value.`
-            : 'Rates are GST-free — items are used for PVC as entered.'}
+            ? `Caution: this removes ${(AGREEMENT_GST_RATE * 100).toFixed(0)}% from items entered as quantity × rate. GCC Cl.46A takes W as the gross value per the on-account bill and does not exclude GST, so on a bill raised at GST-inclusive rates this understates the PVC by ${(AGREEMENT_GST_RATE * 100).toFixed(0)}%. Use only if your accounts office has directed a GST-free base in writing.`
+            : 'Items are used for PVC exactly as billed — the correct basis under GCC Cl.46A.'}
           {' '}Only items with a quantity × rate are recalculated; amounts you type in directly stay unchanged.
         </span>
       </div>

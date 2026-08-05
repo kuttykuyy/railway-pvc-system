@@ -218,8 +218,28 @@ function materialFlags(description: string) {
   // ("Thermo-Mechanically Treated bars of grade Fe-500D or more"), while the word
   // "steel" sits in the parent heading above it. Downstream reads isSteelItem, so
   // reinforcement worth lakhs was never offered as a steel supply item.
-  const isSteelItem = steelType !== '';
-  return { isSteelItem, isCementAffected, steelType };
+  let isSteelItem = steelType !== '';
+
+  // Material the Railway issues free, or at a fixed rate, is not the contractor's to be
+  // compensated for — GCC-2022 Cl.46A.1(a) puts it outside price adjustment, and the
+  // definition of W excludes "cost of materials supplied by Railway either free or at
+  // fixed rate". Such an item is billed for the WORK alone, so its amount belongs in W,
+  // but pricing it against the steel index would compensate the contractor for a
+  // material they never bought.
+  //
+  // Item 013070 of SER/KGP/Civil/2024/0066 is the case: "Driving rails 90R/52 Kg
+  // section..." reads as steel on the word "rail", while the same description says
+  // "...length of rail which will be supplied free by Railways at the site of work."
+  const railwaySupplied =
+    /\b(?:supplied|issued|provided)\s+(?:free\s+)?(?:of\s+cost\s+)?by\s+(?:the\s+)?railways?\b/.test(text)
+    || /\bfree\s+(?:issue|supply)\b/.test(text)
+    || /\bdepartmental(?:ly)?\s+suppl/.test(text);
+  if (railwaySupplied) {
+    isSteelItem = false;
+    steelType = '';
+  }
+
+  return { isSteelItem, isCementAffected, steelType, railwaySupplied };
 }
 
 // Reads the first positive rupee value on the Schedule Summary row whose label
