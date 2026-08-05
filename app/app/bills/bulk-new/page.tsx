@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Trash2, Save, AlertCircle, Edit, Upload, Download, Sparkles, ClipboardList, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Save, AlertCircle, Edit, Upload, Download, Sparkles, ClipboardList, Loader2, Calculator } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
@@ -1072,6 +1072,9 @@ export default function BulkBillCreationPage() {
                     onClick={() => void previewAllRows()}
                     disabled={isSaving || previewingRows}
                   >
+                    {previewingRows
+                      ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      : <Calculator className="h-4 w-4 mr-2" />}
                     {previewingRows ? 'Checking PVC…' : 'Preview PVC'}
                   </Button>
                 </div>
