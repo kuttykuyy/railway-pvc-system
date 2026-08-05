@@ -161,6 +161,7 @@ export default function BillsPage() {
   // Bulk download: ask "with index / without index" before generating the combined PDF.
   const [showBulkIndexDialog, setShowBulkIndexDialog] = useState(false);
   const [pendingBulk, setPendingBulk] = useState<((includeDocs: boolean) => void) | null>(null);
+  const [bulkIncludeAbstract, setBulkIncludeAbstract] = useState(false);
 
   // Delete permissions state
   const [deletableBillIds, setDeletableBillIds] = useState<Set<string>>(new Set());
@@ -787,7 +788,7 @@ export default function BillsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ billIds, format: pdfFormat, includeDocs }),
+        body: JSON.stringify({ billIds, format: pdfFormat, includeDocs, includeAbstract: bulkIncludeAbstract }),
       });
 
       if (!response.ok) {
@@ -829,7 +830,7 @@ export default function BillsPage() {
       const response = await fetch('/api/bills/bulk-pdf-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ billIds, format: pdfFormat, includeDocs }),
+        body: JSON.stringify({ billIds, format: pdfFormat, includeDocs, includeAbstract: bulkIncludeAbstract }),
       });
 
       if (!response.ok) {
@@ -2643,6 +2644,24 @@ export default function BillsPage() {
               <span className="text-xs text-muted-foreground mt-1">Statement pages only, no supporting documents</span>
             </button>
           </div>
+          {/* Appended after the statements it summarises. Only offered for a batch from a
+              single agreement — an abstract covers one contract, and one printed over a
+              mixed batch would total bills that are not all in the file. */}
+          <label className="flex items-start gap-2.5 rounded-lg border border-slate-200 px-3 py-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={bulkIncludeAbstract}
+              onChange={(e) => setBulkIncludeAbstract(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-slate-800"
+            />
+            <span>
+              <span className="block text-sm font-medium">Attach the contract abstract</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                Adds the bill-wise summary for the whole agreement at the end. Skipped if the
+                selected bills span more than one agreement.
+              </span>
+            </span>
+          </label>
         </DialogContent>
       </Dialog>
 

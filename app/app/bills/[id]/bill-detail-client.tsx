@@ -652,6 +652,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
   // Detailed format is hidden from the UI; IR Standard is the only downloadable report.
   const [pdfFormat] = useState<'detailed' | 'ir_standard'>('ir_standard');
   const [includeIndexDocs, setIncludeIndexDocs] = useState(true);
+  const [includeAbstract, setIncludeAbstract] = useState(false);
   const [whatsAppDialogOpen, setWhatsAppDialogOpen] = useState(false);
 
   // Fetch templates on mount
@@ -686,6 +687,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
       if (selectedTemplateId && selectedTemplateId !== defaultTemplate?.id) params.set('templateId', selectedTemplateId);
       if (pdfFormat === 'ir_standard') params.set('format', 'ir_standard');
       if (!includeIndexDocs) params.set('includeDocs', '0');
+      if (includeAbstract) params.set('abstract', '1');
       if (params.toString()) url += `?${params.toString()}`;
       
       const response = await fetch(url);
@@ -766,6 +768,18 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
               <SelectItem value="without_docs" className="text-xs">IR PDF only (no documents)</SelectItem>
             </SelectContent>
           </Select>
+
+          {/* The contract's abstract, appended after this bill's statement. Off by default:
+              it belongs on a submission, not on every working download. */}
+          <label className="flex items-center gap-2 h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={includeAbstract}
+              onChange={(e) => setIncludeAbstract(e.target.checked)}
+              className="h-4 w-4 accent-slate-800"
+            />
+            <span className="text-xs text-slate-600 dark:text-slate-300">Attach abstract</span>
+          </label>
 
           <Button
             variant="outline"

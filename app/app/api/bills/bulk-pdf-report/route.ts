@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { billIds, format: pdfFormat } = body;
         const includeIndexDocs = body.includeDocs !== false; // default: include
+        const includeAbstract = body.includeAbstract === true; // default: leave it out
     
     if (!billIds || !Array.isArray(billIds) || billIds.length === 0) {
       return NextResponse.json(
@@ -514,6 +515,22 @@ export async function POST(request: NextRequest) {
         const copiedPages = await mergedPdf.copyPages(billPdfDoc, billPdfDoc.getPageIndices());
         billPageStartIndex.push(mergedPdf.getPageCount()); // first page of this bill
         for (const page of copiedPages) mergedPdf.addPage(page);
+      }
+
+      // Append the contract's abstract when asked for (?abstract=1), after the bills it
+      // summarises. Only for a single-contract batch: an abstract is per agreement, and
+      // one covering a mixed batch would state a total for bills that are not all here.
+      if (includeAbstract && uniqueContractIds.length === 1) {
+        try {
+          const { generateAbstractPdf } = await import('@/lib/pdf/generators/abstract-report');
+          const { pdfBuffer: abstractBytes } = await generateAbstractPdf(uniqueContractIds[0] as string);
+          const abstractDoc = await PDFDocument.load(new Uint8Array(abstractBytes));
+          const abstractPages = await mergedPdf.copyPages(abstractDoc, abstractDoc.getPageIndices());
+          for (const page of abstractPages) mergedPdf.addPage(page);
+        } catch (err) {
+          // The statements are the deliverable; a missing abstract must not lose them.
+          console.error('Bulk IR PDF: could not append the abstract:', err);
+        }
       }
 
       const mergedBytes = new Uint8Array(await mergedPdf.save());

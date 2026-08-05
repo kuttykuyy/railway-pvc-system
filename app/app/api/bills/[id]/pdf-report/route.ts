@@ -220,7 +220,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // button — downloading again is the regenerate — so a stale hit reads as the
         // fix not having worked.
         const build = process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || 'dev';
-        const cacheKey = `pdf-report:${build}:${billId}:${templateId || 'default'}:${pdfFormat}:${includeIndexDocs ? 'docs' : 'nodocs'}:${isAdminRequester ? 'admin' : 'standard'}:${trialWatermarkWaived ? 'wmoff' : 'wmon'}`;
+        const cacheKey = `pdf-report:${build}:${billId}:${templateId || 'default'}:${pdfFormat}:${includeIndexDocs ? 'docs' : 'nodocs'}:${isAdminRequester ? 'admin' : 'standard'}:${trialWatermarkWaived ? 'wmoff' : 'wmon'}:${searchParams.get('abstract') === '1' ? 'abs' : 'noabs'}`;
         const cachedPdf = advancedCache.get(cacheKey);
         if (cachedPdf) {
           console.log(`[PDF Cache] Hit for: ${cacheKey}`);
@@ -773,6 +773,26 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           });
         } catch (err) {
           console.error('IR PDF: error embedding index documents:', err);
+        }
+      }
+
+      // Append the contract's abstract when asked for (?abstract=1). One bill's statement
+      // shows that bill; the accounts office also wants the contract's running position,
+      // and sending the two as one file is what saves them being paired up by hand.
+      if (searchParams.get('abstract') === '1') {
+        try {
+          const { generateAbstractPdf } = await import('@/lib/pdf/generators/abstract-report');
+          const { pdfBuffer: abstractBytes } = await generateAbstractPdf(bill.contractId);
+          const merged = await PDFDocument.create();
+          for (const source of [irFinalBytes, new Uint8Array(abstractBytes)]) {
+            const doc = await PDFDocument.load(source);
+            const pages = await merged.copyPages(doc, doc.getPageIndices());
+            for (const page of pages) merged.addPage(page);
+          }
+          irFinalBytes = await merged.save();
+        } catch (err) {
+          // The statement is the deliverable; a missing abstract must not lose it.
+          console.error('IR PDF: could not append the abstract:', err);
         }
       }
 
