@@ -1787,28 +1787,29 @@ export default function BillsPage() {
                               when the SAVED calculation used provisional indices — the live status
                               of the quarter says nothing about what this bill actually holds. */}
                           {bill.pvcCalculation?.usedProvisionalIndices && (() => {
-                            // Same rule as the card view: live until the month's real index is
-                            // published, then it lights up. Two views of one list must not
-                            // disagree about when an action is available.
+                            // Clickable throughout. A quarter reads as provisional while ANY of
+                            // its months is, so blocking until the whole quarter is final also
+                            // blocked the case where one month has since been published and the
+                            // bill could already be improved.
                             const nowFinal = bill.indicesStatus?.isProvisional === false;
                             const busy = recalculating === bill.id;
                             return (
                               <Button
                                 onClick={() => recalculateBill(bill.id)}
-                                disabled={!nowFinal || busy}
+                                disabled={busy}
                                 variant="outline"
                                 size="sm"
                                 className={`h-7 gap-1 px-2 text-xs ${
                                   nowFinal
                                     ? 'border-amber-300 text-amber-800 bg-amber-50/60 hover:bg-amber-100/60'
-                                    : 'border-slate-200 text-slate-400 cursor-not-allowed'
+                                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                                 }`}
                                 title={nowFinal
-                                  ? 'The final index is now published — click to regenerate this bill with the final figures.'
-                                  : 'Waiting for the final index of this month to be published. You can regenerate once it is available.'}
+                                  ? 'The final index is now published — regenerate to replace the provisional figures.'
+                                  : 'Some months of this quarter are still provisional. Regenerating picks up any index published since this bill was calculated.'}
                               >
                                 {busy ? <LoadingSpinner /> : <Calculator className="h-3.5 w-3.5" />}
-                                <span className="hidden sm:inline">{nowFinal ? 'Regenerate' : 'Awaiting final'}</span>
+                                <span className="hidden sm:inline">Regenerate</span>
                               </Button>
                             );
                           })()}
@@ -2223,29 +2224,30 @@ export default function BillsPage() {
                     </Button>
 
                     {/* Regenerate — only for bills whose numbers were computed with provisional
-                        (borrowed) indices. Stays disabled until the real index for the month is
-                        published (indicesStatus becomes final), then lights up so one click
-                        refreshes the bill with the final figures. */}
+                        (borrowed) indices. Clickable throughout: a quarter reads as provisional
+                        while ANY of its months is, so waiting for the whole quarter also blocked
+                        the case where one month has since been published and the bill could
+                        already be improved. Emphasised once the quarter is fully final. */}
                     {bill.pvcCalculation?.usedProvisionalIndices && (() => {
                       const nowFinal = bill.indicesStatus?.isProvisional === false;
                       const busy = recalculating === bill.id;
                       return (
                         <Button
                           onClick={() => recalculateBill(bill.id)}
-                          disabled={!nowFinal || busy}
+                          disabled={busy}
                           variant="outline"
                           size="default"
                           title={nowFinal
-                            ? 'The final index is now published — click to regenerate this bill with the final figures.'
-                            : 'Waiting for the final index of this month to be published. You can regenerate once it is available.'}
+                            ? 'The final index is now published — regenerate to replace the provisional figures.'
+                            : 'Some months of this quarter are still provisional. Regenerating picks up any index published since this bill was calculated.'}
                           className={`w-full font-semibold rounded-xl h-10 gap-2 transition-all duration-200 ${
                             nowFinal
                               ? 'border-amber-200 hover:border-amber-300 bg-amber-50/60 hover:bg-amber-100/60 dark:border-amber-900/50 dark:bg-amber-950/20 dark:hover:bg-amber-950/40 text-amber-800 dark:text-amber-300'
-                              : 'border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20 text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                              : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 text-slate-600 dark:text-slate-300'
                           }`}
                         >
                           {busy ? <LoadingSpinner /> : <Calculator className="h-4 w-4" />}
-                          <span>{nowFinal ? 'Regenerate (final ready)' : 'Regenerate (awaiting final)'}</span>
+                          <span>{nowFinal ? 'Regenerate (final ready)' : 'Regenerate'}</span>
                         </Button>
                       );
                     })()}
