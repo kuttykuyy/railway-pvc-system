@@ -44,6 +44,60 @@ export interface ExtractedAgreement {
   division: string | null;
 }
 
+const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/**
+ * The tender closing date as printed in the document, or null.
+ *
+ * Every LOA states it in its opening line — "Tender No. TPJ-17-2025-01 closing date
+ * 17-11-2025 15:00" — and agreements carry a "Closing Date/Time" field. Reading it
+ * from the text is exact, where the AI can transpose or miss it, and this one date
+ * sets the base month for the whole contract.
+ */
+export async function findPrintedClosingDate(pdfBuffer: Buffer): Promise<string | null> {
+  let text: string;
+  try {
+    const { extractLayoutText } = await import('../pdf-layout-extract');
+    text = (await extractLayoutText(pdfBuffer)).replace(/\s+/g, ' ');
+  } catch (err) {
+    console.warn('agreement-extractor: could not read the PDF text for the closing date:', err);
+    return null;
+  }
+
+  const label = String.raw`clos(?:ing|ed)\s*(?:date|on)(?:\s*\/?\s*time)?\s*[:\-–]?\s*`;
+  const found = new Set<string>();
+
+  // "closing date 17-11-2025", "Closing Date/Time : 17.11.2025 15:00"
+  for (const m of text.matchAll(new RegExp(label + String.raw`(\d{1,2})\s*[-\/.]\s*(\d{1,2})\s*[-\/.]\s*(\d{4})`, 'gi'))) {
+    const iso = isoDate(Number(m[1]), Number(m[2]), Number(m[3]));
+    if (iso) found.add(iso);
+  }
+  // "closing date 17 Nov 2025" / "05-June-2025"
+  for (const m of text.matchAll(new RegExp(label + String.raw`(\d{1,2})\s*[-\/. ]\s*([A-Za-z]{3,9})\s*[-\/. ,]+\s*(\d{4})`, 'gi'))) {
+    const month = MONTH_NAMES.indexOf(m[2].slice(0, 3).toLowerCase()) + 1;
+    const iso = month > 0 ? isoDate(Number(m[1]), month, Number(m[3])) : null;
+    if (iso) found.add(iso);
+  }
+
+  // Only override the AI when the document is unambiguous. A tender whose closing date
+  // was extended by corrigendum prints both, and picking one by position would be a
+  // coin toss — the model reads the surrounding words, so let it decide those.
+  if (found.size !== 1) {
+    if (found.size > 1) console.warn(`agreement-extractor: ${found.size} different closing dates printed (${[...found].join(', ')}); leaving it to the AI`);
+    return null;
+  }
+  return [...found][0];
+}
+
+/**
+ * Day-first, as Indian tender documents are written: 05-06-2025 is 5 June 2025.
+ * Returns null rather than guessing when the numbers can't be a real date.
+ */
+function isoDate(day: number, month: number, year: number): string | null {
+  if (!(day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1990 && year <= 2100)) return null;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 export interface AgreementExtractionResult {
   ok: boolean;
   data?: ExtractedAgreement;
@@ -83,7 +137,7 @@ export async function extractAgreementFromPdf(
 
   const prompt = `You are extracting fields from an Indian Railway "Contract Agreement of Works" / e-tender agreement PDF to pre-fill a form. Read the whole document.
 
-Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null when a value is not clearly present. Convert every date to "YYYY-MM-DD". Convert money to a plain number (no commas, no ₹).
+Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null when a value is not clearly present. Convert every date to "YYYY-MM-DD" — these documents write dates DAY FIRST, so 05-06-2025 means 5 June 2025 -> "2025-06-05", never 6 May. Convert money to a plain number (no commas, no ₹).
 
 {
   "documentType": "Classify this document: 'agreement' if it is a tender/contract agreement, e-tender document or Letter of Acceptance (LOA); 'bill' if it is a running account bill / RA bill / measurement or deviation statement (it lists executed quantities and amounts since last bill); 'other' if neither. Note: a running bill often prints the agreement number too, so do NOT call it 'agreement' just because an agreement number appears.",
@@ -93,7 +147,7 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   "contractorName": "Contractor's name",
   "contractorPhone": "Contractor phone/mobile if present, else null",
   "workDescription": "Full name/description of the work",
-  "closingDate": "Tender Closing Date (the 'Closing Date/Time' field), YYYY-MM-DD",
+  "closingDate": "Tender Closing Date, YYYY-MM-DD. On an agreement this is the 'Closing Date/Time' field. On a Letter of Acceptance it is written into the opening sentence, e.g. 'Tender No. TPJ-17-2025-01 closing date 17-11-2025 15:00' -> 2025-11-17. Ignore the time. This is NOT the LOA date and NOT the agreement date.",
   "completionDate": "Date of Completion, YYYY-MM-DD",
   "completionPeriodMonths": "Period of Completion in whole months (number)",
   "tenderAdvertisedValue": "Advertised Value / Tender Amount (number)",
@@ -158,6 +212,16 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
     totalTokens: usage.total_tokens,
     success: true,
   });
+
+  // The closing date decides the base month, and a base month that is out by a month
+  // skews every quarter's PVC without ever looking wrong. Both agreements and LOAs
+  // print it in plain words, so read it off the page and let that beat the model —
+  // the AI is only the fallback here.
+  const printedClosingDate = await findPrintedClosingDate(Buffer.from(pdfBytes));
+  if (printedClosingDate && printedClosingDate !== extracted.closingDate) {
+    console.log(`agreement-extractor: closing date from the document text (${printedClosingDate}) overrides the AI's (${extracted.closingDate ?? 'none'})`);
+    extracted.closingDate = printedClosingDate;
+  }
 
   // Base-month rule: baseMonth = month BEFORE the closing date, and the server
   // derives it from dateOfOpening. So map the closing date onto dateOfOpening.
