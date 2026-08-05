@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import { notFound } from 'next/navigation';
 import { formatContractValue } from '@/lib/gcc-compliance';
 import { BackButton } from '@/components/ui/back-button';
+import { ShareContractDialog } from '@/components/contracts/share-contract-dialog';
 import { BillCard } from '@/components/bill-card';
 
 export const dynamic = 'force-dynamic';
@@ -60,6 +61,7 @@ export default async function ContractDetailPage({ params }: Props) {
           <p className="text-sm text-gray-500 mt-1 line-clamp-2">{contract.workDescription}</p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
+          <ShareContractDialog contractId={contract.id} agreementNo={contract.agreementNo} />
           <Link href={`/contracts/${contract.id}/covering-letter`}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
             <FileText className="h-4 w-4" /> Covering Letter
