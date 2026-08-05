@@ -4,6 +4,7 @@
  */
 
 import { prisma } from './db';
+import { Prisma } from '@prisma/client';
 
 // Reuse the same conversation steps as WhatsApp
 export enum TelegramStep {
@@ -68,16 +69,32 @@ export interface TelegramConversationData {
   docContractAgreementNo?: string;
   docBillFileId?: string;      // Telegram file_id of the uploaded bill PDF (downloaded on process)
   docBillFileName?: string;
+  /**
+   * Bills sent before the contract was ready (no agreement yet, or the zone/fuel
+   * questions unanswered). A list, not one slot: a user forwarding a whole set of
+   * running bills sends them in one burst, and the earlier single slot meant every
+   * bill but the last was silently dropped.
+   */
+  docPendingBills?: Array<{ fileId: string; fileName: string }>;
   /** Extracted agreement fields held back until the user supplies the tender closing date. */
   docPendingAgreement?: any;
   /** Report data waiting on payment — rendered and sent by the Razorpay webhook. */
   docPendingReport?: any;
   /** Razorpay payment link id, so /paid can verify payment without the webhook. */
   docPendingPaymentLinkId?: string;
+  /**
+   * Every unpaid report, keyed by its own payment link. With several bills in flight
+   * for one agreement the single slot above would hand whoever paid the last bill's
+   * report, so the webhook matches on the link that was actually paid and falls back
+   * to the single slot (older chats, /coupon and /paid, which carry no link).
+   */
+  docPendingReports?: Array<{ linkId: string; payload: any }>;
   /** Per-day usage counter for rate limiting (resets when the date changes). */
   dailyUsage?: { date: string; pdfs: number };
   /** ISO time a report render/send started — a soft lock against re-render spam. */
   reportDeliveringAt?: string;
+  /** The same lock, per payment link, so two bills can be paid for at the same time. */
+  reportDelivering?: Record<string, string>;
   /** Railway zone code (e.g. SR) — drives the steel indices and the zone-city fuel index. */
   docZone?: string;
   /** 'four_city_avg' or 'zone_city' — which fuel price basis this contract uses. */
@@ -148,6 +165,49 @@ export async function updateTelegramConversation(
     },
     include: { user: true },
   });
+}
+
+/**
+ * Read-modify-write of the conversation data under a serialisable transaction.
+ *
+ * Use this instead of updateTelegramConversation whenever the change depends on
+ * what is already stored — appending to a list, taking an item off one. Several
+ * bills for the same agreement arrive as separate webhook calls that run at the
+ * same time, and the plain update above reads the whole JSON blob and writes it
+ * back, so the later write silently drops the earlier one's entry. Losing a queued
+ * bill costs the user a re-upload; losing a pending report costs them a payment.
+ */
+export async function mutateTelegramConversationData(
+  conversationId: string,
+  mutate: (data: TelegramConversationData) => TelegramConversationData,
+  step?: TelegramStep,
+): Promise<TelegramConversationData> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const current = await tx.telegramConversation.findUnique({ where: { id: conversationId } });
+          if (!current) throw new Error('Conversation not found');
+          const next = mutate((current.conversationData as TelegramConversationData) || {});
+          await tx.telegramConversation.update({
+            where: { id: conversationId },
+            data: {
+              ...(step ? { currentStep: step } : {}),
+              conversationData: next as any,
+              lastMessageAt: new Date(),
+              expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            },
+          });
+          return next;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (err: any) {
+      // P2034 is Prisma's "write conflict, retry me". Anything else is a real error.
+      const retryable = err?.code === 'P2034' || /could not serialize|deadlock/i.test(String(err?.message || ''));
+      if (!retryable || attempt >= 3) throw err;
+    }
+  }
 }
 
 /**

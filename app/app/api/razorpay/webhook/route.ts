@@ -100,11 +100,16 @@ export async function POST(request: NextRequest) {
         eventType === 'payment_link.paid'
       ) {
         const chatId = String(telegramNotes.telegramChatId || '');
-        logger.log(`[${requestId}] Telegram PVC report payment for chat ${chatId}`);
+        // Which link was paid. A chat can have one unpaid report per bill, so without
+        // this the payer would get whichever report was parked last.
+        const paymentLinkId = String(
+          event.payload?.payment_link?.entity?.id || payment?.payment_link_id || '',
+        );
+        logger.log(`[${requestId}] Telegram PVC report payment for chat ${chatId} (link ${paymentLinkId || 'n/a'})`);
         if (chatId) {
           try {
             const { renderAndSendPaidReport } = await import('@/lib/telegram-bill-pvc');
-            const sent = await renderAndSendPaidReport(chatId);
+            const sent = await renderAndSendPaidReport(chatId, paymentLinkId || undefined);
             logger.log(`[${requestId}] Telegram report ${sent ? 'sent' : 'not pending (already sent?)'}`);
           } catch (err: any) {
             console.error(`[${requestId}] Telegram report delivery failed:`, err);

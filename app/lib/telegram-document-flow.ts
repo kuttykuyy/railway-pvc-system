@@ -18,6 +18,7 @@ import { prisma } from './db';
 import {
   getOrCreateTelegramConversation,
   updateTelegramConversation,
+  mutateTelegramConversationData,
   getTelegramConversationData,
   TelegramStep,
 } from './telegram-conversation';
@@ -37,6 +38,11 @@ export interface TelegramDocument {
 }
 
 const MAX_PDF_BYTES = 25 * 1024 * 1024; // matches the bill extractor's 25MB cap
+
+// How many bills can sit waiting for the agreement (or the zone/fuel answers) at once.
+// A contractor catching up on a year's billing sends a handful; beyond this the oldest
+// are dropped rather than kept forever.
+const MAX_QUEUED_BILLS = 10;
 
 // Each PDF triggers AI extraction (cost), so cap how many a chat can send per day.
 // Guests are anonymous; linked accounts get a higher allowance. Override via env.
@@ -110,11 +116,16 @@ export async function handleTelegramDocument(chatId: string, doc: TelegramDocume
 
   // Classify by the AI's documentType — NOT just "has an agreement number", because
   // a running bill also prints the agreement number and was being misread as the
-  // agreement. Only treat it as the agreement when the model says so AND it found a
+  // agreement. Only treat it as the agreement when the model says so AND it carries a
   // number; anything else (bill / other) is handled as the bill PDF.
+  //
+  // An LOA counts: the agreement is signed weeks after the work is awarded, so a
+  // contractor billing early may only have the Letter of Acceptance. It names the
+  // work, the contractor and the accepted value, which is what the contract needs —
+  // so accept an LOA number when there is no agreement number yet.
   const data = extraction.ok ? extraction.data ?? null : null;
   const looksLikeAgreement =
-    !!data && data.documentType === 'agreement' && !!(data.agreementNo && String(data.agreementNo).trim());
+    !!data && data.documentType === 'agreement' && !!(nonEmpty(data.agreementNo) || nonEmpty(data.loaNo));
 
   if (looksLikeAgreement) {
     return handleAgreementDoc(conversation.id, chatId, data, doc);
@@ -136,13 +147,14 @@ async function handleAgreementDoc(
   // The base month is derived from the tender closing date, so without a date we
   // cannot compute PVC. Never guess (defaulting to "today" produced a 2026 base
   // month and a Q0/zero PVC) — ask the user instead.
+  const isLoaOnly = !nonEmpty(data.agreementNo) && nonEmpty(data.loaNo);
   if (!agreementOpeningDate(data)) {
     await updateTelegramConversation(conversationId, TelegramStep.AWAITING_TENDER_DATE, {
       docPendingAgreement: data,
     });
     return sendTelegramMessage(
       chatId,
-      `📄 I read the agreement <b>${escapeHtml(String(data.agreementNo || ''))}</b>, but I couldn't find the <b>tender closing date</b> in it.\n\n` +
+      `📄 I read the ${isLoaOnly ? 'LOA' : 'agreement'} <b>${escapeHtml(String(data.agreementNo || data.loaNo || ''))}</b>, but I couldn't find the <b>tender closing date</b> in it.\n\n` +
         `That date sets the PVC base month, so I need it. Please reply with it in <b>DD/MM/YYYY</b> format (e.g. 15/03/2024):`,
     );
   }
@@ -155,8 +167,10 @@ async function handleAgreementDoc(
 
     await sendTelegramMessage(
       chatId,
-      `✅ <b>Agreement read</b>\n\n` +
-        `📄 Agreement No: <b>${escapeHtml(displayAgreementNo(contract.agreementNo))}</b>\n` +
+      `✅ <b>${isLoaOnly ? 'LOA' : 'Agreement'} read</b>\n\n` +
+        (isLoaOnly
+          ? `📄 LOA No: <b>${escapeHtml(String(data.loaNo || ''))}</b>\n<i>I'll pick up the agreement number from your bill.</i>\n`
+          : `📄 Agreement No: <b>${escapeHtml(displayAgreementNo(contract.agreementNo))}</b>\n`) +
         (contract.contractorName ? `👤 Contractor: <b>${escapeHtml(contract.contractorName)}</b>\n` : '') +
         (contract.workDescription ? `🏗️ Work: <b>${escapeHtml(truncate(contract.workDescription, 80))}</b>\n` : ''),
     );
@@ -176,31 +190,56 @@ async function handleBillDoc(conversationId: string, chatId: string, doc: Telegr
   const haveContract = !!stored0.docContractId;
   const answeredQuestions = !!stored0.docZone && !!stored0.docFuelPriceType;
 
-  // Keep the bill, but don't skip ahead: the agreement (and the zone/fuel answers)
-  // are still needed before the PVC can be worked out.
-  const nextStep = !haveContract
-    ? TelegramStep.AWAITING_AGREEMENT_PDF
-    : answeredQuestions
-      ? TelegramStep.IDLE
-      : (conv0?.currentStep as TelegramStep) || TelegramStep.AWAITING_ZONE;
-
-  await updateTelegramConversation(conversationId, nextStep, {
-    docBillFileId: doc.file_id,
-    docBillFileName: doc.file_name || 'bill.pdf',
-  });
-
+  // Ready to price → run THIS bill straight from the file id on the message that
+  // carried it. Nothing goes through a shared slot, so a user who forwards five
+  // running bills at once gets five PVCs instead of whichever landed last.
   if (haveContract && answeredQuestions) {
     await sendTelegramMessage(chatId, `✅ <b>Bill received.</b> Calculating your PVC…`);
-    return maybeProcess(conversationId, chatId);
+    return processOneBill(conversationId, chatId, {
+      fileId: doc.file_id,
+      fileName: doc.file_name || 'bill.pdf',
+    });
   }
+
+  // Not ready yet: queue the bill behind whatever is still missing.
+  const queued = await queuePendingBill(conversationId, {
+    fileId: doc.file_id,
+    fileName: doc.file_name || 'bill.pdf',
+  }, haveContract ? undefined : TelegramStep.AWAITING_AGREEMENT_PDF);
+
+  const waiting = queued > 1 ? ` (${queued} bills waiting)` : '';
   if (haveContract) {
-    return sendTelegramMessage(chatId, `✅ <b>Bill received</b> — I'll keep it. Please answer the question above first.`);
+    return sendTelegramMessage(chatId, `✅ <b>Bill received</b>${waiting} — I'll keep it. Please answer the question above first.`);
   }
   return sendTelegramMessage(
     chatId,
-    `✅ <b>Bill received</b> — I'll keep it.\n\n` +
-      `📎 <b>Now send the tender agreement PDF</b> (I need it for the schedules, rates and base month), and I'll calculate the PVC.`,
+    `✅ <b>Bill received</b>${waiting} — I'll keep it.\n\n` +
+      `📎 <b>Now send the tender agreement PDF</b> (or the <b>LOA</b> if the agreement isn't signed yet) — I need it for the schedules, rates and base month, and then I'll calculate the PVC.`,
   );
+}
+
+/** Adds a bill to the waiting queue and reports how many are now waiting. */
+async function queuePendingBill(
+  conversationId: string,
+  bill: { fileId: string; fileName: string },
+  step?: TelegramStep,
+): Promise<number> {
+  const next = await mutateTelegramConversationData(
+    conversationId,
+    (current) => {
+      const pending = [...(current.docPendingBills || []), bill];
+      return {
+        ...current,
+        // Cap it: each bill costs an extraction, and nobody sends 20 by accident.
+        docPendingBills: pending.slice(-MAX_QUEUED_BILLS),
+        // The legacy single slot keeps older code paths (and /paid resumes) working.
+        docBillFileId: bill.fileId,
+        docBillFileName: bill.fileName,
+      };
+    },
+    step,
+  );
+  return (next.docPendingBills || []).length;
 }
 
 /**
@@ -226,6 +265,7 @@ export async function startPvcFlow(conversationId: string, chatId: string) {
     docContractAgreementNo: undefined,
     docBillFileId: undefined,
     docBillFileName: undefined,
+    docPendingBills: undefined,
     docPendingAgreement: undefined,
     docPendingReport: undefined,
     docPendingPaymentLinkId: undefined,
@@ -235,8 +275,9 @@ export async function startPvcFlow(conversationId: string, chatId: string) {
   return sendTelegramMessage(
     chatId,
     `🚂 <b>Let's work out your PVC</b>\n\n` +
-      `I need two PDFs — one at a time.\n\n` +
-      `📎 <b>Step 1 of 2:</b> send the <b>tender agreement PDF</b>.\n\n` +
+      `📎 <b>Step 1 of 2:</b> send the <b>tender agreement PDF</b>.\n` +
+      `<i>No signed agreement yet? Send the <b>LOA</b> instead — that works too.</i>\n\n` +
+      `Then send your <b>running bill</b>. You can send <b>several bills</b> for the same agreement and I'll price each one.\n\n` +
       `<i>Tap the 📎 clip button and choose the file. Type /cancel to stop.</i>`,
   );
 }
@@ -347,8 +388,13 @@ export async function handleFuelBasisReply(conversation: any, msg: string, chatI
   const label = fuelPriceType === 'four_city_avg' ? 'Average of 4 cities' : 'Zone city rate';
   await sendTelegramMessage(chatId, `✅ Fuel basis: <b>${label}</b>`);
 
-  if (data.docBillFileId) return maybeProcess(conversation.id, chatId);
-  return sendTelegramMessage(chatId, `📎 <b>Last step:</b> send the <b>running bill (RA bill) PDF</b> and I'll calculate the PVC.`);
+  // Anything sent while the questions were outstanding is priced now, in order.
+  if (data.docPendingBills?.length || data.docBillFileId) return maybeProcess(conversation.id, chatId);
+  return sendTelegramMessage(
+    chatId,
+    `📎 <b>Last step:</b> send the <b>running bill (RA bill) PDF</b> and I'll calculate the PVC.\n\n` +
+      `<i>Got several bills for this agreement? Send them all — each gets its own PVC.</i>`,
+  );
 }
 
 /**
@@ -459,31 +505,44 @@ export async function handlePaidCheck(conversation: any, chatId: string) {
         `If you already received it, you're all set. Otherwise send /pvc to start again.`,
     );
   }
-  const linkId = data.docPendingPaymentLinkId;
-  if (!linkId) {
+  // Every unpaid link, not just the newest: with several bills in flight the user may
+  // well have paid for an earlier one, and checking only the last would tell them
+  // (wrongly) that no payment had come through.
+  const linkIds = [
+    ...(data.docPendingReports || []).map((r) => r.linkId),
+    ...(data.docPendingPaymentLinkId ? [data.docPendingPaymentLinkId] : []),
+  ].filter((id, index, all) => id && all.indexOf(id) === index);
+
+  if (!linkIds.length) {
     return sendTelegramMessage(chatId, `I couldn't find the payment reference for this chat. Please send /pvc and try again.`);
   }
 
   await sendTelegramMessage(chatId, '🔎 Checking your payment…');
   const { isPaymentLinkPaid } = await import('./telegram-payment');
-  const paid = await isPaymentLinkPaid(linkId);
-  if (!paid) {
+  const { renderAndSendPaidReport } = await import('./telegram-bill-pvc');
+
+  let delivered = 0;
+  let anyPaid = false;
+  for (const linkId of linkIds) {
+    if (!(await isPaymentLinkPaid(linkId))) continue;
+    anyPaid = true;
+    try {
+      if (await renderAndSendPaidReport(chatId, linkId)) delivered++;
+    } catch (err: any) {
+      console.error('[Telegram] /paid delivery failed:', err);
+      await sendTelegramMessage(chatId, `⚠️ Payment confirmed, but I hit a problem building the PDF: ${escapeHtml(err?.message || 'unknown error')}`);
+    }
+  }
+
+  if (!anyPaid) {
     return sendTelegramMessage(
       chatId,
       `❌ Razorpay hasn't confirmed that payment yet.\n\n` +
         `If you've just paid, wait a moment and send /paid again. If the money left your account but this keeps failing, contact support with your payment reference.`,
     );
   }
-
-  try {
-    const { renderAndSendPaidReport } = await import('./telegram-bill-pvc');
-    const sent = await renderAndSendPaidReport(chatId);
-    if (!sent) {
-      return sendTelegramMessage(chatId, '✅ Payment confirmed, but the report was already delivered. Check the messages above.');
-    }
-  } catch (err: any) {
-    console.error('[Telegram] /paid delivery failed:', err);
-    return sendTelegramMessage(chatId, `⚠️ Payment confirmed, but I hit a problem building the PDF: ${escapeHtml(err?.message || 'unknown error')}`);
+  if (!delivered) {
+    return sendTelegramMessage(chatId, '✅ Payment confirmed, but the report was already delivered. Check the messages above.');
   }
 }
 
@@ -493,7 +552,7 @@ export async function handlePaidCheck(conversation: any, chatId: string) {
 export async function remindToUpload(step: TelegramStep, chatId: string) {
   const which = step === TelegramStep.AWAITING_BILL_PDF
     ? { n: '2 of 2', what: 'running bill (RA bill) PDF' }
-    : { n: '1 of 2', what: 'tender agreement PDF' };
+    : { n: '1 of 2', what: 'tender agreement PDF (or the LOA, if the agreement isn\'t signed yet)' };
   return sendTelegramMessage(
     chatId,
     `📎 <b>Step ${which.n}:</b> please attach the <b>${which.what}</b> using the 📎 clip button.\n\n` +
@@ -508,8 +567,41 @@ export async function remindToUpload(step: TelegramStep, chatId: string) {
 async function maybeProcess(conversationId: string, chatId: string) {
   const conv = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
   const data = getTelegramConversationData(conv);
-  // Need the contract, the bill, and the confirmed zone before pricing.
-  if (!data.docContractId || !data.docBillFileId || !data.docZone || !data.docFuelPriceType) return;
+  // Need the contract and the confirmed zone/fuel basis before pricing anything.
+  if (!data.docContractId || !data.docZone || !data.docFuelPriceType) return;
+
+  // Everything that was waiting, oldest first. The legacy single slot is included so
+  // a run paused mid-flight (tender date, account linking) still resumes.
+  const queue = [...(data.docPendingBills || [])];
+  if (!queue.length && data.docBillFileId) {
+    queue.push({ fileId: data.docBillFileId, fileName: data.docBillFileName || 'bill.pdf' });
+  }
+  if (!queue.length) return;
+
+  for (const [index, bill] of queue.entries()) {
+    if (queue.length > 1) {
+      await sendTelegramMessage(chatId, `📄 <b>Bill ${index + 1} of ${queue.length}</b> — ${escapeHtml(bill.fileName)}`);
+    }
+    // One bill needing an answer stops the run: the reply it is waiting for would
+    // otherwise be read against a later bill. What's left stays queued.
+    const paused = await processOneBill(conversationId, chatId, bill);
+    if (paused) return;
+  }
+}
+
+/**
+ * Prices one bill and clears it from the queue. Returns true when the run paused to
+ * ask the user something, in which case the caller must stop and leave the rest
+ * queued for when they answer.
+ */
+async function processOneBill(
+  conversationId: string,
+  chatId: string,
+  bill: { fileId: string; fileName: string },
+): Promise<boolean> {
+  const conv = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
+  const data = getTelegramConversationData(conv);
+  if (!data.docContractId) return false;
 
   await sendTelegramChatAction(chatId, 'upload_document');
   let needsInput = false;
@@ -518,23 +610,34 @@ async function maybeProcess(conversationId: string, chatId: string) {
       chatId,
       conversationId,
       contractId: data.docContractId,
-      billFileId: data.docBillFileId,
-      billFileName: data.docBillFileName || 'bill.pdf',
+      billFileId: bill.fileId,
+      billFileName: bill.fileName,
     });
     needsInput = !!result?.needsInput;
   } catch (err: any) {
     console.error('[Telegram] PVC processing failed:', err);
-    await sendTelegramMessage(chatId, `❌ PVC calculation failed: ${escapeHtml(err.message || 'unknown error')}`);
+    await sendTelegramMessage(chatId, `❌ PVC calculation failed for <b>${escapeHtml(bill.fileName)}</b>: ${escapeHtml(err.message || 'unknown error')}`);
   }
-  // Clear the uploaded bill so a fresh bill can be sent next, but keep the contract
-  // so more bills can follow. When we're waiting on the tender date, keep the bill
-  // so the recalculation can run as soon as the user answers.
-  if (!needsInput) {
-    await updateTelegramConversation(conversationId, TelegramStep.IDLE, {
-      docBillFileId: undefined,
-      docBillFileName: undefined,
-    });
-  }
+
+  // Waiting on an answer → put this bill at the head of the queue so the run picks up
+  // where it stopped. Otherwise take just this bill out, by file id: a bill that
+  // arrived while this one was pricing must survive, so the queue is never replaced
+  // wholesale.
+  await mutateTelegramConversationData(
+    conversationId,
+    (current) => {
+      const others = (current.docPendingBills || []).filter((b) => b.fileId !== bill.fileId);
+      const queue = needsInput ? [bill, ...others] : others;
+      return {
+        ...current,
+        docPendingBills: queue.length ? queue : undefined,
+        docBillFileId: queue.length ? queue[0].fileId : undefined,
+        docBillFileName: queue.length ? queue[0].fileName : undefined,
+      };
+    },
+    needsInput ? undefined : TelegramStep.IDLE,
+  );
+  return needsInput;
 }
 
 /**
@@ -555,7 +658,11 @@ async function findOrCreateContractFromAgreement(
   conversationId: string,
   data: ExtractedAgreement,
 ) {
-  const realNo = String(data.agreementNo).trim();
+  // An LOA has no agreement number yet, so it is keyed by its LOA number until the
+  // bill supplies the real one (see backfillContractFromBill).
+  const realNo = nonEmpty(data.agreementNo)
+    ? String(data.agreementNo).trim()
+    : `LOA ${String(data.loaNo).trim()}`;
 
   const conv = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
   const linkedUserId = conv?.userId || null;
@@ -636,7 +743,11 @@ export async function resumeDocumentFlow(conversationId: string, chatId: string)
  * Base month = month BEFORE this date, so a wrong value silently zeroes the PVC.
  */
 function agreementOpeningDate(data: ExtractedAgreement): Date | null {
-  for (const raw of [data.dateOfOpening, data.closingDate, data.loaDate]) {
+  // Deliberately NOT falling back to the LOA date. The LOA is issued weeks or months
+  // after the tender closes, so using it would quietly move the base month forward
+  // and understate every quarter's PVC. Better to ask the user for the closing date —
+  // which is what the caller does when this returns null.
+  for (const raw of [data.dateOfOpening, data.closingDate]) {
     if (!raw) continue;
     const d = new Date(raw);
     if (!isNaN(d.getTime()) && d.getFullYear() > 1970 && d.getFullYear() < 2100) return d;
@@ -708,6 +819,9 @@ export async function handleTenderDateReply(conversation: any, msg: string, chat
 }
 
 // ─── small helpers ───────────────────────────────────
+function nonEmpty(value: unknown): boolean {
+  return !!(value && String(value).trim());
+}
 function escapeHtml(s: string): string {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

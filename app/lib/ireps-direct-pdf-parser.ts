@@ -388,7 +388,38 @@ function metadata(pages: PositionedPdfPage[]) {
     workDescription: labelledValue(pages, /Name\s+Of\s+Work/i, 'Work', 460)
       || text.match(/Name Of Work\s+(.+?)(?=\s+Name Of Contractor|\n)/i)?.[1]?.trim() || '',
     measurementDate: extractMeasurementDate(flatText),
+    // The bill header repeats the contract's own identity. A contractor who has the
+    // running bill but not the signed agreement can therefore still get a contract
+    // set up from an LOA (or from the bill alone), with these filling the blanks.
+    agreementDate: headerDate(flatText, /Agreement Date/i),
+    loaNo: flatText.match(/LOA No\.?\s*([A-Za-z0-9\/\-]+)/i)?.[1]?.trim() || '',
+    loaDate: headerDate(flatText, /LOA Date/i),
+    // Not printed on any IREPS running bill seen so far, but other formats carry it
+    // and the contract value decides PVC eligibility (GCC 46A.1, ≥ Rs 2 Cr).
+    agreementValue: headerAmount(flatText),
   };
+}
+
+/** A DD/MM/YYYY value printed after a header label, as an ISO date string. */
+function headerDate(flatText: string, label: RegExp): string {
+  const match = flatText.match(new RegExp(label.source + String.raw`\s*(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})`, 'i'));
+  if (!match) return '';
+  const [, dd, mm, yyyy] = match;
+  const date = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+  if (isNaN(date.getTime()) || date.getMonth() !== Number(mm) - 1) return '';
+  // Formatted by hand: toISOString() on a local-midnight date rolls back a day east
+  // of Greenwich, which would report every agreement as signed the day before.
+  return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+}
+
+/** The accepted contract value, when the bill prints it under any of its usual names. */
+function headerAmount(flatText: string): number | null {
+  const match = flatText.match(
+    /(?:Agreement|Contract|Accepted|Tender)\s+(?:Value|Amount)\s*(?:\(Rs\.?\)|Rs\.?|:)?\s*([\d,]+(?:\.\d+)?)/i,
+  );
+  if (!match) return null;
+  const value = Number(match[1].replace(/,/g, ''));
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 // Turns the skipped-row log into something a contractor can act on: which item

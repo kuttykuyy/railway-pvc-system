@@ -47,6 +47,10 @@ export interface ProcessUploadedBillArgs {
 
 const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
+// How many unpaid reports a chat can hold. One per bill sent but not yet paid for;
+// beyond this the oldest links stop being redeemable.
+const MAX_PENDING_REPORTS = 10;
+
 function formatMoney(value: number): string {
   return (Number(value) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -67,7 +71,7 @@ export interface ProcessUploadedBillResult {
 export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Promise<ProcessUploadedBillResult> {
   const { chatId, contractId, billFileId, billFileName } = args;
 
-  const contract = await prisma.contract.findUnique({ where: { id: contractId } });
+  let contract = await prisma.contract.findUnique({ where: { id: contractId } });
   if (!contract) {
     await sendTelegramMessage(chatId, '❌ Could not find the contract for this bill. Please resend the agreement PDF.');
     return {};
@@ -107,6 +111,11 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     await sendTelegramMessage(chatId, '❌ I could not find any bill items in that PDF. Please check it is the running bill.');
     return {};
   }
+
+  // The bill header repeats the contract's identity, so it can finish a contract set
+  // up from an LOA — which carries no agreement number — and fill anything the
+  // agreement PDF didn't yield. Only ever fills blanks; never overwrites.
+  contract = (await backfillContractFromBill(contract, billDetails, chatId, args.conversationId)) || contract;
 
   // 3. Map each item to a PVC sub-classification by its suggested code, summing
   //    amounts per classification. Blank/unknown codes fall back to the bill's main
@@ -366,7 +375,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   };
 
   try {
-    const { updateTelegramConversation, TelegramStep } = await import('./telegram-conversation');
+    const { mutateTelegramConversationData, TelegramStep } = await import('./telegram-conversation');
     const { getReportPriceRupees, createReportPaymentLink } = await import('./telegram-payment');
 
     const price = await getReportPriceRupees();
@@ -377,10 +386,22 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       billNo: payload.billNo,
     });
 
-    await updateTelegramConversation(args.conversationId, TelegramStep.IDLE, {
-      docPendingReport: payload as any,
-      docPendingPaymentLinkId: link.id,
-    });
+    // Park it against its own payment link as well as in the single slot. Several
+    // bills for one agreement means several unpaid links at once, and the single slot
+    // alone would hand whoever pays the FIRST link the LAST bill's report.
+    await mutateTelegramConversationData(
+      args.conversationId,
+      (current) => ({
+        ...current,
+        docPendingReport: payload as any,
+        docPendingPaymentLinkId: link.id,
+        docPendingReports: [
+          ...(current.docPendingReports || []).filter((r) => r.linkId !== link.id),
+          { linkId: link.id, payload: payload as any },
+        ].slice(-MAX_PENDING_REPORTS),
+      }),
+      TelegramStep.IDLE,
+    );
 
     await sendTelegramMessage(
       chatId,
@@ -398,6 +419,98 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   }
 
   return {};
+}
+
+/** Fields the running bill's header can supply about the contract itself. */
+interface BillHeaderFacts {
+  agreementNo?: string;
+  loaNo?: string;
+  loaDate?: string;
+  agreementValue?: number | null;
+  contractorName?: string;
+  billWorkDescription?: string;
+}
+
+/**
+ * Fills in contract details the agreement/LOA didn't give us, using the bill's own
+ * header. This is what lets a contractor start from an LOA: the LOA has no agreement
+ * number, and the running bill prints it — along with the LOA number and date, the
+ * contractor, the Name of Work, and on formats that carry it the contract value.
+ *
+ * Only ever writes fields that are empty or placeholders — a value read from the
+ * actual agreement always wins. Returns the updated contract, or null if nothing
+ * needed changing.
+ */
+async function backfillContractFromBill(
+  contract: any,
+  billDetails: any,
+  chatId: string,
+  conversationId: string,
+): Promise<any | null> {
+  const bill: BillHeaderFacts = billDetails || {};
+  const patch: Record<string, any> = {};
+
+  // The agreement number the contract is filed under. A contract created from an LOA
+  // is keyed "LOA <no>" (and guests carry a "· tg:<chat>" namespace suffix, which must
+  // be preserved or the chat loses its own contract).
+  const storedNo = String(contract.agreementNo || '');
+  const suffixMatch = storedNo.match(/\s*·\s*tg:\S+$/i);
+  const namespaceSuffix = suffixMatch ? suffixMatch[0] : '';
+  const realNo = displayAgreementNo(storedNo);
+  const billAgreementNo = String(bill.agreementNo || '').trim();
+  const stillOnLoaKey = /^LOA\s/i.test(realNo);
+
+  if (stillOnLoaKey && billAgreementNo) {
+    patch.agreementNo = `${billAgreementNo}${namespaceSuffix}`;
+  }
+  if (!contract.loaNo && bill.loaNo) patch.loaNo = String(bill.loaNo).trim();
+  if (!contract.loaDate && bill.loaDate) patch.loaDate = new Date(bill.loaDate);
+  if (!contract.contractValue && typeof bill.agreementValue === 'number' && bill.agreementValue > 0) {
+    patch.contractValue = bill.agreementValue;
+  }
+  if (!contract.contractorName || contract.contractorName === 'Unknown') {
+    const name = String(bill.contractorName || '').trim();
+    if (name) patch.contractorName = name;
+  }
+  // "Work as per agreement" is the placeholder written when the agreement text gave
+  // no description. The bill's Name of Work is the real thing, and it decides the GCC
+  // work group, so a placeholder must not be allowed to stand.
+  if (!contract.workDescription || /^work as per agreement$/i.test(contract.workDescription.trim())) {
+    const work = String(bill.billWorkDescription || '').trim();
+    if (work) patch.workDescription = work;
+  }
+
+  if (!Object.keys(patch).length) return null;
+
+  try {
+    const updated = await prisma.contract.update({ where: { id: contract.id }, data: patch });
+    if (patch.agreementNo) {
+      // The chat (and the admin view, and the nudge message) still name the contract
+      // by its LOA key until this is refreshed.
+      const { mutateTelegramConversationData } = await import('./telegram-conversation');
+      await mutateTelegramConversationData(conversationId, (current) => ({
+        ...current,
+        docContractAgreementNo: billAgreementNo,
+      }));
+      await sendTelegramMessage(
+        chatId,
+        `📄 Picked up the agreement number from your bill: <b>${escapeHtml(billAgreementNo)}</b>`,
+      );
+    }
+    return updated;
+  } catch (err: any) {
+    // The real agreement number may already belong to another contract (P2002). The
+    // LOA-keyed contract still works, so carry on with what we have.
+    console.error('[Telegram] contract backfill failed:', err?.code || err);
+    if (err?.code === 'P2002' && patch.agreementNo) {
+      delete patch.agreementNo;
+      if (!Object.keys(patch).length) return null;
+      try {
+        return await prisma.contract.update({ where: { id: contract.id }, data: patch });
+      } catch { return null; }
+    }
+    return null;
+  }
 }
 
 /**
@@ -490,33 +603,49 @@ export interface StoredReportPayload {
 /**
  * Renders and sends the PVC statement for a chat's pending (now paid) report.
  *
- * Called from the Razorpay webhook. Clearing the pending payload doubles as the
+ * Called from the Razorpay webhook, which passes the payment link that was paid so
+ * the right bill's report goes out when several are waiting. /coupon and /paid carry
+ * no link and take the most recent. Clearing the pending payload doubles as the
  * idempotency guard: a webhook retry finds nothing and won't send twice.
  */
-export async function renderAndSendPaidReport(chatId: string): Promise<boolean> {
+export async function renderAndSendPaidReport(chatId: string, paymentLinkId?: string): Promise<boolean> {
   const conversation = await prisma.telegramConversation.findUnique({ where: { chatId } });
   if (!conversation) return false;
 
   const data = (conversation.conversationData as any) || {};
-  const payload: StoredReportPayload | undefined = data.docPendingReport;
+  const pendingList: Array<{ linkId: string; payload: StoredReportPayload }> = data.docPendingReports || [];
+  const matched = paymentLinkId ? pendingList.find((r) => r.linkId === paymentLinkId) : undefined;
+  const payload: StoredReportPayload | undefined = matched?.payload ?? data.docPendingReport;
   if (!payload) return false;
+  // Which entry to retire on success: the one paid for, or — with no link to go on —
+  // the most recent, which is what the single slot holds.
+  const deliveredLinkId = matched?.linkId ?? data.docPendingPaymentLinkId;
 
   const contract = await prisma.contract.findUnique({ where: { id: payload.contractId } });
   if (!contract) return false;
 
   // Re-render lock: rendering + embedding index docs is heavy, so refuse to start a
-  // second render while one is in flight (guards against coupon/paid spam). The lock
-  // self-expires after 2 min so a crashed render can't wedge the chat forever.
-  const startedAt = data.reportDeliveringAt ? Date.parse(data.reportDeliveringAt) : 0;
+  // second render of THIS report while one is in flight (guards against coupon/paid
+  // spam). Keyed per report, not per chat — paying for two bills at once must produce
+  // two statements, and a chat-wide lock would silently drop the second. Self-expires
+  // after 2 min so a crashed render can't wedge the chat forever.
+  const lockKey = deliveredLinkId || 'single';
+  const startedAt = Date.parse(data.reportDelivering?.[lockKey] || data.reportDeliveringAt || '') || 0;
   if (startedAt && Date.now() - startedAt < 120000) {
-    console.log(`[Telegram] report already delivering for chat ${chatId}; skipping duplicate`);
+    console.log(`[Telegram] report ${lockKey} already delivering for chat ${chatId}; skipping duplicate`);
     return true;
   }
-  const lockStamp = new Date().toISOString();
-  await prisma.telegramConversation.update({
-    where: { id: conversation.id },
-    data: { conversationData: { ...data, reportDeliveringAt: lockStamp } as any },
-  });
+  const { mutateTelegramConversationData } = await import('./telegram-conversation');
+  const releaseLock = (current: any) => {
+    const locks = { ...(current.reportDelivering || {}) };
+    delete locks[lockKey];
+    return Object.keys(locks).length ? locks : undefined;
+  };
+  await mutateTelegramConversationData(conversation.id, (current) => ({
+    ...current,
+    reportDelivering: { ...((current as any).reportDelivering || {}), [lockKey]: new Date().toISOString() },
+    reportDeliveringAt: undefined,
+  }) as any);
 
   try {
     console.log(`[Telegram] rendering paid report for chat ${chatId}, agreement ${contract.agreementNo}`);
@@ -557,12 +686,24 @@ export async function renderAndSendPaidReport(chatId: string): Promise<boolean> 
       `✅ Here is your PVC statement.\n📎 ${escapeHtml(realAgr)}`,
     );
 
-    // Clear the pending report AND the lock on success.
-    const fresh = await prisma.telegramConversation.findUnique({ where: { id: conversation.id } });
-    const freshData = (fresh?.conversationData as any) || {};
-    await prisma.telegramConversation.update({
-      where: { id: conversation.id },
-      data: { conversationData: { ...freshData, docPendingReport: undefined, reportDeliveringAt: undefined } as any },
+    // Retire the delivered report AND clear its lock on success. Reports for the
+    // other bills stay pending — they have their own payment links.
+    await mutateTelegramConversationData(conversation.id, (current) => {
+      // With no link to match on (older chats), the single slot was what we sent, so
+      // the whole list goes: it can only be holding that same report.
+      const rest = deliveredLinkId
+        ? (current.docPendingReports || []).filter((r) => r.linkId !== deliveredLinkId)
+        : [];
+      const newest = rest[rest.length - 1];
+      return {
+        ...current,
+        docPendingReports: rest.length ? rest : undefined,
+        // The single slot follows: it must never still point at what was just sent.
+        docPendingReport: newest?.payload,
+        docPendingPaymentLinkId: newest?.linkId,
+        reportDelivering: releaseLock(current),
+        reportDeliveringAt: undefined,
+      } as any;
     });
 
     notifyTelegramAdmin(
@@ -575,12 +716,11 @@ export async function renderAndSendPaidReport(chatId: string): Promise<boolean> 
     return true;
   } catch (err) {
     // Release the lock so the user can retry (with /paid or the coupon).
-    const fresh = await prisma.telegramConversation.findUnique({ where: { id: conversation.id } });
-    const freshData = (fresh?.conversationData as any) || {};
-    await prisma.telegramConversation.update({
-      where: { id: conversation.id },
-      data: { conversationData: { ...freshData, reportDeliveringAt: undefined } as any },
-    });
+    await mutateTelegramConversationData(conversation.id, (current) => ({
+      ...current,
+      reportDelivering: releaseLock(current),
+      reportDeliveringAt: undefined,
+    }) as any);
     throw err;
   }
 }

@@ -310,6 +310,13 @@ export interface ExtractedBillDetails {
   rebatePercentage?: number;
   rebateAmount?: number;
   workDescription?: string;
+  /** The Name of Work printed on the bill itself, before the contract's own wins. */
+  billWorkDescription?: string;
+  /** Contract details the bill header repeats — used to complete a contract set up from an LOA. */
+  agreementDate?: string;
+  loaNo?: string;
+  loaDate?: string;
+  agreementValue?: number | null;
   classificationGroupCode?: string;
   scheduleSummary?: Array<{
     schedule: string;
@@ -1174,11 +1181,18 @@ export async function extractBillDetailsDirect(pdfBuffer: Buffer, contractId?: s
     });
     contractDescription = contract?.workDescription || '';
   }
+  // "Work as per agreement" is the placeholder stored when a contract was set up
+  // without a readable description (an LOA, say). It names no work, so it would send
+  // every item to the wrong GCC group — the bill's own Name of Work is the real one.
+  if (/^work as per agreement$/i.test(contractDescription.trim())) contractDescription = '';
   const workDescription = contractDescription || parsed.workDescription;
 
   const billDetails: ExtractedBillDetails = {
     ...parsed,
     workDescription,
+    // The contract's description wins above, so keep the bill's own available for
+    // filling in contract details that were never captured.
+    billWorkDescription: parsed.workDescription,
     classificationGroupCode: inferMainClassification(workDescription).code,
     items: parsed.items
       .map(normalizeExtractedItem)
