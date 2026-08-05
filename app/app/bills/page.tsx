@@ -710,7 +710,13 @@ export default function BillsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        // Update the bill in the list with new calculation
+        // Report what actually happened rather than what might have. A regeneration that
+        // changes nothing looks identical to one that failed, which is how "it isn't
+        // working" starts.
+        const before = bills.find(b => b.id === billId)?.pvcCalculation?.totalPvc;
+        const after = data.pvcCalculation?.totalPvc;
+        const money = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+
         setBills(prev => prev.map(bill =>
           bill.id === billId
             ? { ...bill, pvcCalculation: data.pvcCalculation, updatedAt: new Date().toISOString() }
@@ -718,7 +724,12 @@ export default function BillsPage() {
         ));
         // Refresh so the provisional/final badge reflects any newly-entered final indices.
         void fetchBills();
-        toast.success('PVC regenerated. If the month is now final, it will show as Final.');
+
+        if (typeof before === 'number' && typeof after === 'number' && Math.abs(after - before) >= 0.01) {
+          toast.success(`PVC regenerated: ${money(before)} → ${money(after)}`, { duration: 6000 });
+        } else {
+          toast.success('PVC regenerated — the amount is unchanged, so the indices it used have not moved.', { duration: 6000 });
+        }
       } else {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || errorData.error || 'Failed to recalculate PVC');
@@ -1815,18 +1826,34 @@ export default function BillsPage() {
                                 </Link>
                               </DropdownMenuItem>
 
-                              {/* Regenerate — only for provisional bills. Re-runs the PVC with the
-                                  latest indices, so once the real numbers are entered it becomes Final. */}
-                              {bill.indicesStatus?.isProvisional && (
-                                <DropdownMenuItem
-                                  onClick={(e) => { e.preventDefault(); recalculateBill(bill.id); }}
-                                  disabled={recalculating === bill.id}
-                                  className="flex items-center gap-2 cursor-pointer text-amber-700 focus:text-amber-800 focus:bg-amber-50"
-                                >
-                                  {recalculating === bill.id ? <LoadingSpinner /> : <Calculator className="h-4 w-4" />}
-                                  <span>Regenerate PVC</span>
-                                </DropdownMenuItem>
-                              )}
+                              {/* Regenerate. This used to be shown only while indicesStatus was
+                                  provisional — the LIVE status of the quarter's indices. That flag
+                                  turns false the moment the final figures are published, so the
+                                  option disappeared at exactly the point it was needed: the bill
+                                  still held provisional numbers and there was no way to refresh it.
+                                  What matters is whether the SAVED calculation used provisional
+                                  indices, which is recorded on the calculation itself. */}
+                              {(bill.pvcCalculation?.usedProvisionalIndices || bill.indicesStatus?.isProvisional) && (() => {
+                                const nowFinal = bill.pvcCalculation?.usedProvisionalIndices
+                                  && !bill.indicesStatus?.isProvisional;
+                                return (
+                                  <DropdownMenuItem
+                                    onClick={(e) => { e.preventDefault(); recalculateBill(bill.id); }}
+                                    disabled={recalculating === bill.id}
+                                    className={`flex items-center gap-2 cursor-pointer ${
+                                      nowFinal
+                                        ? 'text-emerald-700 focus:text-emerald-800 focus:bg-emerald-50'
+                                        : 'text-amber-700 focus:text-amber-800 focus:bg-amber-50'
+                                    }`}
+                                    title={nowFinal
+                                      ? 'The indices for this quarter are now final. Regenerate to replace the provisional figures.'
+                                      : 'Re-runs the PVC against the latest indices.'}
+                                  >
+                                    {recalculating === bill.id ? <LoadingSpinner /> : <Calculator className="h-4 w-4" />}
+                                    <span>{nowFinal ? 'Regenerate PVC (indices now final)' : 'Regenerate PVC'}</span>
+                                  </DropdownMenuItem>
+                                );
+                              })()}
 
                               <DropdownMenuSeparator />
                               
