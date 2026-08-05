@@ -1781,23 +1781,37 @@ export default function BillsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1 flex-wrap">
-                          {/* Recalculate button - hidden as per user request */}
-                          {/* {bill.contract?.isExtended && bill.contract?.extensionType === '17B' && (
-                            <Button
-                              onClick={() => recalculateBill(bill.id)}
-                              disabled={recalculating === bill.id}
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 text-emerald-600 hover:text-emerald-700"
-                              title="Recalculate PVC"
-                            >
-                              {recalculating === bill.id ? (
-                                <LoadingSpinner />
-                              ) : (
-                                <Calculator className="h-3 w-3" />
-                              )}
-                            </Button>
-                          )} */}
+                          {/* Regenerate, on the row rather than buried in the menu. A bill holding
+                              provisional figures needs chasing once the real indices land, and a
+                              menu item nobody opens is the same as no action at all. Shown only
+                              when the SAVED calculation used provisional indices — the live status
+                              of the quarter says nothing about what this bill actually holds. */}
+                          {bill.pvcCalculation?.usedProvisionalIndices && (() => {
+                            // Same rule as the card view: live until the month's real index is
+                            // published, then it lights up. Two views of one list must not
+                            // disagree about when an action is available.
+                            const nowFinal = bill.indicesStatus?.isProvisional === false;
+                            const busy = recalculating === bill.id;
+                            return (
+                              <Button
+                                onClick={() => recalculateBill(bill.id)}
+                                disabled={!nowFinal || busy}
+                                variant="outline"
+                                size="sm"
+                                className={`h-7 gap-1 px-2 text-xs ${
+                                  nowFinal
+                                    ? 'border-amber-300 text-amber-800 bg-amber-50/60 hover:bg-amber-100/60'
+                                    : 'border-slate-200 text-slate-400 cursor-not-allowed'
+                                }`}
+                                title={nowFinal
+                                  ? 'The final index is now published — click to regenerate this bill with the final figures.'
+                                  : 'Waiting for the final index of this month to be published. You can regenerate once it is available.'}
+                              >
+                                {busy ? <LoadingSpinner /> : <Calculator className="h-3.5 w-3.5" />}
+                                <span className="hidden sm:inline">{nowFinal ? 'Regenerate' : 'Awaiting final'}</span>
+                              </Button>
+                            );
+                          })()}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -1825,35 +1839,6 @@ export default function BillsPage() {
                                   <span>View Details</span>
                                 </Link>
                               </DropdownMenuItem>
-
-                              {/* Regenerate. This used to be shown only while indicesStatus was
-                                  provisional — the LIVE status of the quarter's indices. That flag
-                                  turns false the moment the final figures are published, so the
-                                  option disappeared at exactly the point it was needed: the bill
-                                  still held provisional numbers and there was no way to refresh it.
-                                  What matters is whether the SAVED calculation used provisional
-                                  indices, which is recorded on the calculation itself. */}
-                              {(bill.pvcCalculation?.usedProvisionalIndices || bill.indicesStatus?.isProvisional) && (() => {
-                                const nowFinal = bill.pvcCalculation?.usedProvisionalIndices
-                                  && !bill.indicesStatus?.isProvisional;
-                                return (
-                                  <DropdownMenuItem
-                                    onClick={(e) => { e.preventDefault(); recalculateBill(bill.id); }}
-                                    disabled={recalculating === bill.id}
-                                    className={`flex items-center gap-2 cursor-pointer ${
-                                      nowFinal
-                                        ? 'text-emerald-700 focus:text-emerald-800 focus:bg-emerald-50'
-                                        : 'text-amber-700 focus:text-amber-800 focus:bg-amber-50'
-                                    }`}
-                                    title={nowFinal
-                                      ? 'The indices for this quarter are now final. Regenerate to replace the provisional figures.'
-                                      : 'Re-runs the PVC against the latest indices.'}
-                                  >
-                                    {recalculating === bill.id ? <LoadingSpinner /> : <Calculator className="h-4 w-4" />}
-                                    <span>{nowFinal ? 'Regenerate PVC (indices now final)' : 'Regenerate PVC'}</span>
-                                  </DropdownMenuItem>
-                                );
-                              })()}
 
                               <DropdownMenuSeparator />
                               
