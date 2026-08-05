@@ -285,7 +285,10 @@ function EditBillPageContent() {
   const panelCls = (id: string) => (activeTab === id ? 'block' : 'hidden');
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-5">
+    // Full width. The page is mostly the classification table — item rows, quantities,
+    // rates and per-component amounts — and a 4xl cap squeezed it into a horizontal
+    // scroll on the one screen where the numbers most need to be read across.
+    <div className="w-full px-4 py-6 space-y-5">
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
