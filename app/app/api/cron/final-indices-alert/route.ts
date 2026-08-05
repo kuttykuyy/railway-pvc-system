@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { findBillsWithNewlyFinalIndices, groupByOwner } from '@/lib/final-indices-alert';
 import { sendTextTemplateWhatsApp, validatePhoneNumber } from '@/lib/whatsapp-mydreams';
 import { formatTemplateParams } from '@/lib/whatsapp-templates';
+import { recalculateBillPvc } from '@/lib/recalculate-bill-pvc';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -36,8 +37,30 @@ export async function GET(request: NextRequest) {
 
   try {
     const affected = await findBillsWithNewlyFinalIndices();
-    const byOwner = groupByOwner(affected);
 
+    // Refresh the drafts. A draft has been sent to nobody, so its provisional figure was
+    // only ever a placeholder and replacing it costs nothing. Anything submitted or
+    // approved is left exactly as it is: the paper is already with the accounts office,
+    // and quietly changing the amount underneath it is how a proposal and its statement
+    // come to disagree. Those keep the Regenerate button, to be applied deliberately.
+    const recalculated: Array<{ billNo: string; from: number; to: number }> = [];
+    if (!dryRun) {
+      for (const bill of affected.filter(b => b.status === 'draft')) {
+        try {
+          const before = bill.totalPvc;
+          const result = await recalculateBillPvc(bill.billId);
+          const after = result.pvcCalculation?.totalPvc ?? before;
+          if (Math.abs(after - before) >= 0.01) {
+            recalculated.push({ billNo: bill.billNo, from: before, to: after });
+          }
+        } catch (err) {
+          // One bad bill must not stop the sweep — the rest still need refreshing.
+          console.error(`[final-indices-alert] could not recalculate ${bill.billNo}:`, err);
+        }
+      }
+    }
+
+    const byOwner = groupByOwner(affected);
     const results: Array<{ owner: string; bills: number; sent: boolean; reason?: string }> = [];
 
     for (const [ownerId, bills] of byOwner) {
@@ -81,6 +104,13 @@ export async function GET(request: NextRequest) {
       success: true,
       dryRun,
       billsAffected: affected.length,
+      draftsRefreshed: recalculated.length,
+      // Named individually: a sweep that rewrites amounts unattended should leave a record
+      // of exactly which, and from what to what.
+      changes: recalculated,
+      awaitingDecision: affected.filter(b => b.status !== 'draft').map(b => ({
+        billNo: b.billNo, status: b.status,
+      })),
       ownersNotified: results.filter(r => r.sent).length,
       results,
     });

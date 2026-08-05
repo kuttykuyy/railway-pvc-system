@@ -26,6 +26,8 @@ export interface AffectedBill {
   ownerPhone: string | null;
   /** Indices that were provisional when this ran last and are final now. */
   finalisedIndices: string[];
+  /** The PVC as currently saved, so a refresh can report what actually moved. */
+  totalPvc: number;
 }
 
 /**
@@ -48,6 +50,7 @@ export async function findBillsWithNewlyFinalIndices(limit = 200): Promise<Affec
       status: true,
       zone: true,
       fuelPriceType: true,
+      pvcCalculation: { select: { totalPvc: true } },
       contract: {
         select: {
           agreementNo: true,
@@ -82,6 +85,7 @@ export async function findBillsWithNewlyFinalIndices(limit = 200): Promise<Affec
       ownerName: bill.contract.user?.name || bill.contract.user?.email || 'there',
       ownerPhone: bill.contract.user?.phone || null,
       finalisedIndices: status.finalIndices,
+      totalPvc: bill.pvcCalculation?.totalPvc ?? 0,
     });
   }
 
