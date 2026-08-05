@@ -516,9 +516,8 @@ export async function handlePayAll(conversation: any, chatId: string) {
   }
 
   try {
-    const { getReportPriceRupees, createReportPaymentLink } = await import('./telegram-payment');
-    const price = await getReportPriceRupees();
-    const total = price * pending.length;
+    const { getBulkReportPrice, createReportPaymentLink } = await import('./telegram-payment');
+    const price = await getBulkReportPrice(pending.length);
 
     // Unpaid statements survive a /pvc restart, so the set can span more than one
     // agreement — name them from the reports themselves rather than from whichever
@@ -537,7 +536,7 @@ export async function handlePayAll(conversation: any, chatId: string) {
 
     const link = await createReportPaymentLink({
       chatId,
-      amountRupees: total,
+      amountRupees: price.total,
       agreementNo,
       reportCount: pending.length,
     });
@@ -555,11 +554,17 @@ export async function handlePayAll(conversation: any, chatId: string) {
       .map((r) => `\n   • ${escapeHtml(String(r.payload?.billNo || 'RA Bill'))}`)
       .join('');
 
+    const pricing = price.discount > 0
+      ? `💰 ₹${formatRupees(price.unitPrice)} × ${price.count} = ₹${formatRupees(price.gross)}\n` +
+        `🎁 Bulk discount (${price.discountPercent}%) − ₹${formatRupees(price.discount)}\n` +
+        `👉 <b>You pay ₹${formatRupees(price.total)}</b>`
+      : `💰 ₹${formatRupees(price.unitPrice)} × ${price.count} = <b>₹${formatRupees(price.total)}</b>`;
+
     return sendTelegramMessage(
       chatId,
       `🧾 <b>One payment for all ${pending.length} statements</b>\n\n` +
         `📄 Agreement: <b>${escapeHtml(agreementNo)}</b>${billList}\n\n` +
-        `💰 ₹${formatRupees(price)} × ${pending.length} = <b>₹${formatRupees(total)}</b>\n\n` +
+        pricing + `\n\n` +
         `Pay by UPI / card / net banking here:\n${link.url}\n\n` +
         `When this is paid I'll send all ${pending.length} statements together. ` +
         `<i>Use this link instead of the individual ones above — paying those as well would charge you twice.</i>`,

@@ -114,6 +114,9 @@ export async function getBillingSettings() {
     lowCreditThreshold:             Number(parse('LOW_CREDIT_THRESHOLD', 50)),
     provisionalIndicesCheckEnabled: Boolean(parse('PROVISIONAL_INDICES_CHECK_ENABLED', true)),
     aiBillCost:                     Number(parse('AI_BILL_PROCESSING_COST', 499)),
+    // Telegram /payall — paying for several PVC statements with one link.
+    payAllDiscountPercent:          Number(parse('TELEGRAM_PAYALL_DISCOUNT_PERCENT', 10)),
+    payAllDiscountPercentBulk:      Number(parse('TELEGRAM_PAYALL_DISCOUNT_PERCENT_5PLUS', 20)),
   };
 }
 

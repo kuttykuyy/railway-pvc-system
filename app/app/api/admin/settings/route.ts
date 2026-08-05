@@ -21,6 +21,18 @@ const DEFAULT_SETTINGS = [
     dataType: 'number'
   },
   {
+    key: 'TELEGRAM_PAYALL_DISCOUNT_PERCENT',
+    value: '10',
+    description: 'Discount % when a Telegram user pays for 2-4 PVC statements with one link (/payall)',
+    dataType: 'number'
+  },
+  {
+    key: 'TELEGRAM_PAYALL_DISCOUNT_PERCENT_5PLUS',
+    value: '20',
+    description: 'Discount % when a Telegram user pays for 5 or more PVC statements with one link (/payall)',
+    dataType: 'number'
+  },
+  {
     key: 'PAYMENT_PROCESSING_ENABLED',
     value: 'true',
     description: 'Enable/disable payment processing for bills',

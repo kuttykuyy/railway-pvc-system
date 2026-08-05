@@ -19,6 +19,42 @@ export async function getReportPriceRupees(): Promise<number> {
   return settings.aiBillCost || 499;
 }
 
+export interface BulkReportPrice {
+  count: number;
+  unitPrice: number;
+  /** count x unitPrice, before any discount. */
+  gross: number;
+  discountPercent: number;
+  /** Whole rupees off, so the payable total is a round number. */
+  discount: number;
+  total: number;
+}
+
+/**
+ * What a set of statements costs when paid with one link (/payall).
+ *
+ * Paying for several bills at once earns a discount — the work is one payment and
+ * one delivery, and a contractor catching up on a year's billing shouldn't pay the
+ * single-bill rate on every one. Both tiers are admin settings, so the rate can be
+ * changed without a deploy.
+ */
+export async function getBulkReportPrice(count: number): Promise<BulkReportPrice> {
+  const settings = await getBillingSettings();
+  const unitPrice = settings.aiBillCost || 499;
+  const gross = unitPrice * count;
+
+  const rawPercent = count >= 5
+    ? settings.payAllDiscountPercentBulk
+    : count >= 2
+      ? settings.payAllDiscountPercent
+      : 0;
+  // A misconfigured setting must never make a statement free or negative.
+  const discountPercent = Number.isFinite(rawPercent) ? Math.min(Math.max(rawPercent, 0), 90) : 0;
+
+  const total = Math.round(gross * (1 - discountPercent / 100));
+  return { count, unitPrice, gross, discountPercent, discount: gross - total, total };
+}
+
 export interface CreateReportPaymentLinkArgs {
   chatId: string;
   amountRupees: number;

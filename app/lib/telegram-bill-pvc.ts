@@ -403,12 +403,16 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       TelegramStep.IDLE,
     );
 
-    // With more than one statement waiting, paying them one link at a time is a
-    // nuisance — point at the combined link.
+    // With more than one statement waiting, paying them one link at a time is both a
+    // nuisance and dearer — point at the combined link and name the saving.
     const waitingCount = (stored.docPendingReports || []).length;
-    const payAllHint = waitingCount > 1
-      ? `\n\n🧾 <b>${waitingCount} statements are now waiting.</b> Send <b>/payall</b> to pay for them all with one link instead.`
-      : '';
+    let payAllHint = '';
+    if (waitingCount > 1) {
+      const { getBulkReportPrice } = await import('./telegram-payment');
+      const bulk = await getBulkReportPrice(waitingCount);
+      payAllHint = `\n\n🧾 <b>${waitingCount} statements are now waiting.</b> Send <b>/payall</b> for one link covering all of them`
+        + (bulk.discount > 0 ? ` — ₹${formatMoney(bulk.total)} instead of ₹${formatMoney(bulk.gross)}, saving ₹${formatMoney(bulk.discount)}.` : '.');
+    }
 
     await sendTelegramMessage(
       chatId,

@@ -150,7 +150,7 @@ async function sendHelpMessage(chatId: string) {
     `➡️ You get the <b>PVC amount free</b>, then can pay in this chat to get the <b>PVC statement PDF</b>.\n\n` +
     `<b>After that:</b>\n` +
     `▫️ Another bill for the same work — just send the next bill PDF\n` +
-    `▫️ Several bills to pay for — /payall gives you one link for all of them\n` +
+    `▫️ Several bills to pay for — /payall gives you one link for all of them, at a discount\n` +
     `▫️ A different work — /pvc to start again\n` +
     `▫️ Stop anytime — /cancel\n\n` +
     `<b>Or type the details instead:</b>\n` +
