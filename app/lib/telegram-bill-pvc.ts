@@ -727,7 +727,12 @@ async function buildIrReport(o: {
       value: mv.value,
     }));
     const { getBillIndicesStatus } = await import('@/lib/index-status');
-    const status = await getBillIndicesStatus(o.quarter, baseMonth);
+    // The fuel and steel names are already resolved for this bill, so pass them straight
+    // through rather than re-deriving them from the zone.
+    const status = await getBillIndicesStatus(o.quarter, baseMonth, [
+      'Labour', 'RBI Plant Machinery', 'RBI Other Materials', 'RBI Cement',
+      o.fuelIndexName, ...o.steelIndexNames,
+    ]);
     isProvisional = status.isProvisional;
     provisionalIndices = status.provisionalIndices;
   } catch (err) {

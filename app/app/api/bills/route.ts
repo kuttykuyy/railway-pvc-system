@@ -11,7 +11,7 @@ import { getBillingSettings } from '@/lib/admin-settings';
 import { getUserAccessibleBills, checkUserContractAccess } from '@/lib/permissions';
 import { validateMeasurementDateAgainstProvisionalIndices } from '@/lib/provisional-validation';
 import { handleApiError } from '@/lib/error-handler';
-import { isBillUsingProvisionalIndices, areFinalIndicesAvailableForBill } from '@/lib/index-status';
+import { isBillUsingProvisionalIndices, areFinalIndicesAvailableForBill, relevantIndexNamesForBill } from '@/lib/index-status';
 import { withTimeout, TIMEOUT_DEFAULTS } from '@/lib/api-timeout';
 import { getPaginationParams, createPaginatedResponse } from '@/lib/api-helpers';
 import rateLimiter, { RATE_LIMITS, getIdentifier } from '@/lib/rate-limiter';
@@ -134,12 +134,21 @@ export async function GET(request: NextRequest) {
         
         // Batch provisional-index check: deduplicate quarters before hitting DB
         // A page of 20 bills often share the same 2-3 quarters — no need for 20 queries
-        const uniqueQuarters = [...new Set(bills.map(b => `${b.quarter}::${b.contract.baseMonth.toISOString()}`))];
+        // The status must be judged against the indices THIS bill prices on. Its fuel and
+        // steel indices depend on the zone, so the memo key carries them too — two bills in
+        // the same quarter but different zones are not the same question.
+        const keyFor = (b: any) =>
+          `${b.quarter}::${b.contract.baseMonth.toISOString()}::${relevantIndexNamesForBill(b.zone, b.fuelPriceType).sort().join('|')}`;
+        const uniqueQuarters = [...new Set(bills.map(keyFor))];
         const statusByKey = new Map<string, { isProvisional: boolean; provisionalCount: number; totalCount: number; provisionalIndices: string[]; details: string }>();
         await Promise.all(
           uniqueQuarters.map(async key => {
-            const [quarter, baseMonthISO] = key.split('::');
-            const status = await isBillUsingProvisionalIndices(quarter, new Date(baseMonthISO));
+            const [quarter, baseMonthISO, indexList] = key.split('::');
+            const status = await isBillUsingProvisionalIndices(
+              quarter,
+              new Date(baseMonthISO),
+              indexList ? indexList.split('|').filter(Boolean) : undefined,
+            );
             statusByKey.set(key, {
               isProvisional: status.isProvisional,
               provisionalCount: status.provisionalCount,
@@ -154,7 +163,7 @@ export async function GET(request: NextRequest) {
         // it so the "Regenerate" action survives once the real index is later published.
         const idsToLatch = bills
           .filter(b => b.pvcCalculation && !(b.pvcCalculation as any).usedProvisionalIndices
-            && statusByKey.get(`${b.quarter}::${b.contract.baseMonth.toISOString()}`)?.isProvisional)
+            && statusByKey.get(keyFor(b))?.isProvisional)
           .map(b => b.pvcCalculation!.id);
         if (idsToLatch.length > 0) {
           await prisma.pvcCalculation.updateMany({
@@ -168,7 +177,7 @@ export async function GET(request: NextRequest) {
           pvcCalculation: bill.pvcCalculation && latched.has(bill.pvcCalculation.id)
             ? { ...bill.pvcCalculation, usedProvisionalIndices: true }
             : bill.pvcCalculation,
-          indicesStatus: statusByKey.get(`${bill.quarter}::${bill.contract.baseMonth.toISOString()}`)
+          indicesStatus: statusByKey.get(keyFor(bill))
             ?? { isProvisional: false, provisionalCount: 0, totalCount: 0, provisionalIndices: [], details: '' }
         }));
         

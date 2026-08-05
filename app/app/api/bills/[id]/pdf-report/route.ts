@@ -12,7 +12,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getQuarterlyAverages } from '@/lib/db-utils';
 import { getFileUrl } from '@/lib/s3';
-import { getBillIndicesStatus } from '@/lib/index-status';
+import { getBillIndicesStatus, relevantIndexNamesForBill } from '@/lib/index-status';
 import { withTimeout, TIMEOUT_DEFAULTS } from '@/lib/api-timeout';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill, getSteelCityForZone } from '@/lib/zone-steel-city-mapping';
 import rateLimiter, { RATE_LIMITS, getIdentifier } from '@/lib/rate-limiter';
@@ -661,7 +661,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // ── IR STANDARD FORMAT BRANCH ─────────────────────────────────────────────
     if (pdfFormat === 'ir_standard') {
       const { generateIRStandardReport } = await import('@/lib/pdf/generators/ir-standard-report');
-      const indicesStatusForIR = await getBillIndicesStatus(bill.quarter, baseMonth);
+      const indicesStatusForIR = await getBillIndicesStatus(
+        bill.quarter, baseMonth, relevantIndexNamesForBill(bill.zone, bill.fuelPriceType));
 
       // Build quarterlyAverages in the format expected by ir-standard-report
       const fuelIdxName = getFuelIndexNameForBill(bill.zone, bill.fuelPriceType);

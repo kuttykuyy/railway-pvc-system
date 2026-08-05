@@ -4,6 +4,28 @@
  */
 
 import { prisma } from './db';
+import { getFuelIndexNameForBill, getSteelIndexNamesForZone } from './zone-steel-city-mapping';
+
+/**
+ * The indices a bill's PVC actually depends on. Fuel and steel vary by zone, so this
+ * cannot be a constant.
+ *
+ * Explosives is deliberately absent. Only tunnelling groups carry an explosives
+ * percentage; for every other classification it is 0%, so a month with no explosives
+ * figure would otherwise hold an unrelated bill "provisional" indefinitely. Under-
+ * reporting a tunnelling bill is the lesser fault — the alternative stranded every bill
+ * in the quarter with nothing the user could do about it.
+ */
+export function relevantIndexNamesForBill(zone?: string | null, fuelPriceType?: string | null): string[] {
+  return [
+    'Labour',
+    'RBI Plant Machinery',
+    'RBI Other Materials',
+    'RBI Cement',
+    getFuelIndexNameForBill(zone || '', fuelPriceType || 'four_city_avg'),
+    ...getSteelIndexNamesForZone(zone || ''),
+  ];
+}
 
 /**
  * Check if a bill is using provisional indices
@@ -11,12 +33,13 @@ import { prisma } from './db';
  */
 export async function isBillUsingProvisionalIndices(
   quarter: string,
-  baseMonth: Date
+  baseMonth: Date,
+  relevantIndexNames?: string[],
 ): Promise<{ isProvisional: boolean; provisionalCount: number; totalCount: number; provisionalIndices: string[]; details: string }> {
   try {
     // Delegate to getBillIndicesStatus so both use the same rule: a bill is provisional
     // when a value is flagged provisional OR a required month index is missing (borrowed).
-    const status = await getBillIndicesStatus(quarter, baseMonth);
+    const status = await getBillIndicesStatus(quarter, baseMonth, relevantIndexNames);
     return {
       isProvisional: status.isProvisional,
       provisionalCount: status.provisionalIndices.length,
@@ -229,7 +252,11 @@ export async function areFinalIndicesAvailableForBill(
  */
 export async function getBillIndicesStatus(
   quarter: string,
-  baseMonth: Date
+  baseMonth: Date,
+  /** The indices this bill prices against — labour, plant, its zone's fuel and steel, and
+   *  so on. Omit only where the caller genuinely cannot know; every index in the database
+   *  is then considered, which is what used to strand bills as provisional. */
+  relevantIndexNames?: string[],
 ): Promise<{
   isProvisional: boolean;
   provisionalIndices: string[];
@@ -248,12 +275,18 @@ export async function getBillIndicesStatus(
       };
     }
     
-    // Get all index values with their names
+    // Only the indices this bill actually prices against. Without the filter this read
+    // EVERY index in the database for those months, so an index the bill has nothing to
+    // do with — explosives on a bill with no explosives, another zone's steel — could
+    // hold it "provisional" for ever, with no way for the user to tell why or fix it.
     const indexValues = await prisma.monthlyIndexValue.findMany({
       where: {
         month: {
           in: months
-        }
+        },
+        ...(relevantIndexNames && relevantIndexNames.length > 0
+          ? { priceIndex: { name: { in: relevantIndexNames } } }
+          : {}),
       },
       include: {
         priceIndex: {
