@@ -272,7 +272,7 @@ export async function generateAbstractPdf(contractId: string): Promise<{ pdfBuff
     yPosition += 20;
     pdf.setTextColor(0, 0, 0); // Reset to black
     pdf.setFontSize(14);
-    pdf.text('PRICE VARIATION CALCULATION (PVC) REPORT', pageWidth / 2, yPosition, { align: 'center' });
+    pdf.text('STATEMENT SHOWING PRICE VARIATION CLAUSE', pageWidth / 2, yPosition, { align: 'center' });
     
     yPosition += 5;
     pdf.setLineWidth(2);
@@ -282,7 +282,7 @@ export async function generateAbstractPdf(contractId: string): Promise<{ pdfBuff
     yPosition += 25;
     pdf.setFontSize(14);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('ABSTRACT', pageWidth / 2, yPosition, { align: 'center' });
+    pdf.text('ABSTRACT  (As per GCC Clause 46A / Railway Board Guidelines)', pageWidth / 2, yPosition, { align: 'center' });
     
     yPosition += 5;
     pdf.setLineWidth(0.5);
