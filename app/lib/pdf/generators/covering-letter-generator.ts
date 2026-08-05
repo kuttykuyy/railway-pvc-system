@@ -28,6 +28,13 @@ interface CoveringLetterData {
   date?: string;
   signatory?: string;
   bodyText?: string;
+  /** Base month (T0) and the quarter(s) covered. The first two things an accounts
+   *  office checks, and the letter never stated either. */
+  baseMonth?: string;
+  quarters?: string;
+  /** Signed amount. billAmount is a formatted string, so the sign cannot be read back
+   *  from it — a recovery must not be submitted "for early payment". */
+  netPvcAmount?: number;
 }
 
 /**
@@ -104,6 +111,9 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
     const margin = 20;
     const contentWidth = pageWidth - 2 * margin;
     const lineHeight = 6; // Consistent line height
+    // A variation can fall as well as rise, and the wording differs throughout —
+    // subject line included. Decided once, up front.
+    const isRecovery = typeof data.netPvcAmount === 'number' && data.netPvcAmount < 0;
 
     // Increased top spacing for letterhead printing (70mm from top)
     // Date (top right, aligned properly)
@@ -160,7 +170,7 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
     
     // Subject content with proper wrapping and justification
     doc.setFont('helvetica', 'normal');
-    const subjectText = `${data.workDescription} - Payment for PVC Bill-Reg`;
+    const subjectText = `${data.workDescription} - ${isRecovery ? 'Recovery of Price Variation' : 'Payment for PVC Bill'}-Reg`;
     const subjectLines = doc.splitTextToSize(subjectText, contentWidth - indent);
     
     subjectLines.forEach((line: string, index: number) => {
@@ -214,16 +224,30 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
     const billNumbers = data.billNumber.split(',').map(b => b.trim()).filter(Boolean);
     const isMultipleBills = billNumbers.length > 1;
     
+    const forWhich = isMultipleBills
+      ? `the following ${billNumbers.length} bills`
+      : data.billNumber;
+    const period = [
+      data.baseMonth ? `base month ${data.baseMonth}` : '',
+      data.quarters ? `quarter${data.quarters.includes(',') ? 's' : ''} ${data.quarters}` : '',
+    ].filter(Boolean).join(', ');
+
     let bodyText: string;
-    
-    if (isMultipleBills) {
-      // For multiple bills, replace the inline bill numbers with a count reference
-      // The detailed bill list will be rendered separately below
-      bodyText = `In connection with the subject work, the price variation bill is worked out to Rs.${data.billAmount} for the following ${billNumbers.length} bills as per clause no:46A of GCC 2022 and the same is submitted for early payment please. The calculation sheets along with the indices are submitted here with this letter for the further process at your end.`;
-    } else if (data.bodyText) {
+    if (data.bodyText) {
       bodyText = data.bodyText;
+    } else if (isRecovery) {
+      bodyText = `In connection with the subject work, the price variation has been worked out under Clause 46A of the `
+        + `Indian Railways General Conditions of Contract, 2022 for ${forWhich}`
+        + `${period ? ` (${period})` : ''}. As the published indices for the quarter${billNumbers.length > 1 ? 's' : ''} `
+        + `under consideration are below those of the base month, the variation is a net recovery of `
+        + `Rs.${data.billAmount} from the contractor. The calculation sheets, the abstract statement and the `
+        + `supporting index publications are enclosed for verification and for arranging the recovery at your end.`;
     } else {
-      bodyText = `In connection with the subject work, the price variation bill is worked out to Rs.${data.billAmount} for ${data.billNumber} as per clause no:46A of GCC 2022 and the same is submitted for early payment please. The calculation sheets along with the indices are submitted here with this letter for the further process at your end.`;
+      bodyText = `In connection with the subject work, the price variation has been worked out under Clause 46A of the `
+        + `Indian Railways General Conditions of Contract, 2022 for ${forWhich}`
+        + `${period ? ` (${period})` : ''}, and amounts to Rs.${data.billAmount}. The calculation sheets, the abstract `
+        + `statement and the supporting index publications are enclosed. It is requested that the amount may kindly `
+        + `be verified and passed for payment.`;
     }
     
     const bodyLines = doc.splitTextToSize(bodyText, contentWidth);
@@ -258,11 +282,60 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
       });
     }
     
+    yPos += 8;
+
+    // Enclosures. The body names the documents but never itemised them, so the receiving
+    // office had no list to check the file against — the first thing that goes wrong when
+    // a proposal is passed between hands.
+    // Reserve what the enclosures, the closing and the signature block actually need.
+    // Reserving more than that pushed a one-page letter onto two, leaving page two
+    // carrying nothing but "Encl" and a signature.
+    if (yPos > pageHeight - 88) {
+      doc.addPage();
+      yPos = 30;
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.text('Encl:', margin, yPos);
+    doc.setFont('helvetica', 'normal');
+    yPos += lineHeight; // the heading owns its line; item 1 printed on top of it
+    [
+      'PVC calculation sheet(s) for the bill(s) listed above',
+      'Abstract statement of price variation for the agreement',
+      'Published index pages relied upon (labour, plant & machinery, fuel, cement, steel)',
+    ].forEach((item, index) => {
+      const lines = doc.splitTextToSize(`${index + 1}.  ${item}`, contentWidth - indent) as string[];
+      lines.forEach(line => {
+        doc.text(line, margin + indent, yPos);
+        yPos += lineHeight;
+      });
+    });
+
     yPos += 8; // Space before closing
 
     // Closing
     doc.setFont('helvetica', 'normal');
     doc.text('Thanking You,', margin, yPos);
+    yPos += lineHeight + 2;
+
+    // Signature block. The letter carried the company name and signatory in its data and
+    // printed neither, so it arrived with nowhere to sign and no indication of who from.
+    doc.text('Yours faithfully,', pageWidth - margin - doc.getTextWidth('Yours faithfully,'), yPos);
+    yPos += lineHeight + 2;
+    doc.setFont('helvetica', 'bold');
+    const forLine = `For ${data.companyName}`;
+    doc.text(forLine, pageWidth - margin - doc.getTextWidth(forLine), yPos);
+    doc.setFont('helvetica', 'normal');
+    yPos += lineHeight * 2 + 4; // room to sign
+    if (data.signatory) {
+      doc.text(data.signatory, pageWidth - margin - doc.getTextWidth(data.signatory), yPos);
+      yPos += lineHeight;
+    }
+    if (data.companyGSTIN && data.companyGSTIN !== 'N/A') {
+      doc.setFontSize(9);
+      const gstLine = `GSTIN: ${data.companyGSTIN}`;
+      doc.text(gstLine, pageWidth - margin - doc.getTextWidth(gstLine), yPos);
+      doc.setFontSize(11);
+    }
 
     logger.log('✓ PDF Generator: PDF content created');
 

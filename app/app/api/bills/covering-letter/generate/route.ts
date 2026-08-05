@@ -14,6 +14,9 @@ interface CoveringLetterRequest {
   agreementNumber: string;
   billNumber: string;
   billAmount: string;
+  netPvcAmount?: number;
+  baseMonth?: string;
+  quarters?: string;
   companyName: string;
   companyGSTIN: string;
   date?: string;
@@ -56,6 +59,9 @@ export async function POST(request: NextRequest) {
       agreementNumber: body.agreementNumber,
       billNumber: body.billNumber,
       billAmount: body.billAmount,
+      netPvcAmount: body.netPvcAmount,
+      baseMonth: body.baseMonth,
+      quarters: body.quarters,
       companyName: body.companyName,
       companyGSTIN: body.companyGSTIN,
       date: body.date,

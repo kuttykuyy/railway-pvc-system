@@ -206,10 +206,13 @@ export async function GET(
       
       // Bill details
       billNumber: bill.billNo || `Bill-${bill.id}`,
-      billAmount: (bill.pvcCalculation?.totalPvc || 0).toLocaleString('en-IN', {
+      // Printed without the minus sign: a recovery is worded as one, so a leading "-"
+      // in front of the amount would read as a double negative.
+      billAmount: Math.abs(bill.pvcCalculation?.totalPvc || 0).toLocaleString('en-IN', {
         maximumFractionDigits: 2,
         minimumFractionDigits: 2,
       }),
+      netPvcAmount: bill.pvcCalculation?.totalPvc || 0,
       
       // Company details - from user profile
       companyName: bill.contract.user?.companyName || bill.contract.user?.name || 'Company Name',
