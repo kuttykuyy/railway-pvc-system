@@ -538,49 +538,123 @@ export async function generateAbstractPdf(contractId: string): Promise<{ pdfBuff
       pdf.setTextColor(0, 0, 0);
       ny += 26;
 
-      const para = (heading: string, body: string) => {
+      // The bill-wise split, which is the part an accountant cannot work out from the
+      // net figure: each slice belongs to a different tax invoice, in a different
+      // financial year, and so has its own deadline. Prose alone left them to
+      // apportion Rs 90 lakh across nine bills by hand.
+      pdf.setFontSize(9.5);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(
+        pdf.splitTextToSize(
+          'Each bill below was invoiced with GST at its full value. This variation changes the value of that '
+          + 'same work, so the tax follows it. The financial year of each ORIGINAL tax invoice decides how long '
+          + 'the adjustment remains open, which is why the split matters.',
+          contentWidth,
+        ),
+        marginLeft, ny,
+      );
+      ny += 30;
+
+      const noteRows = billDataArray.map((b, i) => {
+        const gst = Math.round(Math.abs(b.total) * GST_RATE_ON_PVC);
+        return [
+          String(i + 1),
+          b.billNo,
+          b.quarter,
+          money(Math.abs(b.total)),
+          money(gst),
+          money(Math.abs(b.total) + gst),
+          b.total < 0 ? 'Credit note' : 'Tax invoice',
+        ];
+      });
+      const recoverTotal = billDataArray.reduce((s, b) => s + (b.total < 0 ? Math.abs(b.total) : 0), 0);
+      const payTotal = billDataArray.reduce((s, b) => s + (b.total > 0 ? b.total : 0), 0);
+      noteRows.push([
+        '', 'NET', '',
+        money(Math.abs(totalSay)),
+        money(gstAmount),
+        money(Math.abs(totalSay) + gstAmount),
+        'Net recovery',
+      ]);
+
+      autoTable(pdf, {
+        head: [['Sl.', 'Bill No.', 'Quarter', 'Price variation', `GST @ ${(GST_RATE_ON_PVC * 100).toFixed(0)}%`, 'Total', 'Instrument']],
+        body: noteRows,
+        startY: ny,
+        theme: 'grid',
+        margin: { left: marginLeft, right: marginRight },
+        tableWidth: 'auto',
+        headStyles: { fillColor: [80, 80, 80], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center', cellPadding: 3 },
+        bodyStyles: { fontSize: 8, cellPadding: 3, textColor: [0, 0, 0] },
+        styles: { lineColor: [150, 150, 150], lineWidth: 0.5, font: 'helvetica' },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 24 },
+          1: { halign: 'left' }, 2: { halign: 'left' },
+          3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' },
+          6: { halign: 'left' },
+        },
+        didParseCell: (data: any) => {
+          if (data.row.index === noteRows.length - 1) {
+            data.cell.styles.fillColor = [225, 225, 225];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        },
+      });
+      ny = ((pdf as any).lastAutoTable?.finalY ?? ny) + 8;
+
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setTextColor(90, 90, 90);
+      pdf.text(
+        `Bills to be credited: ${money(recoverTotal)}. Bills payable: ${money(payTotal)}. `
+        + `The Railway settles the net, but the tax on each bill follows that bill's own invoice.`,
+        marginLeft, ny,
+      );
+      pdf.setTextColor(0, 0, 0);
+      ny += 22;
+
+      const step = (n: string, heading: string, body: string) => {
         pdf.setFontSize(10);
         pdf.setFont('helvetica', 'bold');
-        pdf.text(heading, marginLeft, ny);
-        ny += 14;
-        pdf.setFontSize(9.5);
+        pdf.text(`${n}. ${heading}`, marginLeft, ny);
+        ny += 13;
+        pdf.setFontSize(9);
         pdf.setFont('helvetica', 'normal');
-        const wrapped = pdf.splitTextToSize(body, contentWidth) as string[];
-        pdf.text(wrapped, marginLeft, ny);
-        ny += wrapped.length * 13 + 14;
+        const wrapped = pdf.splitTextToSize(body, contentWidth - 14) as string[];
+        pdf.text(wrapped, marginLeft + 14, ny);
+        ny += wrapped.length * 12 + 10;
       };
 
-      para(
-        'This price variation is a recovery, not a payment',
-        `Prices fell below the base month, so ${money(Math.abs(totalSay))} is recoverable from the contractor `
-        + `rather than payable. The Railway normally recovers the GST on it as well, about ${money(gstAmount)} `
-        + `at ${(GST_RATE_ON_PVC * 100).toFixed(0)}%, making the total recovery ${money(Math.abs(totalSay) + gstAmount)}.`,
-      );
+      // The four steps run to roughly 250pt. A long bill list pushes the table down far
+      // enough to squeeze them off the sheet, so they start a page of their own instead
+      // of being clipped.
+      if (ny + 250 > pageHeight - 40) {
+        pdf.addPage();
+        ny = marginTop;
+      }
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('WHAT TO DO', marginLeft, ny);
+      ny += 16;
 
-      para(
-        'That GST has already been paid to the Government',
-        'It was paid when the running account bills were invoiced at their full value. Because this variation '
-        + 'reduces the value of that same work, the tax on the reduction can normally be reversed - but only '
-        + 'through the contractor\'s own GST records, and only within a time limit tied to the financial year '
-        + 'of each original invoice. Once that period closes the tax cannot be recovered from the Government '
-        + 'or from the Railway, and the contractor bears it.',
-      );
+      step('1', 'Check whether any bill is still to be raised on this agreement',
+        'If one is, ask for the recovery to be adjusted in that bill. It is then invoiced at the reduced value, '
+        + 'GST is charged on the lower figure, and no adjustment to any earlier invoice is needed. Stop here. '
+        + 'Only if no bill remains, or it is smaller than the recovery, do the steps below apply.');
 
-      para(
-        'A bill still to be raised avoids the question entirely',
-        'If any bill remains to be raised on this agreement, the recovery can be adjusted there instead. The '
-        + 'bill is then invoiced at the reduced value, GST is charged on that lower figure, and nothing has to '
-        + 'be unwound afterwards. This is the simplest route where it is available.',
-      );
+      step('2', 'Write the tax invoice number and date against each bill above',
+        'The app does not hold them. Each row belongs to one original invoice, and the financial year of that '
+        + 'invoice - not of this statement - decides how long the tax on that row can still be adjusted.');
 
-      para(
-        'Take these three things to your accountant',
-        '1. The tax invoice numbers and dates of the running account bills this recovery relates to, so the '
-        + 'time limit for each can be checked.\n'
-        + '2. Whether a bill is still to be raised that the recovery can be set against instead.\n'
-        + '3. Whether the recovery should be grossed up with GST for any period where the tax can no longer '
-        + 'be reversed.',
-      );
+      step('3', 'Group the rows by the financial year of their invoice',
+        'Rows whose year is still open can have their tax adjusted through a credit note. Rows whose year has '
+        + 'closed cannot: that tax stays with the Government. Your accountant will confirm the cut-off date '
+        + 'applicable to each year.');
+
+      step('4', 'Take up the closed years with the Railway separately',
+        'Where the tax can no longer be reversed, ask that the recovery for that period be limited to the price '
+        + 'variation itself and not grossed up with GST. Put the bills, invoice dates and figures in writing. '
+        + 'The price fall is recoverable either way; the tax on it is the part worth arguing.');
 
       ny += 6;
       pdf.setFontSize(8);

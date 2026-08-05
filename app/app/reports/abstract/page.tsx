@@ -394,6 +394,13 @@ function AbstractPageContent() {
           {abstractData.totalSay < 0 && (() => {
             const recovery = Math.abs(abstractData.totalSay);
             const gst = Math.round(recovery * 0.18);
+            const rows = (abstractData.billData || []).map(row => ({
+              billNo: row.billNo || '-',
+              quarter: row.quarter,
+              pvc: Math.abs(row.total),
+              gst: Math.round(Math.abs(row.total) * 0.18),
+              isCredit: row.total < 0,
+            }));
             return (
               <div className="border border-amber-300 bg-amber-50 rounded-lg p-4">
                 <h3 className="text-sm font-semibold text-amber-900">This price variation is a recovery, not a payment</h3>
@@ -404,23 +411,72 @@ function AbstractPageContent() {
                   recovery <span className="font-semibold">₹{fmt(recovery + gst, 0)}</span>.
                 </p>
                 <p className="mt-2 text-sm text-amber-900">
-                  You already paid that GST to the government when the running account bills were invoiced at
-                  their full value. Because this variation reduces the value of that same work, the tax on the
-                  reduction can normally be reversed — but only through your own GST records, and only within a
-                  time limit tied to the financial year of each original invoice. Once that period closes the
-                  tax cannot be recovered from the government or from the railway, and you bear it.
+                  Each bill below was invoiced with GST at its full value. This variation changes the value of
+                  that same work, so the tax follows it — and the financial year of each <em>original</em> tax
+                  invoice, not of this statement, decides how long that adjustment stays open.
                 </p>
-                <p className="mt-2 text-sm text-amber-900">
-                  If any bill is still to be raised on this agreement, the recovery can be adjusted there
-                  instead. The bill is invoiced at the reduced value, GST is charged on the lower figure, and
-                  nothing has to be unwound afterwards.
-                </p>
-                <p className="mt-3 text-sm font-semibold text-amber-900">Three things to take to your accountant</p>
-                <ul className="mt-1 space-y-1 text-sm text-amber-900 list-disc pl-5">
-                  <li>The tax invoice numbers and dates of the running account bills this recovery relates to, so the time limit for each can be checked.</li>
-                  <li>Whether a bill is still to be raised that the recovery can be set against instead.</li>
-                  <li>Whether the recovery should be grossed up with GST for any period where the tax can no longer be reversed.</li>
-                </ul>
+
+                {/* The bill-wise split. An accountant cannot get here from the net figure —
+                    each slice belongs to a different invoice, in a different year. */}
+                <div className="mt-3 overflow-x-auto rounded-md border border-amber-300 bg-white">
+                  <table className="w-full text-xs">
+                    <thead className="bg-amber-100/70 text-amber-900">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium">Bill No.</th>
+                        <th className="px-3 py-2 text-left font-medium">Quarter</th>
+                        <th className="px-3 py-2 text-right font-medium">Price variation</th>
+                        <th className="px-3 py-2 text-right font-medium">GST @ 18%</th>
+                        <th className="px-3 py-2 text-right font-medium">Total</th>
+                        <th className="px-3 py-2 text-left font-medium">Instrument</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-amber-200">
+                      {rows.map((row, i) => (
+                        <tr key={i}>
+                          <td className="px-3 py-1.5 font-medium">{row.billNo}</td>
+                          <td className="px-3 py-1.5">{row.quarter}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.pvc, 0)}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.gst, 0)}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.pvc + row.gst, 0)}</td>
+                          <td className="px-3 py-1.5">{row.isCredit ? 'Credit note' : 'Tax invoice'}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-amber-100/70 font-semibold">
+                        <td className="px-3 py-2">NET</td>
+                        <td className="px-3 py-2"></td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmt(recovery, 0)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmt(gst, 0)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmt(recovery + gst, 0)}</td>
+                        <td className="px-3 py-2">Net recovery</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <p className="mt-4 text-sm font-semibold text-amber-900">What to do</p>
+                <ol className="mt-1 space-y-2 text-sm text-amber-900 list-decimal pl-5">
+                  <li>
+                    <span className="font-medium">Check whether any bill is still to be raised on this agreement.</span>{' '}
+                    If one is, ask for the recovery to be adjusted there. That bill is then invoiced at the
+                    reduced value, GST is charged on the lower figure, and no earlier invoice has to be touched.
+                    Stop here — the steps below only apply if no bill remains, or it is smaller than the recovery.
+                  </li>
+                  <li>
+                    <span className="font-medium">Write the tax invoice number and date against each bill above.</span>{' '}
+                    The app does not hold them, and the year of that invoice is what sets the time limit for its row.
+                  </li>
+                  <li>
+                    <span className="font-medium">Group the rows by the financial year of their invoice.</span>{' '}
+                    Rows in a year that is still open can have their tax adjusted by credit note. Rows in a closed
+                    year cannot — that tax stays with the government. Your accountant will confirm the cut-off for each year.
+                  </li>
+                  <li>
+                    <span className="font-medium">Take up the closed years with the railway separately.</span>{' '}
+                    Where the tax can no longer be reversed, ask that the recovery for that period be limited to the
+                    price variation itself and not grossed up with GST. Put the bills, invoice dates and figures in
+                    writing. The price fall is recoverable either way; the tax on it is the part worth arguing.
+                  </li>
+                </ol>
                 <p className="mt-3 text-xs text-amber-800 italic">
                   These figures are derived from this statement and are indicative. They are not tax advice —
                   the treatment is for you and your accountant to determine.
