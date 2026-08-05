@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
         // Batch provisional-index check: deduplicate quarters before hitting DB
         // A page of 20 bills often share the same 2-3 quarters — no need for 20 queries
         const uniqueQuarters = [...new Set(bills.map(b => `${b.quarter}::${b.contract.baseMonth.toISOString()}`))];
-        const statusByKey = new Map<string, { isProvisional: boolean; provisionalCount: number; totalCount: number }>();
+        const statusByKey = new Map<string, { isProvisional: boolean; provisionalCount: number; totalCount: number; provisionalIndices: string[]; details: string }>();
         await Promise.all(
           uniqueQuarters.map(async key => {
             const [quarter, baseMonthISO] = key.split('::');
@@ -144,6 +144,8 @@ export async function GET(request: NextRequest) {
               isProvisional: status.isProvisional,
               provisionalCount: status.provisionalCount,
               totalCount: status.totalCount,
+              provisionalIndices: status.provisionalIndices,
+              details: status.details,
             });
           })
         );
@@ -167,7 +169,7 @@ export async function GET(request: NextRequest) {
             ? { ...bill.pvcCalculation, usedProvisionalIndices: true }
             : bill.pvcCalculation,
           indicesStatus: statusByKey.get(`${bill.quarter}::${bill.contract.baseMonth.toISOString()}`)
-            ?? { isProvisional: false, provisionalCount: 0, totalCount: 0 }
+            ?? { isProvisional: false, provisionalCount: 0, totalCount: 0, provisionalIndices: [], details: '' }
         }));
         
         // Create paginated response

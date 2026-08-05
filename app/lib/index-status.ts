@@ -12,7 +12,7 @@ import { prisma } from './db';
 export async function isBillUsingProvisionalIndices(
   quarter: string,
   baseMonth: Date
-): Promise<{ isProvisional: boolean; provisionalCount: number; totalCount: number }> {
+): Promise<{ isProvisional: boolean; provisionalCount: number; totalCount: number; provisionalIndices: string[]; details: string }> {
   try {
     // Delegate to getBillIndicesStatus so both use the same rule: a bill is provisional
     // when a value is flagged provisional OR a required month index is missing (borrowed).
@@ -21,10 +21,13 @@ export async function isBillUsingProvisionalIndices(
       isProvisional: status.isProvisional,
       provisionalCount: status.provisionalIndices.length,
       totalCount: status.provisionalIndices.length + status.finalIndices.length,
+      // Which indices, and why. A bare count cannot tell anyone what to go and fix.
+      provisionalIndices: status.provisionalIndices,
+      details: status.details,
     };
   } catch (error) {
     console.error('Error checking provisional status:', error);
-    return { isProvisional: false, provisionalCount: 0, totalCount: 0 };
+    return { isProvisional: false, provisionalCount: 0, totalCount: 0, provisionalIndices: [], details: '' };
   }
 }
 

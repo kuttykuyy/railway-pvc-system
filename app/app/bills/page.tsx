@@ -96,6 +96,10 @@ interface Bill {
     isProvisional: boolean;
     provisionalCount: number;
     totalCount: number;
+    /** Which indices are holding this quarter provisional, and why — a value flagged
+     *  provisional, or a month with no value at all so a nearby one was borrowed. */
+    provisionalIndices?: string[];
+    details?: string;
   };
 }
 
@@ -2037,9 +2041,21 @@ export default function BillsPage() {
                           {bill.quarter}
                         </Badge>
                         {bill.indicesStatus?.isProvisional ? (
-                          <Badge className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200/50 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30">
+                          // The badge names what is holding the quarter back. "Provisional
+                          // Indices" alone gave no way to tell whether a value was flagged
+                          // provisional or a month had no value at all — and so no way to
+                          // know what to go and enter.
+                          <Badge
+                            title={bill.indicesStatus.details || undefined}
+                            className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200/50 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30"
+                          >
                             <AlertCircle className="h-3 w-3 mr-1 text-amber-500" />
-                            Provisional Indices
+                            {bill.indicesStatus.provisionalIndices?.length
+                              ? `Provisional: ${bill.indicesStatus.provisionalIndices.slice(0, 2).join(', ')}${
+                                bill.indicesStatus.provisionalIndices.length > 2
+                                  ? ` +${bill.indicesStatus.provisionalIndices.length - 2}`
+                                  : ''}`
+                              : 'Provisional Indices'}
                           </Badge>
                         ) : (
                           <Badge className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30">
