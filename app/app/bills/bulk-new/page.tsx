@@ -116,6 +116,7 @@ export default function BulkBillCreationPage() {
   const [classificationGroups, setClassificationGroups] = useState<ClassificationGroup[]>([]);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [processingFee, setProcessingFee] = useState<number>(0);
+  const [aiProcessingFee, setAiProcessingFee] = useState<number>(0);
 
   // Global zone and fuel — selected once for all bills
   const [globalZone, setGlobalZone] = useState<string>('');
@@ -188,17 +189,21 @@ export default function BulkBillCreationPage() {
         const feeRes = await fetch('/api/user/processing-fee');
         if (feeRes.ok) {
           const feeData = await feeRes.json();
-          setProcessingFee(feeData.processingFee || 0);
+          setProcessingFee(feeData.manualFee ?? feeData.processingFee ?? 0);
+          setAiProcessingFee(feeData.aiFee ?? feeData.processingFee ?? 0);
         } else {
           const settingsRes = await fetch('/api/admin/settings');
           if (settingsRes.ok) {
             const settings = await settingsRes.json();
             const billProcessingCost = settings.find((s: any) => s.key === 'BILL_PROCESSING_COST');
             if (billProcessingCost) setProcessingFee(parseFloat(billProcessingCost.value) || 10);
+            const aiBillProcessingCost = settings.find((s: any) => s.key === 'AI_BILL_PROCESSING_COST');
+            if (aiBillProcessingCost) setAiProcessingFee(parseFloat(aiBillProcessingCost.value) || 10);
           }
         }
       } catch {
         setProcessingFee(10);
+        setAiProcessingFee(10);
       }
 
       setIsLoading(false);
@@ -1082,8 +1087,16 @@ export default function BulkBillCreationPage() {
 
               <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg">
                 <p className="text-sm text-emerald-900">
-                  <strong>Processing Fee:</strong> {processingFee} credits per manually entered bill;
-                  AI-extracted bills are charged the AI extraction rate. The exact total is deducted on submit.
+                  <strong>Processing Fee:</strong>{' '}
+                  {aiProcessingFee === processingFee ? (
+                    <>{processingFee} credits per bill, however it is entered.</>
+                  ) : (
+                    <>
+                      {processingFee} credits for a bill you type in yourself,{' '}
+                      {aiProcessingFee} credits for a bill read from a PDF by AI.
+                    </>
+                  )}{' '}
+                  Each bill is charged at its own rate, and the exact total is deducted on submit.
                 </p>
               </div>
 

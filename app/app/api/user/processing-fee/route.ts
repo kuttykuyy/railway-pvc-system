@@ -41,6 +41,8 @@ export async function GET(request: NextRequest) {
     if (isFree) {
       return NextResponse.json({
         processingFee: 0,
+        manualFee: 0,
+        aiFee: 0,
         isFreeAccount: true,
         customFee: null,
         source: 'free_account',
@@ -49,8 +51,11 @@ export async function GET(request: NextRequest) {
 
     // If user has a custom processing fee, use it
     if (userData.customProcessingFee !== null) {
+      // A negotiated rate replaces both — it is not split by how the bill was entered.
       return NextResponse.json({
         processingFee: userData.customProcessingFee,
+        manualFee: userData.customProcessingFee,
+        aiFee: userData.customProcessingFee,
         isFreeAccount: false,
         customFee: userData.customProcessingFee,
         source: 'custom_fee',
@@ -58,18 +63,22 @@ export async function GET(request: NextRequest) {
     }
 
     const isAiUploaded = request.nextUrl.searchParams.get('isAiUploaded') === 'true';
-    const settingKey = isAiUploaded ? 'AI_BILL_PROCESSING_COST' : 'BILL_PROCESSING_COST';
-    const defaultVal = isAiUploaded ? 499 : 199;
 
-    // Otherwise, get the system default processing fee
-    const systemSetting = await prisma.adminSettings.findUnique({
-      where: { key: settingKey },
-    });
-
-    const defaultFee = systemSetting ? parseFloat(systemSetting.value) : defaultVal;
+    // Both rates, always. The caller used to get only the one its query param selected,
+    // so a screen that charges either way — bulk entry takes manual and AI-extracted
+    // bills in the same batch — could only ever show one of them and had to describe
+    // the other in words.
+    const [manualSetting, aiSetting] = await Promise.all([
+      prisma.adminSettings.findUnique({ where: { key: 'BILL_PROCESSING_COST' } }),
+      prisma.adminSettings.findUnique({ where: { key: 'AI_BILL_PROCESSING_COST' } }),
+    ]);
+    const manualFee = manualSetting ? parseFloat(manualSetting.value) : 199;
+    const aiFee = aiSetting ? parseFloat(aiSetting.value) : 499;
 
     return NextResponse.json({
-      processingFee: defaultFee,
+      processingFee: isAiUploaded ? aiFee : manualFee,
+      manualFee,
+      aiFee,
       isFreeAccount: false,
       customFee: null,
       source: 'system_default',
