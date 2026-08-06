@@ -91,6 +91,7 @@ model User {
   billTransactions      BillTransaction[]
   pvcChecks             PvcCheck[]
   billApprovals         Bill[]                 @relation("BillApprovals")
+  billsPassedByAccounts Bill[]                 @relation("BillAccountsPassed")
   contracts             Contract[]
   creditTransactions    CreditTransaction[]
   customerAccount       CustomerAccount?
@@ -454,8 +455,19 @@ model Bill {
   approvedAt               DateTime?
   approvedBy               String?
   rejectionReason          String?
+  /// draft -> submitted -> approved (executive) -> passed_for_payment (accounts).
+  /// rejected and revision_requested can be set at either stage.
   status                   String                    @default("draft")
   submittedAt              DateTime?
+  /// The accounts/audit stage, which follows the executive approval. A PVC proposal is
+  /// approved by the engineering side and then vetted by accounts before payment, and
+  /// the two are separate people answering for separate things — so the bill records
+  /// both, not one "approved" flag.
+  passedAt                 DateTime?
+  passedBy                 String?
+  passedComments           String?
+  /// Set when accounts send the proposal back, so the contractor sees what to fix.
+  accountsReturnReason     String?
   hasBeenEditedOnce        Boolean                   @default(false)
   lastEditedBy             String?
   lastEditedAt             DateTime?
@@ -468,6 +480,7 @@ model Bill {
   classificationEntries    BillClassificationEntry[]
   billTransaction          BillTransaction?
   approvedByUser           User?                     @relation("BillApprovals", fields: [approvedBy], references: [id])
+  passedByUser             User?                     @relation("BillAccountsPassed", fields: [passedBy], references: [id])
   contract                 Contract                  @relation(fields: [contractId], references: [id], onDelete: Cascade)
   workClassification       Classification?           @relation(fields: [workClassificationId], references: [id])
   pvcCalculation           PvcCalculation?

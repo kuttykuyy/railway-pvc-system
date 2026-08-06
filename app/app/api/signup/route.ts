@@ -47,14 +47,16 @@ export async function POST(request: NextRequest) {
 
     // Validate accountType and railwayZone
     const resolvedAccountType = accountType || 'contractor';
-    if (resolvedAccountType !== 'contractor' && resolvedAccountType !== 'railway_official') {
+    const DEPARTMENT_TYPES = ['railway_official', 'accounts_official'];
+    const isDepartmentSignup = DEPARTMENT_TYPES.includes(resolvedAccountType);
+    if (resolvedAccountType !== 'contractor' && !isDepartmentSignup) {
       return NextResponse.json(
         { error: 'Invalid account type' },
         { status: 400 }
       );
     }
 
-    if (resolvedAccountType === 'railway_official') {
+    if (isDepartmentSignup) {
       if (!isOfficialRailwayEmail(normalizedEmail || '')) {
         return NextResponse.json(
           { error: `Department users must sign up with an official railway email ending in ${getOfficialRailwayEmailDomainHelp()}` },
@@ -167,9 +169,12 @@ export async function POST(request: NextRequest) {
           password: hashedPassword,
           name: fullName,
           phone: whatsappNumber,
-          role: resolvedAccountType === 'railway_official' ? 'pending_railway_official' : 'contractor',
-          railwayZone: resolvedAccountType === 'railway_official' ? railwayZone : null,
-          railwayZoneName: resolvedAccountType === 'railway_official' ? (RAILWAY_ZONE_STEEL_CITY_MAP[railwayZone]?.name || null) : null,
+          // Department accounts wait for an admin to approve them; see the admin users page.
+          role: resolvedAccountType === 'accounts_official' ? 'pending_accounts_official'
+            : resolvedAccountType === 'railway_official' ? 'pending_railway_official'
+            : 'contractor',
+          railwayZone: isDepartmentSignup ? railwayZone : null,
+          railwayZoneName: isDepartmentSignup ? (RAILWAY_ZONE_STEEL_CITY_MAP[railwayZone]?.name || null) : null,
           emailVerified: emailVerificationRequired ? null : new Date(), // Auto-verify if not required
           freeTrialUsed: 0,
           isTrialActive: false,

@@ -65,6 +65,14 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
           department: true
         }
       },
+      // Who passed it for payment at the accounts/audit stage.
+      passedByUser: {
+        select: {
+          name: true,
+          designation: true,
+          department: true
+        }
+      },
       billTransaction: true
     }
   });

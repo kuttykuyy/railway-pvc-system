@@ -940,6 +940,50 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
               </div>
             </div>
           )}
+
+          {/* Approved by the executive but not yet vetted — worth saying plainly, since
+              the contractor otherwise reads "approved" as "on its way to being paid". */}
+          {bill.status === 'approved' && (
+            <div className="mt-5 p-4 bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-800/40 rounded-2xl flex gap-3">
+              <div className="p-1 rounded-lg bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 flex-shrink-0 h-fit">
+                <Info size={16} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-sky-900 dark:text-sky-300 uppercase tracking-wider">With Accounts</p>
+                <p className="text-sm text-sky-800 dark:text-sky-400 mt-1">
+                  Approved on the executive side. It now sits with the accounts / audit office, who vet it and pass it for payment.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {bill.accountsReturnReason && bill.status === 'submitted' && (
+            <div className="mt-5 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl flex gap-3">
+              <div className="p-1 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex-shrink-0 h-fit">
+                <AlertTriangle size={16} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wider">Returned by Accounts:</p>
+                <p className="text-sm text-amber-800 dark:text-amber-400 mt-1">{bill.accountsReturnReason}</p>
+              </div>
+            </div>
+          )}
+
+          {bill.status === 'passed_for_payment' && (
+            <div className="mt-5 p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl flex gap-3">
+              <div className="p-1 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex-shrink-0 h-fit">
+                <CheckCircle size={16} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">Passed for Payment</p>
+                <p className="text-sm text-emerald-800 dark:text-emerald-400 mt-1">
+                  Vetted by accounts{bill.passedAt ? ` on ${format(toISTDate(new Date(bill.passedAt)), 'dd MMM yyyy')}` : ''}
+                  {bill.passedByUser?.name ? ` by ${bill.passedByUser.name}` : ''}.
+                  {bill.passedComments ? ` ${bill.passedComments}` : ''}
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

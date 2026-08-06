@@ -14,6 +14,10 @@ export function formatRoleLabel(role: string): string {
       return 'Admin';
     case 'pending_railway_official':
       return 'Pending Railway Official';
+    case 'pending_accounts_official':
+      return 'Pending Accounts / Audit';
+    case 'accounts_official':
+      return 'Accounts / Audit';
     case 'railway_official':
       return 'Railway Official';
     case 'contractor':
@@ -45,7 +49,10 @@ export function getRoleBadgeVariant(role: string): "default" | "secondary" | "de
     case 'admin':
       return 'destructive';
     case 'pending_railway_official':
+    case 'pending_accounts_official':
       return 'outline';
+    case 'accounts_official':
+      return 'default';
     case 'railway_official':
       return 'default';
     case 'contractor':

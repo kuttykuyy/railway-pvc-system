@@ -3,6 +3,15 @@
 
 import { agreementMatchesZone } from './railway-division-helper';
 
+/**
+ * Railway staff who see their own zone's work: the executive (engineering) side and
+ * the accounts/audit office, which vets the proposal after the executive approves it.
+ * Both get read access within their zone and neither can edit a contractor's papers.
+ */
+function isZoneScopedOfficial(role?: string | null): boolean {
+  return role === 'railway_official' || role === 'accounts_official';
+}
+
 
 
 export interface UserPermissions {
@@ -54,7 +63,7 @@ export async function checkUserContractAccess(
       };
     }
 
-    if (user?.role === 'railway_official') {
+    if (isZoneScopedOfficial(user?.role)) {
       // Access allowed if contract zone matches official's zone
       if (agreementMatchesZone(contract.agreementNo, user.railwayZone)) {
         return {
@@ -153,7 +162,7 @@ export async function checkUserBillAccess(
       };
     }
 
-    if (user?.role === 'railway_official') {
+    if (isZoneScopedOfficial(user?.role)) {
       // Access allowed if bill's zone matches official's zone
       if (bill.zone && user.railwayZone && bill.zone.toUpperCase() === user.railwayZone.toUpperCase()) {
         return {
@@ -236,7 +245,7 @@ export async function getUserAccessibleContracts(userId: string): Promise<string
       return null;
     }
 
-    if (user?.role === 'railway_official') {
+    if (isZoneScopedOfficial(user?.role)) {
       // Always include contracts owned by this user
       const ownedContracts = await prisma.contract.findMany({
         where: { userId },
@@ -310,7 +319,7 @@ export async function getUserAccessibleBills(userId: string): Promise<string[] |
       return null; // unrestricted
     }
 
-    if (user?.role === 'railway_official') {
+    if (isZoneScopedOfficial(user?.role)) {
       // Get owned contracts directly (avoids extra getUserAccessibleContracts call)
       const ownedContracts = await prisma.contract.findMany({
         where: { userId },

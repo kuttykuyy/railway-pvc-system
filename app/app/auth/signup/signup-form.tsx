@@ -26,7 +26,9 @@ export function SignUpForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [accountType, setAccountType] = useState<'contractor' | 'railway_official'>('contractor');
+  // Two kinds of department user: the executive (engineering) side that approves the
+  // work, and the accounts/audit office that vets the proposal afterwards.
+  const [accountType, setAccountType] = useState<'contractor' | 'railway_official' | 'accounts_official'>('contractor');
   const [railwayZone, setRailwayZone] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -66,12 +68,13 @@ export function SignUpForm() {
       setLoading(false);
       return;
     }
-    if (accountType === 'railway_official' && !railwayZone) {
+    const isDepartmentUser = accountType === 'railway_official' || accountType === 'accounts_official';
+    if (isDepartmentUser && !railwayZone) {
       setFieldErrors({ railwayZone: 'Railway zone is required for department users' });
       setLoading(false);
       return;
     }
-    if (accountType === 'railway_official' && !isOfficialRailwayEmail(email)) {
+    if (isDepartmentUser && !isOfficialRailwayEmail(email)) {
       setFieldErrors({ email: `Use an official railway email ending in ${getOfficialRailwayEmailDomainHelp()}` });
       setLoading(false);
       return;
@@ -206,7 +209,7 @@ export function SignUpForm() {
 
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-gray-700">Account Type</Label>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div
                     onClick={() => {
                       setAccountType('contractor');
@@ -228,12 +231,26 @@ export function SignUpForm() {
                         : 'border-gray-200 hover:border-gray-300 text-gray-600 bg-gray-50'
                     }`}
                   >
-                    Department User
+                    <span className="block">Executive</span>
+                    <span className="block text-[11px] font-normal opacity-75">approves the bill</span>
+                  </div>
+                  {/* The accounts/audit office vets the proposal after the executive
+                      approves it, and passes it for payment. */}
+                  <div
+                    onClick={() => setAccountType('accounts_official')}
+                    className={`cursor-pointer p-3 rounded-lg border text-center transition-all ${
+                      accountType === 'accounts_official'
+                        ? 'border-emerald-600 bg-emerald-50/50 text-emerald-700 font-semibold shadow-sm'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-600 bg-gray-50'
+                    }`}
+                  >
+                    <span className="block">Accounts / Audit</span>
+                    <span className="block text-[11px] font-normal opacity-75">passes it for payment</span>
                   </div>
                 </div>
               </div>
 
-              {accountType === 'railway_official' && (
+              {(accountType === 'railway_official' || accountType === 'accounts_official') && (
                 <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
                   <Label htmlFor="railwayZone" className="text-sm font-semibold text-gray-700">Railway Zone *</Label>
                   <Select
@@ -271,12 +288,12 @@ export function SignUpForm() {
                     setFieldErrors((prev) => ({ ...prev, email: '' }));
                   }}
                   required
-                  placeholder={accountType === 'railway_official' ? 'name@sr.railnet.gov.in' : 'you@example.com'}
+                  placeholder={accountType === 'contractor' ? 'you@example.com' : 'name@sr.railnet.gov.in'}
                   className={`h-11 px-4 bg-gray-50 border-gray-200 focus:bg-white transition-colors ${
                     fieldErrors.email ? 'border-red-500' : ''
                   }`}
                 />
-                {accountType === 'railway_official' && (
+                {accountType !== 'contractor' && (
                   <p className="text-xs text-gray-500">
                     Department users must use an official railway email ending in {getOfficialRailwayEmailDomainHelp()}.
                     Admin approval is required after email verification.

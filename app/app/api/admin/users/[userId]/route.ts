@@ -27,7 +27,13 @@ export async function PATCH(
     const { role: roleUpperCase } = body;
 
     // Validate role (accept uppercase)
-    const validRoles = ['CONTRACTOR', 'PENDING_RAILWAY_OFFICIAL', 'RAILWAY_OFFICIAL', 'ADMIN'];
+    const validRoles = [
+      'CONTRACTOR',
+      'PENDING_RAILWAY_OFFICIAL', 'RAILWAY_OFFICIAL',
+      // The accounts/audit office, which vets a proposal after the executive approves it.
+      'PENDING_ACCOUNTS_OFFICIAL', 'ACCOUNTS_OFFICIAL',
+      'ADMIN',
+    ];
     if (!roleUpperCase || !validRoles.includes(roleUpperCase)) {
       return NextResponse.json(
         { error: `Invalid role. Must be one of: ${validRoles.join(', ')}` },

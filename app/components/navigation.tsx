@@ -67,6 +67,7 @@ const navigationGroups = [
       { name: 'Contracts', href: '/contracts', icon: Briefcase, adminOnly: false },
       { name: 'PVC Bills', href: '/bills', icon: FileText, adminOnly: false },
       { name: 'Bill Approvals', href: '/approvals', icon: CheckSquare, railwayOfficialOnly: true },
+      { name: 'Accounts / Audit', href: '/accounts', icon: CheckSquare, accountsOfficialOnly: true },
       { name: 'Abstract of Bills', href: '/reports/abstract', icon: Calculator, adminOnly: false },
       { name: 'Tendering Estimator', href: '/tendering-estimator', icon: BarChart3, adminOnly: false },
       { name: 'Refer & Earn', href: '/referrals', icon: Gift, adminOnly: false },
@@ -159,7 +160,7 @@ export default function Navigation() {
   };
 
   // Get user role information
-  const { isAdmin, isRailwayOfficial, role } = getClientRoleInfo(session);
+  const { isAdmin, isRailwayOfficial, isAccountsOfficial, role } = getClientRoleInfo(session);
 
   // Fetch credit balance and static billing settings
   useEffect(() => {
@@ -237,9 +238,10 @@ export default function Navigation() {
       if ((item as any).adminOnly && !isAdmin) return false;
       // Railway official-only items
       if ((item as any).railwayOfficialOnly && !isRailwayOfficial) return false;
+      if ((item as any).accountsOfficialOnly && !isAccountsOfficial) return false;
       return true;
     });
-  }, [isAdmin, isRailwayOfficial]);
+  }, [isAdmin, isRailwayOfficial, isAccountsOfficial]);
 
   // Filter navigation groups and items based on user role
   const filteredNavGroups = useMemo(() => {
@@ -250,10 +252,11 @@ export default function Navigation() {
         if (item.adminOnly && !isAdmin) return false;
         // Railway official-only items
         if ((item as any).railwayOfficialOnly && !isRailwayOfficial) return false;
+      if ((item as any).accountsOfficialOnly && !isAccountsOfficial) return false;
         return true;
       })
     })).filter(group => group.items.length > 0);
-  }, [isAdmin, isRailwayOfficial]);
+  }, [isAdmin, isRailwayOfficial, isAccountsOfficial]);
 
   // Helper function to check if current path is in group
   const isGroupActive = (group: typeof navigationGroups[0]) => {

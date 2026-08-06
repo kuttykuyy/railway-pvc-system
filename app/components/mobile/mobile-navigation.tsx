@@ -41,6 +41,7 @@ const mobileNavSections = [
       { name: 'Contracts', href: '/contracts', icon: Building2, adminOnly: false },
       { name: 'Bills', href: '/bills', icon: FileText, adminOnly: false },
       { name: 'Approvals', href: '/approvals', icon: ListChecks, railwayOfficialOnly: true },
+      { name: 'Accounts', href: '/accounts', icon: ListChecks, accountsOfficialOnly: true },
     ]
   },
   {
@@ -87,7 +88,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
   const { data: session } = useSession();
   const [isOpen, setIsOpen] = useState(false);
   
-  const { isAdmin, isRailwayOfficial, role } = getClientRoleInfo(session);
+  const { isAdmin, isRailwayOfficial, isAccountsOfficial, role } = getClientRoleInfo(session);
   const { language, setLanguage, t } = useLanguage();
   
   // Get role display label
@@ -154,6 +155,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
     items: section.items.filter(item => {
       if ((item as any).adminOnly && !isAdmin) return false;
       if ((item as any).railwayOfficialOnly && !isRailwayOfficial) return false;
+      if ((item as any).accountsOfficialOnly && !isAccountsOfficial) return false;
       return true;
     })
   })).filter(section => section.items.length > 0);

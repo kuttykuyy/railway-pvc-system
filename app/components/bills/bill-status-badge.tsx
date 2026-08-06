@@ -23,8 +23,15 @@ const statusConfig = {
     icon: Clock,
     classes: 'bg-amber-50 text-amber-700 border-amber-200'
   },
+  // Approved by the executive side — the proposal now sits with accounts, which is a
+  // different desk and a different wait, so it does not read as finished.
   approved: {
-    label: 'Approved',
+    label: 'With Accounts',
+    icon: FileClock,
+    classes: 'bg-sky-50 text-sky-700 border-sky-200'
+  },
+  passed_for_payment: {
+    label: 'Passed for Payment',
     icon: CheckCircle2,
     classes: 'bg-emerald-50 text-emerald-700 border-emerald-200'
   },
