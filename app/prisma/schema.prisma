@@ -468,6 +468,10 @@ model Bill {
   passedComments           String?
   /// Set when accounts send the proposal back, so the contractor sees what to fix.
   accountsReturnReason     String?
+  /// Which checks the accounts office ticked when passing it, and which they did not.
+  /// "Passed for payment" on its own says nothing about what was looked at; this is
+  /// what answers a query months later. See lib/accounts-checklist.ts.
+  accountsVerification     Json?
   hasBeenEditedOnce        Boolean                   @default(false)
   lastEditedBy             String?
   lastEditedAt             DateTime?

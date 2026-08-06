@@ -35,10 +35,22 @@ async function requireAccountsUser() {
   return { user };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const { error, user } = await requireAccountsUser();
     if (error) return error;
+
+    // ?billId= returns the verification checklist for one proposal — the standard
+    // checks with what the app computed beside each, for the officer to tick.
+    const billId = req.nextUrl.searchParams.get('billId');
+    if (billId) {
+      const { buildAccountsChecklist } = await import('@/lib/accounts-checklist');
+      const items = await buildAccountsChecklist(billId);
+      if (!items) {
+        return NextResponse.json({ error: 'That bill has no PVC calculation to vet.' }, { status: 404 });
+      }
+      return NextResponse.json({ items });
+    }
 
     const bills = await listBillsAwaitingAccounts(user!);
     return NextResponse.json({ bills, count: bills.length });
@@ -53,12 +65,18 @@ export async function POST(req: NextRequest) {
     const { error, user } = await requireAccountsUser();
     if (error) return error;
 
-    const { billId, action, comments } = await req.json();
+    const { billId, action, comments, verified } = await req.json();
     if (!billId || (action !== 'pass' && action !== 'return')) {
       return NextResponse.json({ error: 'billId and action ("pass" or "return") are required' }, { status: 400 });
     }
 
-    const result = await actOnBillAsAccounts({ billId, userId: user!.id, action, comments });
+    const result = await actOnBillAsAccounts({
+      billId,
+      userId: user!.id,
+      action,
+      comments,
+      verified: Array.isArray(verified) ? verified.map(String) : undefined,
+    });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status || 400 });
     }

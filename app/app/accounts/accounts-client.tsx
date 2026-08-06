@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle2, Undo2, FileText, Loader2, IndianRupee, Building2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
+import type { ChecklistItem } from '@/lib/accounts-checklist';
 
 interface AwaitingBill {
   id: string;
@@ -53,6 +54,28 @@ export function AccountsInboxClient({
   const [mode, setMode] = useState<'pass' | 'return'>('pass');
   const [comments, setComments] = useState('');
   const [busy, setBusy] = useState(false);
+  // The standard checks, with what the app computed beside each. Loaded when the
+  // officer opens a proposal to pass it — passing is meant to record what was checked,
+  // not just that a button was pressed.
+  const [checklist, setChecklist] = useState<ChecklistItem[] | null>(null);
+  const [checklistLoading, setChecklistLoading] = useState(false);
+  const [ticked, setTicked] = useState<Set<string>>(new Set());
+
+  const loadChecklist = async (billId: string) => {
+    setChecklist(null);
+    setTicked(new Set());
+    setChecklistLoading(true);
+    try {
+      const res = await fetch(`/api/bills/approval/accounts?billId=${encodeURIComponent(billId)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load the checks');
+      setChecklist(data.items || []);
+    } catch (err: any) {
+      toast.error(err.message || 'Could not load the checks');
+    } finally {
+      setChecklistLoading(false);
+    }
+  };
 
   const act = async (billId: string, action: 'pass' | 'return') => {
     if (action === 'return' && !comments.trim()) {
@@ -64,7 +87,12 @@ export function AccountsInboxClient({
       const res = await fetch('/api/bills/approval/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ billId, action, comments: comments.trim() || null }),
+        body: JSON.stringify({
+          billId,
+          action,
+          comments: comments.trim() || null,
+          ...(action === 'pass' ? { verified: [...ticked] } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not record the decision');
@@ -146,7 +174,63 @@ export function AccountsInboxClient({
             </div>
 
             {openId === bill.id ? (
-              <div className="space-y-2 border-t border-gray-100 pt-3">
+              <div className="space-y-3 border-t border-gray-100 pt-3">
+                {/* The standard checks, with what the app computed beside each. Ticking
+                    is what makes "passed for payment" mean something later. */}
+                {mode === 'pass' && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-slate-700">Verification</p>
+                      {checklist && checklist.length > 0 && (
+                        <button type="button"
+                          className="text-[11px] text-slate-500 hover:text-slate-800 underline"
+                          onClick={() => setTicked(ticked.size === checklist.length ? new Set() : new Set(checklist.map((i) => i.key)))}>
+                          {ticked.size === checklist.length ? 'Clear all' : 'Tick all'}
+                        </button>
+                      )}
+                    </div>
+
+                    {checklistLoading && (
+                      <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Working out the checks…
+                      </p>
+                    )}
+
+                    {checklist?.map((item) => (
+                      <label key={item.key} className="flex items-start gap-2.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={ticked.has(item.key)}
+                          onChange={(e) => {
+                            const next = new Set(ticked);
+                            if (e.target.checked) next.add(item.key); else next.delete(item.key);
+                            setTicked(next);
+                          }}
+                          className="mt-0.5 h-3.5 w-3.5 accent-emerald-600 shrink-0"
+                        />
+                        <span className="text-xs min-w-0">
+                          <span className="font-medium text-slate-800">{item.label}</span>
+                          <span className={`ml-1.5 ${item.tone === 'attention' ? 'text-amber-700 font-medium' : 'text-slate-600'}`}>
+                            — {item.value}
+                          </span>
+                          {item.note && (
+                            <span className={`block ${item.tone === 'attention' ? 'text-amber-700' : 'text-slate-400'}`}>
+                              {item.note}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    ))}
+
+                    {checklist && checklist.length > 0 && (
+                      <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-200">
+                        {ticked.size} of {checklist.length} ticked.
+                        {ticked.size < checklist.length && ' Anything left unticked is recorded as not checked.'}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <Textarea
                   value={comments}
                   onChange={(e) => setComments(e.target.value)}
@@ -163,7 +247,7 @@ export function AccountsInboxClient({
                     {mode === 'pass' ? 'Confirm — pass for payment' : 'Confirm — return'}
                   </Button>
                   <Button size="sm" variant="outline" disabled={busy}
-                    onClick={() => { setOpenId(null); setComments(''); }}>
+                    onClick={() => { setOpenId(null); setComments(''); setChecklist(null); }}>
                     Cancel
                   </Button>
                 </div>
@@ -171,7 +255,7 @@ export function AccountsInboxClient({
             ) : (
               <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-3">
                 <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700"
-                  onClick={() => { setOpenId(bill.id); setMode('pass'); setComments(''); }}>
+                  onClick={() => { setOpenId(bill.id); setMode('pass'); setComments(''); loadChecklist(bill.id); }}>
                   <CheckCircle2 className="h-4 w-4 mr-2" /> Pass for payment
                 </Button>
                 <Button size="sm" variant="outline"

@@ -989,6 +989,17 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                   {bill.passedByUser?.name ? ` by ${bill.passedByUser.name}` : ''}.
                   {bill.passedComments ? ` ${bill.passedComments}` : ''}
                 </p>
+                {/* What was actually checked. Without this, "passed" records only that a
+                    button was pressed — this is what answers a query months later. */}
+                {bill.accountsVerification?.verified && (
+                  <p className="text-xs text-emerald-700/90 dark:text-emerald-500 mt-1.5">
+                    {bill.accountsVerification.verified.length} of{' '}
+                    {bill.accountsVerification.verified.length + (bill.accountsVerification.unverified?.length || 0)} checks verified
+                    {bill.accountsVerification.unverified?.length
+                      ? ` — not ticked: ${bill.accountsVerification.unverified.join(', ').replace(/_/g, ' ')}`
+                      : ''}
+                  </p>
+                )}
               </div>
             </div>
           )}

@@ -50,6 +50,8 @@ export async function actOnBillAsAccounts(o: {
   userId: string;
   action: 'pass' | 'return';
   comments?: string | null;
+  /** Checklist keys the officer ticked. Recorded with the decision. */
+  verified?: string[];
 }): Promise<AccountsActionResult> {
   const bill = await prisma.bill.findUnique({ where: { id: o.billId } });
   if (!bill) return { ok: false, status: 404, error: 'Bill not found' };
@@ -70,6 +72,22 @@ export async function actOnBillAsAccounts(o: {
 
   const newStatus = o.action === 'pass' ? PASSED_FOR_PAYMENT : 'submitted';
 
+  // What was actually checked, recorded against the bill. Passing with items unticked
+  // is allowed — some do not apply to every proposal — but the record says which, so
+  // the decision can be accounted for later instead of remembered.
+  let verification: { verified: string[]; unverified: string[]; at: string; by: string } | undefined;
+  if (o.action === 'pass' && o.verified) {
+    const { buildAccountsChecklist } = await import('./accounts-checklist');
+    const all = (await buildAccountsChecklist(o.billId)) || [];
+    const ticked = new Set(o.verified);
+    verification = {
+      verified: all.filter((i) => ticked.has(i.key)).map((i) => i.key),
+      unverified: all.filter((i) => !ticked.has(i.key)).map((i) => i.key),
+      at: new Date().toISOString(),
+      by: o.userId,
+    };
+  }
+
   const updated = await prisma.bill.update({
     where: { id: o.billId },
     data: o.action === 'pass'
@@ -79,6 +97,7 @@ export async function actOnBillAsAccounts(o: {
         passedBy: o.userId,
         passedComments: o.comments || null,
         accountsReturnReason: null,
+        ...(verification ? { accountsVerification: verification as any } : {}),
       }
       : {
         // Back to the executive stage. The earlier approval is cleared: it has to be
@@ -102,7 +121,14 @@ export async function actOnBillAsAccounts(o: {
       action: event,
       previousStatus: bill.status,
       newStatus,
-      comments: o.comments || (o.action === 'pass' ? 'Passed for payment by accounts' : 'Returned by accounts'),
+      comments: [
+        o.comments || (o.action === 'pass' ? 'Passed for payment by accounts' : 'Returned by accounts'),
+        // The trail should say what was checked, not just that it was passed.
+        verification
+          ? `Checks verified: ${verification.verified.length}/${verification.verified.length + verification.unverified.length}`
+            + (verification.unverified.length ? ` (not ticked: ${verification.unverified.join(', ')})` : '')
+          : '',
+      ].filter(Boolean).join(' — '),
     },
   });
 

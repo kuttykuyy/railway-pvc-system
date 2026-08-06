@@ -63,6 +63,12 @@ const PENDING: PendingColumn[] = [
     ddlType: 'TEXT',
     why: 'Why accounts sent the proposal back, so the executive side knows what to answer.',
   },
+  {
+    table: 'bills',
+    column: 'accountsVerification',
+    ddlType: 'JSONB',
+    why: 'Which checks the accounts office ticked when passing — what answers an audit query later.',
+  },
 ];
 
 /**
