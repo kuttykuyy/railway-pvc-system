@@ -120,6 +120,10 @@ export function BillCard({
       if (response.ok) {
         toast.success('Bill submitted for approval successfully!');
         onActionComplete?.();
+      } else if (data.requiresSelection) {
+        // This card has no picker; the bill's own page does. Without this the user got
+        // "Multiple officials found. Please select an official." and no way to select one.
+        toast.error('More than one official covers this zone — open the bill and submit it from there to choose.', { duration: 6000 });
       } else {
         toast.error(data.error || 'Failed to submit bill for approval');
       }

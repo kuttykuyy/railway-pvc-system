@@ -114,44 +114,50 @@ export async function POST(req: NextRequest) {
         zone: parsed.zone,
         division: parsed.division
       });
-      
-      // Find matching railway officials
-      const matchingOfficials = await prisma.user.findMany({
+
+      const officialFields = { id: true, name: true, designation: true } as const;
+
+      // Best match: the official posted to this very division.
+      let matchingOfficials = await prisma.user.findMany({
         where: {
           role: 'railway_official',
           railwayZone: parsed.zone,
           division: parsed.division,
           isCurrentPosting: true,
         },
-        select: {
-          id: true,
-          name: true,
-          designation: true,
-        },
+        select: officialFields,
       });
 
-      logger.log(`Found ${matchingOfficials.length} matching officials:`, matchingOfficials);
+      // Nothing sets `division` — not signup, not the admin screen — so the match above
+      // finds nobody in practice and the submission used to be refused outright, which
+      // is what "submit for approval does nothing" looked like. Fall back to the zone,
+      // which is what actually governs who may approve.
+      if (matchingOfficials.length === 0) {
+        matchingOfficials = await prisma.user.findMany({
+          where: { role: 'railway_official', railwayZone: parsed.zone, isCurrentPosting: true },
+          select: officialFields,
+        });
+        logger.log(`Division match empty; ${matchingOfficials.length} official(s) in zone ${parsed.zone}`);
+      }
 
-      // Auto-assign if only one official matches
       if (matchingOfficials.length === 1) {
         finalAssignedTo = matchingOfficials[0].id;
         logger.log('Auto-assigning to:', matchingOfficials[0]);
-      } else if (matchingOfficials.length === 0) {
-        console.error('No railway officials found for the zone/division');
-        return NextResponse.json(
-          { error: `No railway officials found for ${parsed.zoneName} - ${parsed.divisionName}. Please contact system administrator.` },
-          { status: 400 }
-        );
-      } else {
+      } else if (matchingOfficials.length > 1) {
         logger.log('Multiple officials found, requiring selection');
         return NextResponse.json(
-          { 
+          {
             error: 'Multiple officials found. Please select an official.',
             requiresSelection: true,
-            officials: matchingOfficials 
+            officials: matchingOfficials
           },
           { status: 400 }
         );
+      } else {
+        // Still nobody. Submit it anyway, unassigned: the approvals queue shows every
+        // submitted bill to every official, and approving does not require being the
+        // assignee. Blocking here left a finished bill with nowhere to go.
+        logger.log(`No railway official registered for ${parsed.zone}; submitting unassigned.`);
       }
     }
 
@@ -177,9 +183,9 @@ export async function POST(req: NextRequest) {
         action: 'submitted',
         previousStatus: bill.status,
         newStatus: 'submitted',
-        comments: finalAssignedTo 
-          ? `Bill submitted and assigned for approval` 
-          : 'Bill submitted for approval'
+        comments: finalAssignedTo
+          ? `Bill submitted and assigned for approval`
+          : 'Bill submitted for approval (no official assigned — any official of the zone can approve it)'
       }
     });
 
