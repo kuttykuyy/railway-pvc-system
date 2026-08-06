@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { UserCog } from 'lucide-react';
 import type { User, RoleFormData } from '../types';
+import { formatRoleLabel } from '../utils/userUtils';
 
 interface RoleDialogProps {
   user: User | null;
@@ -57,7 +58,7 @@ export function RoleDialog({ user, open, onOpenChange, onSubmit }: RoleDialogPro
           <DialogDescription>
             {user.name || user.email}
             <div className="mt-2 text-sm">
-              Current role: <span className="font-semibold">{user.role}</span>
+              Current role: <span className="font-semibold">{formatRoleLabel(user.role)}</span>
             </div>
           </DialogDescription>
         </DialogHeader>
@@ -70,19 +71,21 @@ export function RoleDialog({ user, open, onOpenChange, onSubmit }: RoleDialogPro
                 <SelectValue placeholder="Select a role" />
               </SelectTrigger>
               <SelectContent>
+                {/* Only what an admin actually decides. The two "pending" roles are
+                    states the signup sets while a department account waits for approval —
+                    listing them here invited an admin to put someone back into a queue
+                    instead of approving or refusing them. Filter the user list by pending
+                    to find those waiting. */}
                 <SelectItem value="CONTRACTOR">Contractor</SelectItem>
-                <SelectItem value="PENDING_RAILWAY_OFFICIAL">Pending Railway Official</SelectItem>
-                <SelectItem value="RAILWAY_OFFICIAL">Railway Official (executive)</SelectItem>
-                {/* The accounts/audit office, which vets a proposal after the executive
-                    approves it and passes it for payment. */}
-                <SelectItem value="PENDING_ACCOUNTS_OFFICIAL">Pending Accounts / Audit</SelectItem>
-                <SelectItem value="ACCOUNTS_OFFICIAL">Accounts / Audit</SelectItem>
+                <SelectItem value="RAILWAY_OFFICIAL">Railway Official (approves the bill)</SelectItem>
+                <SelectItem value="ACCOUNTS_OFFICIAL">Accounts / Audit (passes it for payment)</SelectItem>
                 <SelectItem value="ADMIN">Admin</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-sm text-muted-foreground">
-              Select the new role for this user. Choose Railway Official or Accounts / Audit only after
-              verifying their official email and identity — both can act on other people&apos;s bills.
+              Choose Railway Official or Accounts / Audit only after verifying their official email
+              and identity — both can see and act on other people&apos;s bills. To refuse a department
+              account, leave it as Contractor.
             </p>
           </div>
         </div>
