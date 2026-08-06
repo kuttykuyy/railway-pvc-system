@@ -24,6 +24,10 @@ import { inferMainClassification } from '@/lib/work-classification';
 import { BillPdfCementAnalyzer, type AppliedExtractionContext, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
+import {
+  buildClassificationEntriesFromExtractedBill as buildEntriesFromExtractedBill,
+  findSubClassificationForExtractedItem as findSubClassificationForItem,
+} from '@/lib/extracted-bill-entries';
 import { calculateTotalPvc, formatPvcAmount, pvcComparisonAllowsSuffix } from '@/lib/classification-pvc';
 import { computeRebateFactor, scaleComponentsWithRebate } from '@/lib/rebate';
 
@@ -529,89 +533,17 @@ export default function BulkBillCreationPage() {
     return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
   };
 
-  const findSubClassificationForExtractedItem = (item: ExtractedBillItem) => {
-    const code = (item.suggestedClassificationCode || '').trim().toUpperCase();
-    if (!code) return null;
-    const allSubs = classificationGroups.flatMap(group => group.subClassifications);
-    const exact = allSubs.find(sub => sub.code.toUpperCase() === code);
-    if (exact) return exact;
-    // Fall back to the same main group's "<digit>A" (or its default/first sub) so an
-    // item is never left without a valid sub-classification.
-    const digit = code.match(/^\d+/)?.[0];
-    const group = digit ? classificationGroups.find(g => g.code.toUpperCase() === digit) : undefined;
-    if (group && group.subClassifications.length) {
-      return group.subClassifications.find(sub => sub.code.toUpperCase() === `${digit}A`)
-        || group.subClassifications[0];
-    }
-    return null;
-  };
+  // Shared with the single-bill form and the edit page — see lib/extracted-bill-entries.ts.
+  // This page had its own copy that had lost the cement split, so applying the cement
+  // calculation here deducted the cement from every item and then dropped it.
+  const findSubClassificationForExtractedItem = (item: ExtractedBillItem) =>
+    findSubClassificationForItem(item, classificationGroups as any);
 
-  const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData): ClassificationEntry[] => {
-    const items = data.billDetails?.items || data.extractedItems || [];
-
-    // Items sharing the same printed "Group Name" and classification are combined into a
-    // single section (one entry with multiple item rows) instead of a separate section per item.
-    let ungroupedCounter = 0;
-    const rawEntries = items.flatMap((item) => {
-      const subClassification = findSubClassificationForExtractedItem(item);
-      if (!subClassification) return [];
-      const groupName = (item.groupName || '').trim();
-      const baseKey = groupName || `__standalone_${ungroupedCounter++}`;
-      const itemNumber = item.itemNo || item.dsrCode || '';
-      const quantity = item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '';
-      const agreementRate = item.agreementRateRaw || item.agreementRate || '';
-      return [{
-        groupKey: `${subClassification.id}::${baseKey}`,
-        entry: {
-          subClassificationId: subClassification.id,
-          subClassification,
-          amount: Number(item.amountSinceLastBill || 0),
-          description: groupName || item.description || '',
-          steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
-          scheduleItem: matchExtractedSchedule(
-            scheduleNames(selectedContract?.schedules),
-            [item.schedule, item.scheduleGroup, item.chapter],
-          ),
-          itemNumber,
-          quantity,
-          agreementRate,
-          itemRows: [{ itemNumber, quantity, agreementRate }],
-          classificationJustification: item.suggestedClassificationReason || '',
-          aiReviewed: !!(item as any).classificationReviewedByAi,
-        } as ClassificationEntry,
-      }];
-    });
-
-    const merged = new Map<string, ClassificationEntry>();
-    const order: string[] = [];
-    for (const { groupKey, entry } of rawEntries) {
-      const existing = merged.get(groupKey);
-      if (!existing) {
-        merged.set(groupKey, { ...entry, itemRows: [...(entry.itemRows || [])] });
-        order.push(groupKey);
-        continue;
-      }
-      existing.itemRows = [...(existing.itemRows || []), ...(entry.itemRows || [])];
-      existing.amount = (Number(existing.amount) || 0) + (Number(entry.amount) || 0);
-      const steelSet = new Set([...(existing.steelTypes || []), ...(entry.steelTypes || [])]);
-      existing.steelTypes = Array.from(steelSet);
-      existing.aiReviewed = existing.aiReviewed || entry.aiReviewed;
-      if (!existing.classificationJustification) {
-        existing.classificationJustification = entry.classificationJustification || '';
-      }
-    }
-
-    return order.map(key => {
-      const entry = merged.get(key)!;
-      const firstRow = entry.itemRows?.[0];
-      if (firstRow) {
-        entry.itemNumber = firstRow.itemNumber;
-        entry.quantity = firstRow.quantity;
-        entry.agreementRate = firstRow.agreementRate;
-      }
-      return entry;
-    });
-  };
+  const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData): ClassificationEntry[] =>
+    buildEntriesFromExtractedBill(data, {
+      classificationGroups: classificationGroups as any,
+      contractSchedules: selectedContract?.schedules,
+    }) as ClassificationEntry[];
 
   // Compares PVC across the sub-classifications of the entry's group and keeps the one
   // with the least negative PVC, recording the comparison in the justification.

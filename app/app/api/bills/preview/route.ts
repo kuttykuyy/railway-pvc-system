@@ -6,7 +6,7 @@ import { getQuarterFromDate } from '@/lib/pvc-calculations';
 import { getQuarterlyAverages } from '@/lib/db-utils';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
 import { extractSteelTypesFromEntries } from '@/lib/steel-type-handler';
-import { isBillUsingProvisionalIndices } from '@/lib/index-status';
+import { isBillUsingProvisionalIndices, relevantIndexNamesForBill } from '@/lib/index-status';
 import { getBillingSettings } from '@/lib/admin-settings';
 
 export const dynamic = 'force-dynamic';
@@ -135,8 +135,14 @@ export async function POST(request: NextRequest) {
     });
     const previousCumulativePvc = previousBills[0]?.pvcCalculation?.cumulativePvc ?? 0;
 
-    // Check provisional
-    const { isProvisional } = await isBillUsingProvisionalIndices(quarter, contract.baseMonth);
+    // Check provisional — against this bill's own indices only. Checking every index in
+    // the table flagged bills as provisional over a steel index for another zone, or an
+    // explosives index the work never touches.
+    const { isProvisional } = await isBillUsingProvisionalIndices(
+      quarter,
+      contract.baseMonth,
+      relevantIndexNamesForBill(zone, fuelPriceType),
+    );
 
     // Determine bill cost for this user
     const billingSettings = await getBillingSettings();

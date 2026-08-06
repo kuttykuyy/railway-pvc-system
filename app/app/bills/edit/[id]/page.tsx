@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Save, Calendar, Info, AlertTriangle, Building2, ClipboardList, Package, Layers, Loader2 } from 'lucide-react';
+import { Save, Calendar, Info, AlertTriangle, Building2, ClipboardList, Package, Layers, Loader2, Calculator } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { format } from 'date-fns';
@@ -20,6 +20,9 @@ import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr
 import { scheduleNames, normalizeSchedules } from '@/lib/contract-schedules';
 import { inferMainClassification } from '@/lib/work-classification';
 import { applyCementSplit, type CementBreakdownItem } from '@/lib/cement-split';
+import { BillPdfCementAnalyzer, type CementAnalysisData } from '@/components/bills/bill-pdf-cement-analyzer';
+import { buildClassificationEntriesFromExtractedBill } from '@/lib/extracted-bill-entries';
+import { computeRebateFactor, scaleComponentsWithRebate } from '@/lib/rebate';
 
 interface ClassificationEntry {
   subClassificationId: string;
@@ -70,6 +73,12 @@ function EditBillPageContent() {
   const [cementSchedules, setCementSchedules] = useState<CementSchedule[]>([]);
   const [derivingCement, setDerivingCement] = useState(false);
   const [cementUnmatched, setCementUnmatched] = useState<string[]>([]);
+
+  // PVC preview — the same endpoint the new-bill and bulk forms use. Editing used to be
+  // blind: you changed a classification and only found out what it did to the PVC after
+  // saving, which on a submitted bill is exactly when you don't want a surprise.
+  const [preview, setPreview] = useState<{ totalPvc: number; quarter: string; isProvisional: boolean } | { error: string } | null>(null);
+  const [previewing, setPreviewing] = useState(false);
 
   const [form, setForm] = useState({
     contractId: '', billNo: '', dateOfMeasurement: '', zone: '',
@@ -222,6 +231,111 @@ function EditBillPageContent() {
     setClassificationEntries(applyCementSplit(classificationEntries, breakdown, makeCementEntry));
     setForm(p => ({ ...p, cementAmount: '' }));
     toast.success(`Cement split into ${breakdown.filter(b => b.amount > 0).length} classification row(s): ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
+  };
+
+  const runPreview = async () => {
+    if (!form.dateOfMeasurement || classificationEntries.length === 0) {
+      toast.error('A measurement date and at least one classification are needed first.');
+      return;
+    }
+    setPreviewing(true);
+    setPreview(null);
+    try {
+      const res = await fetch('/api/bills/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contractId: form.contractId,
+          grossBillAmount: totalClassification,
+          billAmount: netBillAmount,
+          dateOfMeasurement: form.dateOfMeasurement,
+          zone: form.zone,
+          fuelPriceType: form.fuelPriceType || 'four_city_avg',
+          calculationMethod: 'auto',
+          classificationEntries,
+        }),
+      });
+      const data = await res.json();
+      setPreview(res.ok
+        ? { totalPvc: Number(data.totalPvc) || 0, quarter: data.quarter, isProvisional: !!data.isProvisional }
+        : { error: data.error || 'Preview failed' });
+    } catch {
+      setPreview({ error: 'Preview failed' });
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  /**
+   * Re-read this bill's PDF and rebuild its items.
+   *
+   * Until now a bill could only be fixed by hand or by deleting it and uploading
+   * again — so every improvement to the PDF reader was out of reach for bills already
+   * saved. Entries are rebuilt from the PDF wholesale, which is the point: the
+   * classification the reader produces today is what the user is asking for.
+   */
+  const applyExtractedBillDetails = (data: CementAnalysisData) => {
+    const billDetails = data.billDetails;
+
+    // Guard against re-reading the wrong file. The agreement number is printed on
+    // every IREPS bill, so a mismatch means this PDF belongs to another contract and
+    // applying it would silently replace this bill's items with someone else's.
+    const normalize = (value?: string | null) => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const fromPdf = normalize(billDetails?.agreementNo);
+    const onContract = normalize(selectedContract?.agreementNo);
+    if (fromPdf && onContract && fromPdf !== onContract
+      && !fromPdf.includes(onContract) && !onContract.includes(fromPdf)) {
+      toast.error(
+        `That PDF is for agreement ${billDetails?.agreementNo}, but this bill belongs to ${selectedContract?.agreementNo}. Nothing was changed.`,
+        { duration: 6000 },
+      );
+      return;
+    }
+
+    let entries = buildClassificationEntriesFromExtractedBill(data, {
+      classificationGroups: classificationGroups as any,
+      contractSchedules: selectedContract?.schedules,
+    }) as ClassificationEntry[];
+
+    if (entries.length === 0) {
+      toast.error('No items could be mapped from that PDF, so the bill was left as it was.');
+      return;
+    }
+
+    // Rebate: when the work was awarded below the estimate the printed gross is
+    // reduced to the net payable, so every component scales by the same factor.
+    const rebateFactor = computeRebateFactor({
+      grossTotal: billDetails?.grossBillAmount,
+      netBillAmount: billDetails?.netBillAmount,
+      rebatePercentage: billDetails?.rebatePercentage,
+    });
+    if (rebateFactor < 1) {
+      const scaled = scaleComponentsWithRebate(entries.map(e => Number(e.amount || 0)), rebateFactor);
+      entries = entries.map((entry, index) => ({ ...entry, amount: scaled[index] }));
+      toast.success(
+        `Rebate${billDetails?.rebatePercentage ? ` of ${billDetails.rebatePercentage}%` : ''} applied — components scaled to the net Bill Amount`,
+        { icon: '↓', duration: 4000 },
+      );
+    }
+
+    setClassificationEntries(entries);
+
+    // The measurement date decides the quarter, so it follows the PDF. The bill number
+    // is left alone: it may have been corrected by hand, and it doesn't affect the PVC.
+    const extractedDate = String(billDetails?.measurementDate || '').match(/\d{4}-\d{2}-\d{2}/)?.[0] || '';
+    if (extractedDate && extractedDate !== form.dateOfMeasurement) {
+      setForm(p => ({ ...p, dateOfMeasurement: extractedDate }));
+      toast(`Measurement date updated to ${extractedDate} from the PDF.`, { icon: '📅' });
+    }
+    // Extracted items already carry cement and steel, so the dedicated fields would
+    // double-count them.
+    setForm(p => ({
+      ...p, cementAmount: '',
+      steelTmtBarsAmount: '', steelAngleChannelAmount: '', steelPlatesAmount: '', steelOtherSectionsAmount: '',
+    }));
+
+    toast.success(`Re-read the bill — ${entries.length} item section(s) replaced. Check them, then Update Bill.`);
+    setActiveTab('classification');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -400,7 +514,21 @@ function EditBillPageContent() {
 
         {/* Work & items */}
         <div className={panelCls('classification')}>
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="space-y-4">
+            {/* Re-read the bill PDF. Without this the only way to pick up a fix to the
+                PDF reader was to delete the bill and upload it again. */}
+            <BillPdfCementAnalyzer
+              title="Re-read this bill from its PDF"
+              contractId={form.contractId}
+              disabled={isSaving}
+              onApplyBillDetails={applyExtractedBillDetails}
+            />
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Applying a PDF <b>replaces</b> the item sections below with what the reader finds.
+              Anything typed in by hand here is lost — the bill number, dates and the fields on the other tabs are kept.
+            </div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-4 mt-4">
             <BillClassificationEntries
               value={classificationEntries}
               onChange={setClassificationEntries}
@@ -555,12 +683,54 @@ function EditBillPageContent() {
           ) : <span className="w-[64px]" />}
         </div>
 
+        {/* PVC preview — what this edit does to the figure, before committing it */}
+        {preview && (
+          'error' in preview ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              Couldn&apos;t work out the PVC: {preview.error}
+            </div>
+          ) : (() => {
+            const savedPvc = Number(bill?.pvcCalculation?.totalPvc);
+            const change = Number.isFinite(savedPvc) ? preview.totalPvc - savedPvc : null;
+            const money = (v: number) => `₹${Math.abs(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            return (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 space-y-1">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-sm font-semibold text-emerald-900">
+                    PVC after this edit: {preview.totalPvc < 0 ? '−' : ''}{money(preview.totalPvc)}
+                  </span>
+                  <span className="text-xs text-emerald-700">Quarter {preview.quarter}</span>
+                </div>
+                {change !== null && (
+                  <p className="text-xs text-emerald-800">
+                    {Math.abs(change) < 0.005
+                      ? 'Same as the saved figure.'
+                      : `${change > 0 ? 'Up' : 'Down'} ${money(change)} from the saved ${savedPvc < 0 ? '−' : ''}${money(savedPvc)}.`}
+                  </p>
+                )}
+                {preview.isProvisional && (
+                  <p className="text-xs text-amber-800 flex items-center gap-1">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Some indices for this quarter are still provisional — the figure can change when they go final.
+                  </p>
+                )}
+                <p className="text-[11px] text-emerald-700/80">Nothing is saved yet. Press Update Bill to keep it.</p>
+              </div>
+            );
+          })()
+        )}
+
         {/* Actions */}
         <div className="flex items-center justify-between pt-2 border-t border-gray-100">
           <p className="text-xs text-gray-400 flex items-center gap-1">
             <Info className="h-3.5 w-3.5" /> PVC will be recalculated on save
           </p>
           <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={runPreview}
+              disabled={previewing || !form.dateOfMeasurement || classificationEntries.length === 0}
+              className="rounded-lg">
+              {previewing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Checking…</> : <><Calculator className="h-4 w-4 mr-2" /> Check PVC</>}
+            </Button>
             <button type="button" onClick={() => router.back()}
               className="px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Cancel</button>
             <button type="submit" disabled={isSaving || !form.billNo || !form.dateOfMeasurement || classificationEntries.length === 0}

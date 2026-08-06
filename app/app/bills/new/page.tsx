@@ -49,6 +49,10 @@ import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr
 import { ContextualHelp } from '@/components/contextual-help';
 import { validateDate, validateDateForApi } from '@/lib/date-validation';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
+import {
+  buildClassificationEntriesFromExtractedBill as buildEntriesFromExtractedBill,
+  findSubClassificationForExtractedItem as findSubClassificationForItem,
+} from '@/lib/extracted-bill-entries';
 import { computeRebateFactor, scaleComponentsWithRebate } from '@/lib/rebate';
 import { inferMainClassification } from '@/lib/work-classification';
 import { applyCementSplit, type CementBreakdownItem } from '@/lib/cement-split';
@@ -541,189 +545,17 @@ function NewBillPageContent() {
     return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
   };
 
-  const findSubClassificationForExtractedItem = (item: ExtractedBillItem) => {
-    const code = (item.suggestedClassificationCode || '').trim().toUpperCase();
-    if (!code) return null;
-    const allSubs = classificationGroups.flatMap(group => group.subClassifications);
-    // 1. Exact code (e.g. "9A").
-    const exact = allSubs.find(sub => sub.code.toUpperCase() === code);
-    if (exact) return exact;
-    // 2. Same main group — prefer "<digit>A", else the group's default/first sub. This
-    // keeps an item mapped to a valid sub-class even when its exact suffix has no
-    // matching row (e.g. a single-class group, or a bare "5"), so it is never dropped
-    // or left without a sub-classification id.
-    const digit = code.match(/^\d+/)?.[0];
-    const group = digit ? classificationGroups.find(g => g.code.toUpperCase() === digit) : undefined;
-    if (group && group.subClassifications.length) {
-      return group.subClassifications.find(sub => sub.code.toUpperCase() === `${digit}A`)
-        || group.subClassifications.find(sub => sub.isDefault)
-        || group.subClassifications[0];
-    }
-    return null;
-  };
+  // Both of these live in lib/extracted-bill-entries.ts, so this form, bulk entry and
+  // the edit page all build the same entries from the same PDF. They were copied into
+  // each page and drifted apart.
+  const findSubClassificationForExtractedItem = (item: ExtractedBillItem) =>
+    findSubClassificationForItem(item, classificationGroups as any);
 
-  const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData): ClassificationEntry[] => {
-    const items = data.billDetails?.items || data.extractedItems || [];
-    const allSubClassifications = classificationGroups.flatMap(group => group.subClassifications);
-
-    // Items sharing the same printed "Group Name" and classification are combined into a
-    // single section (one entry with multiple item rows) instead of a separate section per item.
-    let ungroupedCounter = 0;
-
-    const rawEntries: Array<{ groupKey: string; entry: ClassificationEntry }> = items.flatMap((item) => {
-      const subClassification = findSubClassificationForExtractedItem(item);
-      if (!subClassification) return [];
-      const qtySinceLast = Number(item.quantitySinceLastBill || 0);
-      const specialConditionOnly = qtySinceLast === 0
-        && Number(item.amountAtAgreementRateSinceLastBill || 0) === 0
-        && Number(item.amountIncludingSpecialConditionSinceLastBill || item.amountSinceLastBill || 0) > 0;
-
-      const groupName = (item.groupName || '').trim();
-      const baseKey = groupName || `__standalone_${ungroupedCounter++}`;
-
-      const originalAmount = (item as any).originalAmount;
-      const netAmount = Number(item.amountSinceLastBill || 0);
-      const hasDeduction = typeof originalAmount === 'number' && originalAmount > netAmount;
-
-      if (hasDeduction) {
-        const cementCost = (item as any).cementDeduction || (originalAmount - netAmount);
-        // Store cement in MT at a per-MT rate. The "derive cement from items" path
-        // already does, and the report's cement breakup is headed MT — carrying
-        // quintals here made the statement read "243.87 MT at Rs 599.78/MT", ten times
-        // the quantity at a tenth of the rate. The product was right, so the amount
-        // was never wrong, but both figures on the page were.
-        const quintals = Number((item as any).cementQuantityQuintals) || 0;
-        const ratePerQuintal = Number((item as any).cementRatePerQuintal) || 0;
-        const cementQty = quintals / 10;
-        const cementRate = ratePerQuintal ? ratePerQuintal * 10 : '';
-
-        const mainCode = subClassification.code.charAt(0);
-        const cementSub = allSubClassifications.find(sub => sub.code.toUpperCase() === `${mainCode}C`);
-
-        if (cementSub) {
-          const scheduleItem = matchExtractedSchedule(
-            scheduleNames(selectedContract?.schedules),
-            [item.schedule, item.scheduleGroup, item.chapter],
-          );
-
-          const qty = Number(item.quantitySinceLastBill || 0);
-          const netRate = qty > 0 ? Number((netAmount / qty).toFixed(6)) : '';
-
-          return [
-            {
-              groupKey: `${subClassification.id}::${baseKey}`,
-              entry: {
-                subClassificationId: subClassification.id,
-                subClassification,
-                amount: netAmount,
-                description: groupName ? groupName : `${item.description || ''} (Excluding Cement)`,
-                steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
-                scheduleItem,
-                itemNumber: item.itemNo || '',
-                quantity: qty || '',
-                agreementRate: netRate,
-                itemRows: [{
-                  itemNumber: item.itemNo || '',
-                  quantity: qty || '',
-                  agreementRate: netRate,
-                }],
-                classificationJustification: item.suggestedClassificationReason || '',
-                aiReviewed: !!item.classificationReviewedByAi,
-              },
-            },
-            {
-              groupKey: `${cementSub.id}::${baseKey}`,
-              entry: {
-                subClassificationId: cementSub.id,
-                subClassification: cementSub,
-                amount: cementCost,
-                description: groupName ? `${groupName} (Cement Portion)` : `${item.description || ''} (Cement Portion)`,
-                steelTypes: [],
-                scheduleItem,
-                itemNumber: item.itemNo ? `${item.itemNo}-CEM` : 'CEM',
-                quantity: cementQty || '',
-                agreementRate: cementRate,
-                itemRows: [{
-                  itemNumber: item.itemNo ? `${item.itemNo}-CEM` : 'CEM',
-                  quantity: cementQty || '',
-                  agreementRate: cementRate,
-                  // Keep the derivation with the row so the report prints the working.
-                  // The "derive cement from items" path already carries these; the PDF
-                  // upload path did not, so its bills showed "-" in that column.
-                  sourceQty: (item as any).cementSourceQty,
-                  coefficient: (item as any).cementCoefficient,
-                  workUnit: (item as any).cementWorkUnit,
-                }],
-                classificationJustification: `Under GCC Clause 46A, this is the cement portion of item ${item.itemNo || ''} (${item.description || ''}). Its cement cost is derived from the DSR cement coefficient and classified under Sub-classification ${cementSub.code}${cementSub.name ? ` (${cementSub.name})` : ''} so that the cement price index is applied to this value.`,
-              },
-            },
-          ];
-        }
-      }
-
-      // Default: single entry
-      const itemQuantity = specialConditionOnly ? '' : (item.quantitySinceLastBillRaw || item.quantitySinceLastBill || '');
-      const itemRate = specialConditionOnly ? '' : (item.agreementRateRaw || item.agreementRate || '');
-      return [{
-        groupKey: `${subClassification.id}::${baseKey}`,
-        entry: {
-          subClassificationId: subClassification.id,
-          subClassification,
-          amount: Number(item.amountSinceLastBill || 0),
-          description: groupName
-            ? groupName
-            : (specialConditionOnly
-              ? `${item.description || ''} (Special condition amount; printed Qty since last Bill is 0)`
-              : item.description || ''),
-          steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
-          scheduleItem: matchExtractedSchedule(
-            scheduleNames(selectedContract?.schedules),
-            [item.schedule, item.scheduleGroup, item.chapter],
-          ),
-          itemNumber: item.itemNo || '',
-          quantity: itemQuantity,
-          agreementRate: itemRate,
-          itemRows: specialConditionOnly ? [] : [{
-            itemNumber: item.itemNo || '',
-            quantity: itemQuantity,
-            agreementRate: itemRate,
-          }],
-          classificationJustification: item.suggestedClassificationReason || '',
-          aiReviewed: !!item.classificationReviewedByAi,
-        },
-      }];
-    });
-
-    const merged = new Map<string, ClassificationEntry>();
-    const order: string[] = [];
-    for (const { groupKey, entry } of rawEntries) {
-      const existing = merged.get(groupKey);
-      if (!existing) {
-        merged.set(groupKey, { ...entry, itemRows: [...(entry.itemRows || [])] });
-        order.push(groupKey);
-        continue;
-      }
-      existing.itemRows = [...(existing.itemRows || []), ...(entry.itemRows || [])];
-      existing.amount = (Number(existing.amount) || 0) + (Number(entry.amount) || 0);
-      const steelSet = new Set([...(existing.steelTypes || []), ...(entry.steelTypes || [])]);
-      existing.steelTypes = Array.from(steelSet);
-      existing.aiReviewed = existing.aiReviewed || entry.aiReviewed;
-      if (!existing.classificationJustification) {
-        existing.classificationJustification = entry.classificationJustification || '';
-      }
-    }
-
-    return order.map(key => {
-      const entry = merged.get(key)!;
-      const firstRow = entry.itemRows?.[0];
-      if (firstRow) {
-        entry.itemNumber = firstRow.itemNumber;
-        entry.quantity = firstRow.quantity;
-        entry.agreementRate = firstRow.agreementRate;
-      }
-      return entry;
-    });
-  };
+  const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData): ClassificationEntry[] =>
+    buildEntriesFromExtractedBill(data, {
+      classificationGroups: classificationGroups as any,
+      contractSchedules: selectedContract?.schedules,
+    }) as ClassificationEntry[];
 
   // Compares PVC across the sub-classifications of the entry's group and keeps the one
   // with the least negative PVC, recording the comparison in the justification.
