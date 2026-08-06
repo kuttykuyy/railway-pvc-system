@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ShortfallAudit } from '@/components/shortfall-audit';
 import { BillStatusBadge } from '@/components/bills/bill-status-badge';
 import { ApprovalActions } from '@/components/bills/approval-actions';
+import { ApprovalWorkflowStatus } from '@/components/bills/approval-workflow-status';
 import { ApprovalHistory } from '@/components/bills/approval-history';
 import { WhatsAppSendDialog } from '@/components/whatsapp-send-dialog';
 import { Button } from '@/components/ui/button';
@@ -898,13 +899,20 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6">
-          <ApprovalActions 
+          {/* Where the proposal has got to and how it got there. The chain has always
+              been recorded; until now nothing showed it, so "approved" gave no hint
+              that a second desk still had the bill. */}
+          <div className="mb-6">
+            <ApprovalWorkflowStatus status={bill.status} history={bill.approvalHistory || []} />
+          </div>
+
+          <ApprovalActions
             billId={bill.id}
             billStatus={bill.status}
             userRole={user.role}
             onActionComplete={handleActionComplete}
           />
-          
+
           {bill.rejectionReason && (
             <div className="mt-5 p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 rounded-2xl flex gap-3">
               <div className="p-1 rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 flex-shrink-0 h-fit">

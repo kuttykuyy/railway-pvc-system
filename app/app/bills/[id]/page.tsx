@@ -74,6 +74,16 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
           department: true
         }
       },
+      // The whole chain — submitted, approved, returned, passed — with who did each.
+      // It has been recorded from the start and never shown.
+      approvalHistory: {
+        orderBy: { timestamp: 'asc' },
+        include: {
+          user: {
+            select: { name: true, email: true, designation: true, role: true }
+          }
+        }
+      },
       billTransaction: true
     }
   });
