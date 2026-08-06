@@ -53,6 +53,8 @@ export function UserFilters({
             <SelectItem value="contractor" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Contractors</SelectItem>
             <SelectItem value="pending_railway_official" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Pending Officials</SelectItem>
             <SelectItem value="railway_official" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Railway Officials</SelectItem>
+            <SelectItem value="pending_accounts_official" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Pending Accounts / Audit</SelectItem>
+            <SelectItem value="accounts_official" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Accounts / Audit</SelectItem>
             <SelectItem value="admin" className="focus:bg-slate-50 focus:text-slate-900 rounded-xl cursor-pointer">Administrators</SelectItem>
           </SelectContent>
         </Select>

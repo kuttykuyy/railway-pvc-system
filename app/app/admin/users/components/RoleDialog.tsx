@@ -72,12 +72,17 @@ export function RoleDialog({ user, open, onOpenChange, onSubmit }: RoleDialogPro
               <SelectContent>
                 <SelectItem value="CONTRACTOR">Contractor</SelectItem>
                 <SelectItem value="PENDING_RAILWAY_OFFICIAL">Pending Railway Official</SelectItem>
-                <SelectItem value="RAILWAY_OFFICIAL">Railway Official</SelectItem>
+                <SelectItem value="RAILWAY_OFFICIAL">Railway Official (executive)</SelectItem>
+                {/* The accounts/audit office, which vets a proposal after the executive
+                    approves it and passes it for payment. */}
+                <SelectItem value="PENDING_ACCOUNTS_OFFICIAL">Pending Accounts / Audit</SelectItem>
+                <SelectItem value="ACCOUNTS_OFFICIAL">Accounts / Audit</SelectItem>
                 <SelectItem value="ADMIN">Admin</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-sm text-muted-foreground">
-              Select the new role for this user. Choose Railway Official only after verifying their official email and identity.
+              Select the new role for this user. Choose Railway Official or Accounts / Audit only after
+              verifying their official email and identity — both can act on other people&apos;s bills.
             </p>
           </div>
         </div>
