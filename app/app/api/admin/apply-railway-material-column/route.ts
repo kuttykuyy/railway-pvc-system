@@ -38,6 +38,58 @@ const PENDING: PendingColumn[] = [
     ddlType: "TEXT DEFAULT 'four_city_avg'",
     why: 'Fuel basis is per agreement — SWR directs the PPAC 4-city average, Sr.DFM/MDU demands the zone city rate.',
   },
+  // The accounts/audit stage, which follows the executive approval.
+  {
+    table: 'bills',
+    column: 'passedAt',
+    ddlType: 'TIMESTAMP(3)',
+    why: 'When accounts passed the proposal for payment.',
+  },
+  {
+    table: 'bills',
+    column: 'passedBy',
+    ddlType: 'TEXT',
+    why: 'Which accounts user passed it — the second signature on a PVC proposal.',
+  },
+  {
+    table: 'bills',
+    column: 'passedComments',
+    ddlType: 'TEXT',
+    why: "Accounts' remarks when passing the proposal.",
+  },
+  {
+    table: 'bills',
+    column: 'accountsReturnReason',
+    ddlType: 'TEXT',
+    why: 'Why accounts sent the proposal back, so the executive side knows what to answer.',
+  },
+];
+
+/**
+ * Applied after the columns. Each must be safe to run twice and must not touch data.
+ * Neither is needed for the feature to work — Prisma joins on the column with or
+ * without a database-level foreign key — but without them the live schema drifts from
+ * schema.prisma, and the next person to read one would not match the other.
+ */
+const PENDING_EXTRAS: Array<{ label: string; sql: string; why: string }> = [
+  {
+    label: 'bills_status_approvedAt_idx',
+    sql: 'CREATE INDEX IF NOT EXISTS "bills_status_approvedAt_idx" ON "bills" ("status", "approvedAt")',
+    why: 'The accounts inbox lists proposals awaiting vetting, oldest first.',
+  },
+  {
+    label: 'bills_passedBy_fkey',
+    sql: `DO $$
+      BEGIN
+        ALTER TABLE "bills"
+          ADD CONSTRAINT "bills_passedBy_fkey"
+          FOREIGN KEY ("passedBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+        WHEN undefined_column THEN NULL;
+      END $$`,
+    why: 'Ties the accounts signature to a real user, and clears it if that user is deleted.',
+  },
 ];
 
 async function requireAdmin() {
@@ -104,6 +156,19 @@ export async function POST() {
       );
       applied.push(`${c.table}.${c.column}`);
     }
+
+    // Indexes and constraints, after the columns they depend on. A failure here is
+    // reported but never loses the columns already added — they are what the app needs.
+    const extrasFailed: string[] = [];
+    for (const extra of PENDING_EXTRAS) {
+      try {
+        await prisma.$executeRawUnsafe(extra.sql);
+      } catch (err: any) {
+        console.error(`pending schema extra "${extra.label}" failed:`, err?.message || err);
+        extrasFailed.push(extra.label);
+      }
+    }
+
     const columns = await statuses();
     const stillMissing = columns.filter((c) => !c.exists);
     return NextResponse.json({
@@ -111,9 +176,11 @@ export async function POST() {
       added: applied.length > 0,
       applied,
       exists: stillMissing.length === 0,
-      message: applied.length
-        ? `Added: ${applied.join(', ')}.`
-        : 'All columns were already present — nothing to do.',
+      extrasFailed,
+      message: [
+        applied.length ? `Added: ${applied.join(', ')}.` : 'All columns were already present — nothing to do.',
+        extrasFailed.length ? `The index/constraint step could not finish (${extrasFailed.join(', ')}); the columns are in place and the app will work.` : '',
+      ].filter(Boolean).join(' '),
     });
   } catch (error: any) {
     console.error('apply pending columns failed:', error);

@@ -5,12 +5,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, AlertTriangle, Database, RefreshCw } from 'lucide-react';
 
+interface PendingColumnStatus {
+  table: string;
+  column: string;
+  why: string;
+  exists: boolean;
+}
+
 /**
- * One-time admin screen to apply the pending Bill.railwaySuppliedMaterialValue column
- * without needing the production DATABASE_URL (Vercel keeps it sensitive).
+ * Admin screen to apply pending additive schema changes without the production
+ * DATABASE_URL, which Vercel keeps sensitive. The deployed app already holds that
+ * connection. The list comes from the API so this page never goes stale.
  */
 export default function PendingDbChangePage() {
   const [exists, setExists] = useState<boolean | null>(null);
+  const [columns, setColumns] = useState<PendingColumnStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -24,6 +33,7 @@ export default function PendingDbChangePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Check failed');
       setExists(data.exists);
+      setColumns(data.columns || []);
       setMessage(data.message);
     } catch (e: any) {
       setError(e.message);
@@ -67,10 +77,22 @@ export default function PendingDbChangePage() {
             database URL, which Vercel keeps hidden. The app already holds that connection, so it
             can add them here. Each is a single additive column — nothing is dropped or changed.
           </p>
-          <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
-            <li><code>bills.railwaySuppliedMaterialValue</code> — GCC-2022 Cl.46A excludes railway-supplied material from the PVC base.</li>
-            <li><code>contracts.fuelPriceType</code> — fuel basis per agreement (4-city average vs zone city rate).</li>
-          </ul>
+          {columns.length > 0 && (
+            <ul className="text-xs space-y-1.5">
+              {columns.map((c) => (
+                <li key={`${c.table}.${c.column}`} className="flex items-start gap-2">
+                  {c.exists
+                    ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                    : <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />}
+                  <span className={c.exists ? 'text-slate-400' : 'text-slate-600'}>
+                    <code className="font-medium">{c.table}.{c.column}</code>
+                    {c.exists ? ' — already applied' : ''}
+                    <span className="block text-slate-400">{c.why}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
 
           {loading ? (
             <p className="text-sm text-slate-500">Checking…</p>
