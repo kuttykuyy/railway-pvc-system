@@ -165,7 +165,6 @@ export default function BillsPage() {
   // Bulk download: ask "with index / without index" before generating the combined PDF.
   const [showBulkIndexDialog, setShowBulkIndexDialog] = useState(false);
   const [pendingBulk, setPendingBulk] = useState<((includeDocs: boolean) => void) | null>(null);
-  const [bulkIncludeAbstract, setBulkIncludeAbstract] = useState(false);
 
   // Delete permissions state
   const [deletableBillIds, setDeletableBillIds] = useState<Set<string>>(new Set());
@@ -820,7 +819,7 @@ export default function BillsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ billIds, format: pdfFormat, includeDocs, includeAbstract: bulkIncludeAbstract }),
+        body: JSON.stringify({ billIds, format: pdfFormat, includeDocs }),
       });
 
       if (!response.ok) {
@@ -864,7 +863,7 @@ export default function BillsPage() {
       const response = await fetch('/api/bills/bulk-pdf-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ billIds, format: pdfFormat, includeDocs, includeAbstract: bulkIncludeAbstract }),
+        body: JSON.stringify({ billIds, format: pdfFormat, includeDocs }),
       });
 
       if (!response.ok) {
@@ -2681,25 +2680,12 @@ export default function BillsPage() {
             <DialogTitle>Download combined PDF</DialogTitle>
             <DialogDescription>Do you want the supporting index documents included?</DialogDescription>
           </DialogHeader>
-          {/* The abstract choice comes FIRST: the two buttons below start the download the
-              moment they are pressed, so a checkbox under them was never reached. */}
-          <label className="flex items-start gap-2.5 rounded-lg border border-slate-200 px-3 py-2.5 cursor-pointer select-none hover:border-slate-300">
-            <input
-              type="checkbox"
-              checked={bulkIncludeAbstract}
-              onChange={(e) => setBulkIncludeAbstract(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-slate-800"
-            />
-            <span>
-              <span className="block text-sm font-medium">Attach the contract abstract</span>
-              <span className="block text-xs text-muted-foreground mt-0.5">
-                Adds the bill-wise summary for the whole agreement at the end. Only possible when
-                the selected bills are all from one agreement.
-              </span>
-            </span>
-          </label>
-
-          <p className="text-xs font-medium text-slate-600 pt-1">Then choose how to download:</p>
+          {/* The abstract is always included — it is what the accounts office asks for
+              alongside the statements, and as a checkbox it was almost never ticked. */}
+          <p className="text-xs text-slate-600 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            The <b>contract abstract</b> is added at the end automatically. It needs every selected
+            bill to be from the same agreement.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pb-2">
             <button
               type="button"

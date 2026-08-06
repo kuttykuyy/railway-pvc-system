@@ -123,7 +123,10 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { billIds, format: pdfFormat } = body;
         const includeIndexDocs = body.includeDocs !== false; // default: include
-        const includeAbstract = body.includeAbstract === true; // default: leave it out
+        // The abstract goes in unless the caller explicitly says no. It is what the
+        // accounts office asks for alongside the statements, and making it a choice
+        // meant it was almost never there.
+        const includeAbstract = body.includeAbstract !== false;
         // Reported back in a header so a batch that couldn't take an abstract says why,
         // instead of returning a file that quietly lacks one.
         let abstractStatus = includeAbstract ? 'pending' : 'not-requested';

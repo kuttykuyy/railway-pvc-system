@@ -162,9 +162,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const { searchParams } = new URL(request.url);
         const templateId = searchParams.get('templateId');
         const pdfFormat = searchParams.get('format') || 'detailed';
-        // Reported back in a header so a requested abstract that could not be built
-        // says why, instead of arriving as a file quietly missing it.
-        let abstractStatus = searchParams.get('abstract') === '1' ? 'pending' : 'not-requested';
+        // The abstract goes in unless the caller explicitly says no (?abstract=0). One
+        // bill's statement shows that bill; the accounts office also wants the contract's
+        // running position, and sending the two as one file saves them being paired up
+        // by hand. Reported back in a header so one that could not be built says why,
+        // instead of arriving as a file quietly missing it.
+        const includeAbstract = searchParams.get('abstract') !== '0';
+        let abstractStatus = includeAbstract ? 'pending' : 'not-requested';
         // includeDocs=0 skips appending the supporting index documents to the IR PDF.
         const includeIndexDocs = searchParams.get('includeDocs') !== '0';
         const session = await getServerSession(authOptions);
@@ -780,10 +784,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
       }
 
-      // Append the contract's abstract when asked for (?abstract=1). One bill's statement
-      // shows that bill; the accounts office also wants the contract's running position,
-      // and sending the two as one file is what saves them being paired up by hand.
-      if (searchParams.get('abstract') === '1') {
+      if (includeAbstract) {
         try {
           const { generateAbstractPdf } = await import('@/lib/pdf/generators/abstract-report');
           const { pdfBuffer: abstractBytes } = await generateAbstractPdf(bill.contractId);
