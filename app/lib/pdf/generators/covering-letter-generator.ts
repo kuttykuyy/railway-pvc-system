@@ -1,6 +1,22 @@
 ﻿import { logger } from '@/lib/logger';
 
 import { jsPDF } from 'jspdf';
+import { numberToWords } from '../utils/formatting';
+
+/**
+ * "Rupees ... only", as money is written on anything that asks to be paid. The shared
+ * helper puts the word Rupees at the end and appends "Only"; this composes the form an
+ * accounts office expects to read.
+ */
+function amountInWords(value: number): string {
+  const abs = Math.abs(Number(value) || 0);
+  const rupees = Math.floor(abs);
+  const paise = Math.round((abs - rupees) * 100);
+  const strip = (n: number) => numberToWords(n).replace(/\s*Rupees\s*Only$/i, '').replace(/\s*Only$/i, '').trim();
+  let words = `Rupees ${strip(rupees)}`;
+  if (paise > 0) words += ` and Paise ${strip(paise)}`;
+  return `${words} only`;
+}
 
 interface CoveringLetterData {
   // TO Section
@@ -35,6 +51,9 @@ interface CoveringLetterData {
   /** Signed amount. billAmount is a formatted string, so the sign cannot be read back
    *  from it — a recovery must not be submitted "for early payment". */
   netPvcAmount?: number;
+  /** The sender's own file reference. Official correspondence is diarised by it, and a
+   *  letter without one is hard for the receiving office to file or refer back to. */
+  letterNumber?: string;
 }
 
 /**
@@ -130,6 +149,19 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
     const dateWidth = doc.getTextWidth(dateText);
     doc.text(dateText, pageWidth - margin - dateWidth, 70);
 
+    // The sender's reference, opposite the date, as on every official letter. Left as a
+    // rule to fill in when the sender keeps their own series — better than no place for
+    // it at all, which is what the letter had.
+    if (data.letterNumber) {
+      doc.text(`No: ${data.letterNumber}`, margin, 70);
+    } else {
+      const noLabel = 'No: ';
+      doc.text(noLabel, margin, 70);
+      const labelWidth = doc.getTextWidth(noLabel);
+      doc.setLineWidth(0.2);
+      doc.line(margin + labelWidth, 70.5, margin + labelWidth + 45, 70.5);
+    }
+
     let yPos = 82;
 
     // TO Section with better formatting
@@ -154,7 +186,7 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
     yPos += lineHeight;
     
     doc.text(data.toDivision, margin + indent, yPos);
-    yPos += lineHeight + 6; // Extra space after TO section
+    yPos += lineHeight + 4; // Extra space after TO section
 
     // Subject Section with underline
     doc.setFont('helvetica', 'bold');
@@ -170,7 +202,8 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
     
     // Subject content with proper wrapping and justification
     doc.setFont('helvetica', 'normal');
-    const subjectText = `${data.workDescription} - ${isRecovery ? 'Recovery of Price Variation' : 'Payment for PVC Bill'}-Reg`;
+    const subjectText = `${data.workDescription} — ${isRecovery ? 'Recovery' : 'Payment'} of price variation `
+      + `under Clause 46A of GCC-2022 – reg.`;
     const subjectLines = doc.splitTextToSize(subjectText, contentWidth - indent);
     
     subjectLines.forEach((line: string, index: number) => {
@@ -179,7 +212,7 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
       yPos += lineHeight;
     });
     
-    yPos += 4; // Space after subject
+    yPos += 3; // Space after subject
 
     // Reference Section with underline
     doc.setFont('helvetica', 'bold');
@@ -214,7 +247,7 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
       yPos += lineHeight;
     });
     
-    yPos += 8; // Extra space before body
+    yPos += 6; // Extra space before body
 
     // Body Text with proper justification
     doc.setFont('helvetica', 'normal');
@@ -232,6 +265,14 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
       data.quarters ? `quarter${data.quarters.includes(',') ? 's' : ''} ${data.quarters}` : '',
     ].filter(Boolean).join(', ');
 
+    // The amount in words beside the figure, as on anything that asks to be paid — a
+    // figure alone can be altered or misread, and an accounts office checks one against
+    // the other. Inline rather than as its own block, which is both the convention and
+    // the difference between a one-page letter and a two-page one.
+    const amountWithWords = typeof data.netPvcAmount === 'number' && data.netPvcAmount !== 0
+      ? `Rs.${data.billAmount} (${amountInWords(data.netPvcAmount)})`
+      : `Rs.${data.billAmount}`;
+
     let bodyText: string;
     if (data.bodyText) {
       bodyText = data.bodyText;
@@ -240,57 +281,73 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
         + `Indian Railways General Conditions of Contract, 2022 for ${forWhich}`
         + `${period ? ` (${period})` : ''}. As the published indices for the quarter${billNumbers.length > 1 ? 's' : ''} `
         + `under consideration are below those of the base month, the variation is a net recovery of `
-        + `Rs.${data.billAmount} from the contractor. The calculation sheets, the abstract statement and the `
-        + `supporting index publications are enclosed for verification and for arranging the recovery at your end.`;
+        + `${amountWithWords}, inclusive of GST, from the contractor. The documents relied upon are enclosed for `
+        + `verification and for arranging the recovery at your end.`;
     } else {
       bodyText = `In connection with the subject work, the price variation has been worked out under Clause 46A of the `
         + `Indian Railways General Conditions of Contract, 2022 for ${forWhich}`
-        + `${period ? ` (${period})` : ''}, and amounts to Rs.${data.billAmount}. The calculation sheets, the abstract `
-        + `statement and the supporting index publications are enclosed. It is requested that the amount may kindly `
-        + `be verified and passed for payment.`;
+        + `${period ? ` (${period})` : ''}, and amounts to ${amountWithWords}, inclusive of GST. The documents `
+        + `relied upon are enclosed. It is requested that the amount may kindly be verified and passed for payment.`;
     }
     
     const bodyLines = doc.splitTextToSize(bodyText, contentWidth);
-    
+
     bodyLines.forEach((line: string, index: number) => {
       const isLastLine = index === bodyLines.length - 1;
       justifyText(doc, line, margin, yPos, contentWidth, isLastLine);
       yPos += lineHeight;
     });
-    
-    // For multiple bills, render a numbered list of bill numbers below the paragraph
+
+    // The bills covered, run on and wrapped rather than one per line. A numbered list of
+    // three short bill numbers took three lines and pushed the enclosures and the
+    // signature onto a page of their own.
     if (isMultipleBills) {
-      yPos += 4; // Space before bill list
-      
+      yPos += 4;
       doc.setFont('helvetica', 'bold');
-      doc.text('Bill Details:', margin, yPos);
+      const listLabel = 'Bills covered: ';
+      doc.text(listLabel, margin, yPos);
+      const labelWidth = doc.getTextWidth(listLabel);
       doc.setFont('helvetica', 'normal');
-      yPos += lineHeight + 1;
-      
-      billNumbers.forEach((billNo, index) => {
-        // Check if we need a new page
+
+      const listLines = doc.splitTextToSize(billNumbers.join(', '), contentWidth - labelWidth) as string[];
+      listLines.forEach((line, index) => {
         if (yPos > pageHeight - 40) {
           doc.addPage();
           yPos = 30;
         }
-        const listItem = `${index + 1}.  ${billNo}`;
-        const itemLines = doc.splitTextToSize(listItem, contentWidth - indent);
-        itemLines.forEach((line: string, lineIdx: number) => {
-          doc.text(line, margin + indent, yPos);
-          yPos += lineHeight;
-        });
+        // The first line runs on from the label; the rest align under it.
+        doc.text(line, index === 0 ? margin + labelWidth : margin + labelWidth, yPos);
+        yPos += lineHeight;
       });
     }
-    
-    yPos += 8;
+
+    yPos += 6;
 
     // Enclosures. The body names the documents but never itemised them, so the receiving
     // office had no list to check the file against — the first thing that goes wrong when
     // a proposal is passed between hands.
-    // Reserve what the enclosures, the closing and the signature block actually need.
-    // Reserving more than that pushed a one-page letter onto two, leaving page two
-    // carrying nothing but "Encl" and a signature.
-    if (yPos > pageHeight - 88) {
+    const enclosureLines = [
+      'PVC calculation sheet(s) for the bill(s) listed above',
+      'Abstract statement for the agreement, with the bill-wise break-up of taxable value and GST',
+      'Published index pages relied upon (labour, plant & machinery, fuel, cement, steel)',
+    ].flatMap((item, index) => doc.splitTextToSize(`${index + 1}.  ${item}`, contentWidth - indent) as string[]);
+
+    // Measure what the tail actually needs rather than reserving a round number. A guess
+    // that ran 13mm over the truth was enough to push the enclosures and the signature
+    // onto a page of their own while a third of the first page sat empty.
+    const tailHeight =
+      lineHeight                       // "Encl:" heading
+      + enclosureLines.length * lineHeight
+      + 6                              // gap before the closing
+      + (lineHeight + 2)               // Thanking You,
+      + (lineHeight + 2)               // Yours faithfully,
+      + lineHeight                     // For <company>
+      + lineHeight * 2                 // room to sign
+      + (data.signatory ? lineHeight : 0)
+      + (data.companyGSTIN && data.companyGSTIN !== 'N/A' ? 5 : 0);
+    const bottomMargin = 15;
+
+    if (yPos + tailHeight > pageHeight - bottomMargin) {
       doc.addPage();
       yPos = 30;
     }
@@ -298,19 +355,12 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
     doc.text('Encl:', margin, yPos);
     doc.setFont('helvetica', 'normal');
     yPos += lineHeight; // the heading owns its line; item 1 printed on top of it
-    [
-      'PVC calculation sheet(s) for the bill(s) listed above',
-      'Abstract statement of price variation for the agreement',
-      'Published index pages relied upon (labour, plant & machinery, fuel, cement, steel)',
-    ].forEach((item, index) => {
-      const lines = doc.splitTextToSize(`${index + 1}.  ${item}`, contentWidth - indent) as string[];
-      lines.forEach(line => {
-        doc.text(line, margin + indent, yPos);
-        yPos += lineHeight;
-      });
+    enclosureLines.forEach(line => {
+      doc.text(line, margin + indent, yPos);
+      yPos += lineHeight;
     });
 
-    yPos += 8; // Space before closing
+    yPos += 6; // Space before closing
 
     // Closing
     doc.setFont('helvetica', 'normal');
@@ -325,7 +375,7 @@ export async function generateCoveringLetter(data: CoveringLetterData): Promise<
     const forLine = `For ${data.companyName}`;
     doc.text(forLine, pageWidth - margin - doc.getTextWidth(forLine), yPos);
     doc.setFont('helvetica', 'normal');
-    yPos += lineHeight * 2 + 4; // room to sign
+    yPos += lineHeight * 2; // room to sign
     if (data.signatory) {
       doc.text(data.signatory, pageWidth - margin - doc.getTextWidth(data.signatory), yPos);
       yPos += lineHeight;
