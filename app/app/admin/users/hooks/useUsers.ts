@@ -71,12 +71,14 @@ export function useUsers() {
     }
   }, [fetchUsers, toast]);
 
-  const updateUserRole = useCallback(async (userId: string, role: string): Promise<boolean> => {
+  // railwayZone travels with the role: both department roles are scoped by it and show
+  // nothing without one.
+  const updateUserRole = useCallback(async (userId: string, role: string, railwayZone?: string): Promise<boolean> => {
     try {
       const response = await fetch(`/api/admin/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }),
+        body: JSON.stringify({ role, ...(railwayZone !== undefined ? { railwayZone } : {}) }),
       });
 
       if (!response.ok) {

@@ -16,6 +16,8 @@ export interface User {
   customProcessingFee: number | null;
   isFreeAccount: boolean;
   contractLimitOverride: number | null;
+  /** Set for department users; scopes what they can see. */
+  railwayZone?: string | null;
   createdAt: string;
   customerAccount: {
     creditBalance: number;
@@ -51,6 +53,8 @@ export interface ProcessingFeeFormData {
 
 export interface RoleFormData {
   role: string;
+  /** Railway zone, for the two department roles. Empty clears it. */
+  railwayZone?: string;
 }
 
 export interface UserStats {

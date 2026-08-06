@@ -31,10 +31,11 @@ export default async function AccountsPage() {
   const awaiting = await listBillsAwaitingAccounts(user);
 
   const isAdmin = user.role === 'admin' || user.role === 'superadmin';
-  const passed = await prisma.bill.findMany({
+  // Same rule as the inbox: no zone means no bills, never all of them.
+  const passed = !isAdmin && !user.railwayZone ? [] : await prisma.bill.findMany({
     where: {
       status: PASSED_FOR_PAYMENT,
-      ...(isAdmin || !user.railwayZone ? {} : { zone: user.railwayZone }),
+      ...(isAdmin ? {} : { zone: user.railwayZone }),
     },
     include: {
       contract: { select: { agreementNo: true, contractorName: true } },
@@ -50,6 +51,7 @@ export default async function AccountsPage() {
       awaiting={JSON.parse(JSON.stringify(awaiting))}
       passed={JSON.parse(JSON.stringify(passed))}
       zoneLabel={user.railwayZoneName || user.railwayZone || (isAdmin ? 'all zones' : '')}
+      missingZone={!isAdmin && !user.railwayZone}
     />
   );
 }

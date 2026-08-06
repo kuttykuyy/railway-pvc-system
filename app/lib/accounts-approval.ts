@@ -114,10 +114,16 @@ export async function actOnBillAsAccounts(o: {
  */
 export async function listBillsAwaitingAccounts(user: { id: string; role: string; railwayZone?: string | null }) {
   const isAdmin = user.role === 'admin' || user.role === 'superadmin';
+  // An accounts user with no zone set sees NOTHING, not everything. The executive side
+  // already fails closed this way (agreementMatchesZone returns false without a zone),
+  // and a blank zone is what a promoted account has until an admin sets one — which is
+  // exactly when it must not become a pass to every division's bills.
+  if (!isAdmin && !user.railwayZone) return [];
+
   return prisma.bill.findMany({
     where: {
       status: AWAITING_ACCOUNTS,
-      ...(isAdmin || !user.railwayZone ? {} : { zone: user.railwayZone }),
+      ...(isAdmin ? {} : { zone: user.railwayZone }),
     },
     include: {
       contract: { select: { agreementNo: true, contractorName: true, workDescription: true, baseMonth: true } },

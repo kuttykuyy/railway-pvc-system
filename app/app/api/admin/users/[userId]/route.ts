@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateAdminAccess } from '@/lib/role-auth';
+import { RAILWAY_ZONE_STEEL_CITY_MAP } from '@/lib/zone-steel-city-mapping';
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export async function PATCH(
 
     
     const body = await request.json();
-    const { role: roleUpperCase } = body;
+    const { role: roleUpperCase, railwayZone } = body;
 
     // Validate role (accept uppercase)
     const validRoles = [
@@ -64,10 +65,28 @@ export async function PATCH(
       );
     }
 
+    // The zone scopes what a department user can see, and both department roles show
+    // nothing without one. An account promoted here (rather than signed up as a
+    // department user) has no zone, so it has to be settable at the same time.
+    const departmentRoles = ['railway_official', 'accounts_official', 'pending_railway_official', 'pending_accounts_official'];
+    const zoneData: { railwayZone?: string | null; railwayZoneName?: string | null } = {};
+    if (railwayZone !== undefined) {
+      const zone = String(railwayZone || '').trim().toUpperCase();
+      if (zone && !RAILWAY_ZONE_STEEL_CITY_MAP[zone]) {
+        return NextResponse.json({ error: `Unknown railway zone: ${zone}` }, { status: 400 });
+      }
+      zoneData.railwayZone = zone || null;
+      zoneData.railwayZoneName = zone ? (RAILWAY_ZONE_STEEL_CITY_MAP[zone]?.name || null) : null;
+    } else if (!departmentRoles.includes(role)) {
+      // Demoted to contractor or admin — the zone no longer means anything.
+      zoneData.railwayZone = null;
+      zoneData.railwayZoneName = null;
+    }
+
     // Update user role
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { role },
+      data: { role, ...zoneData },
       select: {
         id: true,
         email: true,

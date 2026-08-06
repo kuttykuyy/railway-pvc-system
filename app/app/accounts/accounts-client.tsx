@@ -41,10 +41,12 @@ export function AccountsInboxClient({
   awaiting,
   passed,
   zoneLabel,
+  missingZone = false,
 }: {
   awaiting: AwaitingBill[];
   passed: PassedBill[];
   zoneLabel: string;
+  missingZone?: boolean;
 }) {
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -91,7 +93,17 @@ export function AccountsInboxClient({
           Awaiting vetting <span className="text-gray-400 font-normal">({awaiting.length})</span>
         </h2>
 
-        {awaiting.length === 0 && (
+        {/* Without a zone the list is empty by design, not because nothing is waiting —
+            say which it is, or this reads as "no work" forever. */}
+        {missingZone ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-medium">No railway zone set on this account.</p>
+            <p className="text-xs text-amber-800 mt-1">
+              The inbox is scoped by zone, so nothing can be shown until an administrator sets one
+              (Admin → Users → Change Role).
+            </p>
+          </div>
+        ) : awaiting.length === 0 && (
           <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
             Nothing waiting. Proposals appear here once the executive side approves them.
           </div>

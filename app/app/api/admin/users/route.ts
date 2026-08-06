@@ -73,6 +73,8 @@ export async function GET(request: NextRequest) {
         customProcessingFee: true,
         isFreeAccount: true,
         contractLimitOverride: true,
+        // Scopes what a department user can see; the role dialog sets it.
+        railwayZone: true,
         createdAt: true,
         customerAccount: {
           select: {

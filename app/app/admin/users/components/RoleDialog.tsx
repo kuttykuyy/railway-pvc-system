@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { UserCog } from 'lucide-react';
+import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 import type { User, RoleFormData } from '../types';
 import { formatRoleLabel } from '../utils/userUtils';
 
@@ -23,7 +24,8 @@ interface RoleDialogProps {
 
 export function RoleDialog({ user, open, onOpenChange, onSubmit }: RoleDialogProps) {
   const [formData, setFormData] = useState<RoleFormData>({
-    role: ''
+    role: '',
+    railwayZone: '',
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -31,9 +33,14 @@ export function RoleDialog({ user, open, onOpenChange, onSubmit }: RoleDialogPro
   useEffect(() => {
     if (user) {
       // Convert role to uppercase for the select dropdown
-      setFormData({ role: user.role.toUpperCase() });
+      setFormData({ role: user.role.toUpperCase(), railwayZone: user.railwayZone || '' });
     }
   }, [user]);
+
+  // Both department roles are scoped by zone and show nothing without one, so the zone
+  // is asked for in the same breath as the role. An account promoted here rather than
+  // signed up as a department user has no zone at all.
+  const needsZone = formData.role === 'RAILWAY_OFFICIAL' || formData.role === 'ACCOUNTS_OFFICIAL';
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -66,7 +73,7 @@ export function RoleDialog({ user, open, onOpenChange, onSubmit }: RoleDialogPro
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="role">New Role</Label>
-            <Select value={formData.role} onValueChange={(value) => setFormData({ role: value })}>
+            <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
               <SelectTrigger id="role">
                 <SelectValue placeholder="Select a role" />
               </SelectTrigger>
@@ -88,6 +95,30 @@ export function RoleDialog({ user, open, onOpenChange, onSubmit }: RoleDialogPro
               account, leave it as Contractor.
             </p>
           </div>
+
+          {needsZone && (
+            <div className="space-y-2">
+              <Label htmlFor="railwayZone">Railway Zone</Label>
+              <Select
+                value={formData.railwayZone || ''}
+                onValueChange={(value) => setFormData({ ...formData, railwayZone: value })}
+              >
+                <SelectTrigger id="railwayZone">
+                  <SelectValue placeholder="Select a zone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {getRailwayZoneOptions().map((zone) => (
+                    <SelectItem key={zone.value} value={zone.value}>
+                      {zone.label} ({zone.value})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                They will see bills from this zone only. Without a zone they see nothing at all.
+              </p>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

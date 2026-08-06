@@ -145,7 +145,7 @@ export default function AdminUsersPage() {
   const handleRoleSubmit = async (formData: RoleFormData) => {
     if (!selectedUser) return;
     
-    const success = await updateUserRole(selectedUser.id, formData.role);
+    const success = await updateUserRole(selectedUser.id, formData.role, formData.railwayZone);
     
     if (success) {
       await fetchUsers(); // Refresh list to reflect role updates
