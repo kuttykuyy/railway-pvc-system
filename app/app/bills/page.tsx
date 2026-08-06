@@ -795,6 +795,23 @@ export default function BillsPage() {
     setShowBulkIndexDialog(true);
   };
 
+  /**
+   * Says so when an abstract was asked for but couldn't be attached. Without this the
+   * download simply arrives without one, and the only way to find out is to open the
+   * file and count the pages.
+   */
+  const reportAbstractStatus = (response: Response) => {
+    const status = response.headers.get('X-Abstract-Status');
+    if (!status || status === 'attached' || status === 'not-requested') return;
+    if (status === 'skipped-multiple-agreements') {
+      toast('Abstract not attached — the selected bills come from more than one agreement.', {
+        icon: 'ℹ️', duration: 6000,
+      });
+      return;
+    }
+    toast.error(`Abstract not attached — ${status.replace(/^unavailable:\s*/, '')}`, { duration: 6000 });
+  };
+
   const runBulkReport = async (billIds: string[], includeDocs: boolean) => {
     setGeneratingBulkReport(true);
     try {
@@ -810,6 +827,8 @@ export default function BillsPage() {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.details || errorData.error || 'Failed to generate bulk report');
       }
+
+      reportAbstractStatus(response);
 
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
@@ -852,6 +871,8 @@ export default function BillsPage() {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.details || errorData.error || 'Failed to generate combined PDF');
       }
+
+      reportAbstractStatus(response);
 
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
@@ -986,6 +1007,8 @@ export default function BillsPage() {
         throw new Error('Failed to generate PDF');
       }
       
+      reportAbstractStatus(response);
+
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1018,6 +1041,8 @@ export default function BillsPage() {
         throw new Error('Failed to generate Excel report');
       }
       
+      reportAbstractStatus(response);
+
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -2656,7 +2681,26 @@ export default function BillsPage() {
             <DialogTitle>Download combined PDF</DialogTitle>
             <DialogDescription>Do you want the supporting index documents included?</DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 py-2">
+          {/* The abstract choice comes FIRST: the two buttons below start the download the
+              moment they are pressed, so a checkbox under them was never reached. */}
+          <label className="flex items-start gap-2.5 rounded-lg border border-slate-200 px-3 py-2.5 cursor-pointer select-none hover:border-slate-300">
+            <input
+              type="checkbox"
+              checked={bulkIncludeAbstract}
+              onChange={(e) => setBulkIncludeAbstract(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-slate-800"
+            />
+            <span>
+              <span className="block text-sm font-medium">Attach the contract abstract</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                Adds the bill-wise summary for the whole agreement at the end. Only possible when
+                the selected bills are all from one agreement.
+              </span>
+            </span>
+          </label>
+
+          <p className="text-xs font-medium text-slate-600 pt-1">Then choose how to download:</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pb-2">
             <button
               type="button"
               onClick={() => { setShowBulkIndexDialog(false); const run = pendingBulk; setPendingBulk(null); run?.(true); }}
@@ -2674,24 +2718,6 @@ export default function BillsPage() {
               <span className="text-xs text-muted-foreground mt-1">Statement pages only, no supporting documents</span>
             </button>
           </div>
-          {/* Appended after the statements it summarises. Only offered for a batch from a
-              single agreement — an abstract covers one contract, and one printed over a
-              mixed batch would total bills that are not all in the file. */}
-          <label className="flex items-start gap-2.5 rounded-lg border border-slate-200 px-3 py-2.5 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={bulkIncludeAbstract}
-              onChange={(e) => setBulkIncludeAbstract(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-slate-800"
-            />
-            <span>
-              <span className="block text-sm font-medium">Attach the contract abstract</span>
-              <span className="block text-xs text-muted-foreground mt-0.5">
-                Adds the bill-wise summary for the whole agreement at the end. Skipped if the
-                selected bills span more than one agreement.
-              </span>
-            </span>
-          </label>
         </DialogContent>
       </Dialog>
 

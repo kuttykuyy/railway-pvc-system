@@ -162,6 +162,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const { searchParams } = new URL(request.url);
         const templateId = searchParams.get('templateId');
         const pdfFormat = searchParams.get('format') || 'detailed';
+        // Reported back in a header so a requested abstract that could not be built
+        // says why, instead of arriving as a file quietly missing it.
+        let abstractStatus = searchParams.get('abstract') === '1' ? 'pending' : 'not-requested';
         // includeDocs=0 skips appending the supporting index documents to the IR PDF.
         const includeIndexDocs = searchParams.get('includeDocs') !== '0';
         const session = await getServerSession(authOptions);
@@ -791,9 +794,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             for (const page of pages) merged.addPage(page);
           }
           irFinalBytes = await merged.save();
-        } catch (err) {
+          abstractStatus = 'attached';
+        } catch (err: any) {
           // The statement is the deliverable; a missing abstract must not lose it.
           console.error('IR PDF: could not append the abstract:', err);
+          abstractStatus = `unavailable: ${String(err?.message || 'error').slice(0, 120)}`;
         }
       }
 
@@ -806,6 +811,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return new Response(Buffer.from(irFinalBytes), {
         headers: {
           'Content-Type': 'application/pdf',
+          'X-Abstract-Status': abstractStatus,
           'Content-Disposition': `attachment; filename="IR_PVC_Statement_${bill.billNo.replace(/[^a-zA-Z0-9]/g, '_')}_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf"`,
         },
       });

@@ -20,6 +20,39 @@ import { embedLabourIndex, embedComponentIndicesRange } from '@/lib/pdf/utils/la
 import { ComponentType } from '@prisma/client';
 import { buildCumulativePvcSummaries, compareBillsChronologically } from '@/lib/pdf/cumulative-pvc';
 
+/**
+ * Appends the contract's abstract to a finished bulk PDF.
+ *
+ * Used by both output formats. It lived inside the IR branch only, so asking for the
+ * abstract with the detailed format produced a file without one and said nothing.
+ *
+ * Returns the reason when nothing was appended, so the caller can tell the user
+ * rather than hand back a silently incomplete file.
+ */
+async function appendContractAbstract(
+  pdfBytes: Uint8Array,
+  contractIds: string[],
+): Promise<{ bytes: Uint8Array; status: string }> {
+  // An abstract covers one agreement. Printed over a mixed batch it would state a
+  // total for bills that are not all in the file.
+  if (contractIds.length !== 1) return { bytes: pdfBytes, status: 'skipped-multiple-agreements' };
+  try {
+    const { PDFDocument } = await import('pdf-lib');
+    const { generateAbstractPdf } = await import('@/lib/pdf/generators/abstract-report');
+    const { pdfBuffer: abstractBytes } = await generateAbstractPdf(contractIds[0]);
+
+    const target = await PDFDocument.load(pdfBytes);
+    const abstractDoc = await PDFDocument.load(new Uint8Array(abstractBytes));
+    const pages = await target.copyPages(abstractDoc, abstractDoc.getPageIndices());
+    for (const page of pages) target.addPage(page);
+    return { bytes: new Uint8Array(await target.save()), status: 'attached' };
+  } catch (err: any) {
+    // The statements are the deliverable; a missing abstract must not lose them.
+    console.error('Bulk PDF: could not append the abstract:', err);
+    return { bytes: pdfBytes, status: `unavailable: ${String(err?.message || 'error').slice(0, 120)}` };
+  }
+}
+
 const STEEL_COMPONENT_TYPES = [ComponentType.TMT_BARS, ComponentType.ANGLE_CHANNEL, ComponentType.PLATES, ComponentType.OTHER_SECTIONS];
 const NON_STEEL_COMPONENT_TYPES = Object.values(ComponentType).filter(t => !STEEL_COMPONENT_TYPES.includes(t as any)) as ComponentType[];
 
@@ -91,7 +124,10 @@ export async function POST(request: NextRequest) {
         const { billIds, format: pdfFormat } = body;
         const includeIndexDocs = body.includeDocs !== false; // default: include
         const includeAbstract = body.includeAbstract === true; // default: leave it out
-    
+        // Reported back in a header so a batch that couldn't take an abstract says why,
+        // instead of returning a file that quietly lacks one.
+        let abstractStatus = includeAbstract ? 'pending' : 'not-requested';
+
     if (!billIds || !Array.isArray(billIds) || billIds.length === 0) {
       return NextResponse.json(
         { error: 'Bill IDs are required and must be an array' },
@@ -518,23 +554,14 @@ export async function POST(request: NextRequest) {
         for (const page of copiedPages) mergedPdf.addPage(page);
       }
 
-      // Append the contract's abstract when asked for (?abstract=1), after the bills it
-      // summarises. Only for a single-contract batch: an abstract is per agreement, and
-      // one covering a mixed batch would state a total for bills that are not all here.
-      if (includeAbstract && uniqueContractIds.length === 1) {
-        try {
-          const { generateAbstractPdf } = await import('@/lib/pdf/generators/abstract-report');
-          const { pdfBuffer: abstractBytes } = await generateAbstractPdf(uniqueContractIds[0] as string);
-          const abstractDoc = await PDFDocument.load(new Uint8Array(abstractBytes));
-          const abstractPages = await mergedPdf.copyPages(abstractDoc, abstractDoc.getPageIndices());
-          for (const page of abstractPages) mergedPdf.addPage(page);
-        } catch (err) {
-          // The statements are the deliverable; a missing abstract must not lose them.
-          console.error('Bulk IR PDF: could not append the abstract:', err);
-        }
-      }
+      let mergedBytes = new Uint8Array(await mergedPdf.save());
 
-      const mergedBytes = new Uint8Array(await mergedPdf.save());
+      // The abstract goes after the statements it summarises.
+      if (includeAbstract) {
+        const appended = await appendContractAbstract(mergedBytes, uniqueContractIds as string[]);
+        mergedBytes = appended.bytes;
+        abstractStatus = appended.status;
+      }
 
       // Append component index documents to the combined IR report.
       // The IR branch returns early, so it must perform the same embedding
@@ -605,6 +632,7 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="IR_PVC_Statements_${bills.length}_Bills_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf"`,
           'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+          'X-Abstract-Status': abstractStatus,
         },
       });
     }
@@ -2873,7 +2901,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate initial PDF buffer
-    const initialPdfBytes = new Uint8Array(pdf.output('arraybuffer'));
+    let initialPdfBytes = new Uint8Array(pdf.output('arraybuffer'));
+
+    // The abstract, after the statements it summarises and before the index documents.
+    // Only the IR format used to do this, so asking for an abstract with the detailed
+    // format returned a file without one and no explanation.
+    if (includeAbstract) {
+      const appended = await appendContractAbstract(initialPdfBytes, uniqueContractIds as string[]);
+      initialPdfBytes = appended.bytes;
+      abstractStatus = appended.status;
+    }
 
     // Embed component index documents covering earliest base month → latest measurement date
     if (bills.length > 0) {
@@ -2911,6 +2948,7 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="Bulk_PVC_Report_${bills.length}_Bills_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf"`,
           'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+          'X-Abstract-Status': abstractStatus,
         }
       });
     } else {
@@ -2921,6 +2959,7 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="Bulk_PVC_Report_${bills.length}_Bills_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf"`,
           'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+          'X-Abstract-Status': abstractStatus,
         }
       });
     }
