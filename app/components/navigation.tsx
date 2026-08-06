@@ -94,6 +94,7 @@ const navigationGroups = [
       { name: 'Telegram Usage', href: '/admin/telegram', icon: Send, adminOnly: true },
       { name: 'Steel City Audit', href: '/admin/steel-city-audit', icon: AlertCircle, adminOnly: true },
       { name: 'Pending DB Changes', href: '/admin/pending-db-change', icon: Database, adminOnly: true },
+      { name: 'Demo Accounts', href: '/admin/demo-accounts', icon: User, adminOnly: true },
       { name: 'AI Usage & Credit', href: '/admin/ai-usage', icon: Sparkles, adminOnly: true },
     ]
   }
