@@ -7,6 +7,7 @@ import { prisma } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import { BillDetailClient } from './bill-detail-client';
 import { getQuarterlyAverages } from '@/lib/db-utils';
+import { checkUserBillAccess } from '@/lib/permissions';
 import { getQuarterFromDate, getQuarterMonths } from '@/lib/pvc-calculations';
 import { getSteelCityForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
 
@@ -86,8 +87,13 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
   const isRailwayOfficial = user.role === 'RAILWAY_OFFICIAL' || user.role === 'railway_official';
   const isAdmin = user.role === 'admin';
 
-  // Contractors can only view their own bills
-  if (isContractor && bill.contract.userId !== user.id) {
+  // The one gate for this page, and the same one the bill APIs use: owner, admin, an
+  // explicit grant, or a department user whose zone matches AND whose bill has been
+  // submitted. Before this the page only stopped contractors reading other people's
+  // bills — any department user could open any bill in any zone, draft included, by
+  // typing its id.
+  const access = await checkUserBillAccess(user.id, id);
+  if (!access?.canView) {
     redirect('/bills');
   }
 

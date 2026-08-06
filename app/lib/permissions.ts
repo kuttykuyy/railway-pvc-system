@@ -142,6 +142,7 @@ export async function checkUserBillAccess(
       select: {
         id: true,
         zone: true,
+        status: true,
         contract: {
           select: { id: true, userId: true }
         }
@@ -163,6 +164,9 @@ export async function checkUserBillAccess(
     }
 
     if (isZoneScopedOfficial(user?.role)) {
+      // A draft is the contractor's working copy — unfinished, possibly wrong, and nobody
+      // else's business until they submit it. Zone access starts at submission.
+      if (bill.status === 'draft') return null;
       // Access allowed if bill's zone matches official's zone
       if (bill.zone && user.railwayZone && bill.zone.toUpperCase() === user.railwayZone.toUpperCase()) {
         return {
@@ -333,7 +337,13 @@ export async function getUserAccessibleBills(userId: string): Promise<string[] |
           ? prisma.bill.findMany({ where: { contractId: { in: ownedContractIds } }, select: { id: true } })
           : Promise.resolve([]),
         user.railwayZone
-          ? prisma.bill.findMany({ where: { zone: user.railwayZone }, select: { id: true } })
+          ? prisma.bill.findMany({
+            // Drafts stay with the contractor. Zone access starts at submission — the
+            // same rule checkUserBillAccess applies to a single bill. Bills on their
+            // OWN contracts are fetched separately above and keep their drafts.
+            where: { zone: user.railwayZone, status: { not: 'draft' } },
+            select: { id: true },
+          })
           : Promise.resolve([])
       ]);
 
