@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { notifyApprovalEvent } from '@/lib/approval-telegram';
 
 /**
  * POST /api/bills/approval/request-revision
@@ -94,6 +95,15 @@ export async function POST(req: NextRequest) {
         comments
       }
     });
+
+    // Tell the people the proposal has just moved to or from. Best-effort — the
+    // decision is already saved, and a lost message must not fail the request.
+    notifyApprovalEvent({
+      billId,
+      event: 'revision_requested',
+      actorUserId: user.id,
+      comments: comments,
+    }).catch(() => {});
 
     // TODO: Send email notification to contractor
     // This can be implemented later with email service

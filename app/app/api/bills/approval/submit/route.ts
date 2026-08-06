@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { notifyApprovalEvent } from '@/lib/approval-telegram';
 import { parseAgreementNumber } from '@/lib/railway-division-helper';
 
 /**
@@ -190,6 +191,9 @@ export async function POST(req: NextRequest) {
     });
 
     logger.log('Approval history created');
+
+    // The zone's executives can act on it now — tell them it is waiting.
+    notifyApprovalEvent({ billId, event: 'submitted', actorUserId: user.id }).catch(() => {});
 
     // TODO: Send email notification to assigned railway official or all matching officials
     // This can be implemented later with email service

@@ -93,16 +93,23 @@ export async function actOnBillAsAccounts(o: {
       },
   });
 
+  const event = o.action === 'pass' ? 'passed_for_payment' : 'returned_by_accounts';
+
   await prisma.billApprovalHistory.create({
     data: {
       billId: o.billId,
       userId: o.userId,
-      action: o.action === 'pass' ? 'passed_for_payment' : 'returned_by_accounts',
+      action: event,
       previousStatus: bill.status,
       newStatus,
       comments: o.comments || (o.action === 'pass' ? 'Passed for payment by accounts' : 'Returned by accounts'),
     },
   });
+
+  // Tell the contractor, and on a return the executive who approved it. Best-effort —
+  // the decision is saved, and a lost message must not fail the request.
+  const { notifyApprovalEvent } = await import('./approval-telegram');
+  notifyApprovalEvent({ billId: o.billId, event, actorUserId: o.userId, comments: o.comments }).catch(() => {});
 
   return { ok: true, bill: updated };
 }
