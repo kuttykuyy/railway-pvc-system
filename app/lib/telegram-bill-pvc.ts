@@ -30,6 +30,7 @@ import { getSteelIndexNamesForZone, getFuelIndexNameForBill, getSteelCityForZone
 import { extractSteelTypesFromEntries } from './steel-type-handler';
 import { inferMainClassification } from './work-classification';
 import { matchCementCoefficient, normalizeDsrCode, calculateDsrCementRequirement } from './dsr-cement-calculation';
+import { CEMENT_DERIVATION_ENABLED } from './cement-derivation';
 
 /** Strip the internal per-chat namespace suffix from a guest contract's agreement
  *  number for display. (Kept local to avoid a circular import with the flow.) */
@@ -271,15 +272,18 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     };
   });
 
-  // Derived-cement breakup: for DSR items, work out the cement quantity (MT) from
-  // the DSR coefficient (qty x coefficient ÷ unit block) and add a "Cement (derived)"
-  // entry. The report shows this as its own CEMENT BREAKUP table (not summed into the
-  // gross), matching the website.
-  try {
-    const cementEntry = await buildDerivedCementEntry(items);
-    if (cementEntry) entriesForReport.push(cementEntry);
-  } catch (err) {
-    console.error('[Telegram] cement breakup failed:', err);
+  // Derived-cement breakup: off, as it is on the website. A DSR item's rate already
+  // includes its cement and its own class already carries a cement share, so printing a
+  // CEMENT BREAKUP table implies a split that is not made — and on a statement going to
+  // an accounts office, implying one is worse than leaving it out. The builder is kept;
+  // see lib/cement-derivation.ts.
+  if (CEMENT_DERIVATION_ENABLED) {
+    try {
+      const cementEntry = await buildDerivedCementEntry(items);
+      if (cementEntry) entriesForReport.push(cementEntry);
+    } catch (err) {
+      console.error('[Telegram] cement breakup failed:', err);
+    }
   }
 
   // 5. Reply with the PVC estimate + component breakdown.
