@@ -113,7 +113,41 @@ interface BillGroup {
   isExpanded?: boolean;
 }
 
+/**
+ * The bills filter, kept for the browser session.
+ *
+ * Working through a filtered set means opening a bill and coming back, and the filter
+ * was reset every time — so a contractor narrowing 200 bills to one agreement had to
+ * re-enter it after every single one. sessionStorage, not localStorage: it should
+ * survive navigation, not outlive the sitting.
+ */
+interface StoredBillFilters {
+  searchTerm?: string;
+  selectedContract?: string;
+  selectedQuarter?: string;
+  indicesTypeFilter?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  minAmount?: string;
+  maxAmount?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+const BILL_FILTERS_KEY = 'irpvc_bill_filters';
+
+function readStoredBillFilters(): StoredBillFilters {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(sessionStorage.getItem(BILL_FILTERS_KEY) || '{}') as StoredBillFilters;
+  } catch {
+    return {};
+  }
+}
+
 export default function BillsPage() {
+  // Read once, before any state that depends on it.
+  const stored = readStoredBillFilters();
   const { data: session } = useSession();
   const userRole = (session?.user as any)?.role || 'contractor';
   
@@ -129,7 +163,14 @@ export default function BillsPage() {
   const [generatingBulkReport, setGeneratingBulkReport] = useState(false);
   const [generatingCombinedPDF, setGeneratingCombinedPDF] = useState<string | null>(null); // stores batchId being generated
   const [submittingForApproval, setSubmittingForApproval] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  // Open the panel when a filter was carried in from earlier, so a short list never
+  // looks like a short list of bills.
+  const [showFilters, setShowFilters] = useState(
+    !!(stored.searchTerm || (stored.selectedContract && stored.selectedContract !== 'all')
+      || (stored.selectedQuarter && stored.selectedQuarter !== 'all')
+      || (stored.indicesTypeFilter && stored.indicesTypeFilter !== 'all')
+      || stored.dateFrom || stored.dateTo || stored.minAmount || stored.maxAmount),
+  );
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [billTypeFilter, setBillTypeFilter] = useState<'all' | 'single' | 'bulk' | 'approvals'>('all');
   const [approvalBills, setApprovalBills] = useState<Bill[]>([]);
@@ -140,17 +181,19 @@ export default function BillsPage() {
     revision_requested: 0
   });
   
-  // Filter states
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedContract, setSelectedContract] = useState<string>('all');
-  const [selectedQuarter, setSelectedQuarter] = useState<string>('all');
-  const [indicesTypeFilter, setIndicesTypeFilter] = useState<string>('all'); // 'all', 'provisional', 'final'
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [minAmount, setMinAmount] = useState('');
-  const [maxAmount, setMaxAmount] = useState('');
-  const [sortBy, setSortBy] = useState<string>('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  // Filter states. Kept for the session: working through a filtered set means opening a
+  // bill and coming back, and re-typing the filter every time made that unusable.
+  // Cleared only by the Clear button.
+  const [searchTerm, setSearchTerm] = useState(stored.searchTerm ?? '');
+  const [selectedContract, setSelectedContract] = useState<string>(stored.selectedContract ?? 'all');
+  const [selectedQuarter, setSelectedQuarter] = useState<string>(stored.selectedQuarter ?? 'all');
+  const [indicesTypeFilter, setIndicesTypeFilter] = useState<string>(stored.indicesTypeFilter ?? 'all'); // 'all', 'provisional', 'final'
+  const [dateFrom, setDateFrom] = useState(stored.dateFrom ?? '');
+  const [dateTo, setDateTo] = useState(stored.dateTo ?? '');
+  const [minAmount, setMinAmount] = useState(stored.minAmount ?? '');
+  const [maxAmount, setMaxAmount] = useState(stored.maxAmount ?? '');
+  const [sortBy, setSortBy] = useState<string>(stored.sortBy ?? 'createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(stored.sortOrder ?? 'desc');
   
   // Template selection for PDF generation
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
@@ -212,6 +255,16 @@ export default function BillsPage() {
   useEffect(() => {
     applyFilters();
   }, [bills, searchTerm, selectedContract, selectedQuarter, indicesTypeFilter, dateFrom, dateTo, minAmount, maxAmount, sortBy, sortOrder]);
+
+  // Remember the filter so coming back from a bill lands on the same list.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(BILL_FILTERS_KEY, JSON.stringify({
+        searchTerm, selectedContract, selectedQuarter, indicesTypeFilter,
+        dateFrom, dateTo, minAmount, maxAmount, sortBy, sortOrder,
+      }));
+    } catch { /* private mode — the filter just will not persist */ }
+  }, [searchTerm, selectedContract, selectedQuarter, indicesTypeFilter, dateFrom, dateTo, minAmount, maxAmount, sortBy, sortOrder]);
 
   useEffect(() => {
     if (bills.length > 0) {
@@ -970,6 +1023,8 @@ export default function BillsPage() {
     setMaxAmount('');
     setSortBy('dateOfMeasurement');
     setSortOrder('desc');
+    // Clear is the only thing that forgets it.
+    try { sessionStorage.removeItem(BILL_FILTERS_KEY); } catch { /* private mode */ }
   };
 
   const handleSortChange = (field: string) => {
