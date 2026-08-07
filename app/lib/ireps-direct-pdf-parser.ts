@@ -9,7 +9,9 @@ import type { DeterministicBillDetails, DeterministicBillItem } from './ireps-bi
 // and matching both would anchor the same physical row twice and count its amount
 // twice — silently inflating the bill, which is far worse than failing to read it.
 // The duplicate guard below is the backstop if a pair like that ever slips in.
-const UNIT_PATTERN = /^(?:Cum|Cu\.?m\.?|Sqm|Sq\.?m\.?|Kg|MT|M\.?T\.?|Metre|Meter|Each|Num|Nos?\.?|RM|Rmt|Km|Litre|Ltr|Set|Job|LS|Hours?|Hrs?|Days?|Quintal|Qtl|Tonne|Pair|Bags?|Sqft|Cft)$/i;
+// "TRM" is track running metre — five rows of SR/TPJ/Civil/2025/0067/B8 were billed in
+// it, went unanchored, and left the bill Rs 83,571.79 short.
+const UNIT_PATTERN = /^(?:Cum|Cu\.?m\.?|Sqm|Sq\.?m\.?|Kg|MT|M\.?T\.?|Metre|Meter|Each|Num|Nos?\.?|RM|Rmt|TRM|Km|Litre|Ltr|Set|Job|LS|Hours?|Hrs?|Days?|Quintal|Qtl|Tonne|Pair|Bags?|Sqft|Cft)$/i;
 const NUMBER_PATTERN = /^-?[\d,]+(?:\.\d*)?$/;
 const X = {
   serial: [50, 88],
@@ -458,6 +460,8 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   // say WHICH money went missing instead of only that some did.
   const skippedRows: Array<{ reason: string; itemNo: string; amount: number }> = [];
   let excludedZeroQtyAmount = 0;
+  // Rows the bill measured but held over for a later payment; its own Total excludes them.
+  let heldOverAmount = 0;
   let currentSchedule = 'Schedule UNASSIGNED';
   let currentScheduleHeading = '';
   let currentChapter = '';
@@ -553,6 +557,21 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
             .map(topItem => topItem.text.trim())
         : []);
 
+      // IREPS prints a payment status in the right-most column: "Now to pay 100%",
+      // "As per special Condition", or "Pay Later". A "Pay Later" row is measured but
+      // held over — it carries an amount in the since-last column while its own
+      // "Total upto date" stays zero, and the bill's printed Total excludes it. Reading
+      // it as payable inflated B-8 of SR/TPJ/Civil/2025/0067 by Rs 2,82,823.75 across
+      // 58 rows.
+      const paymentStatus = page.items
+        .filter(statusItem => normalizedX(page, statusItem) > 700 && Math.abs(statusItem.y - unitItem.y) <= 6)
+        .map(statusItem => statusItem.text.trim())
+        .join(' ');
+      if (/pay\s*later/i.test(paymentStatus)) {
+        heldOverAmount += payableAmount;
+        continue;
+      }
+
       // Nothing measured this period. Silent: most rows of a long bill are idle,
       // and listing them would bury the rows that actually failed to read.
       if (quantity === 0) {
@@ -621,7 +640,6 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     }
     for (const line of lines) updateContext(line.text);
   }
-
   const financials = extractScheduleSummaryFinancials(pages);
   const netBillAmount = financials.billAmount;
   if (!items.length) {
@@ -656,9 +674,18 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   const details = metadata(pages);
   const rebatePercentage = financials.rebatePercentage;
   const rebateAmount = financials.rebateAmount;
-  const warnings = excludedZeroQtyAmount > 0.05
-    ? [`Excluded Rs ${excludedZeroQtyAmount.toFixed(2)} of payable amount from rows where printed Qty since last Bill is zero.`]
-    : [];
+  const warnings: string[] = [];
+  if (excludedZeroQtyAmount > 0.05) {
+    warnings.push(
+      `Excluded Rs ${excludedZeroQtyAmount.toFixed(2)} of payable amount from rows where printed Qty since last Bill is zero.`,
+    );
+  }
+  if (heldOverAmount > 0.05) {
+    warnings.push(
+      `Rs ${heldOverAmount.toFixed(2)} of measured work is marked "Pay Later" on this bill and has been left out, `
+      + `as the bill's own Total Amount leaves it out too. It becomes payable in a later bill.`,
+    );
+  }
   if (rebateAmount && rebateAmount > 0) {
     warnings.push(
       `A rebate of Rs ${rebateAmount.toFixed(2)}${rebatePercentage ? ` (${rebatePercentage}%)` : ''} was applied: ` +
