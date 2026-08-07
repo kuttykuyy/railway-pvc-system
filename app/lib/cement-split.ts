@@ -29,6 +29,77 @@ function entryCodes(e: EntryLike): string[] {
   return rows.map(r => normalizeDsrCode(String(r.itemNumber || ''))).filter(Boolean);
 }
 
+/** A saved bill does not carry the isDerivedCement flag, so the rows are recognised by
+ *  the descriptions both generators write: "Cement (derived) — <schedule>" from the DSR
+ *  path, "... (Cement Portion)" from the PDF path. */
+export function isDerivedCementEntry(e: EntryLike): boolean {
+  if (e.isDerivedCement) return true;
+  const d = String(e.description || '');
+  return /^cement \(derived\)/i.test(d.trim()) || /\(cement portion\)/i.test(d);
+}
+
+/** The work-item codes a derived-cement row was computed from. Both generators put the
+ *  contributing code in the cement row's own item rows — "5.35 (Cement)", "1130-CEM". */
+function contributingCodes(e: EntryLike): string[] {
+  const rows = e.itemRows?.length ? e.itemRows : [{ itemNumber: e.itemNumber }];
+  return rows
+    .map(r => normalizeDsrCode(String(r.itemNumber || '').replace(/\s*\(cement\)\s*$/i, '').replace(/-CEM$/i, '')))
+    .filter(Boolean);
+}
+
+/**
+ * Folds derived cement back into the work items it was taken out of, and drops the
+ * cement rows — the exact reverse of applyCementSplit.
+ *
+ * Needed because a DSR/USSOR item's rate already includes its cement, and its work
+ * classification already carries a cement share. Splitting that cement into a "C"
+ * sub-classification prices the same cement through the cement index a second time and
+ * takes it out of the class that was meant to carry it. Where an agreement is read that
+ * way, the split has to come off the bills it was applied to.
+ *
+ * The money goes back to the same items it came from — the cement row records their
+ * codes — so the bill total is unchanged and every row returns to its pre-split value.
+ */
+export function undoCementSplit<T extends EntryLike>(entries: T[]): T[] {
+  const cementRows = entries.filter(isDerivedCementEntry);
+  if (cementRows.length === 0) return entries;
+
+  const work: T[] = entries.filter(e => !isDerivedCementEntry(e)).map(e => ({ ...e }));
+
+  for (const cementRow of cementRows) {
+    const amount = num(cementRow.amount);
+    if (amount === 0) continue;
+    const schedule = schedOf(cementRow);
+    const codes = new Set(contributingCodes(cementRow));
+
+    // The items it came out of: those whose code contributed, or — when the row kept no
+    // codes — every item on its schedule, which is the set the split drew from.
+    let affected = work.filter(e => schedOf(e) === schedule && entryCodes(e).some(c => codes.has(c)));
+    if (affected.length === 0) affected = work.filter(e => schedOf(e) === schedule);
+    if (affected.length === 0) affected = work;
+    if (affected.length === 0) continue;
+
+    const total = affected.reduce((sum, e) => sum + num(e.amount), 0);
+    if (total > 0) {
+      // Proportionally, as it was taken. The last row absorbs the rounding so the bill
+      // total comes back to exactly what it was.
+      let given = 0;
+      affected.forEach((e, index) => {
+        const share = index === affected.length - 1
+          ? Math.round((amount - given) * 100) / 100
+          : Math.round(amount * (num(e.amount) / total) * 100) / 100;
+        given = Math.round((given + share) * 100) / 100;
+        e.amount = Math.round((num(e.amount) + share) * 100) / 100;
+      });
+    } else {
+      const share = Math.round((amount / affected.length) * 100) / 100;
+      for (const e of affected) e.amount = Math.round((num(e.amount) + share) * 100) / 100;
+    }
+  }
+
+  return work;
+}
+
 /**
  * Splits derived cement out of the work items into their own cement classification
  * entries — matching the AI PDF flow — while keeping the bill total unchanged.

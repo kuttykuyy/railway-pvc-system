@@ -19,7 +19,7 @@ import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr-cement-calculator';
 import { scheduleNames, normalizeSchedules } from '@/lib/contract-schedules';
 import { inferMainClassification } from '@/lib/work-classification';
-import { applyCementSplit, type CementBreakdownItem } from '@/lib/cement-split';
+import { applyCementSplit, undoCementSplit, isDerivedCementEntry, type CementBreakdownItem } from '@/lib/cement-split';
 import { BillPdfCementAnalyzer, type CementAnalysisData } from '@/components/bills/bill-pdf-cement-analyzer';
 import { buildClassificationEntriesFromExtractedBill } from '@/lib/extracted-bill-entries';
 import { computeRebateFactor, scaleComponentsWithRebate } from '@/lib/rebate';
@@ -338,6 +338,31 @@ function EditBillPageContent() {
     setActiveTab('classification');
   };
 
+  // Whether this bill carries a derived-cement split at all. A saved bill has lost the
+  // isDerivedCement flag, so the rows are recognised by their description.
+  const derivedCementRows = classificationEntries.filter(isDerivedCementEntry);
+  const derivedCementTotal = derivedCementRows.reduce(
+    (sum, e) => sum + (e.amount === '' || e.amount == null ? 0 : Number(e.amount) || 0), 0,
+  );
+
+  /**
+   * Puts the derived cement back where it came from and drops the cement rows.
+   *
+   * A DSR/USSOR item's rate already includes its cement, and the item's own work
+   * classification already carries a cement share — so on an agreement read that way,
+   * splitting the cement into a "C" sub-classification prices the same cement twice.
+   */
+  const removeCementSplit = () => {
+    setClassificationEntries(undoCementSplit(classificationEntries) as ClassificationEntry[]);
+    setCementSchedules([]);
+    setCementUnmatched([]);
+    toast.success(
+      `Cement split removed — ₹${derivedCementTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })} put back into the work items. Press Update Bill to save.`,
+      { duration: 6000 },
+    );
+    setActiveTab('classification');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.billNo || !form.dateOfMeasurement || classificationEntries.length === 0) {
@@ -546,6 +571,27 @@ function EditBillPageContent() {
         {/* Cement & steel */}
         <div className={panelCls('cement')}>
           <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+            {/* Already split? Offer to put it back. Some agreements are read as not
+                requiring a cement split on DSR items at all, and the split then has to
+                come off the bills it was applied to. */}
+            {derivedCementRows.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-amber-900">
+                    This bill has a derived cement split — {derivedCementRows.length} row(s), ₹{derivedCementTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-[11px] text-amber-800 mt-0.5">
+                    If this agreement does not split cement out of DSR items, remove it. The money goes
+                    back to the items it came from and the bill total does not change.
+                  </p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={removeCementSplit}
+                  className="border-amber-300 bg-white text-amber-800 hover:bg-amber-100">
+                  Remove the cement split
+                </Button>
+              </div>
+            )}
+
             {/* Cement — derive from items via DSR */}
             <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
