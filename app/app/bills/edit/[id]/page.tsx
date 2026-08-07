@@ -369,6 +369,23 @@ function EditBillPageContent() {
       setError('Bill number, measurement date and at least one classification are required.');
       return;
     }
+
+    // Saving rewrites the bill's gross as whatever the rows now total, so drifting away
+    // from the figure printed on the bill has to be deliberate. Deleting a cement row
+    // worth lakhs used to shrink the bill with nothing said.
+    const savedGross = Number(bill?.grossBillAmount) || 0;
+    const drift = Math.round((totalClassification - savedGross) * 100) / 100;
+    if (savedGross > 0 && Math.abs(drift) >= 1) {
+      const money = (v: number) => `₹${Math.abs(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const ok = window.confirm(
+        `The classification rows now total ${money(totalClassification)}, but this bill was saved at ${money(savedGross)}`
+        + ` — ${drift < 0 ? 'down' : 'up'} ${money(drift)}.\n\n`
+        + `Saving will set the bill's gross to the new figure. If you removed a cement row, its amount has to go back`
+        + ` into the work items it came from (Cement & steel → Remove the cement split) or the bill will be short.\n\n`
+        + `Save anyway?`,
+      );
+      if (!ok) return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -558,6 +575,11 @@ function EditBillPageContent() {
               value={classificationEntries}
               onChange={setClassificationEntries}
               classificationGroups={classificationGroups}
+              // The bill's SAVED gross, so the Difference panel guards the edit. Without
+              // it the panel showed "-" and reported Rs 0.00 whatever you did — deleting
+              // a cement row worth lakhs raised nothing, and the save then redefined the
+              // bill's gross as whatever the rows happened to total.
+              grossBillAmount={Number(bill?.grossBillAmount) || undefined}
               workDescription={selectedContract?.workDescription}
               contractSchedules={scheduleNames(selectedContract?.schedules)}
               scheduleRates={normalizeSchedules(selectedContract?.schedules)}
