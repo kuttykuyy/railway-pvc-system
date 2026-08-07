@@ -46,6 +46,7 @@ import { useLanguage } from '@/components/i18n-provider';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { scheduleNames, normalizeSchedules } from '@/lib/contract-schedules';
 import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr-cement-calculator';
+import { CEMENT_DERIVATION_ENABLED } from '@/lib/cement-derivation';
 import { ContextualHelp } from '@/components/contextual-help';
 import { validateDate, validateDateForApi } from '@/lib/date-validation';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
@@ -1931,6 +1932,8 @@ function NewBillPageContent() {
                   {/* SECTION 2b: Cement (derived from the entered items via DSR) */}
                   <div className={billPanelCls('cement')}>
                     <div className="border border-slate-200 rounded-xl bg-white px-4 py-4 space-y-4">
+                      {/* Deriving cement out of DSR items is off — see lib/cement-derivation.ts. */}
+                      {CEMENT_DERIVATION_ENABLED && (
                       <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
@@ -1969,6 +1972,7 @@ function NewBillPageContent() {
                           />
                         )}
                       </div>
+                      )}
                       {Number(formData.cementAmount) > 0 && (
                         <p className="text-xs text-emerald-700">
                           Applied cement amount: <strong>₹{Number(formData.cementAmount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong> — included in this bill&apos;s PVC.

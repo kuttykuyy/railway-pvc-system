@@ -19,6 +19,7 @@ import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
 import { scheduleNames, normalizeSchedules } from '@/lib/contract-schedules';
 import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr-cement-calculator';
+import { CEMENT_DERIVATION_ENABLED } from '@/lib/cement-derivation';
 import { applyCementSplit, type CementBreakdownItem } from '@/lib/cement-split';
 import { inferMainClassification } from '@/lib/work-classification';
 import { BillPdfCementAnalyzer, type AppliedExtractionContext, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
@@ -1226,7 +1227,8 @@ export default function BulkBillCreationPage() {
             />
           )}
 
-          {editingBillId && getEditingBill() && (
+          {/* Deriving cement out of DSR items is off — see lib/cement-derivation.ts. */}
+          {CEMENT_DERIVATION_ENABLED && editingBillId && getEditingBill() && (
             <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>

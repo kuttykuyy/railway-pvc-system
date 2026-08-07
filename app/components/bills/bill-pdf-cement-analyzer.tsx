@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { unitBlockSize } from '@/lib/dsr-cement-calculation';
+import { CEMENT_DERIVATION_ENABLED } from '@/lib/cement-derivation';
 
 /** Vercel rejects a serverless request body larger than this, before any of our code runs. */
 const MAX_UPLOAD_BYTES = 4.5 * 1024 * 1024;
@@ -1388,16 +1389,27 @@ export function BillPdfCementAnalyzer({
                           )}
                         </div>
                       </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => applyCalculatedAmount(
-                          getUniqueCementSchedules(result).reduce((sum, sched) => sum + getScheduleCementAmount(sched), 0)
-                        )}
-                        className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
-                      >
-                        Apply Derived Costs
-                      </Button>
+                      {/* Applying this splits the cement out of the work items into a "C"
+                          sub-classification. That is off — a DSR item's rate already
+                          includes its cement and its own class already carries a cement
+                          share. The figures above stay, as a reading of how much cement
+                          the work consumes. See lib/cement-derivation.ts. */}
+                      {CEMENT_DERIVATION_ENABLED ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => applyCalculatedAmount(
+                            getUniqueCementSchedules(result).reduce((sum, sched) => sum + getScheduleCementAmount(sched), 0)
+                          )}
+                          className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                        >
+                          Apply Derived Costs
+                        </Button>
+                      ) : (
+                        <p className="text-[11px] text-slate-400 max-w-[16rem] text-right">
+                          For reference only — cement is not split out of DSR items, whose rates already include it.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
