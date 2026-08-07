@@ -49,7 +49,10 @@ const mobileNavSections = [
     items: [
       { name: 'Abstract', href: '/reports/abstract', icon: Calculator, adminOnly: false },
       { name: 'Tendering Estimator', href: '/tendering-estimator', icon: BarChart3, adminOnly: false },
-      { name: 'Price Indices', href: '/indices', icon: TrendingUp, adminOnly: false },
+      // The read-only view, as on desktop. /indices is the admin management screen, so a
+      // contractor tapping this was bounced straight back out.
+      { name: 'Price Indices', href: '/indices/view', icon: TrendingUp, adminOnly: false },
+      { name: 'Price Indices Management', href: '/indices', icon: TrendingUp, adminOnly: true },
       { name: 'Component Index Documents', href: '/indices/component-documents', icon: FileText, adminOnly: true },
       { name: 'Classifications', href: '/classifications', icon: ListChecks, adminOnly: true },
       { name: 'Report Templates', href: '/report-templates', icon: FileText, adminOnly: true },
@@ -70,6 +73,14 @@ const mobileNavSections = [
       { name: 'Review Rewards', href: '/admin/review-rewards', icon: Star, adminOnly: true },
       { name: 'WhatsApp Logs', href: '/admin/whatsapp-logs', icon: MessageSquare, adminOnly: true },
       { name: 'AI Usage & Credit', href: '/admin/ai-usage', icon: Sparkles, adminOnly: true },
+      { name: 'Cement Coefficients', href: '/admin/dsr-cement-coefficients', icon: Calculator, adminOnly: true },
+      { name: 'Classification %', href: '/admin/classification-audit', icon: ListChecks, adminOnly: true },
+      { name: 'GST Invoices', href: '/admin/gst-invoices', icon: FileText, adminOnly: true },
+      { name: 'Railway Official Limits', href: '/admin/railway-official-settings', icon: Settings, adminOnly: true },
+      { name: 'Steel City Audit', href: '/admin/steel-city-audit', icon: TrendingUp, adminOnly: true },
+      { name: 'Telegram Usage', href: '/admin/telegram', icon: MessageSquare, adminOnly: true },
+      { name: 'Demo Accounts', href: '/admin/demo-accounts', icon: User, adminOnly: true },
+      { name: 'Pending DB Changes', href: '/admin/pending-db-change', icon: Settings, adminOnly: true },
     ]
   }
 ];
