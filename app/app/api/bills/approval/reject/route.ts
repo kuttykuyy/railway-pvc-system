@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Only railway officials and admins can reject
-    if (user.role !== 'RAILWAY_OFFICIAL' && user.role !== 'railway_official' && user.role !== 'admin') {
+    if (user.role !== 'RAILWAY_OFFICIAL' && user.role !== 'railway_official' && user.role !== 'admin' && user.role !== 'superadmin') {
       return NextResponse.json(
         { error: 'Only railway officials can reject bills' },
         { status: 403 }

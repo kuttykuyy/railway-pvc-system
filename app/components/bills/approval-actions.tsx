@@ -61,11 +61,11 @@ export function ApprovalActions({
   const [selectedOfficialId, setSelectedOfficialId] = useState<string>('');
 
   // Contractor actions (users with 'user' role are contractors)
-  const isContractor = userRole === 'user' || userRole === 'contractor' || userRole === 'admin';
+  const isContractor = userRole === 'user' || userRole === 'contractor' || userRole === 'admin' || userRole === 'superadmin';
   const canSubmit = isContractor && (billStatus === 'draft' || billStatus === 'revision_requested');
 
   // Railway official actions
-  const isRailwayOfficial = userRole === 'RAILWAY_OFFICIAL' || userRole === 'railway_official' || userRole === 'admin';
+  const isRailwayOfficial = userRole === 'RAILWAY_OFFICIAL' || userRole === 'railway_official' || userRole === 'admin' || userRole === 'superadmin';
   const canApprove = isRailwayOfficial && billStatus === 'submitted';
 
   const handleSubmit = async (assignedToUserId?: string) => {

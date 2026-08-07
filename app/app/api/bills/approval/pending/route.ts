@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Only railway officials and admins can view pending approvals
-    if (user.role !== 'RAILWAY_OFFICIAL' && user.role !== 'railway_official' && user.role !== 'admin') {
+    if (user.role !== 'RAILWAY_OFFICIAL' && user.role !== 'railway_official' && user.role !== 'admin' && user.role !== 'superadmin') {
       return NextResponse.json(
         { error: 'Only railway officials can view pending approvals' },
         { status: 403 }

@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Only contractors can submit bills
-    if (user.role !== 'contractor' && user.role !== 'admin') {
+    if (user.role !== 'contractor' && user.role !== 'admin' && user.role !== 'superadmin') {
       return NextResponse.json(
         { error: 'Only contractors can submit bills for approval' },
         { status: 403 }
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
 
     for (const bill of bills) {
       // Verify the bill belongs to a contract owned by this user
-      if (bill.contract.userId !== user.id && user.role !== 'admin') {
+      if (bill.contract.userId !== user.id && user.role !== 'admin' && user.role !== 'superadmin') {
         errors.push(`${bill.billNo}: You do not have permission to submit this bill`);
         continue;
       }

@@ -27,7 +27,7 @@ export default async function ApprovalsPage() {
   }
 
   // Only railway officials and admins can access this page
-  if (user.role !== 'RAILWAY_OFFICIAL' && user.role !== 'railway_official' && user.role !== 'admin') {
+  if (user.role !== 'RAILWAY_OFFICIAL' && user.role !== 'railway_official' && user.role !== 'admin' && user.role !== 'superadmin') {
     redirect('/dashboard');
   }
 
