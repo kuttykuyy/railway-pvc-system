@@ -91,9 +91,10 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
       if (!urlRes.ok) throw new Error(urlData.error || 'Could not fetch the sheet');
 
       const pdfjs = (await import('pdfjs-dist')) as any;
-      // Served from our own origin — a CDN copy is refused twice over (cross-origin
-      // workers by the browser, the fallback import by our CSP).
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+      // A plain file on our own origin, copied from the installed package at build time
+      // (scripts/copy-pdf-worker.cjs). Not a CDN — refused twice over by browsers and
+      // CSP — and not bundled, which the server's pdfjs external makes webpack refuse.
+      pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
       const loaded = await pdfjs.getDocument({ url: urlData.url }).promise;
 
       const months = [...(sheet.months || [])].sort((a, b) => a - b);
