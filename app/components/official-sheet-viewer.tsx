@@ -25,9 +25,15 @@ function detectJpcGrid(
   context: CanvasRenderingContext2D,
   width: number,
   height: number,
-): { rowLines: number[]; colRules: number[] } | null {
+): { rowLines: number[]; colRules: number[]; fail?: undefined } | { fail: string } {
   try {
-    const image = context.getImageData(0, 0, width, height).data;
+    const raw = context.getImageData(0, 0, width, height).data;
+    // Luminance, not the red channel alone — a raw scan often carries a yellow cast,
+    // and yellow is bright in red while the grey table lines are not.
+    const lum = new Uint8Array(width * height);
+    for (let i = 0, j = 0; j < lum.length; i += 4, j++) {
+      lum[j] = (raw[i] * 77 + raw[i + 1] * 150 + raw[i + 2] * 29) >> 8;
+    }
     const cluster = (points: number[], gap: number) => {
       const groups: number[][] = [];
       for (const p of points) {
@@ -51,7 +57,7 @@ function detectJpcGrid(
     let sampled = 0;
     for (let y = bandTop; y < bandBottom; y += 2) {
       for (let x = 0; x < width; x += 2) {
-        histogram[image[(y * width + x) * 4]]++;
+        histogram[lum[y * width + x]]++;
         sampled++;
       }
     }
@@ -68,7 +74,7 @@ function detectJpcGrid(
       if (between > bestVar) { bestVar = between; otsu = t; }
     }
     const threshold = Math.min(230, Math.max(100, otsu));
-    const darkAt = (x: number, y: number) => image[(y * width + x) * 4] < threshold;
+    const darkAt = (x: number, y: number) => lum[y * width + x] < threshold;
 
     // Vertical rules, by DENSITY not contiguous run — a photocopied line is broken into
     // pieces, but its column stays far darker than any text column (measured: rules
@@ -80,7 +86,7 @@ function detectJpcGrid(
       if (dark / bandSize > 0.5) vCandidates.push(x);
     }
     const colRules = cluster(vCandidates, Math.max(3, width / 300));
-    if (colRules.length < 6 || colRules.length > 9) return null;
+    if (colRules.length < 6 || colRules.length > 9) return { fail: `rules=${colRules.length} thr=${threshold}` };
 
     // The table's bottom, from the rules' own extent — walked DOWNWARD with a small gap
     // tolerance, so a photocopy's breaks are stepped over but the jump from table bottom
@@ -120,7 +126,7 @@ function detectJpcGrid(
       if (dark / ((x1 - x0) / 2) > 0.5) hCandidates.push(y);
     }
     const strongLines = cluster(hCandidates, Math.max(3, height / 400));
-    if (strongLines.length === 0) return null;
+    if (strongLines.length === 0) return { fail: `no-hlines thr=${threshold}` };
 
     // The header separator is not simply the first strong line — a lighter threshold
     // also surfaces the table's own top border, and once it surfaced the letterhead
@@ -142,12 +148,12 @@ function detectJpcGrid(
       const score = fitting / below.length;
       if (!best || score > best.score) best = { row1Top: candidate, pitch, score };
     }
-    if (!best || best.score < 0.6) return null;
+    if (!best || best.score < 0.6) return { fail: `fit=${best ? best.score.toFixed(2) : 'none'} thr=${threshold}` };
 
     const rowLines = Array.from({ length: JPC_TABLE_ROWS + 1 }, (_, k) => best!.row1Top + k * best!.pitch);
     return { rowLines, colRules };
-  } catch {
-    return null;
+  } catch (err: any) {
+    return { fail: `error ${String(err?.message || err).slice(0, 40)}` };
   }
 }
 
@@ -197,6 +203,8 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
   const [wholeYear, setWholeYear] = useState(false);
   /** The same six-row + city marks the bills carry, drawn on the canvas — toggleable. */
   const [showHighlights, setShowHighlights] = useState(true);
+  /** Why the current page has no marks — shown in the dialog so failures are reportable. */
+  const [detectNote, setDetectNote] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const openViewer = async () => {
@@ -295,7 +303,8 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
       // page) fail detection and stay clean.
       if (showHighlights) {
         const grid = detectJpcGrid(context, viewport.width, viewport.height);
-        if (grid) {
+        if ('rowLines' in grid) {
+          setDetectNote(null);
           const { rowLines, colRules } = grid;
           // Rules, left to right: table edge | Sl.No | ITEM | Kolkata | Delhi | Mumbai |
           // Chennai. With the right edge detected there are 7; with 6, the last city's
@@ -317,6 +326,10 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
               context.strokeRect(cx0, yTop, cx1 - cx0, h);
             }
           }
+        } else {
+          // Why marks are absent, for the dialog to say — a page without the 24-item
+          // table is normal; a first page failing is a bug report in miniature.
+          setDetectNote(grid.fail);
         }
       }
 
@@ -456,11 +469,18 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
                 className="w-full h-auto border rounded shadow-sm"
               />
               <p className="text-[11px] text-gray-400 text-center">
-                {showHighlights && (
+                {showHighlights && !detectNote && (
                   <span className="block">
                     Shaded: the six items used for the steel indices under GCC 46A.9(1), across all
                     four cities, found by the sheet&apos;s own table lines. Marks are a reading aid;
                     the figures are the sheet&apos;s own.
+                  </span>
+                )}
+                {showHighlights && detectNote && (
+                  <span className="block text-amber-600">
+                    No marks on this page — the 24-item table was not recognised ({detectNote}).
+                    Normal for a fortnight&apos;s 2nd and 3rd pages; on a price page, please report
+                    this line.
                   </span>
                 )}
                 JPC Market Price (Retail) — © Joint Plant Committee. Shown for verifying rates
