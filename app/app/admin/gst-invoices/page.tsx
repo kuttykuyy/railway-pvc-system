@@ -132,6 +132,10 @@ export default function AdminGstInvoicesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generation failed');
       toast.success(`Invoice ${data.invoice.invoiceNumber} generated (B2C, no GSTIN)`);
+      // Whether the ledger copy happened is part of the outcome, not a hidden detail.
+      if (data.zoho?.detail) {
+        (data.zoho.pushed ? toast.success : toast.info)(data.zoho.detail, { duration: 8000 });
+      }
       await fetchInvoices();
     } catch (error: any) {
       toast.error(error.message || 'Could not generate the invoice');

@@ -268,3 +268,19 @@ export async function syncGstinToZoho(params: {
       : `Zoho refused the invoice update: ${updateData.message || 'unknown reason'}`,
   };
 }
+
+/**
+ * Whether Zoho already holds an invoice for this payment — looked up by the reference
+ * number every invoice here is created with (the Razorpay order id), since the Zoho
+ * invoice id itself was never stored.
+ */
+export async function findZohoInvoiceByReference(razorpayOrderId: string): Promise<{ invoiceId: string; invoiceNumber: string } | null> {
+  const token = await getAccessToken();
+  const res = await fetch(
+    `${ZOHO_API_BASE}/invoices?organization_id=${ORG_ID}&reference_number=${encodeURIComponent(razorpayOrderId)}`,
+    { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+  );
+  const data = await res.json();
+  const invoice = data.invoices?.[0];
+  return invoice ? { invoiceId: invoice.invoice_id, invoiceNumber: invoice.invoice_number } : null;
+}
