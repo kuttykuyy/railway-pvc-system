@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { PDFDocument } from "pdf-lib";
 import { ComponentType } from "@prisma/client";
 import { highlightJpcSheet } from "./jpc-highlighter";
+import { highlightComponentSheet, componentSheetIsMarkable } from "./component-sheet-highlighter";
 
 interface ComponentIndexOptions {
   year: number;
@@ -245,10 +246,40 @@ export async function embedComponentIndicesRange(
             indexBytes = await indexResponse.arrayBuffer();
           }
 
-          // Mark the cells this bill's steel indices came from, on JPC sheets only.
-          // Best-effort by design: the highlighter returns the document untouched if the
-          // page is not the layout it knows, so a supporting document is never lost to a
-          // failed marking.
+          // Mark, on each sheet, the figures this bill's PVC actually used. Best-effort
+          // by design: the highlighters return the document untouched if a page is not
+          // a layout they know, so a supporting document is never lost to a failed
+          // marking. jpcCity doubles as the switch for all marking — it is set exactly
+          // when the caller wants marked sheets.
+          if (jpcCity && componentSheetIsMarkable(doc.componentType)) {
+            try {
+              // The months of the bill's index range that fall in this sheet's year.
+              const docYear = doc.displayYear || doc.year;
+              const from = startDate.getFullYear() === docYear ? startDate.getMonth() + 1 : 1;
+              const to = endDate.getFullYear() === docYear ? endDate.getMonth() + 1 : 12;
+              const usedMonths = [];
+              for (let m = from; m <= to; m++) usedMonths.push(m);
+              if (docYear >= startDate.getFullYear() && docYear <= endDate.getFullYear() && usedMonths.length) {
+                const marked = await highlightComponentSheet(new Uint8Array(indexBytes), {
+                  componentType: doc.componentType,
+                  months: usedMonths,
+                  caption: jpcCaption,
+                });
+                if (marked.marked) {
+                  indexBytes = marked.bytes.buffer.slice(
+                    marked.bytes.byteOffset,
+                    marked.bytes.byteOffset + marked.bytes.byteLength,
+                  ) as ArrayBuffer;
+                  console.log(`Marked ${marked.pagesMarked} page(s) on ${doc.componentType} ${docYear} for months ${usedMonths.join(',')}`);
+                } else {
+                  console.log(`${doc.componentType} sheet left unmarked (${marked.reason})`);
+                }
+              }
+            } catch (markError) {
+              console.error('Component sheet marking failed, attaching as is:', markError);
+            }
+          }
+
           if (jpcCity && JPC_SHEET_TYPES.includes(doc.componentType)) {
             try {
               const marked = await highlightJpcSheet(new Uint8Array(indexBytes), {
