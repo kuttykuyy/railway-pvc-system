@@ -275,15 +275,54 @@ export async function embedComponentIndicesRange(
           // a layout they know, so a supporting document is never lost to a failed
           // marking. jpcCity doubles as the switch for all marking — it is set exactly
           // when the caller wants marked sheets.
+          // The months of the bill's index range that fall in this sheet's year — used
+          // to slice the JPC year down and to mark what remains.
+          const docYear = doc.displayYear || doc.year;
+          const usedFrom = startDate.getFullYear() === docYear ? startDate.getMonth() + 1 : 1;
+          const usedTo = endDate.getFullYear() === docYear ? endDate.getMonth() + 1 : 12;
+          const usedMonths: number[] = [];
+          for (let m = usedFrom; m <= usedTo; m++) usedMonths.push(m);
+          const yearInRange = docYear >= startDate.getFullYear() && docYear <= endDate.getFullYear();
+
+          // A JPC document is a whole year — 72 pages — and its pages follow the JPC's
+          // own rhythm: two fortnights a month, three pages a fortnight, six pages a
+          // month, in the order of the document's recorded month list. A bill that used
+          // March to June should carry those months' pages, not the year. The slice is
+          // trusted only when the page count fits the rhythm exactly; a document that
+          // does not fit attaches whole, since slicing it would put the WRONG months
+          // into a legal document while labelling them as the right ones.
+          if (JPC_SHEET_TYPES.includes(doc.componentType) && yearInRange && usedMonths.length) {
+            try {
+              const PAGES_PER_MONTH = 6;
+              const docMonths: number[] = [...(doc.months || [])].sort((a: number, b: number) => a - b);
+              const src = await PDFDocument.load(indexBytes);
+              const fitsRhythm = docMonths.length > 0 && src.getPageCount() === docMonths.length * PAGES_PER_MONTH;
+              const wanted = usedMonths.filter(m => docMonths.includes(m));
+              if (fitsRhythm && wanted.length > 0 && wanted.length < docMonths.length) {
+                const slicedDoc = await PDFDocument.create();
+                const pageIndices = wanted.flatMap(m => {
+                  const at = docMonths.indexOf(m) * PAGES_PER_MONTH;
+                  return Array.from({ length: PAGES_PER_MONTH }, (_, k) => at + k);
+                });
+                const pages = await slicedDoc.copyPages(src, pageIndices);
+                pages.forEach(p => slicedDoc.addPage(p));
+                const slicedBytes = await slicedDoc.save();
+                indexBytes = slicedBytes.buffer.slice(
+                  slicedBytes.byteOffset,
+                  slicedBytes.byteOffset + slicedBytes.byteLength,
+                ) as ArrayBuffer;
+                console.log(`Sliced ${doc.componentType} ${docYear} to months ${wanted.join(',')} — ${pageIndices.length} of ${docMonths.length * PAGES_PER_MONTH} pages`);
+              } else if (!fitsRhythm) {
+                console.log(`${doc.componentType} ${docYear} attached whole — ${src.getPageCount()} pages does not fit 6/month for ${docMonths.length} recorded month(s)`);
+              }
+            } catch (sliceError) {
+              console.error('JPC month slicing failed, attaching the whole document:', sliceError);
+            }
+          }
+
           if (jpcCity && componentSheetIsMarkable(doc.componentType)) {
             try {
-              // The months of the bill's index range that fall in this sheet's year.
-              const docYear = doc.displayYear || doc.year;
-              const from = startDate.getFullYear() === docYear ? startDate.getMonth() + 1 : 1;
-              const to = endDate.getFullYear() === docYear ? endDate.getMonth() + 1 : 12;
-              const usedMonths = [];
-              for (let m = from; m <= to; m++) usedMonths.push(m);
-              if (docYear >= startDate.getFullYear() && docYear <= endDate.getFullYear() && usedMonths.length) {
+              if (yearInRange && usedMonths.length) {
                 const marked = await highlightComponentSheet(new Uint8Array(indexBytes), {
                   componentType: doc.componentType,
                   months: usedMonths,
