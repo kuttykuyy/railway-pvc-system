@@ -74,6 +74,68 @@ export default function SteelImportPage() {
     return d;
   };
   const [cityData, setCityData] = useState<CityData>(emptyCityData);
+  const [extracting, setExtracting] = useState(false);
+  const [extractNote, setExtractNote] = useState<string | null>(null);
+
+  /**
+   * Fills one fortnight from a scanned JPC sheet.
+   *
+   * Only the fortnight the sheet is FOR is touched, and only cells the reader actually
+   * returned — so uploading the second-half sheet cannot wipe first-half figures already
+   * entered, and an unread cell is left as it was rather than blanked.
+   */
+  const extractSheet = async (file: File) => {
+    setExtracting(true);
+    setExtractNote(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/indices/jpc-extract', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not read that sheet');
+
+      const fortnight: 'f1' | 'f2' | null = data.fortnight;
+      if (!fortnight) {
+        setExtractNote('The sheet date could not be read, so I cannot tell which fortnight it is. Enter the figures by hand.');
+        return;
+      }
+      if (data.month && steelMonth && data.month !== steelMonth) {
+        setExtractNote(`That sheet is for ${data.month}, but the month above is ${steelMonth}. Change the month, or upload the right sheet.`);
+        return;
+      }
+      if (data.month && !steelMonth) setSteelMonth(data.month);
+
+      let filled = 0;
+      setCityData((prev) => {
+        const next: CityData = JSON.parse(JSON.stringify(prev));
+        for (const row of data.rows || []) {
+          if (!row.itemCode) continue;
+          for (const city of CITIES) {
+            const value = row.prices?.[city];
+            if (value === null || value === undefined) continue;
+            if (!next[city][row.itemCode]) continue;
+            next[city][row.itemCode][fortnight] = String(value);
+            filled++;
+          }
+        }
+        return next;
+      });
+
+      const label = fortnight === 'f1' ? 'first fortnight' : 'second fortnight';
+      toast.success(`Filled ${filled} cell(s) for the ${label}${data.priceDate ? ` (${data.priceDate})` : ''}. Check them before saving.`, { duration: 6000 });
+      setExtractNote(
+        [
+          data.warning,
+          data.summary?.unmatchedCount ? `${data.summary.unmatchedCount} row(s) on the sheet matched no known item.` : '',
+          'Read by AI from a scan — compare every figure with the sheet before saving.',
+        ].filter(Boolean).join(' '),
+      );
+    } catch (err: any) {
+      toast.error(err.message || 'Could not read that sheet');
+    } finally {
+      setExtracting(false);
+    }
+  };
 
   useEffect(() => {
     if (status === "loading") return;
@@ -323,6 +385,43 @@ export default function SteelImportPage() {
             </div>
             {isLoading && <Loader2 className="h-4 w-4 animate-spin text-gray-500 mt-5" />}
             <span className="text-sm text-gray-500 mt-5">{completeCount} of {CITIES.length} cities complete</span>
+          </div>
+
+          {/* Read the fortnight straight off the JPC sheet. It arrives as a scan with no
+              text layer, so this goes through the AI — and it only FILLS the grid below.
+              Nothing is saved until the values have been checked against the sheet. */}
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-700">Have the JPC sheet as a PDF?</p>
+                <p className="text-[11px] text-slate-500">
+                  Upload it and the fortnight fills itself. Check every figure against the sheet before saving.
+                </p>
+              </div>
+              <label className="shrink-0">
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  disabled={extracting}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (file) extractSheet(file);
+                  }}
+                />
+                <span className={`inline-flex items-center gap-2 h-9 px-3 rounded-md border text-sm cursor-pointer ${
+                  extracting ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-white border-slate-300 hover:bg-slate-100'
+                }`}>
+                  {extracting ? <><Loader2 className="h-4 w-4 animate-spin" /> Reading the sheet…</> : <>Upload JPC sheet</>}
+                </span>
+              </label>
+            </div>
+            {extractNote && (
+              <p className="mt-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                {extractNote}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
