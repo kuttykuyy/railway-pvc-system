@@ -36,9 +36,26 @@ export function isS3Configured(): boolean {
  */
 export function getS3Diagnostics() {
   const present = (...names: string[]) => names.filter(n => !!process.env[n]);
+  // Which variable actually WON, not merely which are set. Every storage failure here so
+  // far has been a leftover AWS_* variable outranking the Supabase one meant to be used,
+  // and a list of names alone hides that.
+  const winner = (...names: string[]) => {
+    const from = names.find(n => !!process.env[n]);
+    return from ? { value: process.env[from]!, from } : null;
+  };
+  const bucket = winner('AWS_BUCKET_NAME', 'S3_BUCKET_NAME', 'SUPABASE_STORAGE_BUCKET');
+  const region = winner('AWS_REGION', 'S3_REGION', 'SUPABASE_REGION');
+  const endpoint = winner('S3_ENDPOINT_URL', 'SUPABASE_S3_ENDPOINT');
   return {
     configured: isS3Configured(),
     initError: initError || null,
+    // Bucket, region and endpoint are not secrets, and their VALUES are what must be
+    // compared against the Supabase dashboard — the bucket must exist under exactly this
+    // name, and Supabase checks the region as part of the signature.
+    bucket,
+    region,
+    endpoint,
+    regionIsAuto: !region,
     bucketSetVia: present('AWS_BUCKET_NAME', 'S3_BUCKET_NAME', 'SUPABASE_STORAGE_BUCKET'),
     endpointSetVia: present('S3_ENDPOINT_URL', 'SUPABASE_S3_ENDPOINT'),
     regionSetVia: present('AWS_REGION', 'S3_REGION', 'SUPABASE_REGION'),
@@ -56,6 +73,71 @@ export function getS3Diagnostics() {
       return true;
     })(),
   };
+}
+
+/**
+ * Actually put a file in the bucket, read it back, and remove it.
+ *
+ * Signing an upload URL is pure arithmetic — it never contacts storage — so a bucket that
+ * does not exist and a region that does not match both produce a perfectly valid-looking
+ * URL that is then refused at the moment of upload. From the browser that refusal arrives
+ * as a bare network failure, which is how a wrong bucket name came to be reported as a
+ * file being too large.
+ *
+ * This does the round trip server-side and hands back what storage actually said, so the
+ * cause can be read off rather than inferred.
+ */
+export async function testS3RoundTrip(): Promise<{
+  ok: boolean;
+  failedAt?: 'upload' | 'read-back' | 'cleanup';
+  errorCode?: string;
+  errorMessage?: string;
+  httpStatus?: number;
+  hint?: string;
+}> {
+  if (!s3Client || useLocalFallback) {
+    return { ok: false, failedAt: 'upload', errorMessage: initError || 'Storage is not configured.' };
+  }
+
+  const key = `${folderPrefix}connection-test/${Date.now()}.txt`;
+  const describe = (error: any, failedAt: 'upload' | 'read-back' | 'cleanup') => {
+    const errorCode = error?.name || error?.Code || undefined;
+    const httpStatus = error?.$metadata?.httpStatusCode;
+    // The two refusals that account for nearly every failure, each with a different fix.
+    let hint: string | undefined;
+    if (/NoSuchBucket/i.test(errorCode || '') || httpStatus === 404) {
+      hint = `No bucket named "${bucketName}" exists at this endpoint. Create it in Supabase under exactly that name, or correct the bucket variable — note that AWS_BUCKET_NAME outranks SUPABASE_STORAGE_BUCKET.`;
+    } else if (/SignatureDoesNotMatch|InvalidAccessKeyId|AccessDenied/i.test(errorCode || '') || httpStatus === 403) {
+      hint = 'Storage rejected the signature. Usually the region does not match the Supabase project, or the access key and secret are not the S3 access keys from Storage Settings.';
+    }
+    return { ok: false as const, failedAt, errorCode, errorMessage: String(error?.message || error), httpStatus, hint };
+  };
+
+  try {
+    await s3Client.send(new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Body: 'irpvc storage check',
+      ContentType: 'text/plain',
+    }));
+  } catch (error: any) {
+    return describe(error, 'upload');
+  }
+
+  try {
+    await s3Client.send(new GetObjectCommand({ Bucket: bucketName, Key: key }));
+  } catch (error: any) {
+    return describe(error, 'read-back');
+  }
+
+  try {
+    await s3Client.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
+  } catch {
+    // Uploading and reading worked, which is the question being asked. A leftover test
+    // file is not worth reporting as a failure.
+  }
+
+  return { ok: true };
 }
 
 export async function getUploadPresignedUrl(key: string, contentType: string, expiresIn: number = 3600): Promise<string> {

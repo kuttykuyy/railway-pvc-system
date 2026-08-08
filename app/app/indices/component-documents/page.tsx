@@ -88,6 +88,9 @@ interface UploadedDocument {
   };
 }
 
+/** The upload signature covers the content type, so one value has to serve both ends. */
+const UPLOAD_CONTENT_TYPE = 'application/pdf';
+
 const COMPONENT_TYPES = [
   { value: "LABOUR", label: "Labour" },
   { value: "PLANT_MACHINERY_SPARES", label: "Plant Machinery & Spares" },
@@ -387,8 +390,40 @@ export default function ComponentDocumentsPage() {
       regionSetVia: string[];
       credentialsSetVia: string[];
       endpointLooksRight: boolean | null;
+      bucket: { value: string; from: string } | null;
+      region: { value: string; from: string } | null;
     };
   } | null>(null);
+  const [connectionTest, setConnectionTest] = useState<{
+    ok: boolean;
+    failedAt?: string;
+    errorCode?: string;
+    errorMessage?: string;
+    hint?: string;
+  } | null>(null);
+  const [isTestingStorage, setIsTestingStorage] = useState(false);
+
+  /**
+   * Put a real file in the bucket and take it out again.
+   *
+   * Being configured only means the variables can be read. It does not mean the bucket
+   * exists or that storage will accept us, and the upload URL is worked out offline, so
+   * neither problem shows up until a sheet is already being sent.
+   */
+  const testStorageConnection = async () => {
+    setIsTestingStorage(true);
+    setConnectionTest(null);
+    try {
+      const res = await fetch('/api/labour-index/presigned-url?test=1');
+      const data = await res.json();
+      setConnectionTest(data.connection ?? { ok: false, errorMessage: 'No result came back.' });
+      if (data.connection?.ok) toast.success('Storage is working — a test file went up and came back.');
+    } catch (err: any) {
+      setConnectionTest({ ok: false, errorMessage: String(err?.message || err) });
+    } finally {
+      setIsTestingStorage(false);
+    }
+  };
 
   /** The reason storage is off, in words, from which variables are actually present. */
   const storageProblem = (() => {
@@ -562,7 +597,11 @@ export default function ComponentDocumentsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             fileName: selectedFile.name,
-            fileType: selectedFile.type,
+            // Signed and sent as the same fixed type. The upload is signed before the
+            // file is compressed, and the signature covers the content type, so taking it
+            // from the original here and from the rebuilt file at upload time would let
+            // the two drift apart and be refused.
+            fileType: UPLOAD_CONTENT_TYPE,
             componentTypes: selectedComponentTypes,
             year: parseInt(uploadYear),
             months: selectedMonths,
@@ -637,7 +676,7 @@ export default function ComponentDocumentsPage() {
           const s3UploadRes = await fetch(presignedUrl, {
             method: "PUT",
             headers: {
-              "Content-Type": fileToUpload.type,
+              "Content-Type": UPLOAD_CONTENT_TYPE,
             },
             body: fileToUpload,
           });
@@ -648,12 +687,22 @@ export default function ComponentDocumentsPage() {
           }
           toast.dismiss(uploadToastId);
           toast.success("Document uploaded to S3 successfully");
-        } catch (s3Err) {
+        } catch (s3Err: any) {
           console.error("S3 Direct upload failed, falling back to database upload:", s3Err);
           toast.dismiss(uploadToastId);
-          toast.error("S3 direct upload failed. Trying to fall back to serverless database upload...");
+          // The actual reason, not just that it failed. A refused signature and a browser
+          // blocking the request for CORS need completely different fixes, and "upload
+          // failed" sends you looking at the file instead of at either of them.
+          const detail = String(s3Err?.message || s3Err || '');
+          const looksLikeCors = /failed to fetch|networkerror|load failed/i.test(detail);
+          toast.error(
+            looksLikeCors
+              ? 'The browser blocked the upload to Supabase (CORS). The bucket has to allow uploads from this site.'
+              : `Upload to storage refused: ${detail.slice(0, 160)}`,
+            { duration: 12000 },
+          );
           s3Available = false;
-          
+
           if (fileToUpload.size > LIMIT_BYTES) {
             toast.error("File is too large for database fallback. Please reduce file size.");
             setIsUploading(false);
@@ -875,6 +924,33 @@ export default function ComponentDocumentsPage() {
                   ? 'Cloud storage on — full quality'
                   : 'Cloud storage off — sheets get compressed'}
                 {storageProblem && <span className="block font-normal opacity-90 mt-0.5">{storageProblem}</span>}
+                {/* Diagnostics come back for admins only, so their presence is the cue. */}
+                {storageStatus.diagnostics && (
+                  <button
+                    type="button"
+                    onClick={testStorageConnection}
+                    disabled={isTestingStorage}
+                    className="block mt-1 underline font-normal opacity-90 hover:opacity-100 disabled:opacity-50"
+                  >
+                    {isTestingStorage ? 'Testing…' : 'Test storage now'}
+                  </button>
+                )}
+                {connectionTest && (
+                  <span className="block mt-1 font-normal">
+                    {connectionTest.ok
+                      ? '✓ A test file uploaded and read back fine.'
+                      : `✗ Failed at ${connectionTest.failedAt ?? 'upload'}: ${connectionTest.errorCode ?? ''} ${connectionTest.errorMessage ?? ''}`}
+                    {connectionTest.hint && <span className="block mt-0.5 opacity-90">{connectionTest.hint}</span>}
+                  </span>
+                )}
+                {storageStatus.diagnostics?.bucket && (
+                  <span className="block mt-1 font-normal opacity-75">
+                    Bucket “{storageStatus.diagnostics.bucket.value}” (from {storageStatus.diagnostics.bucket.from})
+                    {storageStatus.diagnostics.region
+                      ? `, region ${storageStatus.diagnostics.region.value} (from ${storageStatus.diagnostics.region.from})`
+                      : ', region not set'}
+                  </span>
+                )}
               </span>
             )}
             <Button onClick={() => setUploadDialogOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm gap-2">

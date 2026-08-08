@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getUploadPresignedUrl, isS3Configured, getS3Diagnostics } from "@/lib/s3";
+import { getUploadPresignedUrl, isS3Configured, getS3Diagnostics, testS3RoundTrip } from "@/lib/s3";
 import { ComponentType } from "@prisma/client";
 
 /**
@@ -13,7 +13,7 @@ import { ComponentType } from "@prisma/client";
  * were mistyped, or set for Preview but not Production, looked exactly like having none
  * at all: the file was quietly squeezed under Vercel's 4.5 MB request cap instead.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -28,12 +28,19 @@ export async function GET() {
   });
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
 
+  // ?test=1 puts a real file in the bucket and removes it again. Being configured only
+  // means the variables are readable; it says nothing about whether the bucket exists or
+  // will accept us, and that gap is where every failure so far has lived.
+  const runTest = request.nextUrl.searchParams.get('test') === '1';
+  const connection = runTest && isAdmin ? await testS3RoundTrip() : undefined;
+
   return NextResponse.json({
     s3Available: configured,
     message: configured
       ? 'Cloud storage is on. Sheets upload at their original quality.'
       : 'Cloud storage is off, so every sheet is compressed to fit under the 4.5 MB request limit.',
     ...(isAdmin ? { diagnostics: getS3Diagnostics() } : {}),
+    ...(connection ? { connection } : {}),
   });
 }
 
