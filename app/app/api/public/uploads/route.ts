@@ -36,6 +36,16 @@ export async function GET(request: NextRequest) {
       return new NextResponse("File not found or access denied", { status: 404 });
     }
 
+    // Cloud-stored sheets pass through here too — the pages link every document to this
+    // route, from the days when the database was the only storage. A bucket file has no
+    // base64 in the record; hand the caller a short-lived signed link to the bucket
+    // instead of declaring it missing.
+    if (!key.startsWith('db://') && (!doc.remarks || !doc.remarks.startsWith('base64:'))) {
+      const { getFileUrl } = await import("@/lib/s3");
+      const signedUrl = await getFileUrl(key, 300);
+      return NextResponse.redirect(signedUrl);
+    }
+
     if (!doc.remarks || !doc.remarks.startsWith('base64:')) {
       console.warn(`Database file document lacks base64 data for key: ${key}`);
       return new NextResponse("File not found", { status: 404 });
