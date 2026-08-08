@@ -588,10 +588,16 @@ export async function POST(request: NextRequest) {
       if (includeIndexDocs) {
         try {
           const componentTypes = anyBillHasSteel(bills) ? undefined : NON_STEEL_COMPONENT_TYPES;
+          // One JPC sheet serves the whole batch, so its marks must be true for every
+          // bill in it: marked only when all bills read the same city, left plain when
+          // zones differ — a box on another zone's column would be a false statement.
+          const irJpcCities = new Set(bills.map((b: any) => getSteelCityForZone(b.zone)));
           irFinalBytes = await embedComponentIndicesRange(mergedBytes, {
             startDate: componentIndexStartDate,
             endDate: componentIndexEndDate,
             componentTypes,
+            jpcCity: anyBillHasSteel(bills) && irJpcCities.size === 1 ? [...irJpcCities][0] : undefined,
+            jpcCaption: `${firstBill.contract.agreementNo} — ${bills.length} bill(s)`,
           });
         } catch (error) {
           console.error('Bulk IR PDF: error embedding component index documents:', error);
@@ -2936,11 +2942,16 @@ export async function POST(request: NextRequest) {
       }, new Date(firstBill.dateOfMeasurement));
 
       const bulkComponentTypes = anyBillHasSteel(bills) ? undefined : NON_STEEL_COMPONENT_TYPES;
+      // Same rule as the IR-format path above: the shared sheet is marked only when
+      // every bill in the batch reads the same city.
+      const bulkJpcCities = new Set(bills.map((b: any) => getSteelCityForZone(b.zone)));
       const finalPdfBytes = includeIndexDocs
         ? await embedComponentIndicesRange(initialPdfBytes, {
             startDate: componentIndexStartDate,
             endDate: componentIndexEndDate,
             componentTypes: bulkComponentTypes,
+            jpcCity: anyBillHasSteel(bills) && bulkJpcCities.size === 1 ? [...bulkJpcCities][0] : undefined,
+            jpcCaption: `${firstBill.contract.agreementNo} — ${bills.length} bill(s)`,
           })
         : initialPdfBytes;
 

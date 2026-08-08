@@ -260,9 +260,11 @@ export async function embedComponentIndicesRange(
                   marked.bytes.byteOffset,
                   marked.bytes.byteOffset + marked.bytes.byteLength,
                 ) as ArrayBuffer;
-                logger.log(`Marked ${marked.pagesMarked} JPC page(s) for ${jpcCity} on ${doc.componentType}`);
+                // console, not logger: whether a legal document went out marked or plain
+                // must be readable in production logs, where logger.log is silent.
+                console.log(`Marked ${marked.pagesMarked} JPC page(s) for ${jpcCity} on ${doc.componentType}`);
               } else {
-                logger.log(`JPC sheet left unmarked (${marked.reason}) for ${doc.componentType}`);
+                console.log(`JPC sheet left unmarked (${marked.reason}) for ${doc.componentType}`);
               }
             } catch (markError) {
               console.error('JPC marking failed, attaching the sheet as it is:', markError);

@@ -778,6 +778,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             startDate: new Date(bill.contract.baseMonth),
             endDate: new Date(bill.dateOfMeasurement),
             componentTypes: irComponentTypes,
+            // Mark, on the attached JPC sheets, the six rows and this bill's city column
+            // that its steel indices were read from.
+            jpcCity: billHasSteel(bill) ? getSteelCityForZone(bill.zone) : undefined,
+            jpcCaption: `${bill.contract.agreementNo} — ${bill.billNo}`,
           });
         } catch (err) {
           console.error('IR PDF: error embedding index documents:', err);
@@ -4437,6 +4441,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           startDate: componentIndexStartDate,
           endDate: componentIndexEndDate,
           componentTypes: detailedComponentTypes,
+          // Mark, on the attached JPC sheets, the six rows and this bill's city column
+          // that its steel indices were read from.
+          jpcCity: billHasSteel(bill) ? getSteelCityForZone(bill.zone) : undefined,
+          jpcCaption: `${bill.contract.agreementNo} — ${bill.billNo}`,
         });
         
         // Count documents after embedding
