@@ -180,3 +180,91 @@ export async function createZohoInvoice(params: {
     status: data.invoice.status,
   };
 }
+
+/**
+ * Carry a GSTIN that arrived AFTER payment into the Zoho side of the books.
+ *
+ * Zoho's invoice is created the moment payment verifies, with whatever GSTIN the
+ * user's profile held — often none. The billing dialog collects the real one minutes
+ * later, but it only reached the app's own PDF: the customer's input-credit claim and
+ * the GSTR-1 both read from Zoho, which still said B2C. This finds the payment's Zoho
+ * invoice by its reference number (the Razorpay order id it was created with), puts
+ * the GSTIN on the contact, and corrects the invoice's GST treatment and place of
+ * supply.
+ *
+ * Best-effort by contract: a paid or locked Zoho invoice may refuse edits, and that
+ * refusal is reported, not thrown — the app-side invoice must not fail because the
+ * ledger copy could not be touched.
+ */
+export async function syncGstinToZoho(params: {
+  customerEmail: string;
+  gstin: string;
+  razorpayOrderId: string;
+}): Promise<{ contactUpdated: boolean; invoiceUpdated: boolean; detail: string }> {
+  const token = await getAccessToken();
+  const gstin = params.gstin.trim().toUpperCase();
+  const placeOfSupply = getStateFromGstin(gstin);
+
+  // The contact carries the GSTIN in Zoho's model; the invoice carries the treatment.
+  let contactUpdated = false;
+  const searchRes = await fetch(
+    `${ZOHO_API_BASE}/contacts?organization_id=${ORG_ID}&email=${encodeURIComponent(params.customerEmail)}`,
+    { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+  );
+  const searchData = await searchRes.json();
+  const contactId = searchData.contacts?.[0]?.contact_id;
+  if (contactId) {
+    const contactRes = await fetch(
+      `${ZOHO_API_BASE}/contacts/${contactId}?organization_id=${ORG_ID}`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Zoho-oauthtoken ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ gst_no: gstin, gst_treatment: 'business_gst' }),
+      }
+    );
+    const contactData = await contactRes.json();
+    contactUpdated = !!contactData.contact;
+  }
+
+  // The invoice was created with reference_number = the Razorpay order id — the one
+  // handle that survives, since the Zoho invoice id was never stored.
+  const invoiceSearchRes = await fetch(
+    `${ZOHO_API_BASE}/invoices?organization_id=${ORG_ID}&reference_number=${encodeURIComponent(params.razorpayOrderId)}`,
+    { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+  );
+  const invoiceSearchData = await invoiceSearchRes.json();
+  const invoice = invoiceSearchData.invoices?.[0];
+  if (!invoice) {
+    return {
+      contactUpdated,
+      invoiceUpdated: false,
+      detail: `No Zoho invoice found for order ${params.razorpayOrderId} — it may not have been created (Zoho was down at payment time?). The backfill can catch it.`,
+    };
+  }
+
+  const updateBody: any = { gst_treatment: 'business_gst', gst_no: gstin };
+  if (placeOfSupply) updateBody.place_of_supply = placeOfSupply;
+  const updateRes = await fetch(
+    `${ZOHO_API_BASE}/invoices/${invoice.invoice_id}?organization_id=${ORG_ID}`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Zoho-oauthtoken ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updateBody),
+    }
+  );
+  const updateData = await updateRes.json();
+  const invoiceUpdated = !!updateData.invoice;
+  return {
+    contactUpdated,
+    invoiceUpdated,
+    detail: invoiceUpdated
+      ? `Zoho invoice ${invoice.invoice_number} now carries GSTIN ${gstin}`
+      : `Zoho refused the invoice update: ${updateData.message || 'unknown reason'}`,
+  };
+}

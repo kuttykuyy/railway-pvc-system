@@ -127,6 +127,31 @@ export async function POST(request: NextRequest) {
 
     logger.log(`[GST Invoice] Generated: ${gstInvoice.invoiceNumber} for transaction ${transaction.id}`);
 
+    // A GSTIN arriving in this dialog exists nowhere else: Zoho's invoice was created
+    // at payment time from the profile (often GSTIN-less), and the customer's
+    // input-credit claim reads from Zoho, not from our PDF. Carry it across — and into
+    // the profile, so the customer's NEXT payment is invoiced right from the start.
+    // Best-effort on both counts: the app-side invoice above is already made and must
+    // not fail because the ledger copy could not be touched.
+    const submittedGstin = customerGstin?.trim().toUpperCase();
+    if (submittedGstin) {
+      if (!user.gstin) {
+        await prisma.user.update({ where: { id: user.id }, data: { gstin: submittedGstin } })
+          .catch((err) => console.error('[GST Invoice] Could not save GSTIN to profile:', err));
+      }
+      try {
+        const { syncGstinToZoho } = await import('@/lib/zoho-books');
+        const sync = await syncGstinToZoho({
+          customerEmail: user.email || customerEmail.trim().toLowerCase(),
+          gstin: submittedGstin,
+          razorpayOrderId: transaction.orderId,
+        });
+        console.log(`[GST Invoice] Zoho GSTIN sync: contact=${sync.contactUpdated} invoice=${sync.invoiceUpdated} — ${sync.detail}`);
+      } catch (zohoErr: any) {
+        console.error('[GST Invoice] Zoho GSTIN sync failed:', zohoErr?.message || zohoErr);
+      }
+    }
+
     // Send WhatsApp notification if phone number is provided and WhatsApp is configured
     if (customerPhone && customerPhone.trim()) {
       const whatsappConfigured = await isMyDreamsWhatsAppConfigured();
