@@ -673,34 +673,55 @@ export default function ComponentDocumentsPage() {
 
       // Step 3: Upload the file
       if (s3Available && presignedUrl) {
-        const uploadToastId = toast.loading("Uploading document directly to Amazon S3...");
+        const uploadToastId = toast.loading("Uploading document to cloud storage...");
         try {
-          const s3UploadRes = await fetch(presignedUrl, {
-            method: "PUT",
-            headers: {
-              "Content-Type": UPLOAD_CONTENT_TYPE,
-            },
-            body: fileToUpload,
-          });
+          // Sending a whole scanned sheet in one go is a long transfer, and a connection
+          // that drops anywhere in the middle loses all of it. A second attempt costs
+          // nothing when the first succeeded and rescues the common case where it did not.
+          const attemptUpload = async () => {
+            const res = await fetch(presignedUrl, {
+              method: "PUT",
+              headers: {
+                "Content-Type": UPLOAD_CONTENT_TYPE,
+              },
+              body: fileToUpload,
+            });
+            if (!res.ok) {
+              const errText = await res.text();
+              throw new Error(`Storage refused the file: ${res.status} ${res.statusText} ${errText.substring(0, 200)}`);
+            }
+            return res;
+          };
 
-          if (!s3UploadRes.ok) {
-            const errText = await s3UploadRes.text();
-            throw new Error(`S3 upload failed: ${s3UploadRes.statusText} ${errText.substring(0, 100)}`);
+          try {
+            await attemptUpload();
+          } catch (firstErr: any) {
+            // Only worth repeating when the transfer itself failed. A refusal is a
+            // decision, and asking twice gets the same answer.
+            const droppedMidway = /failed to fetch|networkerror|load failed/i.test(String(firstErr?.message || ''));
+            if (!droppedMidway) throw firstErr;
+            toast.loading("Connection dropped — trying once more...", { id: uploadToastId });
+            await attemptUpload();
           }
+
           toast.dismiss(uploadToastId);
-          toast.success("Document uploaded to S3 successfully");
+          toast.success("Document uploaded to cloud storage at full quality");
         } catch (s3Err: any) {
           console.error("S3 Direct upload failed, falling back to database upload:", s3Err);
           toast.dismiss(uploadToastId);
-          // The actual reason, not just that it failed. A refused signature and a browser
-          // blocking the request for CORS need completely different fixes, and "upload
-          // failed" sends you looking at the file instead of at either of them.
+          // The actual reason, not just that it failed. A refusal by storage and a
+          // transfer that died on the way there need different fixes, and "upload failed"
+          // sends you looking at the file instead of at either.
+          //
+          // This deliberately does not blame CORS. Supabase allows uploads from this site,
+          // on error responses too — that was checked — so a failed transfer here means
+          // the connection gave out, which naming it CORS only hides.
           const detail = String(s3Err?.message || s3Err || '');
-          const looksLikeCors = /failed to fetch|networkerror|load failed/i.test(detail);
+          const droppedMidway = /failed to fetch|networkerror|load failed/i.test(detail);
           toast.error(
-            looksLikeCors
-              ? 'The browser blocked the upload to Supabase (CORS). The bucket has to allow uploads from this site.'
-              : `Upload to storage refused: ${detail.slice(0, 160)}`,
+            droppedMidway
+              ? 'The connection to storage gave out part-way through, twice. Large sheets need a steady connection — please try again.'
+              : `Storage refused the file: ${detail.slice(0, 200)}`,
             { duration: 12000 },
           );
           s3Available = false;
