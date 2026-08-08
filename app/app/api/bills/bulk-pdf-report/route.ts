@@ -598,6 +598,7 @@ export async function POST(request: NextRequest) {
             componentTypes,
             jpcCity: anyBillHasSteel(bills) && irJpcCities.size === 1 ? [...irJpcCities][0] : undefined,
             jpcCaption: `${firstBill.contract.agreementNo} — ${bills.length} bill(s)`,
+            fuelBasis: new Set(bills.map((b) => b.fuelPriceType)).size === 1 ? firstBill.fuelPriceType : undefined,
           });
         } catch (error) {
           console.error('Bulk IR PDF: error embedding component index documents:', error);
@@ -2952,6 +2953,7 @@ export async function POST(request: NextRequest) {
             componentTypes: bulkComponentTypes,
             jpcCity: anyBillHasSteel(bills) && bulkJpcCities.size === 1 ? [...bulkJpcCities][0] : undefined,
             jpcCaption: `${firstBill.contract.agreementNo} — ${bills.length} bill(s)`,
+            fuelBasis: new Set(bills.map((b) => b.fuelPriceType)).size === 1 ? firstBill.fuelPriceType : undefined,
           })
         : initialPdfBytes;
 

@@ -782,6 +782,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             // that its steel indices were read from.
             jpcCity: billHasSteel(bill) ? getSteelCityForZone(bill.zone) : undefined,
             jpcCaption: `${bill.contract.agreementNo} — ${bill.billNo}`,
+            fuelBasis: bill.fuelPriceType,
           });
         } catch (err) {
           console.error('IR PDF: error embedding index documents:', err);
@@ -4445,6 +4446,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           // that its steel indices were read from.
           jpcCity: billHasSteel(bill) ? getSteelCityForZone(bill.zone) : undefined,
           jpcCaption: `${bill.contract.agreementNo} — ${bill.billNo}`,
+            fuelBasis: bill.fuelPriceType,
         });
         
         // Count documents after embedding

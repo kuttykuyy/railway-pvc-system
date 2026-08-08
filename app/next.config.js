@@ -6,7 +6,9 @@ const nextConfig = {
   output: process.env.NEXT_OUTPUT_MODE,
   productionBrowserSourceMaps: false,
   outputFileTracingRoot: path.join(__dirname, '../'),
-  serverExternalPackages: ['@napi-rs/canvas'],
+  // pdfjs-dist must stay unbundled on the server: its fake worker resolves
+  // pdf.worker.mjs as a sibling file, which bundling separates from it.
+  serverExternalPackages: ['@napi-rs/canvas', 'pdfjs-dist'],
   eslint: {
     ignoreDuringBuilds: false,
   },

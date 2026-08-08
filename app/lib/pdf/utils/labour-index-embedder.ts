@@ -6,6 +6,7 @@ import { PDFDocument } from "pdf-lib";
 import { ComponentType } from "@prisma/client";
 import { highlightJpcSheet } from "./jpc-highlighter";
 import { highlightComponentSheet, componentSheetIsMarkable } from "./component-sheet-highlighter";
+import { highlightFuelSheet } from "./fuel-sheet-highlighter";
 
 interface ComponentIndexOptions {
   year: number;
@@ -26,6 +27,11 @@ interface ComponentIndexRangeOptions {
   jpcCity?: string;
   /** Printed beside the note on each marked sheet, e.g. the agreement and bill number. */
   jpcCaption?: string;
+  /**
+   * How the bill prices fuel. 'zone_city' additionally boxes the bill's city column on
+   * each marked fuel row; anything else marks the whole row (four-city average).
+   */
+  fuelBasis?: string;
 }
 
 /** The component types whose documents are JPC price sheets. */
@@ -159,7 +165,7 @@ export async function embedComponentIndicesRange(
   options: ComponentIndexRangeOptions
 ): Promise<Uint8Array> {
   try {
-    const { startDate, endDate, componentTypes, jpcCity, jpcCaption } = options;
+    const { startDate, endDate, componentTypes, jpcCity, jpcCaption, fuelBasis } = options;
 
     // If no component types specified, fetch all component types
     const typesToFetch = componentTypes || Object.values(ComponentType);
@@ -251,7 +257,8 @@ export async function embedComponentIndicesRange(
           // a layout they know, so a supporting document is never lost to a failed
           // marking. jpcCity doubles as the switch for all marking — it is set exactly
           // when the caller wants marked sheets.
-          if (jpcCity && componentSheetIsMarkable(doc.componentType)) {
+          const isFuelSheet = doc.componentType === ComponentType.MPNG_FUEL;
+          if (jpcCity && (componentSheetIsMarkable(doc.componentType) || isFuelSheet)) {
             try {
               // The months of the bill's index range that fall in this sheet's year.
               const docYear = doc.displayYear || doc.year;
@@ -260,11 +267,21 @@ export async function embedComponentIndicesRange(
               const usedMonths = [];
               for (let m = from; m <= to; m++) usedMonths.push(m);
               if (docYear >= startDate.getFullYear() && docYear <= endDate.getFullYear() && usedMonths.length) {
-                const marked = await highlightComponentSheet(new Uint8Array(indexBytes), {
-                  componentType: doc.componentType,
-                  months: usedMonths,
-                  caption: jpcCaption,
-                });
+                // Fuel sheets are dated per price revision, so their rows are found by
+                // the dates printed on the sheet; the fixed-layout sheets are marked by
+                // measured geometry.
+                const marked = isFuelSheet
+                  ? await highlightFuelSheet(new Uint8Array(indexBytes), {
+                      year: docYear,
+                      months: usedMonths,
+                      city: fuelBasis === 'zone_city' ? jpcCity : undefined,
+                      caption: jpcCaption,
+                    })
+                  : await highlightComponentSheet(new Uint8Array(indexBytes), {
+                      componentType: doc.componentType,
+                      months: usedMonths,
+                      caption: jpcCaption,
+                    });
                 if (marked.marked) {
                   indexBytes = marked.bytes.buffer.slice(
                     marked.bytes.byteOffset,
