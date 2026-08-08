@@ -5,6 +5,28 @@ import { prisma } from "@/lib/db";
 import { getUploadPresignedUrl, isS3Configured } from "@/lib/s3";
 import { ComponentType } from "@prisma/client";
 
+/**
+ * GET — is cloud storage actually reachable?
+ *
+ * Whether a PDF keeps its quality turns on this one fact, and until now the only way to
+ * find out was to upload something and watch which messages appeared. Credentials that
+ * were mistyped, or set for Preview but not Production, looked exactly like having none
+ * at all: the file was quietly squeezed under Vercel's 4.5 MB request cap instead.
+ */
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const configured = isS3Configured();
+  return NextResponse.json({
+    s3Available: configured,
+    message: configured
+      ? 'Cloud storage is on. Sheets upload at their original quality.'
+      : 'Cloud storage is off, so every sheet is compressed to fit under the 4.5 MB request limit.',
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);

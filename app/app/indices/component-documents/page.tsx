@@ -377,6 +377,16 @@ export default function ComponentDocumentsPage() {
   const [isProvisionalUpload, setIsProvisionalUpload] = useState<boolean>(true);
   const [uploadRemarks, setUploadRemarks] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
+  const [storageStatus, setStorageStatus] = useState<{ s3Available: boolean; message: string } | null>(null);
+
+  // Asked once on load, so the answer is on the screen before anything is uploaded
+  // rather than discovered afterwards from the quality of the result.
+  useEffect(() => {
+    fetch('/api/labour-index/presigned-url')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && typeof d.s3Available === 'boolean') setStorageStatus(d); })
+      .catch(() => { /* the badge simply does not appear */ });
+  }, []);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
 
   // Edit dialog states
@@ -820,10 +830,28 @@ export default function ComponentDocumentsPage() {
             </div>
           </div>
           
-          <Button onClick={() => setUploadDialogOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm gap-2">
-            <Upload className="h-4 w-4" />
-            Upload Document
-          </Button>
+          <div className="flex items-center gap-3">
+            {/* Whether a sheet keeps its quality turns on this one fact, and the only way
+                to find out used to be to upload something and watch the messages. */}
+            {storageStatus && (
+              <span
+                className={`text-xs px-2.5 py-1.5 rounded-lg border ${
+                  storageStatus.s3Available
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-amber-50 border-amber-200 text-amber-800'
+                }`}
+                title={storageStatus.message}
+              >
+                {storageStatus.s3Available
+                  ? 'Cloud storage on — full quality'
+                  : 'Cloud storage off — sheets get compressed'}
+              </span>
+            )}
+            <Button onClick={() => setUploadDialogOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm gap-2">
+              <Upload className="h-4 w-4" />
+              Upload Document
+            </Button>
+          </div>
         </div>
 
         {/* Info Box */}
