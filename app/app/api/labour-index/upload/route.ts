@@ -6,7 +6,10 @@ import { prisma } from "@/lib/db";
 import { uploadFile } from "@/lib/s3";
 import { ComponentType } from "@prisma/client";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+// Only reached on the S3 path: a request that carries the file itself is capped at
+// 4.5 MB by Vercel long before this, whatever we put here. With S3 configured the file
+// goes straight to the bucket and a year of sheets can be uploaded at full quality.
+const MAX_FILE_SIZE = 40 * 1024 * 1024; // 40 MB
 
 export async function POST(request: NextRequest) {
   try {

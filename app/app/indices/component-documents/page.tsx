@@ -165,6 +165,23 @@ const renderRasterPdf = async (
       viewport: viewport,
     }).promise;
     
+    // These sheets are black figures on white paper. Colour costs roughly a third of the
+    // file for nothing — the scanner's chroma noise — and spending that on resolution
+    // instead is what keeps a 6 and an 8 apart. Greyscale first, then encode.
+    try {
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+      const d = pixels.data;
+      for (let p = 0; p < d.length; p += 4) {
+        // Rec. 601 luma, then a gentle contrast stretch so paper goes white and ink dark.
+        const luma = d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114;
+        const stretched = luma < 110 ? luma * 0.75 : luma > 190 ? 255 : luma;
+        d[p] = d[p + 1] = d[p + 2] = stretched;
+      }
+      context.putImageData(pixels, 0, 0);
+    } catch {
+      // A tainted or oversized canvas — encode what was rendered rather than failing.
+    }
+
     const jpegDataUrl = canvas.toDataURL("image/jpeg", quality);
     const base64Jpeg = jpegDataUrl.split(",")[1];
     
@@ -253,20 +270,31 @@ const optimizeAndCompressPdf = async (
     
     let tiers: CompressionTier[] = [];
     
+    // Resolution before quality. Dropping the scale blurs the digits themselves, which no
+    // encoder can put back, whereas JPEG quality on a greyscale page of black-on-white
+    // degrades gently. The earlier tiers did the opposite — scale 0.75 at quality 0.35 —
+    // and that is why the sheets came out unreadable. Each list starts where a page is
+    // comfortably legible and steps down only if the file will not fit.
     if (numPages > 15) {
       tiers = [
-        { scale: 0.85, quality: 0.45 },
-        { scale: 0.75, quality: 0.35 }
+        { scale: 1.25, quality: 0.62 },
+        { scale: 1.1, quality: 0.52 },
+        { scale: 0.95, quality: 0.45 },
+        { scale: 0.85, quality: 0.4 },
       ];
     } else if (numPages > 5) {
       tiers = [
-        { scale: 1.0, quality: 0.5 },
-        { scale: 0.85, quality: 0.4 }
+        { scale: 1.5, quality: 0.68 },
+        { scale: 1.3, quality: 0.58 },
+        { scale: 1.1, quality: 0.48 },
+        { scale: 0.95, quality: 0.42 },
       ];
     } else {
       tiers = [
-        { scale: 1.2, quality: 0.65 },
-        { scale: 1.0, quality: 0.5 }
+        { scale: 1.8, quality: 0.75 },
+        { scale: 1.5, quality: 0.65 },
+        { scale: 1.25, quality: 0.55 },
+        { scale: 1.05, quality: 0.45 },
       ];
     }
     

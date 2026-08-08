@@ -4,6 +4,7 @@ import { getFileUrl } from "@/lib/s3";
 import { prisma } from "@/lib/db";
 import { PDFDocument } from "pdf-lib";
 import { ComponentType } from "@prisma/client";
+import { highlightJpcSheet } from "./jpc-highlighter";
 
 interface ComponentIndexOptions {
   year: number;
@@ -15,7 +16,24 @@ interface ComponentIndexRangeOptions {
   startDate: Date;
   endDate: Date;
   componentTypes?: ComponentType[];
+  /**
+   * The bill's JPC city. When given, the steel sheets are shaded on the six items and
+   * the one column the bill's indices were built from — the sheet holds 96 figures and
+   * only seven of them were used, which a reader otherwise has to find by eye.
+   * Leave unset to attach the sheets unmarked.
+   */
+  jpcCity?: string;
+  /** Printed beside the note on each marked sheet, e.g. the agreement and bill number. */
+  jpcCaption?: string;
 }
+
+/** The component types whose documents are JPC price sheets. */
+const JPC_SHEET_TYPES: ComponentType[] = [
+  ComponentType.TMT_BARS,
+  ComponentType.ANGLE_CHANNEL,
+  ComponentType.PLATES,
+  ComponentType.OTHER_SECTIONS,
+];
 
 /**
  * Fetch and embed component index documents into a PDF
@@ -140,7 +158,7 @@ export async function embedComponentIndicesRange(
   options: ComponentIndexRangeOptions
 ): Promise<Uint8Array> {
   try {
-    const { startDate, endDate, componentTypes } = options;
+    const { startDate, endDate, componentTypes, jpcCity, jpcCaption } = options;
 
     // If no component types specified, fetch all component types
     const typesToFetch = componentTypes || Object.values(ComponentType);
@@ -225,6 +243,30 @@ export async function embedComponentIndicesRange(
             const indexUrl = await getFileUrl(doc.cloudStoragePath);
             const indexResponse = await fetch(indexUrl);
             indexBytes = await indexResponse.arrayBuffer();
+          }
+
+          // Mark the cells this bill's steel indices came from, on JPC sheets only.
+          // Best-effort by design: the highlighter returns the document untouched if the
+          // page is not the layout it knows, so a supporting document is never lost to a
+          // failed marking.
+          if (jpcCity && JPC_SHEET_TYPES.includes(doc.componentType)) {
+            try {
+              const marked = await highlightJpcSheet(new Uint8Array(indexBytes), {
+                city: jpcCity as any,
+                caption: jpcCaption,
+              });
+              if (marked.marked) {
+                indexBytes = marked.bytes.buffer.slice(
+                  marked.bytes.byteOffset,
+                  marked.bytes.byteOffset + marked.bytes.byteLength,
+                ) as ArrayBuffer;
+                logger.log(`Marked ${marked.pagesMarked} JPC page(s) for ${jpcCity} on ${doc.componentType}`);
+              } else {
+                logger.log(`JPC sheet left unmarked (${marked.reason}) for ${doc.componentType}`);
+              }
+            } catch (markError) {
+              console.error('JPC marking failed, attaching the sheet as it is:', markError);
+            }
           }
 
           // Load component index PDF

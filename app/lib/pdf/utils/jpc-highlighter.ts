@@ -70,7 +70,7 @@ export interface HighlightOptions {
 export async function highlightJpcSheet(
   pdfBytes: Uint8Array,
   options: HighlightOptions,
-): Promise<{ bytes: Uint8Array; marked: boolean; reason?: string }> {
+): Promise<{ bytes: Uint8Array; marked: boolean; reason?: string; pagesMarked?: number }> {
   try {
     const doc = await PDFDocument.load(pdfBytes);
     const pages = doc.getPages();
@@ -80,17 +80,22 @@ export async function highlightJpcSheet(
     if (!column) return { bytes: pdfBytes, marked: false, reason: `unknown city ${options.city}` };
 
     const rows = calculationRowNumbers();
-    const page = pages[0];
+    const rowHeight = (TABLE.bodyBottom - TABLE.bodyTop) / TABLE.rows;
+
+    // A stored document holds a year of sheets, so every page is marked — the rows and
+    // the city are the same whichever month a sheet is for.
+    let markedPages = 0;
+    for (const page of pages) {
     const { width, height } = page.getSize();
 
     // The template is for portrait A4. Anything else is a differently-produced sheet and
-    // the geometry below would mark the wrong cells.
+    // the geometry below would mark the wrong cells, so that page is left alone.
     const ratio = height / width;
     if (ratio < 1.35 || ratio > 1.50) {
-      return { bytes: pdfBytes, marked: false, reason: 'page is not the portrait A4 the JPC template uses' };
+      continue;
     }
+    markedPages++;
 
-    const rowHeight = (TABLE.bodyBottom - TABLE.bodyTop) / TABLE.rows;
     // pdf-lib measures from the bottom-left; the fractions above are from the top.
     const yFor = (fractionFromTop: number) => height * (1 - fractionFromTop);
 
@@ -144,8 +149,13 @@ export async function highlightJpcSheet(
       maxWidth: width * 0.82,
       lineHeight: 7.5,
     });
+    }
 
-    return { bytes: await doc.save(), marked: true };
+    if (markedPages === 0) {
+      return { bytes: pdfBytes, marked: false, reason: 'no page matched the portrait A4 JPC layout' };
+    }
+
+    return { bytes: await doc.save(), marked: true, pagesMarked: markedPages };
   } catch (error: any) {
     console.error('JPC highlight failed:', error?.message || error);
     return { bytes: pdfBytes, marked: false, reason: 'could not be marked' };
