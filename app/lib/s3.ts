@@ -8,18 +8,50 @@ let bucketName = '';
 let folderPrefix = '';
 let useLocalFallback = false;
 
+let initError = '';
+
 try {
   s3Client = createS3Client();
   const config = getBucketConfig();
   bucketName = config.bucketName;
   folderPrefix = config.folderPrefix;
-} catch (error) {
+} catch (error: any) {
   logger.warn('⚠️ AWS S3 initialization failed. Database fallback will be used for uploads:', error);
   useLocalFallback = true;
+  initError = String(error?.message || error);
 }
 
 export function isS3Configured(): boolean {
   return s3Client !== null && !useLocalFallback && !!bucketName;
+}
+
+/**
+ * Why storage is off, when it is.
+ *
+ * The failure above is swallowed and everything falls back to storing files in the
+ * database, so a mistyped variable, one set only for Preview, and none at all all look
+ * identical from outside — the file is simply squeezed and the quality suffers. This
+ * reports which variables are PRESENT (never their values) and what the failure said,
+ * so the cause can be read rather than guessed at.
+ */
+export function getS3Diagnostics() {
+  const present = (...names: string[]) => names.filter(n => !!process.env[n]);
+  return {
+    configured: isS3Configured(),
+    initError: initError || null,
+    bucketSetVia: present('AWS_BUCKET_NAME', 'S3_BUCKET_NAME', 'SUPABASE_STORAGE_BUCKET'),
+    endpointSetVia: present('S3_ENDPOINT_URL', 'SUPABASE_S3_ENDPOINT'),
+    regionSetVia: present('AWS_REGION', 'S3_REGION', 'SUPABASE_REGION'),
+    credentialsSetVia: present('AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'),
+    // The endpoint is not a secret and its shape is the commonest mistake — a Supabase
+    // endpoint must keep its /storage/v1/s3 path.
+    endpointLooksRight: (() => {
+      const endpoint = process.env.S3_ENDPOINT_URL || process.env.SUPABASE_S3_ENDPOINT;
+      if (!endpoint) return null;
+      if (/supabase/i.test(endpoint)) return /\/storage\/v1\/s3\/?$/.test(endpoint);
+      return true;
+    })(),
+  };
 }
 
 export async function getUploadPresignedUrl(key: string, contentType: string, expiresIn: number = 3600): Promise<string> {

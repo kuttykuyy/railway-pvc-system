@@ -377,7 +377,30 @@ export default function ComponentDocumentsPage() {
   const [isProvisionalUpload, setIsProvisionalUpload] = useState<boolean>(true);
   const [uploadRemarks, setUploadRemarks] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
-  const [storageStatus, setStorageStatus] = useState<{ s3Available: boolean; message: string } | null>(null);
+  const [storageStatus, setStorageStatus] = useState<{
+    s3Available: boolean;
+    message: string;
+    diagnostics?: {
+      initError: string | null;
+      bucketSetVia: string[];
+      endpointSetVia: string[];
+      regionSetVia: string[];
+      credentialsSetVia: string[];
+      endpointLooksRight: boolean | null;
+    };
+  } | null>(null);
+
+  /** The reason storage is off, in words, from which variables are actually present. */
+  const storageProblem = (() => {
+    const d = storageStatus?.diagnostics;
+    if (!storageStatus || storageStatus.s3Available || !d) return null;
+    if (d.bucketSetVia.length === 0) return 'No bucket name is set (SUPABASE_STORAGE_BUCKET).';
+    if (d.endpointSetVia.length === 0) return 'No endpoint is set (SUPABASE_S3_ENDPOINT).';
+    if (d.endpointLooksRight === false) return 'The endpoint is missing its /storage/v1/s3 path.';
+    if (d.credentialsSetVia.length < 2) return 'The access key or the secret is missing.';
+    if (d.initError) return d.initError;
+    return 'Set, but the connection could not be made. Check the values and redeploy.';
+  })();
 
   // Asked once on load, so the answer is on the screen before anything is uploaded
   // rather than discovered afterwards from the quality of the result.
@@ -845,6 +868,7 @@ export default function ComponentDocumentsPage() {
                 {storageStatus.s3Available
                   ? 'Cloud storage on — full quality'
                   : 'Cloud storage off — sheets get compressed'}
+                {storageProblem && <span className="block font-normal opacity-90 mt-0.5">{storageProblem}</span>}
               </span>
             )}
             <Button onClick={() => setUploadDialogOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm gap-2">

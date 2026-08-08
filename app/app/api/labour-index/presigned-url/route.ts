@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getUploadPresignedUrl, isS3Configured } from "@/lib/s3";
+import { getUploadPresignedUrl, isS3Configured, getS3Diagnostics } from "@/lib/s3";
 import { ComponentType } from "@prisma/client";
 
 /**
@@ -19,11 +19,21 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const configured = isS3Configured();
+
+  // Admins also get the reason. Which variable NAMES are set, never their values — the
+  // point is to show that a secret is missing, not what it is.
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { role: true },
+  });
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+
   return NextResponse.json({
     s3Available: configured,
     message: configured
       ? 'Cloud storage is on. Sheets upload at their original quality.'
       : 'Cloud storage is off, so every sheet is compressed to fit under the 4.5 MB request limit.',
+    ...(isAdmin ? { diagnostics: getS3Diagnostics() } : {}),
   });
 }
 
