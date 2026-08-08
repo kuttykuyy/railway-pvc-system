@@ -100,6 +100,8 @@ interface QuarterlyAverage {
   average: number;
   baseValue: number;
   monthlyValues?: { month: string; value: number }[];
+  /** Set when new-series WPI months were lifted to the old base — see lib/wpi-series.ts. */
+  wpiConverted?: { factor: number; monthsConverted: number };
 }
 
 interface IRStandardReportOptions {
@@ -650,6 +652,24 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     const note = `Note: Provisional indices used: ${provisionalIndices.join(', ')}`;
     const noteLines = pdf.splitTextToSize(note, summaryX - mL - 5);
     pdf.text(noteLines, mL, summaryStartY + 22);
+    pdf.setTextColor(0, 0, 0);
+  }
+
+  // The WPI series changed base in June 2026, and where that bridge was crossed the
+  // statement must say so — an auditor comparing these figures against the published
+  // indices would otherwise find numbers that match nothing. Which indices and factors
+  // come from the calculation itself, never assumed here.
+  const wpiBridged = quarterlyAverages.filter(q => q.wpiConverted);
+  if (wpiBridged.length > 0) {
+    const parts = wpiBridged.map(q => `${q.indexName} × ${q.wpiConverted!.factor}`);
+    pdf.setFontSize(7.5);
+    pdf.setFont('helvetica', 'italic');
+    pdf.setTextColor(80, 80, 80);
+    const wpiNote = `Note: WPI indices from Jun 2026 are published on base 2022-23=100 (old 2011-12 series discontinued). ` +
+      `For comparison with this contract's base month they are converted to the 2011-12 base using DPIIT linking factors ` +
+      `(PIB release 15.06.2026): ${parts.join('; ')}.`;
+    const wpiNoteLines = pdf.splitTextToSize(wpiNote, summaryX - mL - 5);
+    pdf.text(wpiNoteLines, mL, summaryStartY + (isProvisional && provisionalIndices.length > 0 ? 30 : 22));
     pdf.setTextColor(0, 0, 0);
   }
 

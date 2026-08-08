@@ -1,0 +1,73 @@
+import { getAdminSettings } from './admin-settings';
+
+/**
+ * The WPI base-year change of June 2026, and the bridge across it.
+ *
+ * On 15.06.2026 DPIIT replaced the WPI series: indices from June 2026 are published on
+ * base 2022-23 = 100, and the old 2011-12 series is discontinued. The PVC formula
+ * compares a bill month's index against the contract's base month's — a ratio that only
+ * means anything when both sit on the same series. A contract based March 2024 (old
+ * series, ~150) measured against August 2026 (new series, ~108) would show a price fall
+ * that never happened and underpay the bill.
+ *
+ * DPIIT published linking factors (the ratio of the two series' geometric means over
+ * FY 2024-25) but deliberately prescribes no methodology, leaving the choice to users.
+ * The Railways' own precedent is exactly this bridge: when CPI-IW rebased in 2020,
+ * Railway Board adopted a linking factor (2.88) by circular. Until a Board circular
+ * lands for WPI, the DPIIT major-group factors are the defensible interim — and they
+ * are read from AdminSettings first, so the eventual circular's figures are a settings
+ * change, not a code change.
+ *
+ * Applied ONE way only: new-series months are converted up to the old base (× factor)
+ * when the contract's base month predates the switch. Contracts based June 2026 onward
+ * live entirely in the new series and are never converted. Stored values are never
+ * altered — conversion happens at calculation time and is flagged on the result so the
+ * statement can disclose it.
+ */
+
+/** First month published on the 2022-23 base. */
+export const WPI_NEW_SERIES_FROM = new Date(Date.UTC(2026, 5, 1));
+
+/**
+ * DPIIT linking factors, PIB release of 15.06.2026: Manufactured Products 1.44 (cement,
+ * machinery and explosives all live in that major group), All Commodities 1.53.
+ */
+export const DEFAULT_WPI_LINKING_FACTORS: Record<string, number> = {
+  'RBI Cement': 1.44,
+  'RBI Plant Machinery': 1.44,
+  'RBI Explosives': 1.44,
+  'RBI Other Materials': 1.53,
+};
+
+export function isWpiIndexName(name: string): boolean {
+  return name in DEFAULT_WPI_LINKING_FACTORS;
+}
+
+export function isNewSeriesMonth(month: Date): boolean {
+  return month.getTime() >= WPI_NEW_SERIES_FROM.getTime();
+}
+
+/** AdminSettings key for overriding one index's factor, e.g. wpi_linking_factor_rbi_cement. */
+export function wpiFactorSettingKey(indexName: string): string {
+  return `wpi_linking_factor_${indexName.toLowerCase().replace(/\s+/g, '_')}`;
+}
+
+/**
+ * The factors in force: DPIIT defaults, overridden per index from AdminSettings when a
+ * Railway Board circular (or a considered admin decision) supplies different ones.
+ */
+export async function getWpiLinkingFactors(): Promise<Record<string, number>> {
+  const factors = { ...DEFAULT_WPI_LINKING_FACTORS };
+  try {
+    const settings = await getAdminSettings();
+    for (const indexName of Object.keys(factors)) {
+      const key = wpiFactorSettingKey(indexName);
+      const setting = settings.find(s => s.key === key);
+      const parsed = setting ? parseFloat(setting.value) : NaN;
+      if (!isNaN(parsed) && parsed > 0) factors[indexName] = parsed;
+    }
+  } catch {
+    // Settings unreachable — the published defaults still stand.
+  }
+  return factors;
+}

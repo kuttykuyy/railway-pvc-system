@@ -1,6 +1,7 @@
 
 import { prisma } from './db';
 import { getQuarterMonths } from './pvc-calculations';
+import { getWpiLinkingFactors, isWpiIndexName, isNewSeriesMonth } from './wpi-series';
 
 export async function getQuarterlyAverages(quarter: string, priceIndexNames: string[], baseMonth: Date, calculationMethod: string = 'auto') {
   // Validate inputs
@@ -50,6 +51,16 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
   });
   
   const baseValueMap = new Map(baseMonthValues.map(bmv => [bmv.priceIndexId, bmv.value]));
+
+  // The WPI base-year change of June 2026: from that month the indices publish on base
+  // 2022-23 = 100, discontinuous with the 2011-12 series every earlier value is on.
+  // For contracts based before the switch, new-series months are lifted back to the old
+  // base with the DPIIT linking factors (admin-overridable), so the ratio the PVC
+  // formula takes stays a comparison of like with like. Contracts based after the
+  // switch live wholly in the new series and are left alone. See lib/wpi-series.ts.
+  const baseIsOldSeries = !isNewSeriesMonth(normalizedBaseMonth);
+  const needsWpiBridge = baseIsOldSeries && priceIndexNames.some(isWpiIndexName);
+  const wpiFactors = needsWpiBridge ? await getWpiLinkingFactors() : {};
   
   // 3. Fetch all quarterly values in a single query
   const monthlyValuesAll = await prisma.monthlyIndexValue.findMany({
@@ -72,7 +83,10 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
   const isBaseQuarter = ['Q0', 'Base'].includes(quarter);
 
   // Bulk fetch fallbacks for target months if any index is missing
-  const fallbackMaps: { [targetKey: string]: Map<string, number> } = {};
+  // Fallback values remember the month they were PUBLISHED for, not just the month they
+  // stand in for: whether a value needs the WPI series bridge turns on which series it
+  // was published in, and a May-2026 value standing in for August 2026 is old-series.
+  const fallbackMaps: { [targetKey: string]: Map<string, { value: number; sourceMonth: Date }> } = {};
   if (!isBaseQuarter) {
     for (const targetMonth of months) {
       const targetKey = targetMonth.toISOString().slice(0, 7);
@@ -101,7 +115,7 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
           distinct: ['priceIndexId']
         });
         
-        fallbackMaps[targetKey] = new Map(fallbacks.map(f => [f.priceIndexId, f.value]));
+        fallbackMaps[targetKey] = new Map(fallbacks.map(f => [f.priceIndexId, { value: f.value, sourceMonth: new Date(f.month) }]));
       }
     }
   }
@@ -125,13 +139,16 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
         const targetKey = targetMonth.toISOString().slice(0, 7);
         
         if (!existingMonthSet.has(targetKey)) {
-          const fallbackVal = fallbackMaps[targetKey]?.get(priceIndex.id);
-          if (fallbackVal !== undefined) {
+          const fallback = fallbackMaps[targetKey]?.get(priceIndex.id);
+          if (fallback !== undefined) {
             monthlyValues.push({
               id: `fallback-${priceIndex.id}-${targetKey}`,
               priceIndexId: priceIndex.id,
               month: targetMonth,
-              value: fallbackVal,
+              // The month this value was actually published for — the series it belongs
+              // to is decided by this, not by the month it stands in for.
+              sourceMonth: fallback.sourceMonth,
+              value: fallback.value,
               source: 'provisional-fallback',
               isProvisional: true,
               createdAt: new Date(),
@@ -145,19 +162,40 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
     }
     
     if (monthlyValues.length > 0) {
-      const average = monthlyValues.reduce((sum: number, val: any) => sum + val.value, 0) / monthlyValues.length;
-      
+      // Bridge the WPI series change: a value published June 2026 or later sits on the
+      // new 2022-23 base and must be lifted to the old base (× linking factor) before it
+      // can be compared with this contract's old-series base month. Judged per value by
+      // its published month, so a quarter straddling the switch converts only the months
+      // that need it. Stored data is never touched — this happens on the way into the
+      // formula, and the flag below lets the statement say so.
+      const factor = wpiFactors[indexName];
+      let wpiMonthsConverted = 0;
+      const effectiveValues = monthlyValues.map((mv: any) => {
+        const publishedMonth = new Date(mv.sourceMonth ?? mv.month);
+        if (factor && isNewSeriesMonth(publishedMonth)) {
+          wpiMonthsConverted++;
+          return { ...mv, value: mv.value * factor, wpiConverted: true };
+        }
+        return mv;
+      });
+
+      const average = effectiveValues.reduce((sum: number, val: any) => sum + val.value, 0) / effectiveValues.length;
+
       results.push({
         quarter,
         indexName,
         average,
         baseValue: actualBaseValue,
-        monthsUsed: monthlyValues.length,
+        monthsUsed: effectiveValues.length,
         includesFutureMonths: false,
-        usesPreviousMonthFallback: monthlyValues.some((mv: any) => typeof mv.id === 'string' && mv.id.startsWith('fallback-')),
-        monthlyValues: monthlyValues.map((mv: any) => ({
+        usesPreviousMonthFallback: effectiveValues.some((mv: any) => typeof mv.id === 'string' && mv.id.startsWith('fallback-')),
+        // For the statement's disclosure line: which factor bridged the series change,
+        // and for how many of the months used.
+        ...(wpiMonthsConverted > 0 ? { wpiConverted: { factor, monthsConverted: wpiMonthsConverted } } : {}),
+        monthlyValues: effectiveValues.map((mv: any) => ({
           month: new Date(mv.month).toISOString().slice(0, 7),
-          value: mv.value
+          value: mv.value,
+          ...(mv.wpiConverted ? { wpiConverted: true } : {})
         }))
       });
     }
