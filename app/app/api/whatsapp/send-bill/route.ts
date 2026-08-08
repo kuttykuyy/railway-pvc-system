@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { checkUserBillAccess } from '@/lib/permissions';
 import { sendBillPDFNotification, isMyDreamsWhatsAppConfigured } from '@/lib/whatsapp-mydreams';
 import jwt from 'jsonwebtoken';
 import { format } from 'date-fns';
@@ -75,11 +76,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const isAdmin = user?.role === 'admin';
-    const isRailwayOfficial = user?.role === 'railway_official';
-    const isContractOwner = bill.contract?.user?.email === session.user.email;
-
-    if (!isAdmin && !isRailwayOfficial && !isContractOwner) {
+    // The same gate the bill pages and PDF routes use: owner, admin, an explicit grant,
+    // or a department user whose zone matches and whose bill has been submitted.
+    //
+    // This used to admit ANY railway official to ANY bill in the country — no zone, no
+    // ownership — and the next lines mint a 24-hour public PDF link and send it to a
+    // number supplied in the request. That made it a way to pull any contractor's
+    // statement out of the app, not merely to read one.
+    const access = user ? await checkUserBillAccess(user.id, billId) : null;
+    if (!access?.canView) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

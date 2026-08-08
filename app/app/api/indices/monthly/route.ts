@@ -3,12 +3,22 @@ import { prisma } from '@/lib/db';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { advancedCache } from '@/lib/advanced-cache';
+import { validateAdminAccess } from '@/lib/role-auth';
 
 export const dynamic = "force-dynamic";
 
 // POST /api/indices/monthly - Add monthly index value(s)
 export async function POST(request: NextRequest) {
   try {
+    // These values are what every PVC in the app is computed from, so writing them is an
+    // admin act. POST and PUT had no role check at all — any signed-in contractor could
+    // overwrite a published index, and the cache flush below made it take effect at once.
+    // Every sibling route under indices/ was already guarded this way.
+    const { authorized, message } = await validateAdminAccess(request);
+    if (!authorized) {
+      return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
+    }
+
     const body = await request.json();
     
     // Handle both single entry and bulk import
@@ -118,6 +128,11 @@ export async function POST(request: NextRequest) {
 // PUT /api/indices/monthly - Update multiple monthly values
 export async function PUT(request: NextRequest) {
   try {
+    const { authorized, message } = await validateAdminAccess(request);
+    if (!authorized) {
+      return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { values } = body; // Array of { priceIndexId, month, value }
     
@@ -182,9 +197,11 @@ export async function PUT(request: NextRequest) {
 // DELETE /api/indices/monthly - Delete monthly index value(s)
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Deleting a published index value is an admin act too — this asked only whether
+    // you were signed in.
+    const { authorized, message } = await validateAdminAccess(request);
+    if (!authorized) {
+      return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
     }
 
     const body = await request.json();
