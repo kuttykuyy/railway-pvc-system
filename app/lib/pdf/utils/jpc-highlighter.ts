@@ -54,10 +54,15 @@ export async function highlightJpcSheet(
 
     const rows = calculationRowNumbers();
 
-    // A stored document holds a year of sheets, so every page is marked — the rows and
-    // the city are the same whichever month a sheet is for.
+    // Only the first page of each three-page fortnight carries the 24-item table this
+    // geometry describes; the second page is a different table (items 25-34) and the
+    // third a disclaimer, and marking those put boxes on the wrong rows. Documents
+    // start at a fortnight's first page — whole years, month slices and single sheets
+    // alike — so every third page is a first page.
     let markedPages = 0;
-    for (const page of pages) {
+    for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+    if (pageIndex % 3 !== 0) continue;
+    const page = pages[pageIndex];
     const { width, height } = page.getSize();
 
     // Pick the geometry for this page's shape. A shape none of the templates describe is

@@ -198,7 +198,6 @@ export default function IndicesViewPage() {
               <OfficialSheetViewer
                 year={year}
                 initialMonth={year === new Date().getFullYear() ? new Date().getMonth() + 1 : 1}
-                city={steelCity === 'Default' ? 'Chennai' : steelCity}
               />
               <Link href="/indices/jpc-view"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
