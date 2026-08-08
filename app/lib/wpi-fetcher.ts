@@ -6,27 +6,41 @@
 
 import { prisma } from './db';
 
-// WPI commodity codes mapping to our price indices
-export const WPI_MAPPINGS: Record<string, { code: string; name: string; wpiName: string }> = {
+// WPI commodity codes mapping to our price indices.
+//
+// Two series, two sets of codes: the 2022-23 rebase of June 2026 rebuilt the item
+// basket, and with it two of our four codes changed (machinery moved from k. to l. and
+// took a new code; "Explosive" became "Explosives & Defense Ammunition" under a new
+// group). `code`/`wpiName` identify the row in old-series workbooks, `newCode`/
+// `newWpiName` in new-series ones — verified against the July 2026 workbook itself.
+export const WPI_MAPPINGS: Record<string, { code: string; name: string; wpiName: string; newCode: string; newWpiName: string }> = {
   'RBI Cement': {
     code: '1313050000',
     name: 'RBI Cement',
-    wpiName: 'e. Manufacture of cement, lime and plaster'
+    wpiName: 'e. Manufacture of cement, lime and plaster',
+    newCode: '1313050000',
+    newWpiName: 'e.Manufacture of cement, lime and plaster'
   },
   'RBI Plant Machinery': {
-    code: '1318110000', 
+    code: '1318110000',
     name: 'RBI Plant Machinery',
-    wpiName: 'k. Manufacture of machinery for mining, quarrying and construction'
+    wpiName: 'k. Manufacture of machinery for mining, quarrying and construction',
+    newCode: '1318120000',
+    newWpiName: 'l.Manufacture of machinery for mining, quarrying and construction'
   },
   'RBI Explosives': {
     code: '1310070011',
     name: 'RBI Explosives',
-    wpiName: 'Explosive'
+    wpiName: 'Explosive',
+    newCode: '1315040001',
+    newWpiName: 'Explosives & Defense Ammunition'
   },
   'RBI Other Materials': {
     code: '1000000000',
-    name: 'RBI Other Materials', 
-    wpiName: 'All commodities'
+    name: 'RBI Other Materials',
+    wpiName: 'All commodities',
+    newCode: '1000000000',
+    newWpiName: 'All Commodities'
   }
 };
 
@@ -47,52 +61,80 @@ function parseIndexColumn(colName: string): Date | null {
 
 // Parse Excel row to extract index values
 export interface WPIDataRow {
+  /** Which series this row came from — codes are only meaningful within their own series. */
+  series?: 'old' | 'new';
   commName: string;
   commCode: string;
   commWeight: number;
   monthlyValues: { month: Date; value: number }[];
 }
 
+/** Excel's day count since 1899-12-30, which the new-series workbook uses as column headers. */
+function excelSerialToDate(serial: number): Date | null {
+  if (!isFinite(serial) || serial < 20000 || serial > 80000) return null;
+  const date = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+  // Normalize to the first of the month — the headers are month markers.
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
 export function parseWPIExcelData(data: any[][]): WPIDataRow[] {
   if (!data || data.length < 2) return [];
-  
-  const headers = data[0] as string[];
+
+  const headers = data[0] as any[];
   const result: WPIDataRow[] = [];
-  
+
+  // Two workbook generations. Old series (base 2011-12): columns are
+  // [name, code, weight, INDXMMYYYY...]. New series (base 2022-23, June 2026 onward):
+  // columns are [Level, Commodity Name, Commodity Code, Commodity Weight, <Excel date
+  // serials>...]. The header row says which this is.
+  const isNewLayout = headers.some(h => typeof h === 'string' && /commodity\s*code/i.test(h));
+  const nameCol = isNewLayout ? 1 : 0;
+  const codeCol = isNewLayout ? 2 : 1;
+  const weightCol = isNewLayout ? 3 : 2;
+
   // Find column indices for monthly data
   const monthColumns: { index: number; date: Date }[] = [];
   headers.forEach((header, idx) => {
     if (typeof header === 'string' && header.startsWith('INDX')) {
       const date = parseIndexColumn(header);
-      if (date) {
-        monthColumns.push({ index: idx, date });
-      }
+      if (date) monthColumns.push({ index: idx, date });
+    } else if (isNewLayout && typeof header === 'number') {
+      const date = excelSerialToDate(header);
+      if (date) monthColumns.push({ index: idx, date });
+    } else if (isNewLayout && header instanceof Date) {
+      monthColumns.push({ index: idx, date: new Date(Date.UTC(header.getUTCFullYear(), header.getUTCMonth(), 1)) });
     }
   });
-  
+
   // Parse each data row
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    if (!row || !row[0]) continue;
-    
-    const commName = String(row[0] || '').trim();
-    const commCode = String(row[1] || '').trim();
-    const commWeight = parseFloat(row[2]) || 0;
-    
+    if (!row || !row[nameCol]) continue;
+
+    const commName = String(row[nameCol] || '').trim();
+    const commCode = String(row[codeCol] || '').trim();
+    const commWeight = parseFloat(row[weightCol]) || 0;
+
     const monthlyValues: { month: Date; value: number }[] = [];
-    
+
     for (const col of monthColumns) {
       const value = parseFloat(row[col.index]);
-      if (!isNaN(value) && value > 0) {
-        monthlyValues.push({ month: col.date, value });
-      }
+      if (isNaN(value) || value <= 0) continue;
+      // The new-series workbook carries the whole back-series RECOMPUTED on the new
+      // base, from April 2023. Importing those would overwrite three years of stored
+      // old-series history with numbers on a different base — silently corrupting
+      // every contract whose base month sits in it (the calculation bridge assumes
+      // stored pre-June-2026 values are old-series). New-series workbooks therefore
+      // contribute only the months the new series actually owns.
+      if (isNewLayout && col.date.getTime() < Date.UTC(2026, 5, 1)) continue;
+      monthlyValues.push({ month: col.date, value });
     }
-    
+
     if (commName && commCode && monthlyValues.length > 0) {
-      result.push({ commName, commCode, commWeight, monthlyValues });
+      result.push({ commName, commCode, commWeight, monthlyValues, series: isNewLayout ? 'new' : 'old' });
     }
   }
-  
+
   return result;
 }
 
@@ -104,16 +146,21 @@ export function findWPIDataForIndex(
   const mapping = WPI_MAPPINGS[indexName];
   if (!mapping) return null;
   
-  // Find by code first (most accurate)
-  let match = wpiData.find(row => row.commCode === mapping.code);
+  // A code only means anything within its own series: the 2022-23 rebase reassigned
+  // codes, and our OLD machinery code now belongs to a different commodity (metallurgy
+  // machinery) in the new basket. Matching either code blindly picks that wrong row —
+  // so each row is matched by the code of the series it came from.
+  const codeFor = (row: WPIDataRow) => (row.series === 'new' ? mapping.newCode : mapping.code);
+  let match = wpiData.find(row => row.commCode === codeFor(row));
   if (match) return match;
-  
-  // Fallback to name matching
-  match = wpiData.find(row => 
-    row.commName.toLowerCase().includes(mapping.wpiName.toLowerCase()) ||
-    mapping.wpiName.toLowerCase().includes(row.commName.toLowerCase())
-  );
-  
+
+  // Fallback to name matching, against the spelling of the row's own series
+  match = wpiData.find(row => {
+    const expected = (row.series === 'new' ? mapping.newWpiName : mapping.wpiName).toLowerCase();
+    const rowName = row.commName.toLowerCase();
+    return rowName.includes(expected) || expected.includes(rowName);
+  });
+
   return match || null;
 }
 
@@ -277,6 +324,12 @@ export async function updateIndicesFromWPI(
 // Get WPI download URL for a specific month
 export function getWPIDownloadUrl(year: number, month: number): string {
   const monthStr = month.toString().padStart(2, '0');
+  // June 2026 onward publishes only in the new series' folder, in a new filename shape
+  // (verified against eaindustry's own download page). Earlier months stay at the old
+  // series' address for re-imports of history.
+  if (year > 2026 || (year === 2026 && month >= 6)) {
+    return `https://eaindustry.nic.in/indx_download_2223/wpi_monthly_index_${year}${monthStr}.xlsx`;
+  }
   return `https://eaindustry.nic.in/indx_download_1112/monthly_index_${year}${monthStr}.xls`;
 }
 

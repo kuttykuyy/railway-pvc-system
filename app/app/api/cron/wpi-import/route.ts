@@ -26,7 +26,8 @@ import {
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const WPI_CODES = new Set(Object.values(WPI_MAPPINGS).map((m: any) => m.code));
+// Both series' codes — two of the four changed at the June 2026 rebase.
+const WPI_CODES = new Set(Object.values(WPI_MAPPINGS).flatMap((m: any) => [m.code, m.newCode]));
 
 /** Fetch + parse a WPI workbook; returns the mapped rows, or null if the file is
  *  missing / not yet published (does not contain our commodities). */
