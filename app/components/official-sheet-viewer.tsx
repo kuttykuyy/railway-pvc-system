@@ -21,15 +21,15 @@ import { calculationRowNumbers, JPC_TABLE_ROWS } from '@/lib/pdf/utils/jpc-geome
  *
  * Returns null when no confident grid is found; the caller draws nothing then.
  */
-function detectJpcGrid(
+export function detectJpcGrid(
   context: CanvasRenderingContext2D,
   width: number,
   height: number,
-): { rowLines: number[]; colRules: number[]; fail?: undefined } | { fail: string } {
+): { rowLines: number[]; colRules: number[]; angle: number; fail?: undefined } | { fail: string } {
   try {
     const raw = context.getImageData(0, 0, width, height).data;
-    // Luminance, not the red channel alone — a raw scan often carries a yellow cast,
-    // and yellow is bright in red while the grey table lines are not.
+    // Luminance, not the red channel alone — a raw scan often carries a colour cast,
+    // and grey or bluish ink can vanish in red while the yellowed paper glows.
     const lum = new Uint8Array(width * height);
     for (let i = 0, j = 0; j < lum.length; i += 4, j++) {
       lum[j] = (raw[i] * 77 + raw[i + 1] * 150 + raw[i + 2] * 29) >> 8;
@@ -44,15 +44,12 @@ function detectJpcGrid(
       return groups.map(g => g[Math.floor(g.length / 2)]);
     };
 
-    const bandTop = Math.floor(0.18 * height);
+    const bandTop = Math.floor(0.15 * height);
     const bandBottom = Math.floor(0.95 * height);
     const bandSize = bandBottom - bandTop;
 
-    // Ink darkness is a property of the scan, not of the table: the old compressed
-    // sheets were contrast-stretched to near-black, the full-quality originals keep the
-    // scanner's grey. So the cut-off between paper and ink is read off the page's own
-    // histogram (Otsu) rather than assumed — a fixed number that separates one scan
-    // drowns another in text noise or sees no lines at all.
+    // The cut-off between paper and ink is read off the page's own histogram (Otsu) —
+    // contrast is a property of the scan, not of the table.
     const histogram = new Array(256).fill(0);
     let sampled = 0;
     for (let y = bandTop; y < bandBottom; y += 2) {
@@ -74,38 +71,82 @@ function detectJpcGrid(
       if (between > bestVar) { bestVar = between; otsu = t; }
     }
     const threshold = Math.min(230, Math.max(100, otsu));
-    const darkAt = (x: number, y: number) => lum[y * width + x] < threshold;
 
-    // Vertical rules, by DENSITY not contiguous run — a photocopied line is broken into
-    // pieces, but its column stays far darker than any text column (measured: rules
-    // 0.59-0.80 dark, the busiest text column 0.29).
-    const vCandidates: number[] = [];
-    for (let x = 0; x < width; x++) {
-      let dark = 0;
-      for (let y = bandTop; y < bandBottom; y++) if (darkAt(x, y)) dark++;
-      if (dark / bandSize > 0.5) vCandidates.push(x);
+    // ---- The scan's tilt, before anything else ----
+    // A tilted vertical rule never stays in one pixel column, so column-by-column
+    // scanning sees nothing (a real page failed with rules=1 on a visibly skewed scan).
+    // Project the dark pixels onto a rotated axis for each candidate angle: at the
+    // scan's true tilt the rules stack into a few tall bins; at every other angle they
+    // smear. The sharpest projection names the angle; everything after works in the
+    // de-rotated frame, and the caller draws the marks rotated back.
+    const cx = width / 2, cy = height / 2;
+    const darkPts: number[] = [];
+    for (let y = bandTop; y < bandBottom; y += 3) {
+      for (let x = 0; x < width; x++) {
+        if (lum[y * width + x] < threshold) darkPts.push(x, y);
+      }
     }
-    const colRules = cluster(vCandidates, Math.max(3, width / 300));
-    if (colRules.length < 6 || colRules.length > 9) return { fail: `rules=${colRules.length} thr=${threshold}` };
+    let angle = 0, bestScore = -1;
+    for (let deg = -3; deg <= 3.01; deg += 0.5) {
+      const th = (deg * Math.PI) / 180;
+      const cos = Math.cos(th), sin = Math.sin(th);
+      const bins = new Float64Array(width);
+      for (let i = 0; i < darkPts.length; i += 2) {
+        const u = (darkPts[i] - cx) * cos + (darkPts[i + 1] - cy) * sin + cx;
+        if (u >= 0 && u < width) bins[u | 0]++;
+      }
+      const sorted = Array.from(bins).sort((a, b) => b - a);
+      let score = 0;
+      for (let k = 0; k < 12; k++) score += sorted[k];
+      if (score > bestScore) { bestScore = score; angle = th; }
+    }
+    const cosA = Math.cos(angle), sinA = Math.sin(angle);
+    // Content frame (u,v) → pixel: rotate by the found angle about the page centre.
+    const darkAt = (u: number, v: number) => {
+      const x = Math.round((u - cx) * cosA - (v - cy) * sinA + cx);
+      const y = Math.round((u - cx) * sinA + (v - cy) * cosA + cy);
+      if (x < 0 || x >= width || y < 0 || y >= height) return false;
+      return lum[y * width + x] < threshold;
+    };
 
-    // The table's bottom, from the rules' own extent — walked DOWNWARD with a small gap
-    // tolerance, so a photocopy's breaks are stepped over but the jump from table bottom
-    // to the footer text below is not (walking up from the page bottom hit that footer
-    // and read the table as taller than it is).
-    // Each rule's LONGEST gap-tolerant dark segment is the rule itself — starting from
-    // the first dark pixel instead walks into stray header text above the table and
-    // stops there. Its ends bound the table.
+    // Vertical rules, by DENSITY in the de-rotated frame — a photocopied line is broken
+    // into pieces, but its column stays far darker than any text column. The bar is set
+    // RELATIVE to the page's own strongest column: on a full-page table the rules score
+    // ~0.8 of the band, on the newer sheets whose table fills half the page ~0.4 — a
+    // fixed bar either floods with text columns or sees nothing. All rules score alike,
+    // text columns score far below them, whatever the table's height.
+    const densities = new Float64Array(width);
+    let maxDensity = 0;
+    for (let u = 0; u < width; u++) {
+      let dark = 0;
+      for (let v = bandTop; v < bandBottom; v++) if (darkAt(u, v)) dark++;
+      densities[u] = dark / bandSize;
+      if (densities[u] > maxDensity) maxDensity = densities[u];
+    }
+    if (maxDensity < 0.25) {
+      return { fail: 'no-vlines thr=' + threshold + ' tilt=' + (angle * 180 / Math.PI).toFixed(1) };
+    }
+    const ruleBar = 0.6 * maxDensity;
+    const vCandidates: number[] = [];
+    for (let u = 0; u < width; u++) if (densities[u] > ruleBar) vCandidates.push(u);
+    const colRules = cluster(vCandidates, Math.max(3, width / 300));
+    if (colRules.length < 6 || colRules.length > 7) {
+      return { fail: 'rules=' + colRules.length + ' thr=' + threshold + ' tilt=' + (angle * 180 / Math.PI).toFixed(1) };
+    }
+
+    // Each rule's LONGEST gap-tolerant dark segment is the rule itself; its ends bound
+    // the table (walking from the first dark pixel instead strays into header text).
     const gapTolerance = Math.max(6, 0.02 * height);
-    const ruleSegment = (x: number) => {
-      const dark3 = (y: number) => darkAt(x, y) || darkAt(Math.max(0, x - 1), y) || darkAt(Math.min(width - 1, x + 1), y);
+    const ruleSegment = (u: number) => {
+      const dark3 = (v: number) => darkAt(u, v) || darkAt(u - 1, v) || darkAt(u + 1, v);
       let bestStart = bandTop, bestEnd = bandTop;
       let segStart = -1, lastDark = -1;
-      for (let y = bandTop; y <= bandBottom; y++) {
-        const isDark = y < bandBottom && dark3(y);
+      for (let v = bandTop; v <= bandBottom; v++) {
+        const isDark = v < bandBottom && dark3(v);
         if (isDark) {
-          if (segStart === -1) segStart = y;
-          lastDark = y;
-        } else if (segStart !== -1 && (y - lastDark > gapTolerance || y === bandBottom)) {
+          if (segStart === -1) segStart = v;
+          lastDark = v;
+        } else if (segStart !== -1 && (v - lastDark > gapTolerance || v === bandBottom)) {
           if (lastDark - segStart > bestEnd - bestStart) { bestStart = segStart; bestEnd = lastDark; }
           segStart = -1;
         }
@@ -117,28 +158,25 @@ function detectJpcGrid(
     const tableTop = median(segments.map(s => s.top));
     const tableBottom = median(segments.map(s => s.bottom));
 
-    // Horizontal lines inside the table's own vertical extent.
+    // Horizontal lines inside the table's own vertical extent, in the same frame.
     const x0 = colRules[0], x1 = colRules[colRules.length - 1];
     const hCandidates: number[] = [];
-    for (let y = Math.max(bandTop, tableTop - 4); y < tableBottom; y++) {
+    for (let v = Math.max(bandTop, tableTop - 4); v < tableBottom; v++) {
       let dark = 0;
-      for (let x = x0; x < x1; x += 2) if (darkAt(x, y)) dark++;
-      if (dark / ((x1 - x0) / 2) > 0.5) hCandidates.push(y);
+      for (let u = x0; u < x1; u += 2) if (darkAt(u, v)) dark++;
+      if (dark / ((x1 - x0) / 2) > 0.5) hCandidates.push(v);
     }
     const strongLines = cluster(hCandidates, Math.max(3, height / 400));
-    if (strongLines.length === 0) return { fail: `no-hlines thr=${threshold}` };
+    if (strongLines.length === 0) return { fail: 'no-hlines thr=' + threshold };
 
-    // The header separator is not simply the first strong line — a lighter threshold
-    // also surfaces the table's own top border, and once it surfaced the letterhead
-    // underline. Each candidate high in the table must EARN the job: the grid its
-    // position implies (24 equal rows down to the table bottom) has to be the one the
-    // surviving row separators actually agree with.
+    // The header separator must EARN the job of "top of row 1": the 24-row grid its
+    // position implies has to be the grid the surviving separators actually agree with.
     const upperLimit = tableTop + 0.35 * (tableBottom - tableTop);
     const candidates = strongLines.filter(line => line <= upperLimit);
     let best: { row1Top: number; pitch: number; score: number } | null = null;
     for (const candidate of candidates) {
       const pitch = (tableBottom - candidate) / JPC_TABLE_ROWS;
-      if (pitch < 0.015 * height || pitch > 0.035 * height) continue;
+      if (pitch < 0.012 * height || pitch > 0.035 * height) continue;
       const below = strongLines.filter(line => line > candidate);
       if (below.length === 0) continue;
       const fitting = below.filter(line => {
@@ -148,10 +186,10 @@ function detectJpcGrid(
       const score = fitting / below.length;
       if (!best || score > best.score) best = { row1Top: candidate, pitch, score };
     }
-    if (!best || best.score < 0.6) return { fail: `fit=${best ? best.score.toFixed(2) : 'none'} thr=${threshold}` };
+    if (!best || best.score < 0.6) return { fail: 'fit=' + (best ? best.score.toFixed(2) : 'none') + ' thr=' + threshold };
 
     const rowLines = Array.from({ length: JPC_TABLE_ROWS + 1 }, (_, k) => best!.row1Top + k * best!.pitch);
-    return { rowLines, colRules };
+    return { rowLines, colRules, angle };
   } catch (err: any) {
     return { fail: `error ${String(err?.message || err).slice(0, 40)}` };
   }
@@ -306,6 +344,12 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
         if ('rowLines' in grid) {
           setDetectNote(null);
           const { rowLines, colRules } = grid;
+          // The grid was found in the de-rotated frame; draw under the same rotation so
+          // the marks lie along the scan's own tilted lines.
+          context.save();
+          context.translate(viewport.width / 2, viewport.height / 2);
+          context.rotate(grid.angle);
+          context.translate(-viewport.width / 2, -viewport.height / 2);
           // Rules, left to right: table edge | Sl.No | ITEM | Kolkata | Delhi | Mumbai |
           // Chennai. With the right edge detected there are 7; with 6, the last city's
           // right edge is a column-width beyond the last rule.
@@ -326,6 +370,7 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
               context.strokeRect(cx0, yTop, cx1 - cx0, h);
             }
           }
+          context.restore();
         } else {
           // Why marks are absent, for the dialog to say — a page without the 24-item
           // table is normal; a first page failing is a bug report in miniature.
