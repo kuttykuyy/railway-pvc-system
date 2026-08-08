@@ -43,6 +43,10 @@ export function getS3Diagnostics() {
     endpointSetVia: present('S3_ENDPOINT_URL', 'SUPABASE_S3_ENDPOINT'),
     regionSetVia: present('AWS_REGION', 'S3_REGION', 'SUPABASE_REGION'),
     credentialsSetVia: present('AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'),
+    // A leftover AWS_PROFILE used to win over the keys and send the SDK looking for a
+    // credentials file that does not exist on Vercel. The client now passes the keys
+    // explicitly, so this is only worth flagging as clutter.
+    awsProfileAlsoSet: !!process.env.AWS_PROFILE,
     // The endpoint is not a secret and its shape is the commonest mistake — a Supabase
     // endpoint must keep its /storage/v1/s3 path.
     endpointLooksRight: (() => {

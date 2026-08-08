@@ -28,6 +28,23 @@ export function createS3Client(): S3Client {
     region,
   };
 
+  // Hand the SDK the keys directly when we have them, rather than leaving it to hunt
+  // through its own credential chain.
+  //
+  // That chain prefers AWS_PROFILE when it is set, and a profile means a credentials
+  // FILE — which does not exist on Vercel. With AWS_PROFILE left over in the
+  // environment, a correct access key and secret sitting right beside it were ignored
+  // and every upload failed with "Could not load credentials from any providers", which
+  // the app then reported as a file-size problem.
+  //
+  // Falls back to the chain when no keys are set, so a deployment using an instance role
+  // still works.
+  const accessKeyId = process.env.AWS_ACCESS_KEY_ID || process.env.S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.S3_SECRET_ACCESS_KEY;
+  if (accessKeyId && secretAccessKey) {
+    clientConfig.credentials = { accessKeyId, secretAccessKey };
+  }
+
   if (endpoint) {
     clientConfig.endpoint = endpoint;
     // Supabase Storage and other S3-compatible services typically expect path-style URLs

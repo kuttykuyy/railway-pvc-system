@@ -569,16 +569,22 @@ export default function ComponentDocumentsPage() {
           }),
         });
 
-        if (checkRes.ok) {
-          const checkData = await checkRes.json();
-          if (checkData.s3Available) {
-            presignedUrl = checkData.presignedUrl;
-            cloudStoragePath = checkData.cloudStoragePath;
-            s3Available = true;
-          }
+        const checkData = await checkRes.json().catch(() => ({}));
+        if (checkRes.ok && checkData.s3Available) {
+          presignedUrl = checkData.presignedUrl;
+          cloudStoragePath = checkData.cloudStoragePath;
+          s3Available = true;
+        } else {
+          // Say why. A failing check used to be swallowed — no else branch, no message —
+          // so a 400 or a 500 here was indistinguishable from having no storage at all,
+          // and the only symptom was a sheet compressed until the digits blurred.
+          const reason = checkData.error || checkData.message || `storage check returned ${checkRes.status}`;
+          console.warn('Cloud storage unavailable:', reason);
+          toast.error(`Cloud storage not used: ${reason}`, { duration: 8000 });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn("Failed to check/generate presigned URL, using DB storage fallback:", err);
+        toast.error(`Could not reach cloud storage: ${err?.message || 'request failed'}`, { duration: 8000 });
       } finally {
         toast.dismiss(presignedToastId);
       }
