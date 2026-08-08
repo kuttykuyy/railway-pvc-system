@@ -25,8 +25,9 @@ import { getAdminSettings } from './admin-settings';
  * statement can disclose it.
  */
 
-/** First month published on the 2022-23 base. */
-export const WPI_NEW_SERIES_FROM = new Date(Date.UTC(2026, 5, 1));
+/** First month published on the 2022-23 base — the 15.06.2026 release carried MAY 2026
+ * data, so May is the new series' first month; the old series ended with April. */
+export const WPI_NEW_SERIES_FROM = new Date(Date.UTC(2026, 4, 1));
 
 /**
  * DPIIT linking factors, PIB release of 15.06.2026: Manufactured Products 1.44 (cement,

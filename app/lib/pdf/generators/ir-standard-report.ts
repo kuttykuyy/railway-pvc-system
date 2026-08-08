@@ -665,7 +665,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     pdf.setFontSize(7.5);
     pdf.setFont('helvetica', 'italic');
     pdf.setTextColor(80, 80, 80);
-    const wpiNote = `Note: WPI indices from Jun 2026 are published on base 2022-23=100 (old 2011-12 series discontinued). ` +
+    const wpiNote = `Note: WPI indices from May 2026 are published on base 2022-23=100 (old 2011-12 series discontinued with Apr 2026). ` +
       `For comparison with this contract's base month they are converted to the 2011-12 base using DPIIT linking factors ` +
       `(PIB release 15.06.2026): ${parts.join('; ')}.`;
     const wpiNoteLines = pdf.splitTextToSize(wpiNote, summaryX - mL - 5);

@@ -5,6 +5,7 @@
  */
 
 import { prisma } from './db';
+import { WPI_NEW_SERIES_FROM } from './wpi-series';
 
 // WPI commodity codes mapping to our price indices.
 //
@@ -126,7 +127,7 @@ export function parseWPIExcelData(data: any[][]): WPIDataRow[] {
       // every contract whose base month sits in it (the calculation bridge assumes
       // stored pre-June-2026 values are old-series). New-series workbooks therefore
       // contribute only the months the new series actually owns.
-      if (isNewLayout && col.date.getTime() < Date.UTC(2026, 5, 1)) continue;
+      if (isNewLayout && col.date.getTime() < WPI_NEW_SERIES_FROM.getTime()) continue;
       monthlyValues.push({ month: col.date, value });
     }
 
