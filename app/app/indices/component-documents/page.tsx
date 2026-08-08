@@ -477,15 +477,18 @@ export default function ComponentDocumentsPage() {
     errorCode?: string;
     errorMessage?: string;
     hint?: string;
+    browserVerdict?: string;
+    browserOk?: boolean;
   } | null>(null);
   const [isTestingStorage, setIsTestingStorage] = useState(false);
 
   /**
-   * Put a real file in the bucket and take it out again.
+   * Test both halves of the wire: server → storage, then THIS browser → storage.
    *
-   * Being configured only means the variables can be read. It does not mean the bucket
-   * exists or that storage will accept us, and the upload URL is worked out offline, so
-   * neither problem shows up until a sheet is already being sent.
+   * They sit on different networks, and sheets have failed from the browser while every
+   * server-side call worked. The browser sends two probes itself — a tiny one (can this
+   * network PUT to storage at all?) and a 6 MB one (does something cut off large
+   * uploads?) — and where the wire breaks falls out of which probe survives.
    */
   const testStorageConnection = async () => {
     setIsTestingStorage(true);
@@ -493,8 +496,49 @@ export default function ComponentDocumentsPage() {
     try {
       const res = await fetch('/api/labour-index/presigned-url?test=1');
       const data = await res.json();
-      setConnectionTest(data.connection ?? { ok: false, errorMessage: 'No result came back.' });
-      if (data.connection?.ok) toast.success('Storage is working — a test file went up and came back.');
+      const base = data.connection ?? { ok: false, errorMessage: 'No result came back.' };
+
+      if (!base.ok || !data.browserProbe) {
+        setConnectionTest(base);
+        return;
+      }
+
+      const probe = async (url: string, bytes: number, timeoutMs: number) => {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+          const putRes = await fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: new Uint8Array(bytes),
+            signal: ctrl.signal,
+          });
+          return putRes.ok;
+        } catch {
+          return false;
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+
+      setConnectionTest({ ...base, browserVerdict: 'Server side works. Now testing from this browser…' });
+      const tinyOk = await probe(data.browserProbe.tiny.putUrl, 16, 20000);
+      // Skipping the big probe when the tiny one failed: it cannot pass, and its answer
+      // would say nothing new.
+      const bigOk = tinyOk ? await probe(data.browserProbe.big.putUrl, 6 * 1024 * 1024, 120000) : false;
+
+      // Tidy up what landed; nothing turns on whether this succeeds.
+      for (const p of [data.browserProbe.tiny, data.browserProbe.big]) {
+        fetch(p.deleteUrl, { method: 'DELETE' }).catch(() => {});
+      }
+
+      const browserVerdict = !tinyOk
+        ? 'This browser cannot reach storage at all, though the server can. Something on this device or network — antivirus, firewall, proxy — is blocking uploads to storage.supabase.co.'
+        : !bigOk
+          ? 'Small uploads from this browser get through, but a 6 MB one does not. Something on this network cuts off large uploads — usually antivirus scanning, a proxy, or a hotspot. The sheet fails for the same reason.'
+          : 'This browser reached storage with both a small and a 6 MB upload. The sheet failing looks like a passing drop — try it again now.';
+      setConnectionTest({ ...base, browserOk: tinyOk && bigOk, browserVerdict });
+      if (tinyOk && bigOk) toast.success('Storage is reachable from the server and this browser.');
     } catch (err: any) {
       setConnectionTest({ ok: false, errorMessage: String(err?.message || err) });
     } finally {
@@ -1049,9 +1093,15 @@ export default function ComponentDocumentsPage() {
                 {connectionTest && (
                   <span className="block mt-1 font-normal">
                     {connectionTest.ok
-                      ? '✓ A test file uploaded and read back fine.'
+                      ? '✓ Server → storage works: a test file went up and came back.'
                       : `✗ Failed at ${connectionTest.failedAt ?? 'upload'}: ${connectionTest.errorCode ?? ''} ${connectionTest.errorMessage ?? ''}`}
                     {connectionTest.hint && <span className="block mt-0.5 opacity-90">{connectionTest.hint}</span>}
+                    {connectionTest.browserVerdict && (
+                      <span className="block mt-0.5">
+                        {connectionTest.browserOk === undefined ? '… ' : connectionTest.browserOk ? '✓ ' : '✗ '}
+                        {connectionTest.browserVerdict}
+                      </span>
+                    )}
                   </span>
                 )}
                 {storageStatus.diagnostics?.bucket && (

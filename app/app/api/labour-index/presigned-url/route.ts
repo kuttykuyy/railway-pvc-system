@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getUploadPresignedUrl, isS3Configured, getS3Diagnostics, testS3RoundTrip } from "@/lib/s3";
+import { getUploadPresignedUrl, getDeletePresignedUrl, isS3Configured, getS3Diagnostics, testS3RoundTrip } from "@/lib/s3";
 import { ComponentType } from "@prisma/client";
 
 /**
@@ -34,6 +34,36 @@ export async function GET(request: NextRequest) {
   const runTest = request.nextUrl.searchParams.get('test') === '1';
   const connection = runTest && isAdmin ? await testS3RoundTrip() : undefined;
 
+  // The server reaching storage says nothing about the browser reaching it — they sit on
+  // different networks, and uploads here have failed from the browser while every
+  // server-side call sailed through. Hand back signed URLs for two probes the browser can
+  // send itself: a tiny one (can this network PUT to storage at all?) and a 6 MB one
+  // (does something on it cut off large uploads?). Where the wire breaks falls out of
+  // which probe survives.
+  let browserProbe: {
+    tiny: { putUrl: string; deleteUrl: string };
+    big: { putUrl: string; deleteUrl: string };
+  } | undefined;
+  if (connection?.ok) {
+    try {
+      const stamp = Date.now();
+      const tinyKey = `connection-test/browser-tiny-${stamp}.bin`;
+      const bigKey = `connection-test/browser-big-${stamp}.bin`;
+      browserProbe = {
+        tiny: {
+          putUrl: await getUploadPresignedUrl(tinyKey, 'application/octet-stream'),
+          deleteUrl: await getDeletePresignedUrl(tinyKey),
+        },
+        big: {
+          putUrl: await getUploadPresignedUrl(bigKey, 'application/octet-stream'),
+          deleteUrl: await getDeletePresignedUrl(bigKey),
+        },
+      };
+    } catch {
+      // The server-side verdict still stands on its own.
+    }
+  }
+
   return NextResponse.json({
     s3Available: configured,
     message: configured
@@ -41,6 +71,7 @@ export async function GET(request: NextRequest) {
       : 'Cloud storage is off, so every sheet is compressed to fit under the 4.5 MB request limit.',
     ...(isAdmin ? { diagnostics: getS3Diagnostics() } : {}),
     ...(connection ? { connection } : {}),
+    ...(browserProbe ? { browserProbe } : {}),
   });
 }
 

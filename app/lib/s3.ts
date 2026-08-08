@@ -271,6 +271,18 @@ export async function getUploadPresignedUrl(key: string, contentType: string, ex
   return await getSignedUrl(s3Client, command, { expiresIn });
 }
 
+/** So a browser-side probe can tidy up after itself without a server round trip. */
+export async function getDeletePresignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
+  if (useLocalFallback || !s3Client) {
+    throw new Error('S3 client not initialized or running in database fallback mode');
+  }
+  const command = new DeleteObjectCommand({
+    Bucket: bucketName,
+    Key: key,
+  });
+  return await getSignedUrl(s3Client, command, { expiresIn });
+}
+
 export async function uploadFile(buffer: Buffer, fileName: string): Promise<string> {
   if (useLocalFallback || !s3Client) {
     // If S3 is not available, store the file in the database instead of exposing
