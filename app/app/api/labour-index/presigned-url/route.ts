@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getUploadPresignedUrl, getDeletePresignedUrl, isS3Configured, getS3Diagnostics, testS3RoundTrip } from "@/lib/s3";
+import { isRestUploadAvailable, getRestUploadDiagnostics, createRestSignedUploadUrl } from "@/lib/supabase-storage";
+import { getBucketConfig } from "@/lib/aws-config";
 import { ComponentType } from "@prisma/client";
 
 /**
@@ -34,13 +36,13 @@ export async function GET(request: NextRequest) {
   const runTest = request.nextUrl.searchParams.get('test') === '1';
   const connection = runTest && isAdmin ? await testS3RoundTrip() : undefined;
 
-  // The server reaching storage says nothing about the browser reaching it — they sit on
-  // different networks, and uploads here have failed from the browser while every
-  // server-side call sailed through. Hand back signed URLs for two probes the browser can
-  // send itself: a tiny one (can this network PUT to storage at all?) and a 6 MB one
-  // (does something on it cut off large uploads?). Where the wire breaks falls out of
-  // which probe survives.
+  // The server reaching storage says nothing about the browser reaching it — they use
+  // different doors, and Supabase's S3 door blocks browsers outright. Hand back signed
+  // URLs for two probes the browser sends itself, through the SAME door real uploads
+  // will use: a tiny one (does this door work from a browser at all?) and a 6 MB one
+  // (does anything on the way choke on size?).
   let browserProbe: {
+    kind: 'rest' | 's3';
     tiny: { putUrl: string; deleteUrl: string };
     big: { putUrl: string; deleteUrl: string };
   } | undefined;
@@ -49,13 +51,19 @@ export async function GET(request: NextRequest) {
       const stamp = Date.now();
       const tinyKey = `connection-test/browser-tiny-${stamp}.bin`;
       const bigKey = `connection-test/browser-big-${stamp}.bin`;
+      const rest = isRestUploadAvailable();
+      const sign = (key: string) => rest
+        ? createRestSignedUploadUrl(getBucketConfig().bucketName, key)
+        : getUploadPresignedUrl(key, 'application/octet-stream');
       browserProbe = {
+        kind: rest ? 'rest' : 's3',
         tiny: {
-          putUrl: await getUploadPresignedUrl(tinyKey, 'application/octet-stream'),
+          putUrl: await sign(tinyKey),
+          // Cleanup goes through S3 regardless — the server's door works fine.
           deleteUrl: await getDeletePresignedUrl(tinyKey),
         },
         big: {
-          putUrl: await getUploadPresignedUrl(bigKey, 'application/octet-stream'),
+          putUrl: await sign(bigKey),
           deleteUrl: await getDeletePresignedUrl(bigKey),
         },
       };
@@ -69,7 +77,7 @@ export async function GET(request: NextRequest) {
     message: configured
       ? 'Cloud storage is on. Sheets upload at their original quality.'
       : 'Cloud storage is off, so every sheet is compressed to fit under the 4.5 MB request limit.',
-    ...(isAdmin ? { diagnostics: getS3Diagnostics() } : {}),
+    ...(isAdmin ? { diagnostics: { ...getS3Diagnostics(), ...getRestUploadDiagnostics() } } : {}),
     ...(connection ? { connection } : {}),
     ...(browserProbe ? { browserProbe } : {}),
   });
@@ -122,12 +130,27 @@ export async function POST(request: NextRequest) {
     const generatedFileName = `${folderName}-${year}-${monthsStr}-${timestamp}.pdf`;
     const s3Key = `component-indices/${folderName}/${generatedFileName}`;
 
-    // Generate presigned URL
+    // The browser cannot use an S3-signed URL on hosted Supabase — the S3 door answers
+    // preflights but blocks the actual cross-origin PUT, with no setting to open it. So
+    // browsers get a URL signed at Supabase's REST door (the one its own browser SDK
+    // uses), and the S3 signature remains only as a fallback for non-Supabase storage.
+    if (isRestUploadAvailable()) {
+      const restUrl = await createRestSignedUploadUrl(getBucketConfig().bucketName, s3Key);
+      return NextResponse.json({
+        s3Available: true,
+        presignedUrl: restUrl,
+        urlKind: "rest",
+        cloudStoragePath: s3Key,
+        fileName: generatedFileName
+      });
+    }
+
     const presignedUrl = await getUploadPresignedUrl(s3Key, fileType);
 
     return NextResponse.json({
       s3Available: true,
       presignedUrl,
+      urlKind: "s3",
       cloudStoragePath: s3Key,
       fileName: generatedFileName
     });

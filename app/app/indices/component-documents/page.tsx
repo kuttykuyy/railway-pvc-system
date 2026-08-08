@@ -469,6 +469,8 @@ export default function ComponentDocumentsPage() {
       region: { value: string; from: string } | null;
       overriddenBucket: { value: string; from: string } | null;
       overriddenRegion: { value: string; from: string } | null;
+      restUploadAvailable?: boolean;
+      restKeySetVia?: string | null;
     };
   } | null>(null);
   const [connectionTest, setConnectionTest] = useState<{
@@ -723,6 +725,9 @@ export default function ComponentDocumentsPage() {
       let presignedUrl = "";
       let cloudStoragePath = "";
       let s3Available = false;
+      // Which door the URL opens. Supabase's REST door takes a whole file in one browser
+      // PUT; only a true S3 door supports the multipart route.
+      let urlKind: 'rest' | 's3' = 's3';
 
       const presignedToastId = toast.loading("Checking storage configuration...");
       try {
@@ -746,6 +751,7 @@ export default function ComponentDocumentsPage() {
         if (checkRes.ok && checkData.s3Available) {
           presignedUrl = checkData.presignedUrl;
           cloudStoragePath = checkData.cloudStoragePath;
+          if (checkData.urlKind === 'rest') urlKind = 'rest';
           s3Available = true;
         } else {
           // Say why. A failing check used to be swallowed — no else branch, no message —
@@ -807,10 +813,9 @@ export default function ComponentDocumentsPage() {
       if (s3Available && presignedUrl) {
         const uploadToastId = toast.loading("Uploading document to cloud storage...");
         try {
-          if (fileToUpload.size > MULTIPART_THRESHOLD) {
-            // Big sheets go up in 5 MB parts, each retried on its own. One unbroken
-            // transfer of the whole file kept dying on this connection, and every death
-            // cost all of it.
+          if (urlKind === 's3' && fileToUpload.size > MULTIPART_THRESHOLD) {
+            // Multipart is an S3-door route only. Supabase's REST door takes the whole
+            // file in one PUT — and unlike its S3 door, it actually admits browsers.
             cloudStoragePath = await uploadInParts(
               fileToUpload,
               {
@@ -821,7 +826,8 @@ export default function ComponentDocumentsPage() {
               (msg) => toast.loading(msg, { id: uploadToastId }),
             );
           } else {
-            // Small files fit in one transfer; a second attempt covers the common drop.
+            // One transfer, with a second attempt to cover a passing drop. All REST-door
+            // uploads land here, whatever their size, plus small S3 ones.
             const attemptUpload = async () => {
               const res = await fetch(presignedUrl, {
                 method: "PUT",
@@ -1123,6 +1129,13 @@ export default function ComponentDocumentsPage() {
                     {storageStatus.diagnostics.region
                       ? `, region ${storageStatus.diagnostics.region.value} (from ${storageStatus.diagnostics.region.from})`
                       : ', region not set'}
+                  </span>
+                )}
+                {storageStatus.diagnostics?.restUploadAvailable === false && (
+                  <span className="block mt-1 font-normal">
+                    Browser uploads need one more variable: add SUPABASE_SERVICE_ROLE_KEY in Vercel.
+                    Supabase's S3 door refuses browsers, so upload links must be signed at its browser door,
+                    and signing there takes that key.
                   </span>
                 )}
                 {(storageStatus.diagnostics?.overriddenBucket || storageStatus.diagnostics?.overriddenRegion) && (
