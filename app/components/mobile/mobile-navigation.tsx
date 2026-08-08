@@ -31,64 +31,21 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getClientRoleInfo } from '@/lib/role-auth-client';
+import { WORK_ITEMS, REFERENCE_ITEMS, ACCOUNT_ITEMS, ADMIN_ITEMS, QUICK_ACTIONS } from '@/lib/navigation-items';
 import { useLanguage } from '../i18n-provider';
 
+// The screens come from lib/navigation-items.ts, shared with the desktop menu. These
+// were two hand-kept lists and this one had fallen nine entries behind, with its Price
+// Indices link pointing at the admin screen. Only the grouping and the quick actions
+// below are particular to the phone.
 const mobileNavSections = [
-  {
-    title: 'Main',
-    items: [
-      { name: 'Dashboard', href: '/dashboard', icon: Home, adminOnly: true },
-      { name: 'Contracts', href: '/contracts', icon: Building2, adminOnly: false },
-      { name: 'Bills', href: '/bills', icon: FileText, adminOnly: false },
-      { name: 'Approvals', href: '/approvals', icon: ListChecks, railwayOfficialOnly: true },
-      { name: 'Accounts', href: '/accounts', icon: ListChecks, accountsOfficialOnly: true },
-    ]
-  },
-  {
-    title: 'Reports & Data',
-    items: [
-      { name: 'Abstract', href: '/reports/abstract', icon: Calculator, adminOnly: false },
-      { name: 'Tendering Estimator', href: '/tendering-estimator', icon: BarChart3, adminOnly: false },
-      // The read-only view, as on desktop. /indices is the admin management screen, so a
-      // contractor tapping this was bounced straight back out.
-      { name: 'Price Indices', href: '/indices/view', icon: TrendingUp, adminOnly: false },
-      { name: 'Price Indices Management', href: '/indices', icon: TrendingUp, adminOnly: true },
-      { name: 'Component Index Documents', href: '/indices/component-documents', icon: FileText, adminOnly: true },
-      { name: 'Classifications', href: '/classifications', icon: ListChecks, adminOnly: true },
-      { name: 'Report Templates', href: '/report-templates', icon: FileText, adminOnly: true },
-      { name: 'Extension Subcategories', href: '/admin/extension-subcategories', icon: Calculator, adminOnly: true },
-    ]
-  },
-  {
-    title: 'Account',
-    items: [
-      { name: 'Profile', href: '/profile', icon: UserCircle, adminOnly: false },
-      { name: 'Profile & Billing', href: '/profile', icon: CreditCard, adminOnly: false },
-      { name: 'Refer & Earn', href: '/referrals', icon: Gift, adminOnly: false },
-      { name: 'Review Reward', href: '/review-reward', icon: Star, adminOnly: false },
-      { name: 'PVC Check Analytics', href: '/admin/analytics', icon: TrendingUp, adminOnly: true },
-      { name: 'User Management', href: '/admin/users', icon: User, adminOnly: true },
-      { name: 'User Permissions', href: '/admin/user-permissions', icon: Settings, adminOnly: true },
-      { name: 'Credit Statements', href: '/admin/credit-statements', icon: Wallet, adminOnly: true },
-      { name: 'Review Rewards', href: '/admin/review-rewards', icon: Star, adminOnly: true },
-      { name: 'WhatsApp Logs', href: '/admin/whatsapp-logs', icon: MessageSquare, adminOnly: true },
-      { name: 'AI Usage & Credit', href: '/admin/ai-usage', icon: Sparkles, adminOnly: true },
-      { name: 'Cement Coefficients', href: '/admin/dsr-cement-coefficients', icon: Calculator, adminOnly: true },
-      { name: 'Classification %', href: '/admin/classification-audit', icon: ListChecks, adminOnly: true },
-      { name: 'GST Invoices', href: '/admin/gst-invoices', icon: FileText, adminOnly: true },
-      { name: 'Railway Official Limits', href: '/admin/railway-official-settings', icon: Settings, adminOnly: true },
-      { name: 'Steel City Audit', href: '/admin/steel-city-audit', icon: TrendingUp, adminOnly: true },
-      { name: 'Telegram Usage', href: '/admin/telegram', icon: MessageSquare, adminOnly: true },
-      { name: 'Demo Accounts', href: '/admin/demo-accounts', icon: User, adminOnly: true },
-      { name: 'Pending DB Changes', href: '/admin/pending-db-change', icon: Settings, adminOnly: true },
-    ]
-  }
+  { title: 'Main', items: WORK_ITEMS },
+  { title: 'Reports & Data', items: REFERENCE_ITEMS },
+  { title: 'Account', items: ACCOUNT_ITEMS },
+  { title: 'Admin', items: ADMIN_ITEMS },
 ];
 
-const quickActions = [
-  { name: 'New Bill', href: '/bills/new', icon: FileText, color: 'bg-gradient-to-br from-emerald-500 to-emerald-600', adminOnly: true },
-  { name: 'New Contract', href: '/contracts/new', icon: Building2, color: 'bg-gradient-to-br from-emerald-500 to-emerald-600', adminOnly: true },
-];
+const quickActions = QUICK_ACTIONS;
 
 interface MobileNavigationProps {
   asSheet?: boolean;

@@ -51,54 +51,16 @@ import {
   Send
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { WORK_ITEMS, ADMIN_ITEMS, REFERENCE_ITEMS } from '@/lib/navigation-items';
 
 
-// Standalone navigation items (top-level tabs)
-const standaloneNavItems = [
-  { name: 'Price Indices', href: '/indices/view', icon: LineChart, adminOnly: false }
-];
+// The screens themselves live in lib/navigation-items.ts, shared with the phone menu —
+// two hand-kept lists had drifted nine entries apart. Only the grouping is local.
+const standaloneNavItems = REFERENCE_ITEMS;
 
 const navigationGroups = [
-  {
-    name: 'Contract Management',
-    icon: Building2,
-    items: [
-      // Admin-only operations
-      { name: 'Dashboard', href: '/dashboard', icon: Home, adminOnly: true },
-      { name: 'Contracts', href: '/contracts', icon: Briefcase, adminOnly: false },
-      { name: 'PVC Bills', href: '/bills', icon: FileText, adminOnly: false },
-      { name: 'Bill Approvals', href: '/approvals', icon: CheckSquare, railwayOfficialOnly: true },
-      { name: 'Accounts / Audit', href: '/accounts', icon: CheckSquare, accountsOfficialOnly: true },
-      { name: 'Abstract of Bills', href: '/reports/abstract', icon: Calculator, adminOnly: false },
-      { name: 'Tendering Estimator', href: '/tendering-estimator', icon: BarChart3, adminOnly: false },
-      { name: 'Refer & Earn', href: '/referrals', icon: Gift, adminOnly: false },
-    ]
-  },
-  {
-    name: 'Admin Settings',
-    icon: Settings,
-    items: [
-      { name: 'PVC Check Analytics', href: '/admin/analytics', icon: TrendingUp, adminOnly: true },
-      { name: 'Report Templates', href: '/report-templates', icon: Layers, adminOnly: true },
-      { name: 'Work Classifications', href: '/classifications', icon: Tags, adminOnly: true },
-      { name: 'Extension Categories', href: '/admin/extension-subcategories', icon: FileBarChart, adminOnly: true },
-      { name: 'Price Indices Management', href: '/indices', icon: LineChart, adminOnly: true },
-      { name: 'Cement Coefficients', href: '/admin/dsr-cement-coefficients', icon: Package, adminOnly: true },
-      { name: 'Component Index Documents', href: '/indices/component-documents', icon: FileText, adminOnly: true },
-      { name: 'GST Invoices', href: '/admin/gst-invoices', icon: Receipt, adminOnly: true },
-      { name: 'User Management', href: '/admin/users', icon: User, adminOnly: true },
-      { name: 'Role & Permissions', href: '/admin/user-permissions', icon: ShieldCheck, adminOnly: true },
-      { name: 'Railway Official Limits', href: '/admin/railway-official-settings', icon: ShieldCheck, adminOnly: true },
-      { name: 'Credit Statements', href: '/admin/credit-statements', icon: Wallet, adminOnly: true },
-      { name: 'WhatsApp Logs', href: '/admin/whatsapp-logs', icon: MessageSquare, adminOnly: true },
-      { name: 'Telegram Usage', href: '/admin/telegram', icon: Send, adminOnly: true },
-      { name: 'Steel City Audit', href: '/admin/steel-city-audit', icon: AlertCircle, adminOnly: true },
-      { name: 'Classification %', href: '/admin/classification-audit', icon: Tags, adminOnly: true },
-      { name: 'Pending DB Changes', href: '/admin/pending-db-change', icon: Database, adminOnly: true },
-      { name: 'Demo Accounts', href: '/admin/demo-accounts', icon: User, adminOnly: true },
-      { name: 'AI Usage & Credit', href: '/admin/ai-usage', icon: Sparkles, adminOnly: true },
-    ]
-  }
+  { name: 'Contract Management', icon: Building2, items: WORK_ITEMS },
+  { name: 'Admin Settings', icon: Settings, items: ADMIN_ITEMS },
 ];
 
 interface CreditBalance {
