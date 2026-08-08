@@ -95,6 +95,41 @@ export function getRestUploadDiagnostics() {
  * The returned URL is complete — the browser PUTs the file to it with a Content-Type
  * header and nothing else. Tokens are single-use and expire on Supabase's schedule.
  */
+/**
+ * Ask Supabase to sign a short-lived browser DOWNLOAD URL for this key.
+ *
+ * Same door as the uploads, opposite direction, and for the same reason: the S3 door's
+ * signed GETs work as page navigations but a browser fetch of one is refused, so
+ * anything that must READ the bytes in the page — a canvas PDF viewer, for one — needs
+ * a URL from the REST door, which speaks CORS.
+ */
+export async function createRestSignedDownloadUrl(bucket: string, key: string, expiresInSeconds = 600): Promise<string> {
+  const base = restBase();
+  const token = serviceKey();
+  if (!base || !token) {
+    throw new Error('Signed downloads are not configured — set SUPABASE_SERVICE_ROLE_KEY.');
+  }
+  const described = describeKey(token);
+  const headers: Record<string, string> = {
+    apikey: token,
+    'Content-Type': 'application/json',
+  };
+  if (described.kind !== 'secret') headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${base}/object/sign/${bucket}/${key}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ expiresIn: expiresInSeconds }),
+  });
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(`Supabase refused to sign a download: ${res.status} ${data?.message || data?.error || ''}`.trim());
+  }
+  const url: string | undefined = data?.signedURL || data?.signedUrl || data?.url;
+  if (!url) throw new Error('Supabase returned no download URL');
+  return url.startsWith('http') ? url : `${base}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
 export async function createRestSignedUploadUrl(bucket: string, key: string): Promise<string> {
   const base = restBase();
   const token = serviceKey();
