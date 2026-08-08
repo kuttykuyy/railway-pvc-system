@@ -596,7 +596,7 @@ export async function POST(request: NextRequest) {
             startDate: componentIndexStartDate,
             endDate: componentIndexEndDate,
             componentTypes,
-            jpcCity: anyBillHasSteel(bills) && irJpcCities.size === 1 ? [...irJpcCities][0] : undefined,
+            jpcCity: irJpcCities.size === 1 ? [...irJpcCities][0] : undefined,
             jpcCaption: `${firstBill.contract.agreementNo} — ${bills.length} bill(s)`,
             fuelBasis: new Set(bills.map((b) => b.fuelPriceType)).size === 1 ? firstBill.fuelPriceType : undefined,
           });
@@ -2951,7 +2951,7 @@ export async function POST(request: NextRequest) {
             startDate: componentIndexStartDate,
             endDate: componentIndexEndDate,
             componentTypes: bulkComponentTypes,
-            jpcCity: anyBillHasSteel(bills) && bulkJpcCities.size === 1 ? [...bulkJpcCities][0] : undefined,
+            jpcCity: bulkJpcCities.size === 1 ? [...bulkJpcCities][0] : undefined,
             jpcCaption: `${firstBill.contract.agreementNo} — ${bills.length} bill(s)`,
             fuelBasis: new Set(bills.map((b) => b.fuelPriceType)).size === 1 ? firstBill.fuelPriceType : undefined,
           })

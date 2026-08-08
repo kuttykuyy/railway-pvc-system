@@ -778,9 +778,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             startDate: new Date(bill.contract.baseMonth),
             endDate: new Date(bill.dateOfMeasurement),
             componentTypes: irComponentTypes,
-            // Mark, on the attached JPC sheets, the six rows and this bill's city column
-            // that its steel indices were read from.
-            jpcCity: billHasSteel(bill) ? getSteelCityForZone(bill.zone) : undefined,
+            // Switches on marking for every attached sheet — steel rows and city on JPC
+            // sheets, used months on the rest. Passed for every bill: one without steel
+            // attaches no JPC sheet, so the city is unused there, but its labour,
+            // cement and fuel sheets still get their months marked.
+            jpcCity: getSteelCityForZone(bill.zone),
             jpcCaption: `${bill.contract.agreementNo} — ${bill.billNo}`,
             fuelBasis: bill.fuelPriceType,
           });
@@ -4442,9 +4444,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           startDate: componentIndexStartDate,
           endDate: componentIndexEndDate,
           componentTypes: detailedComponentTypes,
-          // Mark, on the attached JPC sheets, the six rows and this bill's city column
-          // that its steel indices were read from.
-          jpcCity: billHasSteel(bill) ? getSteelCityForZone(bill.zone) : undefined,
+          // Switches on marking for every attached sheet — steel rows and city on JPC
+          // sheets, used months on the rest. Passed for every bill: one without steel
+          // attaches no JPC sheet, so the city is unused there, but its labour,
+          // cement and fuel sheets still get their months marked.
+          jpcCity: getSteelCityForZone(bill.zone),
           jpcCaption: `${bill.contract.agreementNo} — ${bill.billNo}`,
             fuelBasis: bill.fuelPriceType,
         });
