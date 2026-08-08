@@ -471,6 +471,10 @@ export default function ComponentDocumentsPage() {
       overriddenRegion: { value: string; from: string } | null;
       restUploadAvailable?: boolean;
       restKeySetVia?: string | null;
+      restKeyKind?: string | null;
+      restKeyRole?: string | null;
+      restKeyProjectRef?: string | null;
+      restKeyMatchesProject?: boolean | null;
     };
   } | null>(null);
   const [connectionTest, setConnectionTest] = useState<{
@@ -1136,6 +1140,24 @@ export default function ComponentDocumentsPage() {
                     Browser uploads need one more variable: add SUPABASE_SERVICE_ROLE_KEY in Vercel.
                     Supabase's S3 door refuses browsers, so upload links must be signed at its browser door,
                     and signing there takes that key.
+                  </span>
+                )}
+                {/* A key can be present and still be the wrong pass — for another
+                    project, or the anon one. Its own label says so; read it out. */}
+                {storageStatus.diagnostics?.restKeyMatchesProject === false && (
+                  <span className="block mt-1 font-normal">
+                    The {storageStatus.diagnostics.restKeySetVia} key belongs to Supabase project
+                    “{storageStatus.diagnostics.restKeyProjectRef}”, but storage points at a different
+                    project. Copy the service_role key from this project's dashboard.
+                  </span>
+                )}
+                {storageStatus.diagnostics?.restKeyKind === 'jwt' &&
+                  storageStatus.diagnostics?.restKeyRole &&
+                  storageStatus.diagnostics.restKeyRole !== 'service_role' && (
+                  <span className="block mt-1 font-normal">
+                    The {storageStatus.diagnostics.restKeySetVia} key is the
+                    “{storageStatus.diagnostics.restKeyRole}” key — signing uploads needs the
+                    service_role key.
                   </span>
                 )}
                 {(storageStatus.diagnostics?.overriddenBucket || storageStatus.diagnostics?.overriddenRegion) && (

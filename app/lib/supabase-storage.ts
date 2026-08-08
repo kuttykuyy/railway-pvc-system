@@ -26,11 +26,50 @@ function serviceKey(): string | null {
   return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || null;
 }
 
+/**
+ * What kind of pass this key is, read from its label — never its secret.
+ *
+ * Supabase keys come in two shapes and each must be presented differently: a legacy JWT
+ * goes in the Authorization header, a new sb_secret_ key must NOT — the gateway tries to
+ * verify anything in Authorization as a JWT and answers "signature verification failed",
+ * which reads like a broken key when the key is fine and merely in the wrong pocket.
+ *
+ * A JWT also states, readably and unsecretly, which project issued it and as what role —
+ * exactly the two ways a syntactically fine key can still be the wrong one.
+ */
+function describeKey(key: string): {
+  kind: 'jwt' | 'secret' | 'publishable' | 'unknown';
+  role?: string;
+  projectRef?: string;
+} {
+  if (key.startsWith('sb_secret_')) return { kind: 'secret' };
+  if (key.startsWith('sb_publishable_')) return { kind: 'publishable' };
+  if (key.startsWith('eyJ')) {
+    try {
+      const payload = JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString('utf8'));
+      return { kind: 'jwt', role: payload.role, projectRef: payload.ref };
+    } catch {
+      return { kind: 'jwt' };
+    }
+  }
+  return { kind: 'unknown' };
+}
+
+/** The project ref the endpoint points at, for comparing against the key's own claim. */
+function endpointProjectRef(): string | null {
+  const base = restBase();
+  const match = base?.match(/^https?:\/\/([a-z0-9]+)\.(?:storage\.)?supabase\.(?:co|in|com)/i);
+  return match ? match[1] : null;
+}
+
 export function isRestUploadAvailable(): boolean {
   return !!restBase() && !!serviceKey();
 }
 
 export function getRestUploadDiagnostics() {
+  const key = serviceKey();
+  const described = key ? describeKey(key) : null;
+  const endpointRef = endpointProjectRef();
   return {
     restUploadAvailable: isRestUploadAvailable(),
     restBaseFound: !!restBase(),
@@ -39,6 +78,14 @@ export function getRestUploadDiagnostics() {
       : process.env.SUPABASE_SECRET_KEY
         ? 'SUPABASE_SECRET_KEY'
         : null,
+    // The label of the pass, never its secret: shape, claimed role, claimed project —
+    // the three ways a present key can still be the wrong one.
+    restKeyKind: described?.kind ?? null,
+    restKeyRole: described?.role ?? null,
+    restKeyProjectRef: described?.projectRef ?? null,
+    restKeyMatchesProject: described?.projectRef && endpointRef
+      ? described.projectRef === endpointRef
+      : null,
   };
 }
 
@@ -55,18 +102,39 @@ export async function createRestSignedUploadUrl(bucket: string, key: string): Pr
     throw new Error('Browser upload signing is not configured — set SUPABASE_SERVICE_ROLE_KEY.');
   }
 
+  // Presented per shape. Anything placed in Authorization gets verified as a JWT, so a
+  // new-style sb_secret_ key must stay out of that header or the gateway answers
+  // "signature verification failed" about a perfectly good key.
+  const described = describeKey(token);
+  const headers: Record<string, string> = {
+    apikey: token,
+    'Content-Type': 'application/json',
+  };
+  if (described.kind !== 'secret') headers.Authorization = `Bearer ${token}`;
+
   const res = await fetch(`${base}/object/upload/sign/${bucket}/${key}`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: token,
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({}),
   });
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(`Supabase refused to sign an upload: ${res.status} ${data?.message || data?.error || ''}`.trim());
+    // A refused key has exactly three usual causes, and the key's own label plus the
+    // endpoint name between them: wrong role, wrong project, or a key
+    // invalidated by a JWT-secret rotation. Name the one the evidence supports.
+    const refused = `${data?.message || data?.error || ''}`.trim();
+    const endpointRef = endpointProjectRef();
+    let why = '';
+    if (described.kind === 'jwt' && described.role && described.role !== 'service_role') {
+      why = ` The key in use is the "${described.role}" key — signing uploads needs the service_role (or sb_secret_) key.`;
+    } else if (described.kind === 'jwt' && described.projectRef && endpointRef && described.projectRef !== endpointRef) {
+      why = ` The key belongs to project ${described.projectRef}, but storage is project ${endpointRef} — it is from a different Supabase project.`;
+    } else if (described.kind === 'jwt' && /signature verification failed/i.test(refused)) {
+      why = ' The key is for the right project but its signature no longer verifies — this happens when the JWT secret was rotated after the key was copied. Copy a fresh service_role key (or an sb_secret_ key) from the Supabase dashboard.';
+    } else if (described.kind === 'publishable') {
+      why = ' The key in use is the publishable one — signing uploads needs the secret key.';
+    }
+    throw new Error(`Supabase refused to sign an upload: ${res.status} ${refused}.${why}`.trim());
   }
   const url: string | undefined = data?.url;
   if (!url) throw new Error('Supabase returned no upload URL');
