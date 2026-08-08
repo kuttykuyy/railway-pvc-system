@@ -740,13 +740,15 @@ export default function SpreadsheetPage() {
   }
 
   return (
-    <div className="container mx-auto p-4 max-w-full">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4">
+    <div className="container mx-auto p-2 sm:p-4 max-w-full">
+      {/* Wraps on narrow screens — seven actions in one unwrapping row forced the whole
+          page wider than the phone. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <BackButton href="/indices" />
-          <h1 className="text-xl font-bold">Price Indices - {year}</h1>
+          <h1 className="text-lg sm:text-xl font-bold whitespace-nowrap">Price Indices - {year}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setYear(y => y - 1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -1598,7 +1600,7 @@ export default function SpreadsheetPage() {
       </div>
 
       <Card>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-0 overflow-x-auto overscroll-x-contain">
           {(() => {
             // Build visible steel columns based on city selection
             let steelColumns: { key: string; name: string; dbName: string; city?: SteelCity }[] = [];
@@ -1620,12 +1622,12 @@ export default function SpreadsheetPage() {
             const allVisibleColumns = [...NON_STEEL_COLUMNS, ...steelColumns];
             
             return (
-              <table className="w-full text-sm border-collapse">
+              <table className="w-full text-xs sm:text-sm border-collapse">
                 <thead className="bg-gray-100">
                   {/* City group header row (only in "all" view) */}
                   {steelCityView === 'all' && (
                     <tr>
-                      <th className="border px-2 py-1" rowSpan={1}></th>
+                      <th className="border px-2 py-1 sticky left-0 z-20 bg-gray-100" rowSpan={1}></th>
                       {/* Non-steel spacer */}
                       <th className="border px-2 py-1" colSpan={NON_STEEL_COLUMNS.length}></th>
                       {steelCityGroups.map(group => (
@@ -1647,7 +1649,8 @@ export default function SpreadsheetPage() {
                   )}
                   {/* Column name header row */}
                   <tr>
-                    <th className="border px-2 py-2 text-left font-semibold w-20">Month</th>
+                    {/* Sticky: the wide grid scrolls sideways, the month must not leave. */}
+                    <th className="border px-2 py-2 text-left font-semibold min-w-[4.5rem] sticky left-0 z-20 bg-gray-100">Month</th>
                     {NON_STEEL_COLUMNS.map(col => (
                       <th key={col.key} className="border px-2 py-2 text-center font-semibold" title={col.dbName}>
                         {col.name}
@@ -1673,7 +1676,7 @@ export default function SpreadsheetPage() {
                   </tr>
                   {/* F/P toggle row */}
                   <tr className="bg-gray-50">
-                    <th className="border px-1 py-1 text-xs text-gray-400 font-normal">F / P</th>
+                    <th className="border px-1 py-1 text-xs text-gray-400 font-normal sticky left-0 z-20 bg-gray-50">F / P</th>
                     {NON_STEEL_COLUMNS.map(col => {
                       const status = getColumnProvisionalStatus(col.key);
                       const isToggling = togglingCol === col.key;
@@ -1765,12 +1768,12 @@ export default function SpreadsheetPage() {
                 <tbody>
                   {data.map((row, rowIdx) => (
                     <tr key={row.month} className={rowIdx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                      <td className="border px-2 py-2 font-medium text-gray-700">
+                      <td className="border px-2 py-2 font-medium text-gray-700 sticky left-0 z-10 bg-inherit whitespace-nowrap">
                         <div className="flex items-center justify-between group">
                           <span>{row.month}</span>
                           <button
                             onClick={() => handleDeleteRow(row.month)}
-                            className="text-red-500 hover:text-red-700 p-0.5 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity ml-2"
+                            className="text-red-500 hover:text-red-700 p-0.5 rounded hover:bg-red-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity ml-2"
                             title={`Clear all values for ${row.month}`}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1804,7 +1807,7 @@ export default function SpreadsheetPage() {
                                     e.stopPropagation();
                                     handleDeleteCell(row.month, col.key, cell.id);
                                   }}
-                                  className="text-red-500 hover:text-red-700 p-0.5 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  className="text-red-500 hover:text-red-700 p-0.5 rounded hover:bg-red-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                                   title="Delete value"
                                 >
                                   <Trash2 className="h-3 w-3" />
@@ -1842,7 +1845,7 @@ export default function SpreadsheetPage() {
                                 city: (col as any).city === 'Default' ? 'Chennai' : (col as any).city || 'Chennai',
                                 value: cell.value,
                                 detail: cell.steelDetail,
-                                rect: { top: rect.bottom + window.scrollY, left: rect.left + window.scrollX },
+                                rect: { top: rect.bottom, left: rect.left },
                               });
                             } : undefined}
                           >
@@ -1866,7 +1869,7 @@ export default function SpreadsheetPage() {
                                     e.stopPropagation();
                                     handleDeleteCell(row.month, col.key, cell.id);
                                   }}
-                                  className="text-red-500 hover:text-red-700 p-0.5 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  className="text-red-500 hover:text-red-700 p-0.5 rounded hover:bg-red-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                                   title="Delete value"
                                 >
                                   <Trash2 className="h-3 w-3" />
