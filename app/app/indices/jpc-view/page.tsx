@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { ArrowLeft, ChevronLeft, ChevronRight, Database, Calculator } from 'lucide-react';
 import { JPC_ITEMS, JpcItem } from '@/lib/jpc-items';
-import { OfficialSheetViewer } from './official-sheet-viewer';
+import { OfficialSheetViewer } from '@/components/official-sheet-viewer';
 import toast from 'react-hot-toast';
 
 interface JpcItemData {
@@ -230,7 +230,7 @@ export default function JpcViewPage() {
         </div>
         <div className="flex items-center gap-3">
           {/* Matching a rate means seeing it on the sheet, not taking the table's word. */}
-          <OfficialSheetViewer month={selectedMonth} />
+          <OfficialSheetViewer year={parseInt(selectedMonth.split('-')[0], 10)} initialMonth={parseInt(selectedMonth.split('-')[1], 10)} />
           <span className="text-xs text-gray-400">Source: JPC {selectedCity}</span>
         </div>
       </div>

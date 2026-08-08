@@ -7,6 +7,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Download, ChevronLeft, ChevronRight, Database, Info, TrendingUp, Flame, Construction, Hammer, Layers, MapPin, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { OfficialSheetViewer } from '@/components/official-sheet-viewer';
 
 interface IndexValue { value: number | null; isProvisional?: boolean; formula?: string | null; steelDetail?: any }
 interface MonthlyData { month: string; [key: string]: IndexValue | number | string | null }
@@ -174,6 +175,12 @@ export default function IndicesViewPage() {
                 onClick={() => toast.error("Requires Advanced Feature Subscription (₹99/month). Please subscribe in the Billing panel to access this feature.")}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
               >
+                <span className="text-[10px]">🔒</span> View official sheet
+              </button>
+              <button
+                onClick={() => toast.error("Requires Advanced Feature Subscription (₹99/month). Please subscribe in the Billing panel to access this feature.")}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
+              >
                 <span className="text-[10px]">🔒</span> JPC Raw Rates
               </button>
               <button
@@ -185,6 +192,13 @@ export default function IndicesViewPage() {
             </>
           ) : (
             <>
+              {/* The sheet itself, sliced to the month being read — rate matching
+                  without leaving the indices table. Opens on the current month for the
+                  current year, January for a past one; months switch inside. */}
+              <OfficialSheetViewer
+                year={year}
+                initialMonth={year === new Date().getFullYear() ? new Date().getMonth() + 1 : 1}
+              />
               <Link href="/indices/jpc-view"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
                 <Database className="h-4 w-4" /> JPC Raw Rates
