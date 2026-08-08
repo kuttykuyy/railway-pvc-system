@@ -31,6 +31,7 @@ export function OfficialSheetViewer({ month }: { month: string }) {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [sheets, setSheets] = useState<SheetOption[]>([]);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [pdf, setPdf] = useState<any>(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageCount, setPageCount] = useState(0);
@@ -49,6 +50,7 @@ export function OfficialSheetViewer({ month }: { month: string }) {
       if (!listRes.ok) throw new Error(listData.error || 'Could not list sheets');
       const options: SheetOption[] = listData.sheets || [];
       setSheets(options);
+      setAvailableYears(listData.availableYears || []);
       if (options.length === 0) return;
       await loadSheet(options[0].id);
     } catch (err: any) {
@@ -139,9 +141,19 @@ export function OfficialSheetViewer({ month }: { month: string }) {
           )}
 
           {!isLoading && sheets.length === 0 && (
-            <p className="text-sm text-gray-600 py-8 text-center">
-              No JPC sheet has been uploaded for this month yet.
-            </p>
+            <div className="py-8 text-center space-y-2">
+              <p className="text-sm text-gray-600">
+                No JPC sheet has been uploaded for {year} yet.
+              </p>
+              {/* Which years exist is the difference between "broken" and "not yet
+                  uploaded" — say it. */}
+              {availableYears.length > 0 && (
+                <p className="text-xs text-gray-400">
+                  Sheets are available for: {availableYears.join(', ')}. An admin can add {year} under
+                  Component Index Documents.
+                </p>
+              )}
+            </div>
           )}
 
           {!isLoading && sheets.length > 0 && !sheets[0].coversMonth && (

@@ -86,7 +86,20 @@ export async function GET(request: NextRequest) {
     coversMonth: d.months.includes(month),
   }));
 
-  return NextResponse.json({ sheets: offered });
+  // When the year has nothing, say which years DO have sheets — the difference between
+  // "this feature is broken" and "the 2026 sheet has not been uploaded yet".
+  let availableYears: number[] = [];
+  if (offered.length === 0) {
+    const years = await prisma.labourIndexDocument.findMany({
+      where: { componentType: { in: JPC_TYPES } },
+      select: { year: true },
+      distinct: ["year"],
+      orderBy: { year: "desc" },
+    });
+    availableYears = years.map((y) => y.year);
+  }
+
+  return NextResponse.json({ sheets: offered, availableYears });
 }
 
 export async function POST(request: NextRequest) {
