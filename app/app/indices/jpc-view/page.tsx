@@ -230,7 +230,7 @@ export default function JpcViewPage() {
         </div>
         <div className="flex items-center gap-3">
           {/* Matching a rate means seeing it on the sheet, not taking the table's word. */}
-          <OfficialSheetViewer year={parseInt(selectedMonth.split('-')[0], 10)} initialMonth={parseInt(selectedMonth.split('-')[1], 10)} />
+          <OfficialSheetViewer year={parseInt(selectedMonth.split('-')[0], 10)} initialMonth={parseInt(selectedMonth.split('-')[1], 10)} city={selectedCity} />
           <span className="text-xs text-gray-400">Source: JPC {selectedCity}</span>
         </div>
       </div>

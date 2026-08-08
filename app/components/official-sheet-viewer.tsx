@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { ChevronLeft, ChevronRight, FileSearch } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { findJpcTemplate, calculationRowNumbers, JPC_TABLE_ROWS } from '@/lib/pdf/utils/jpc-geometry';
 
 /**
  * The official JPC sheet, readable beside the extracted numbers — month by month.
@@ -37,7 +38,7 @@ const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 const PAGES_PER_FORTNIGHT = 3;
 const PAGES_PER_MONTH = PAGES_PER_FORTNIGHT * 2;
 
-export function OfficialSheetViewer({ year, initialMonth }: { year: number; initialMonth: number }) {
+export function OfficialSheetViewer({ year, initialMonth, city }: { year: number; initialMonth: number; city?: string }) {
   const { data: session } = useSession();
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -52,6 +53,8 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
   /** True when the document's page count fits the six-pages-per-month rhythm. */
   const [sliced, setSliced] = useState(false);
   const [wholeYear, setWholeYear] = useState(false);
+  /** The same six-row + city marks the bills carry, drawn on the canvas — toggleable. */
+  const [showHighlights, setShowHighlights] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const openViewer = async () => {
@@ -144,6 +147,36 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
       await page.render({ canvasContext: context, viewport }).promise;
       if (cancelled) return;
 
+      // The same marks the bills carry — six formula rows shaded, the chosen city's
+      // figures boxed — drawn from the same measurements (lib/pdf/utils/jpc-geometry),
+      // so screen and bill can never disagree. Same refusal too: a page shape the
+      // templates don't describe gets no marks rather than marks in the wrong place.
+      if (showHighlights) {
+        const template = findJpcTemplate(baseViewport.height / baseViewport.width);
+        if (template) {
+          const rowHeight = (template.bodyBottom - template.bodyTop) / JPC_TABLE_ROWS;
+          const cityColumn = city ? template.columns[city] : undefined;
+          for (const row of calculationRowNumbers()) {
+            const yTop = (template.bodyTop + (row.sno - 1) * rowHeight) * viewport.height;
+            const h = rowHeight * viewport.height;
+            context.fillStyle = 'rgba(255, 237, 153, 0.4)';
+            context.fillRect(
+              template.columns.item[0] * viewport.width,
+              yTop,
+              (template.columns.item[1] - template.columns.item[0]) * viewport.width,
+              h,
+            );
+            if (cityColumn) {
+              context.fillStyle = 'rgba(255, 217, 64, 0.45)';
+              context.fillRect(cityColumn[0] * viewport.width, yTop, (cityColumn[1] - cityColumn[0]) * viewport.width, h);
+              context.strokeStyle = 'rgba(217, 140, 0, 0.9)';
+              context.lineWidth = Math.max(1, viewport.width / 900);
+              context.strokeRect(cityColumn[0] * viewport.width, yTop, (cityColumn[1] - cityColumn[0]) * viewport.width, h);
+            }
+          }
+        }
+      }
+
       // The viewer's own email, faint and diagonal — a screenshot carries its reader.
       const who = session?.user?.email || 'irpvc.in';
       context.save();
@@ -159,7 +192,7 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
       context.restore();
     })();
     return () => { cancelled = true; };
-  }, [pdf, absolutePage, pageCount, session?.user?.email]);
+  }, [pdf, absolutePage, pageCount, session?.user?.email, showHighlights, city]);
 
   /** "1st fortnight · page 2 of 3" for the sliced view; plain numbering otherwise. */
   const positionLabel = () => {
@@ -230,6 +263,17 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
                   >
                     Whole year
                   </button>
+                  <button
+                    onClick={() => setShowHighlights(v => !v)}
+                    className={`px-2 py-1 rounded text-xs border ${
+                      showHighlights
+                        ? 'bg-amber-500 text-white border-amber-500'
+                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                    }`}
+                    title="Shade the six items and city column the PVC steel indices use"
+                  >
+                    {showHighlights ? 'Highlights on' : 'Highlights off'}
+                  </button>
                 </div>
               )}
 
@@ -269,6 +313,13 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
                 className="w-full h-auto border rounded shadow-sm"
               />
               <p className="text-[11px] text-gray-400 text-center">
+                {showHighlights && (
+                  <span className="block">
+                    Shaded: the six items{city ? ` and the ${city} column` : ''} used for the steel
+                    indices under GCC 46A.9(1). Marks are a reading aid placed by layout; the figures
+                    are the sheet&apos;s own.
+                  </span>
+                )}
                 JPC Market Price (Retail) — © Joint Plant Committee. Shown for verifying rates
                 against your bill; not for redistribution.
               </p>
