@@ -28,7 +28,6 @@ function detectJpcGrid(
 ): { rowLines: number[]; colRules: number[] } | null {
   try {
     const image = context.getImageData(0, 0, width, height).data;
-    const darkAt = (x: number, y: number) => image[(y * width + x) * 4] < 160;
     const cluster = (points: number[], gap: number) => {
       const groups: number[][] = [];
       for (const p of points) {
@@ -39,12 +38,41 @@ function detectJpcGrid(
       return groups.map(g => g[Math.floor(g.length / 2)]);
     };
 
-    // Vertical rules, by DENSITY not contiguous run — a photocopied line is broken into
-    // pieces, but its column stays far darker than any text column (measured: rules
-    // 0.59-0.80 dark, the busiest text column 0.29).
     const bandTop = Math.floor(0.18 * height);
     const bandBottom = Math.floor(0.95 * height);
     const bandSize = bandBottom - bandTop;
+
+    // Ink darkness is a property of the scan, not of the table: the old compressed
+    // sheets were contrast-stretched to near-black, the full-quality originals keep the
+    // scanner's grey. So the cut-off between paper and ink is read off the page's own
+    // histogram (Otsu) rather than assumed — a fixed number that separates one scan
+    // drowns another in text noise or sees no lines at all.
+    const histogram = new Array(256).fill(0);
+    let sampled = 0;
+    for (let y = bandTop; y < bandBottom; y += 2) {
+      for (let x = 0; x < width; x += 2) {
+        histogram[image[(y * width + x) * 4]]++;
+        sampled++;
+      }
+    }
+    let sumAll = 0;
+    for (let i = 0; i < 256; i++) sumAll += i * histogram[i];
+    let sumBelow = 0, countBelow = 0, bestVar = 0, otsu = 160;
+    for (let t = 0; t < 256; t++) {
+      countBelow += histogram[t];
+      if (countBelow === 0 || countBelow === sampled) continue;
+      sumBelow += t * histogram[t];
+      const meanBelow = sumBelow / countBelow;
+      const meanAbove = (sumAll - sumBelow) / (sampled - countBelow);
+      const between = countBelow * (sampled - countBelow) * (meanBelow - meanAbove) ** 2;
+      if (between > bestVar) { bestVar = between; otsu = t; }
+    }
+    const threshold = Math.min(230, Math.max(100, otsu));
+    const darkAt = (x: number, y: number) => image[(y * width + x) * 4] < threshold;
+
+    // Vertical rules, by DENSITY not contiguous run — a photocopied line is broken into
+    // pieces, but its column stays far darker than any text column (measured: rules
+    // 0.59-0.80 dark, the busiest text column 0.29).
     const vCandidates: number[] = [];
     for (let x = 0; x < width; x++) {
       let dark = 0;
@@ -60,9 +88,9 @@ function detectJpcGrid(
     // and read the table as taller than it is).
     // Each rule's LONGEST gap-tolerant dark segment is the rule itself — starting from
     // the first dark pixel instead walks into stray header text above the table and
-    // stops there.
+    // stops there. Its ends bound the table.
     const gapTolerance = Math.max(6, 0.02 * height);
-    const ruleBottom = (x: number) => {
+    const ruleSegment = (x: number) => {
       const dark3 = (y: number) => darkAt(x, y) || darkAt(Math.max(0, x - 1), y) || darkAt(Math.min(width - 1, x + 1), y);
       let bestStart = bandTop, bestEnd = bandTop;
       let segStart = -1, lastDark = -1;
@@ -76,37 +104,47 @@ function detectJpcGrid(
           segStart = -1;
         }
       }
-      return bestEnd;
+      return { top: bestStart, bottom: bestEnd };
     };
-    const bottoms = colRules.map(ruleBottom).sort((a, b) => a - b);
-    const tableBottom = bottoms[Math.floor(bottoms.length / 2)];
+    const segments = colRules.map(ruleSegment);
+    const median = (values: number[]) => values.sort((a, b) => a - b)[Math.floor(values.length / 2)];
+    const tableTop = median(segments.map(s => s.top));
+    const tableBottom = median(segments.map(s => s.bottom));
 
-    // The top of row 1 is the header separator — the strongest horizontal line high in
-    // the table. Strong lines survive a 0.5-density test even on photocopies.
+    // Horizontal lines inside the table's own vertical extent.
     const x0 = colRules[0], x1 = colRules[colRules.length - 1];
     const hCandidates: number[] = [];
-    for (let y = bandTop; y < tableBottom; y++) {
+    for (let y = Math.max(bandTop, tableTop - 4); y < tableBottom; y++) {
       let dark = 0;
       for (let x = x0; x < x1; x += 2) if (darkAt(x, y)) dark++;
       if (dark / ((x1 - x0) / 2) > 0.5) hCandidates.push(y);
     }
     const strongLines = cluster(hCandidates, Math.max(3, height / 400));
     if (strongLines.length === 0) return null;
-    const row1Top = strongLines[0];
 
-    // 24 equal rows from the header separator to the table bottom. The photocopy hides
-    // most row separators, but the ones that DO show must agree with this arithmetic —
-    // and the pitch must look like a 24-row table, which is what rejects the ten-row
-    // second page of each fortnight.
-    const pitch = (tableBottom - row1Top) / JPC_TABLE_ROWS;
-    if (pitch < 0.015 * height || pitch > 0.035 * height) return null;
-    const misfits = strongLines.filter(line => {
-      const k = (line - row1Top) / pitch;
-      return Math.abs(k - Math.round(k)) > 0.35;
-    });
-    if (misfits.length > strongLines.length / 2) return null;
+    // The header separator is not simply the first strong line — a lighter threshold
+    // also surfaces the table's own top border, and once it surfaced the letterhead
+    // underline. Each candidate high in the table must EARN the job: the grid its
+    // position implies (24 equal rows down to the table bottom) has to be the one the
+    // surviving row separators actually agree with.
+    const upperLimit = tableTop + 0.35 * (tableBottom - tableTop);
+    const candidates = strongLines.filter(line => line <= upperLimit);
+    let best: { row1Top: number; pitch: number; score: number } | null = null;
+    for (const candidate of candidates) {
+      const pitch = (tableBottom - candidate) / JPC_TABLE_ROWS;
+      if (pitch < 0.015 * height || pitch > 0.035 * height) continue;
+      const below = strongLines.filter(line => line > candidate);
+      if (below.length === 0) continue;
+      const fitting = below.filter(line => {
+        const k = (line - candidate) / pitch;
+        return Math.abs(k - Math.round(k)) <= 0.25;
+      }).length;
+      const score = fitting / below.length;
+      if (!best || score > best.score) best = { row1Top: candidate, pitch, score };
+    }
+    if (!best || best.score < 0.6) return null;
 
-    const rowLines = Array.from({ length: JPC_TABLE_ROWS + 1 }, (_, k) => row1Top + k * pitch);
+    const rowLines = Array.from({ length: JPC_TABLE_ROWS + 1 }, (_, k) => best!.row1Top + k * best!.pitch);
     return { rowLines, colRules };
   } catch {
     return null;
