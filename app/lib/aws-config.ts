@@ -71,6 +71,14 @@ export function createS3Client(): S3Client {
 
   const clientConfig: ConstructorParameters<typeof S3Client>[0] = {
     region,
+    // Since SDK v3.729 every signed upload URL demands a CRC32 checksum header unless
+    // told otherwise. The server's own uploads still work — the SDK computes the checksum
+    // as it sends — but a browser PUT to such a URL arrives without the promised header
+    // and is refused. Server fine, browser dead, deterministically: exactly the split
+    // seen here. Amazon's own guidance for S3-compatible stores (Supabase included) is to
+    // require checksums only where the operation itself does.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
   };
 
   // Hand the SDK the keys directly when we have them, rather than leaving it to hunt

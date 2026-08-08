@@ -503,7 +503,11 @@ export default function ComponentDocumentsPage() {
         return;
       }
 
-      const probe = async (url: string, bytes: number, timeoutMs: number) => {
+      // A refusal and a dead wire are different diagnoses: a refusal arrives as a status
+      // and words from storage (status > 0 here), a dead wire as a thrown fetch (status
+      // 0). Collapsing both to "failed" once reported a signature refusal as this device
+      // blocking storage — keep them apart.
+      const probe = async (url: string, bytes: number, timeoutMs: number): Promise<{ ok: boolean; status: number; detail: string }> => {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), timeoutMs);
         try {
@@ -513,32 +517,41 @@ export default function ComponentDocumentsPage() {
             body: new Uint8Array(bytes),
             signal: ctrl.signal,
           });
-          return putRes.ok;
-        } catch {
-          return false;
+          const detail = putRes.ok ? '' : (await putRes.text().catch(() => '')).slice(0, 200);
+          return { ok: putRes.ok, status: putRes.status, detail };
+        } catch (err: any) {
+          return { ok: false, status: 0, detail: String(err?.message || err) };
         } finally {
           clearTimeout(timer);
         }
       };
 
       setConnectionTest({ ...base, browserVerdict: 'Server side works. Now testing from this browser…' });
-      const tinyOk = await probe(data.browserProbe.tiny.putUrl, 16, 20000);
+      const tiny = await probe(data.browserProbe.tiny.putUrl, 16, 20000);
       // Skipping the big probe when the tiny one failed: it cannot pass, and its answer
       // would say nothing new.
-      const bigOk = tinyOk ? await probe(data.browserProbe.big.putUrl, 6 * 1024 * 1024, 120000) : false;
+      const big = tiny.ok
+        ? await probe(data.browserProbe.big.putUrl, 6 * 1024 * 1024, 120000)
+        : { ok: false, status: 0, detail: 'skipped — the tiny probe already failed' };
 
       // Tidy up what landed; nothing turns on whether this succeeds.
       for (const p of [data.browserProbe.tiny, data.browserProbe.big]) {
         fetch(p.deleteUrl, { method: 'DELETE' }).catch(() => {});
       }
 
-      const browserVerdict = !tinyOk
-        ? 'This browser cannot reach storage at all, though the server can. Something on this device or network — antivirus, firewall, proxy — is blocking uploads to storage.supabase.co.'
-        : !bigOk
-          ? 'Small uploads from this browser get through, but a 6 MB one does not. Something on this network cuts off large uploads — usually antivirus scanning, a proxy, or a hotspot. The sheet fails for the same reason.'
+      const refusalWords = (r: { status: number; detail: string }) =>
+        `storage answered ${r.status}${r.detail ? `: ${r.detail}` : ''}`;
+      const browserVerdict = !tiny.ok
+        ? tiny.status === 0
+          ? 'This browser could not connect to storage at all, though the server can. Something on this device or network — antivirus, firewall, proxy — is blocking uploads to storage.supabase.co.'
+          : `Storage refused this browser's test upload — ${refusalWords(tiny)}. That is a signing problem in the app, not your connection.`
+        : !big.ok
+          ? big.status === 0
+            ? 'Small uploads from this browser get through, but a 6 MB one does not arrive. Something on this network cuts off large uploads — usually antivirus scanning, a proxy, or a hotspot.'
+            : `A small upload got through but storage refused the 6 MB one — ${refusalWords(big)}.`
           : 'This browser reached storage with both a small and a 6 MB upload. The sheet failing looks like a passing drop — try it again now.';
-      setConnectionTest({ ...base, browserOk: tinyOk && bigOk, browserVerdict });
-      if (tinyOk && bigOk) toast.success('Storage is reachable from the server and this browser.');
+      setConnectionTest({ ...base, browserOk: tiny.ok && big.ok, browserVerdict });
+      if (tiny.ok && big.ok) toast.success('Storage is reachable from the server and this browser.');
     } catch (err: any) {
       setConnectionTest({ ok: false, errorMessage: String(err?.message || err) });
     } finally {
