@@ -28,7 +28,12 @@ const nextConfig = {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https://fonts.gstatic.com",
-      "connect-src 'self' https://*.razorpay.com https://*.google.com https://*.googlesyndication.com https://*.googleadservices.com https://*.googletagservices.com https://*.doubleclick.net https://*.google-analytics.com https://*.googletagmanager.com https://*.adtrafficquality.google https://pagead2.googlesyndication.com",
+      // Supabase storage is here because JPC sheets upload straight from the browser to
+      // the bucket (signed URL), skipping Vercel's 4.5 MB request cap. Without this
+      // entry the browser killed every such upload before it left — no network entry,
+      // no console error in production, just "Failed to fetch" — which spent a long day
+      // being misread as credentials, bucket names, checksums, and CORS in turn.
+      "connect-src 'self' https://*.supabase.co https://*.storage.supabase.co https://*.razorpay.com https://*.google.com https://*.googlesyndication.com https://*.googleadservices.com https://*.googletagservices.com https://*.doubleclick.net https://*.google-analytics.com https://*.googletagmanager.com https://*.adtrafficquality.google https://pagead2.googlesyndication.com",
       "frame-src https://*.razorpay.com https://*.google.com https://*.doubleclick.net https://*.googlesyndication.com https://*.googleadservices.com",
       "object-src 'none'",
       "base-uri 'self'",
