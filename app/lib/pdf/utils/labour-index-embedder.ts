@@ -320,6 +320,32 @@ export async function embedComponentIndicesRange(
             }
           }
 
+          // Fuel documents slice by what is printed on them, not by position: their
+          // pages have no fixed rhythm, but they carry real text, so a page is kept
+          // exactly when its own revision dates fall in the used months. Anything
+          // unreadable or fully-used attaches whole. Imported lazily — this is the one
+          // path that needs text extraction, and it should cost nothing when unused.
+          if (doc.componentType === ComponentType.MPNG_FUEL && yearInRange && usedMonths.length) {
+            try {
+              const { sliceFuelSheetByMonths } = await import('./fuel-sheet-slicer');
+              const result = await sliceFuelSheetByMonths(new Uint8Array(indexBytes), {
+                year: docYear,
+                months: usedMonths,
+              });
+              if (result.sliced) {
+                indexBytes = result.bytes.buffer.slice(
+                  result.bytes.byteOffset,
+                  result.bytes.byteOffset + result.bytes.byteLength,
+                ) as ArrayBuffer;
+                console.log(`Sliced MPNG_FUEL ${docYear} to months ${usedMonths.join(',')} — kept ${result.keptPages} of ${result.totalPages} pages`);
+              } else {
+                console.log(`MPNG_FUEL ${docYear} attached whole (${result.reason})`);
+              }
+            } catch (sliceError) {
+              console.error('Fuel slicing failed, attaching the whole document:', sliceError);
+            }
+          }
+
           if (jpcCity && componentSheetIsMarkable(doc.componentType)) {
             try {
               if (yearInRange && usedMonths.length) {
