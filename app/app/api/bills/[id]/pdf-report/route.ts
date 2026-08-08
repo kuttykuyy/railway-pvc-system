@@ -784,7 +784,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             // cement and fuel sheets still get their months marked.
             jpcCity: getSteelCityForZone(bill.zone),
             jpcCaption: `${bill.contract.agreementNo} — ${bill.billNo}`,
-            fuelBasis: bill.fuelPriceType,
           });
         } catch (err) {
           console.error('IR PDF: error embedding index documents:', err);
@@ -4400,7 +4399,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         
         if (fuelData) {
           console.log(`✓ Found MPNG Fuel data: ${fuelData.totalMonths} months, average: ${fuelData.average}, source: ${fuelData.dataSource}, basis: ${fuelData.fuelBasis}${fuelData.cityName ? ` (${fuelData.cityName})` : ''}`);
-          
+
           pdfWithFuelAverage = await generateMPNGFuelAveragePage(initialPdfBytes, {
             ...fuelData,
             startDate: fuelStartDate,
@@ -4450,7 +4449,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           // cement and fuel sheets still get their months marked.
           jpcCity: getSteelCityForZone(bill.zone),
           jpcCaption: `${bill.contract.agreementNo} — ${bill.billNo}`,
-            fuelBasis: bill.fuelPriceType,
         });
         
         // Count documents after embedding

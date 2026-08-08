@@ -6,7 +6,6 @@ import { PDFDocument } from "pdf-lib";
 import { ComponentType } from "@prisma/client";
 import { highlightJpcSheet } from "./jpc-highlighter";
 import { highlightComponentSheet, componentSheetIsMarkable } from "./component-sheet-highlighter";
-import { highlightFuelSheet } from "./fuel-sheet-highlighter";
 
 interface ComponentIndexOptions {
   year: number;
@@ -27,11 +26,6 @@ interface ComponentIndexRangeOptions {
   jpcCity?: string;
   /** Printed beside the note on each marked sheet, e.g. the agreement and bill number. */
   jpcCaption?: string;
-  /**
-   * How the bill prices fuel. 'zone_city' additionally boxes the bill's city column on
-   * each marked fuel row; anything else marks the whole row (four-city average).
-   */
-  fuelBasis?: string;
 }
 
 /** The component types whose documents are JPC price sheets. */
@@ -165,7 +159,7 @@ export async function embedComponentIndicesRange(
   options: ComponentIndexRangeOptions
 ): Promise<Uint8Array> {
   try {
-    const { startDate, endDate, componentTypes, jpcCity, jpcCaption, fuelBasis } = options;
+    const { startDate, endDate, componentTypes, jpcCity, jpcCaption } = options;
 
     // If no component types specified, fetch all component types
     const typesToFetch = componentTypes || Object.values(ComponentType);
@@ -199,9 +193,33 @@ export async function embedComponentIndicesRange(
         ],
       });
 
-      // Add documents to map, using component type + year as key
-      // This ensures only one document per component per year (most recent one)
+      // The months of the bill's range that fall in this year — what the attached
+      // documents must cover, together.
+      const neededFrom = startDate.getFullYear() === year ? startDate.getMonth() + 1 : 1;
+      const neededTo = endDate.getFullYear() === year ? endDate.getMonth() + 1 : 12;
+
+      // One document per component-year used to be kept — the most recent upload, its
+      // months ignored. That works for sheets published one page per year, but fuel
+      // sheets arrive as several uploads each covering a few months, so only the latest
+      // slice was attached and the rest of base-to-measurement went missing. Keep every
+      // document that contributes a needed month not already covered, newest first.
+      const coveredByType = new Map<string, Set<number>>();
       for (const doc of documents) {
+        const covered = coveredByType.get(doc.componentType) || new Set<number>();
+        // A document without recorded months is treated as covering its whole year, as
+        // the old selection implicitly did.
+        const docMonths: number[] = doc.months?.length ? doc.months : Array.from({ length: 12 }, (_, i) => i + 1);
+        const contributes = docMonths.filter(m => m >= neededFrom && m <= neededTo && !covered.has(m));
+        if (contributes.length === 0) continue;
+        contributes.forEach(m => covered.add(m));
+        coveredByType.set(doc.componentType, covered);
+        allDocuments.set(`${doc.componentType}-${year}-${doc.id}`, { ...doc, displayYear: year });
+      }
+
+      // A component whose documents none intersect the needed months keeps the most
+      // recent one, as before — an off-months sheet beats an absent one.
+      for (const doc of documents) {
+        if (coveredByType.has(doc.componentType)) continue;
         const key = `${doc.componentType}-${year}`;
         if (!allDocuments.has(key)) {
           allDocuments.set(key, { ...doc, displayYear: year });
@@ -257,8 +275,7 @@ export async function embedComponentIndicesRange(
           // a layout they know, so a supporting document is never lost to a failed
           // marking. jpcCity doubles as the switch for all marking — it is set exactly
           // when the caller wants marked sheets.
-          const isFuelSheet = doc.componentType === ComponentType.MPNG_FUEL;
-          if (jpcCity && (componentSheetIsMarkable(doc.componentType) || isFuelSheet)) {
+          if (jpcCity && componentSheetIsMarkable(doc.componentType)) {
             try {
               // The months of the bill's index range that fall in this sheet's year.
               const docYear = doc.displayYear || doc.year;
@@ -267,21 +284,11 @@ export async function embedComponentIndicesRange(
               const usedMonths = [];
               for (let m = from; m <= to; m++) usedMonths.push(m);
               if (docYear >= startDate.getFullYear() && docYear <= endDate.getFullYear() && usedMonths.length) {
-                // Fuel sheets are dated per price revision, so their rows are found by
-                // the dates printed on the sheet; the fixed-layout sheets are marked by
-                // measured geometry.
-                const marked = isFuelSheet
-                  ? await highlightFuelSheet(new Uint8Array(indexBytes), {
-                      year: docYear,
-                      months: usedMonths,
-                      city: fuelBasis === 'zone_city' ? jpcCity : undefined,
-                      caption: jpcCaption,
-                    })
-                  : await highlightComponentSheet(new Uint8Array(indexBytes), {
-                      componentType: doc.componentType,
-                      months: usedMonths,
-                      caption: jpcCaption,
-                    });
+                const marked = await highlightComponentSheet(new Uint8Array(indexBytes), {
+                  componentType: doc.componentType,
+                  months: usedMonths,
+                  caption: jpcCaption,
+                });
                 if (marked.marked) {
                   indexBytes = marked.bytes.buffer.slice(
                     marked.bytes.byteOffset,
