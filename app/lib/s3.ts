@@ -1,5 +1,16 @@
 import { logger } from './logger';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListBucketsCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  ListBucketsCommand,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
+  ListPartsCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createS3Client, getBucketConfig, resolveStorageSettings } from './aws-config';
 
@@ -165,6 +176,86 @@ export async function testS3RoundTrip(): Promise<{
   }
 
   return { ok: true };
+}
+
+/**
+ * Uploading a scanned sheet in pieces, so a dropped connection costs one piece.
+ *
+ * A 16 MB sheet sent as a single PUT lives or dies on one unbroken transfer, and on an
+ * unsteady connection it died — twice in a row, retry included. Multipart turns that
+ * all-or-nothing bet into 5 MB instalments: each part is retried on its own, and a
+ * stumble repeats one part instead of starting the whole file over.
+ *
+ * The browser never reports the parts it sent — the server asks storage directly which
+ * parts arrived (ListParts) before sealing the file, so the completion can't be spoofed
+ * into a file with holes, and the ETag headers CORS may withhold are never needed.
+ */
+export async function createMultipartUpload(key: string, contentType: string): Promise<string> {
+  if (useLocalFallback || !s3Client) {
+    throw new Error('S3 client not initialized or running in database fallback mode');
+  }
+  const result = await s3Client.send(new CreateMultipartUploadCommand({
+    Bucket: bucketName,
+    Key: key,
+    ContentType: contentType,
+  }));
+  if (!result.UploadId) throw new Error('Storage did not return an upload id');
+  return result.UploadId;
+}
+
+export async function getPartPresignedUrl(key: string, uploadId: string, partNumber: number, expiresIn: number = 3600): Promise<string> {
+  if (useLocalFallback || !s3Client) {
+    throw new Error('S3 client not initialized or running in database fallback mode');
+  }
+  const command = new UploadPartCommand({
+    Bucket: bucketName,
+    Key: key,
+    UploadId: uploadId,
+    PartNumber: partNumber,
+  });
+  return await getSignedUrl(s3Client, command, { expiresIn });
+}
+
+export async function completeMultipartUpload(key: string, uploadId: string, expectedParts: number): Promise<void> {
+  if (useLocalFallback || !s3Client) {
+    throw new Error('S3 client not initialized or running in database fallback mode');
+  }
+  // Ask storage what actually arrived rather than trusting the browser's account of
+  // itself. A part that went missing turns up here as a gap, before the file is sealed.
+  const listed = await s3Client.send(new ListPartsCommand({
+    Bucket: bucketName,
+    Key: key,
+    UploadId: uploadId,
+  }));
+  const parts = (listed.Parts ?? [])
+    .filter(p => p.PartNumber != null && p.ETag)
+    .sort((a, b) => a.PartNumber! - b.PartNumber!);
+  if (parts.length !== expectedParts) {
+    throw new Error(`Storage received ${parts.length} of ${expectedParts} parts — the file would have holes.`);
+  }
+  await s3Client.send(new CompleteMultipartUploadCommand({
+    Bucket: bucketName,
+    Key: key,
+    UploadId: uploadId,
+    MultipartUpload: {
+      Parts: parts.map(p => ({ PartNumber: p.PartNumber, ETag: p.ETag })),
+    },
+  }));
+}
+
+export async function abortMultipartUpload(key: string, uploadId: string): Promise<void> {
+  if (useLocalFallback || !s3Client) return;
+  try {
+    await s3Client.send(new AbortMultipartUploadCommand({
+      Bucket: bucketName,
+      Key: key,
+      UploadId: uploadId,
+    }));
+  } catch (error) {
+    // Abandoned parts cost a little storage until cleaned up; failing the caller over
+    // them would turn tidying into a second error.
+    logger.warn(`⚠️ Could not abort multipart upload for ${key}:`, error);
+  }
 }
 
 export async function getUploadPresignedUrl(key: string, contentType: string, expiresIn: number = 3600): Promise<string> {

@@ -91,6 +91,81 @@ interface UploadedDocument {
 /** The upload signature covers the content type, so one value has to serve both ends. */
 const UPLOAD_CONTENT_TYPE = 'application/pdf';
 
+/** Storage's minimum part size for every part but the last. */
+const PART_BYTES = 5 * 1024 * 1024;
+/** Above this, one unbroken transfer is a bet the connection has kept losing. */
+const MULTIPART_THRESHOLD = PART_BYTES;
+
+/**
+ * Send a file in 5 MB instalments so a dropped connection costs one part, not the file.
+ *
+ * A whole sheet as a single PUT has to survive one unbroken transfer, and on this
+ * connection it twice did not. Here each part gets three attempts of its own, and the
+ * server seals the file only after storage confirms every part arrived.
+ */
+const uploadInParts = async (
+  file: File,
+  meta: { componentTypes: string[]; year: number; months: number[] },
+  onProgress: (message: string) => void,
+): Promise<string> => {
+  const call = async (payload: Record<string, unknown>) => {
+    const res = await fetch('/api/labour-index/multipart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) throw new Error(data.error || `multipart request returned ${res.status}`);
+    return data;
+  };
+
+  const { uploadId, key } = await call({
+    action: 'create',
+    fileType: UPLOAD_CONTENT_TYPE,
+    ...meta,
+  });
+
+  const totalParts = Math.ceil(file.size / PART_BYTES);
+  try {
+    for (let part = 1; part <= totalParts; part++) {
+      const chunk = file.slice((part - 1) * PART_BYTES, part * PART_BYTES);
+      let lastError: unknown = null;
+      let sent = false;
+      for (let attempt = 1; attempt <= 3 && !sent; attempt++) {
+        onProgress(
+          attempt === 1
+            ? `Uploading part ${part} of ${totalParts}...`
+            : `Part ${part} of ${totalParts} — attempt ${attempt}...`,
+        );
+        try {
+          // Signed fresh per attempt, so a retry never races an expiring URL.
+          const { url } = await call({ action: 'sign-part', key, uploadId, partNumber: part });
+          const putRes = await fetch(url, {
+            method: 'PUT',
+            body: chunk,
+          });
+          if (!putRes.ok) {
+            const errText = await putRes.text();
+            throw new Error(`Storage refused part ${part}: ${putRes.status} ${errText.substring(0, 120)}`);
+          }
+          sent = true;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      if (!sent) throw lastError instanceof Error ? lastError : new Error(String(lastError));
+    }
+
+    onProgress('All parts sent — sealing the file...');
+    await call({ action: 'complete', key, uploadId, expectedParts: totalParts });
+    return key;
+  } catch (err) {
+    // Leave nothing half-assembled behind; the file either exists whole or not at all.
+    await call({ action: 'abort', key, uploadId }).catch(() => {});
+    throw err;
+  }
+};
+
 const COMPONENT_TYPES = [
   { value: "LABOUR", label: "Labour" },
   { value: "PLANT_MACHINERY_SPARES", label: "Plant Machinery & Spares" },
@@ -675,33 +750,46 @@ export default function ComponentDocumentsPage() {
       if (s3Available && presignedUrl) {
         const uploadToastId = toast.loading("Uploading document to cloud storage...");
         try {
-          // Sending a whole scanned sheet in one go is a long transfer, and a connection
-          // that drops anywhere in the middle loses all of it. A second attempt costs
-          // nothing when the first succeeded and rescues the common case where it did not.
-          const attemptUpload = async () => {
-            const res = await fetch(presignedUrl, {
-              method: "PUT",
-              headers: {
-                "Content-Type": UPLOAD_CONTENT_TYPE,
+          if (fileToUpload.size > MULTIPART_THRESHOLD) {
+            // Big sheets go up in 5 MB parts, each retried on its own. One unbroken
+            // transfer of the whole file kept dying on this connection, and every death
+            // cost all of it.
+            cloudStoragePath = await uploadInParts(
+              fileToUpload,
+              {
+                componentTypes: selectedComponentTypes,
+                year: parseInt(uploadYear),
+                months: selectedMonths,
               },
-              body: fileToUpload,
-            });
-            if (!res.ok) {
-              const errText = await res.text();
-              throw new Error(`Storage refused the file: ${res.status} ${res.statusText} ${errText.substring(0, 200)}`);
-            }
-            return res;
-          };
+              (msg) => toast.loading(msg, { id: uploadToastId }),
+            );
+          } else {
+            // Small files fit in one transfer; a second attempt covers the common drop.
+            const attemptUpload = async () => {
+              const res = await fetch(presignedUrl, {
+                method: "PUT",
+                headers: {
+                  "Content-Type": UPLOAD_CONTENT_TYPE,
+                },
+                body: fileToUpload,
+              });
+              if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(`Storage refused the file: ${res.status} ${res.statusText} ${errText.substring(0, 200)}`);
+              }
+              return res;
+            };
 
-          try {
-            await attemptUpload();
-          } catch (firstErr: any) {
-            // Only worth repeating when the transfer itself failed. A refusal is a
-            // decision, and asking twice gets the same answer.
-            const droppedMidway = /failed to fetch|networkerror|load failed/i.test(String(firstErr?.message || ''));
-            if (!droppedMidway) throw firstErr;
-            toast.loading("Connection dropped — trying once more...", { id: uploadToastId });
-            await attemptUpload();
+            try {
+              await attemptUpload();
+            } catch (firstErr: any) {
+              // Only worth repeating when the transfer itself failed. A refusal is a
+              // decision, and asking twice gets the same answer.
+              const droppedMidway = /failed to fetch|networkerror|load failed/i.test(String(firstErr?.message || ''));
+              if (!droppedMidway) throw firstErr;
+              toast.loading("Connection dropped — trying once more...", { id: uploadToastId });
+              await attemptUpload();
+            }
           }
 
           toast.dismiss(uploadToastId);
@@ -720,7 +808,7 @@ export default function ComponentDocumentsPage() {
           const droppedMidway = /failed to fetch|networkerror|load failed/i.test(detail);
           toast.error(
             droppedMidway
-              ? 'The connection to storage gave out part-way through, twice. Large sheets need a steady connection — please try again.'
+              ? 'The connection to storage kept giving out, even sending the sheet in 5 MB pieces with retries. Please try again — a steadier connection will get it through.'
               : `Storage refused the file: ${detail.slice(0, 200)}`,
             { duration: 12000 },
           );
