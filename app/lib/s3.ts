@@ -1,7 +1,7 @@
 import { logger } from './logger';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { createS3Client, getBucketConfig } from './aws-config';
+import { createS3Client, getBucketConfig, resolveStorageSettings } from './aws-config';
 
 let s3Client: S3Client | null = null;
 let bucketName = '';
@@ -36,16 +36,11 @@ export function isS3Configured(): boolean {
  */
 export function getS3Diagnostics() {
   const present = (...names: string[]) => names.filter(n => !!process.env[n]);
-  // Which variable actually WON, not merely which are set. Every storage failure here so
-  // far has been a leftover AWS_* variable outranking the Supabase one meant to be used,
-  // and a list of names alone hides that.
-  const winner = (...names: string[]) => {
-    const from = names.find(n => !!process.env[n]);
-    return from ? { value: process.env[from]!, from } : null;
-  };
-  const bucket = winner('AWS_BUCKET_NAME', 'S3_BUCKET_NAME', 'SUPABASE_STORAGE_BUCKET');
-  const region = winner('AWS_REGION', 'S3_REGION', 'SUPABASE_REGION');
-  const endpoint = winner('S3_ENDPOINT_URL', 'SUPABASE_S3_ENDPOINT');
+  // Read from the same resolution the client uses, so what is reported cannot drift from
+  // what is actually in force. Every storage failure here has been a leftover AWS_*
+  // variable outranking the Supabase one meant to be used, and a list of names alone
+  // hides that.
+  const { bucket, region, endpoint, overriddenBucket, overriddenRegion } = resolveStorageSettings();
   return {
     configured: isS3Configured(),
     initError: initError || null,
@@ -56,6 +51,10 @@ export function getS3Diagnostics() {
     region,
     endpoint,
     regionIsAuto: !region,
+    // Stale values still sitting in Vercel behind the ones in use. Harmless now, but worth
+    // deleting so they cannot be mistaken for the live settings.
+    overriddenBucket,
+    overriddenRegion,
     bucketSetVia: present('AWS_BUCKET_NAME', 'S3_BUCKET_NAME', 'SUPABASE_STORAGE_BUCKET'),
     endpointSetVia: present('S3_ENDPOINT_URL', 'SUPABASE_S3_ENDPOINT'),
     regionSetVia: present('AWS_REGION', 'S3_REGION', 'SUPABASE_REGION'),
@@ -106,7 +105,7 @@ export async function testS3RoundTrip(): Promise<{
     // The two refusals that account for nearly every failure, each with a different fix.
     let hint: string | undefined;
     if (/NoSuchBucket/i.test(errorCode || '') || httpStatus === 404) {
-      hint = `No bucket named "${bucketName}" exists at this endpoint. Create it in Supabase under exactly that name, or correct the bucket variable — note that AWS_BUCKET_NAME outranks SUPABASE_STORAGE_BUCKET.`;
+      hint = `No bucket named "${bucketName}" exists at this endpoint. Create the bucket in Supabase under exactly that name, or correct SUPABASE_STORAGE_BUCKET.`;
     } else if (/SignatureDoesNotMatch|InvalidAccessKeyId|AccessDenied/i.test(errorCode || '') || httpStatus === 403) {
       hint = 'Storage rejected the signature. Usually the region does not match the Supabase project, or the access key and secret are not the S3 access keys from Storage Settings.';
     }

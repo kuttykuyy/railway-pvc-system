@@ -6,12 +6,56 @@ export interface BucketConfig {
   folderPrefix: string;
 }
 
+/**
+ * Where a setting came from, so the winner can be reported and not just used.
+ *
+ * Which variable wins has been the cause of every storage failure here: AWS_PROFILE beat
+ * the access keys, then AWS_BUCKET_NAME and AWS_REGION beat the Supabase pair and sent an
+ * old AbacusAI bucket in us-west-2 to Supabase's address, where no such bucket exists.
+ */
+export interface ResolvedSetting {
+  value: string;
+  from: string;
+}
+
+function firstSet(names: string[]): ResolvedSetting | null {
+  const from = names.find(n => !!process.env[n]);
+  return from ? { value: process.env[from]!, from } : null;
+}
+
+/**
+ * Settings in the order they should be trusted.
+ *
+ * When an endpoint points storage somewhere other than Amazon, the SUPABASE_* names are
+ * believed ahead of the AWS_* ones. Anything left in an AWS_* variable then belongs to a
+ * bucket that is not the one being addressed, so preferring it can only ever be wrong —
+ * and leaving it to win means a stale value silently replaces the correct one sitting
+ * right beside it.
+ */
+export function resolveStorageSettings() {
+  const endpoint = firstSet(['S3_ENDPOINT_URL', 'SUPABASE_S3_ENDPOINT']);
+  const bucketNames = ['AWS_BUCKET_NAME', 'S3_BUCKET_NAME', 'SUPABASE_STORAGE_BUCKET'];
+  const regionNames = ['AWS_REGION', 'S3_REGION', 'SUPABASE_REGION'];
+  if (endpoint) {
+    bucketNames.reverse();
+    regionNames.reverse();
+  }
+  return {
+    endpoint,
+    bucket: firstSet(bucketNames),
+    region: firstSet(regionNames),
+    // Named so a leftover value can be seen sitting behind the one in use.
+    overriddenBucket: endpoint ? firstSet(['AWS_BUCKET_NAME', 'S3_BUCKET_NAME']) : null,
+    overriddenRegion: endpoint ? firstSet(['AWS_REGION', 'S3_REGION']) : null,
+  };
+}
+
 export function getBucketConfig(): BucketConfig {
-  const bucketName = process.env.AWS_BUCKET_NAME || process.env.S3_BUCKET_NAME || process.env.SUPABASE_STORAGE_BUCKET;
+  const bucketName = resolveStorageSettings().bucket?.value;
   const folderPrefix = process.env.AWS_FOLDER_PREFIX || process.env.S3_FOLDER_PREFIX || '';
 
   if (!bucketName) {
-    throw new Error('Bucket name is not set. Set AWS_BUCKET_NAME, S3_BUCKET_NAME, or SUPABASE_STORAGE_BUCKET.');
+    throw new Error('Bucket name is not set. Set SUPABASE_STORAGE_BUCKET, S3_BUCKET_NAME, or AWS_BUCKET_NAME.');
   }
 
   return {
@@ -21,8 +65,9 @@ export function getBucketConfig(): BucketConfig {
 }
 
 export function createS3Client(): S3Client {
-  const endpoint = process.env.S3_ENDPOINT_URL || process.env.SUPABASE_S3_ENDPOINT;
-  const region = process.env.AWS_REGION || process.env.S3_REGION || process.env.SUPABASE_REGION || 'auto';
+  const settings = resolveStorageSettings();
+  const endpoint = settings.endpoint?.value;
+  const region = settings.region?.value || 'auto';
 
   const clientConfig: ConstructorParameters<typeof S3Client>[0] = {
     region,

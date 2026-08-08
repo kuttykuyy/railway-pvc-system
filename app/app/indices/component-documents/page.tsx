@@ -392,6 +392,8 @@ export default function ComponentDocumentsPage() {
       endpointLooksRight: boolean | null;
       bucket: { value: string; from: string } | null;
       region: { value: string; from: string } | null;
+      overriddenBucket: { value: string; from: string } | null;
+      overriddenRegion: { value: string; from: string } | null;
     };
   } | null>(null);
   const [connectionTest, setConnectionTest] = useState<{
@@ -949,6 +951,15 @@ export default function ComponentDocumentsPage() {
                     {storageStatus.diagnostics.region
                       ? `, region ${storageStatus.diagnostics.region.value} (from ${storageStatus.diagnostics.region.from})`
                       : ', region not set'}
+                  </span>
+                )}
+                {(storageStatus.diagnostics?.overriddenBucket || storageStatus.diagnostics?.overriddenRegion) && (
+                  <span className="block mt-1 font-normal opacity-75">
+                    Ignoring leftover{' '}
+                    {[storageStatus.diagnostics.overriddenBucket?.from, storageStatus.diagnostics.overriddenRegion?.from]
+                      .filter(Boolean)
+                      .join(' and ')}
+                    . Safe to delete in Vercel.
                   </span>
                 )}
               </span>
