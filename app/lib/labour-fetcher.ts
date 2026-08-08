@@ -75,6 +75,61 @@ export function parseLabourCSV(csvContent: string): LabourIndexData[] {
 }
 
 /**
+ * Parse the Labour Bureau's own page instead of a hand-carried CSV.
+ *
+ * The all-india-index page embeds the complete table in its HTML — the same five
+ * columns the downloadable CSV holds (S.No, Base Year, Survey Year, Survey Month,
+ * Index Value). Reading it directly removes the monthly ritual of downloading a CSV
+ * and uploading it here: same data, same source, no courier.
+ */
+export function parseLabourHtmlTable(html: string): LabourIndexData[] {
+  const result: LabourIndexData[] = [];
+
+  // The report table's body: rows of five cells each.
+  const tableMatch = html.match(/<table[^>]*id=["']report_data["'][\s\S]*?<tbody>([\s\S]*?)<\/tbody>/i);
+  if (!tableMatch) return result;
+
+  const rowRe = /<tr>([\s\S]*?)<\/tr>/gi;
+  const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+  let rowMatch: RegExpExecArray | null;
+  while ((rowMatch = rowRe.exec(tableMatch[1])) !== null) {
+    const cells: string[] = [];
+    let cellMatch: RegExpExecArray | null;
+    cellRe.lastIndex = 0;
+    while ((cellMatch = cellRe.exec(rowMatch[1])) !== null) {
+      cells.push(cellMatch[1].replace(/<[^>]+>/g, '').trim());
+    }
+    if (cells.length < 5) continue;
+
+    const baseYear = parseInt(cells[1], 10);
+    const year = parseInt(cells[2], 10);
+    const monthNum = MONTH_MAP[cells[3].toLowerCase()];
+    const value = parseFloat(cells[4]);
+    if (isNaN(baseYear) || isNaN(year) || !monthNum || isNaN(value) || value <= 0) continue;
+
+    result.push({
+      month: new Date(Date.UTC(year, monthNum - 1, 1)),
+      year,
+      monthName: cells[3],
+      value,
+      baseYear,
+    });
+  }
+
+  result.sort((a, b) => b.month.getTime() - a.month.getTime());
+  return result;
+}
+
+/** Fetch the Labour Bureau page and parse its embedded table. */
+export async function fetchLabourIndexFromBureau(): Promise<LabourIndexData[]> {
+  const res = await fetch('https://labourbureau.gov.in/all-india-index', {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; IR-PVC/1.0; +https://irpvc.in)' },
+  });
+  if (!res.ok) throw new Error(`Labour Bureau answered ${res.status}`);
+  return parseLabourHtmlTable(await res.text());
+}
+
+/**
  * Update Labour index in database from parsed data
  */
 export async function updateLabourIndexFromData(
