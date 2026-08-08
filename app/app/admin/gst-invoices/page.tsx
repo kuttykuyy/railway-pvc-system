@@ -19,6 +19,7 @@ import {
   Receipt,
   AlertCircle,
   FileSpreadsheet,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -59,6 +60,8 @@ export default function AdminGstInvoicesPage() {
   const [exportMonth, setExportMonth] = useState<string>('');
   const [exportYear, setExportYear] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
+  // The transaction currently being invoiced B2C, so its button alone shows the spinner.
+  const [generatingTxId, setGeneratingTxId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchInvoices();
@@ -105,6 +108,35 @@ export default function AdminGstInvoicesPage() {
       toast.error(error.message || 'Failed to load GST invoices');
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Issue the invoice for a payment whose user never filled the billing dialog —
+   * typically an unregistered (non-GST) customer with no GSTIN to give. B2C: the
+   * account's own name and email, no GSTIN, the same CGST+SGST split the payment
+   * was charged with.
+   */
+  const handleGenerateB2C = async (transactionId?: string) => {
+    if (!transactionId) {
+      toast.error('This payment carries no transaction id');
+      return;
+    }
+    setGeneratingTxId(transactionId);
+    try {
+      const res = await fetch('/api/admin/gst-invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Generation failed');
+      toast.success(`Invoice ${data.invoice.invoiceNumber} generated (B2C, no GSTIN)`);
+      await fetchInvoices();
+    } catch (error: any) {
+      toast.error(error.message || 'Could not generate the invoice');
+    } finally {
+      setGeneratingTxId(null);
     }
   };
 
@@ -583,9 +615,24 @@ export default function AdminGstInvoicesPage() {
                   {/* Action Buttons */}
                   <div className="flex lg:flex-col gap-2">
                     {invoice.status === 'pending_billing_details' ? (
-                      <Button variant="outline" size="sm" disabled className="flex-1 lg:flex-none">
-                        <AlertCircle className="h-4 w-4 mr-2" />
-                        Awaiting Details
+                      // A dead end until now: users without GST registration skip the
+                      // billing dialog (nothing to put in it), and their payments sat
+                      // "awaiting" forever. The supplier's duty to invoice does not
+                      // depend on the customer holding a GSTIN — so issue it B2C from
+                      // the account's own details.
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={generatingTxId === invoice.razorpayTransactionId}
+                        onClick={() => handleGenerateB2C(invoice.razorpayTransactionId)}
+                        className="flex-1 lg:flex-none"
+                      >
+                        {generatingTxId === invoice.razorpayTransactionId ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <FileText className="h-4 w-4 mr-2" />
+                        )}
+                        Generate (no GSTIN)
                       </Button>
                     ) : (
                       <>
