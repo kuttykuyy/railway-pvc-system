@@ -334,7 +334,10 @@ const optimizeAndCompressPdf = async (
     
     // Dynamically import PDF.js to avoid SSR/prerender errors during Next.js build
     const pdfjs = (await import("pdfjs-dist")) as any;
-    pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/6.0.227/pdf.worker.min.mjs`;
+    // Served from our own origin — the CDN copy was refused twice over (cross-origin
+    // workers by the browser, the fallback import by our CSP), which silently pushed
+    // all PDF work onto the page thread when it ran at all.
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
     
     const loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) });
     const pdf = await loadingTask.promise;

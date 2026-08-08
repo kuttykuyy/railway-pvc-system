@@ -74,7 +74,10 @@ export function OfficialSheetViewer({ month }: { month: string }) {
       if (!urlRes.ok) throw new Error(urlData.error || 'Could not fetch the sheet');
 
       const pdfjs = (await import('pdfjs-dist')) as any;
-      pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/6.0.227/pdf.worker.min.mjs`;
+      // The worker ships with the app and is served from our own origin. A CDN copy is
+      // doubly dead on arrival: cross-origin workers are refused by the browser, and the
+      // fallback import of the same URL is refused by our CSP.
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
       const loaded = await pdfjs.getDocument({ url: urlData.url }).promise;
       setPdf(loaded);
       setPageCount(loaded.numPages);
