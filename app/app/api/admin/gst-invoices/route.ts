@@ -169,9 +169,70 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 });
     }
 
-    const { transactionId } = await request.json().catch(() => ({}));
+    const { transactionId, invoiceId } = await request.json().catch(() => ({}));
+
+    // { invoiceId }: reconcile an already-generated app invoice with Zoho — create the
+    // missing sales invoice there, or carry a GSTIN across to an existing one. The
+    // payments this page deals in are exactly the ones whose Zoho copy often never
+    // happened (pre-integration transactions, outages at payment time).
+    if (invoiceId) {
+      const appInvoice = await prisma.gstInvoice.findUnique({ where: { id: invoiceId } });
+      if (!appInvoice) {
+        return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+      }
+      const tx = await prisma.razorpayTransaction.findUnique({
+        where: { id: appInvoice.razorpayTransactionId },
+      });
+      if (!tx) {
+        return NextResponse.json({ error: 'The payment behind this invoice no longer exists' }, { status: 404 });
+      }
+      try {
+        const { findZohoInvoiceByReference, createZohoInvoice, syncGstinToZoho } = await import('@/lib/zoho-books');
+        const existingZoho = await findZohoInvoiceByReference(tx.orderId);
+        if (existingZoho) {
+          // Already in the ledger. If the app invoice carries a GSTIN, make sure the
+          // ledger copy does too — the common drift between the two.
+          if (appInvoice.customerGstin) {
+            const sync = await syncGstinToZoho({
+              customerEmail: appInvoice.customerEmail,
+              gstin: appInvoice.customerGstin,
+              razorpayOrderId: tx.orderId,
+            });
+            return NextResponse.json({
+              success: true,
+              zoho: { pushed: false, detail: `Zoho already has ${existingZoho.invoiceNumber}; ${sync.detail}` },
+            });
+          }
+          return NextResponse.json({
+            success: true,
+            zoho: { pushed: false, detail: `Zoho already has invoice ${existingZoho.invoiceNumber} for this payment` },
+          });
+        }
+        const created = await createZohoInvoice({
+          customerName: appInvoice.customerName,
+          customerEmail: appInvoice.customerEmail,
+          gstin: appInvoice.customerGstin,
+          creditAmount: tx.creditAmount,
+          gstAmount: tx.gstAmount,
+          totalAmount: tx.totalAmount,
+          razorpayOrderId: tx.orderId,
+          razorpayPaymentId: tx.razorpayPaymentId || tx.orderId,
+        });
+        logger.log(`[Admin GST Invoices] Zoho invoice ${created.invoiceNumber} pushed by ${admin.email} for app invoice ${appInvoice.invoiceNumber}`);
+        return NextResponse.json({
+          success: true,
+          zoho: { pushed: true, detail: `Zoho invoice ${created.invoiceNumber} created` },
+        });
+      } catch (zohoError: any) {
+        return NextResponse.json(
+          { error: `Zoho push failed: ${zohoError?.message || zohoError}` },
+          { status: 502 }
+        );
+      }
+    }
+
     if (!transactionId) {
-      return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
+      return NextResponse.json({ error: 'transactionId or invoiceId is required' }, { status: 400 });
     }
 
     const transaction = await prisma.razorpayTransaction.findUnique({ where: { id: transactionId } });

@@ -62,6 +62,8 @@ export default function AdminGstInvoicesPage() {
   const [isExporting, setIsExporting] = useState(false);
   // The transaction currently being invoiced B2C, so its button alone shows the spinner.
   const [generatingTxId, setGeneratingTxId] = useState<string | null>(null);
+  // Likewise for the per-invoice Zoho push.
+  const [pushingZohoId, setPushingZohoId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchInvoices();
@@ -108,6 +110,29 @@ export default function AdminGstInvoicesPage() {
       toast.error(error.message || 'Failed to load GST invoices');
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Reconcile a generated invoice with Zoho Books: create the missing sales invoice
+   * there, or carry this invoice's GSTIN onto the existing one. Safe to click twice —
+   * an invoice already in the ledger is never duplicated.
+   */
+  const handlePushToZoho = async (invoiceId: string) => {
+    setPushingZohoId(invoiceId);
+    try {
+      const res = await fetch('/api/admin/gst-invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Zoho push failed');
+      (data.zoho?.pushed ? toast.success : toast.info)(data.zoho?.detail || 'Done', { duration: 8000 });
+    } catch (error: any) {
+      toast.error(error.message || 'Could not push to Zoho');
+    } finally {
+      setPushingZohoId(null);
     }
   };
 
@@ -658,6 +683,24 @@ export default function AdminGstInvoicesPage() {
                         >
                           <Download className="h-4 w-4 mr-2" />
                           Download
+                        </Button>
+                        {/* Ensure the ledger has this invoice too — the payments on
+                            this page are the ones whose Zoho copy often never
+                            happened. Never duplicates; carries the GSTIN if Zoho's
+                            copy lacks it. */}
+                        <Button
+                          onClick={() => handlePushToZoho(invoice.id)}
+                          variant="outline"
+                          size="sm"
+                          disabled={pushingZohoId === invoice.id}
+                          className="flex-1 lg:flex-none"
+                        >
+                          {pushingZohoId === invoice.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Receipt className="h-4 w-4 mr-2" />
+                          )}
+                          Push to Zoho
                         </Button>
                       </>
                     )}
