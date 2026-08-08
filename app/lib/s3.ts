@@ -1,5 +1,5 @@
 import { logger } from './logger';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListBucketsCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createS3Client, getBucketConfig, resolveStorageSettings } from './aws-config';
 
@@ -93,23 +93,51 @@ export async function testS3RoundTrip(): Promise<{
   errorMessage?: string;
   httpStatus?: number;
   hint?: string;
+  existingBuckets?: string[];
 }> {
   if (!s3Client || useLocalFallback) {
     return { ok: false, failedAt: 'upload', errorMessage: initError || 'Storage is not configured.' };
   }
 
   const key = `${folderPrefix}connection-test/${Date.now()}.txt`;
-  const describe = (error: any, failedAt: 'upload' | 'read-back' | 'cleanup') => {
+
+  /**
+   * The names storage will actually answer to.
+   *
+   * "No such bucket" leaves open whether the bucket has yet to be made or is simply
+   * spelled differently here, and those need opposite fixes. The real list settles it.
+   */
+  const listBucketNames = async (): Promise<string[] | null> => {
+    try {
+      const result = await s3Client!.send(new ListBucketsCommand({}));
+      return (result.Buckets ?? []).map(b => b.Name!).filter(Boolean);
+    } catch {
+      // Some keys may upload without being allowed to list. Not knowing is no worse
+      // than before.
+      return null;
+    }
+  };
+
+  const describe = async (error: any, failedAt: 'upload' | 'read-back' | 'cleanup') => {
     const errorCode = error?.name || error?.Code || undefined;
     const httpStatus = error?.$metadata?.httpStatusCode;
     // The two refusals that account for nearly every failure, each with a different fix.
     let hint: string | undefined;
+    let existingBuckets: string[] | undefined;
     if (/NoSuchBucket/i.test(errorCode || '') || httpStatus === 404) {
-      hint = `No bucket named "${bucketName}" exists at this endpoint. Create the bucket in Supabase under exactly that name, or correct SUPABASE_STORAGE_BUCKET.`;
+      const names = await listBucketNames();
+      existingBuckets = names ?? undefined;
+      if (names && names.length) {
+        hint = `No bucket named "${bucketName}" here. Storage does have: ${names.join(', ')}. Either set SUPABASE_STORAGE_BUCKET to one of those, or create "${bucketName}" in Supabase.`;
+      } else if (names) {
+        hint = `This project has no storage buckets at all yet. Create one in Supabase named "${bucketName}".`;
+      } else {
+        hint = `No bucket named "${bucketName}" exists at this endpoint. Create it in Supabase under exactly that name, or correct SUPABASE_STORAGE_BUCKET.`;
+      }
     } else if (/SignatureDoesNotMatch|InvalidAccessKeyId|AccessDenied/i.test(errorCode || '') || httpStatus === 403) {
       hint = 'Storage rejected the signature. Usually the region does not match the Supabase project, or the access key and secret are not the S3 access keys from Storage Settings.';
     }
-    return { ok: false as const, failedAt, errorCode, errorMessage: String(error?.message || error), httpStatus, hint };
+    return { ok: false as const, failedAt, errorCode, errorMessage: String(error?.message || error), httpStatus, hint, existingBuckets };
   };
 
   try {
@@ -120,13 +148,13 @@ export async function testS3RoundTrip(): Promise<{
       ContentType: 'text/plain',
     }));
   } catch (error: any) {
-    return describe(error, 'upload');
+    return await describe(error, 'upload');
   }
 
   try {
     await s3Client.send(new GetObjectCommand({ Bucket: bucketName, Key: key }));
   } catch (error: any) {
-    return describe(error, 'read-back');
+    return await describe(error, 'read-back');
   }
 
   try {
