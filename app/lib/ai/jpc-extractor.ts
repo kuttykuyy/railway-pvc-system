@@ -184,3 +184,87 @@ Rules:
     },
   };
 }
+
+/**
+ * Reads a multi-page JPC PDF — a month's two fortnights, or several months bound
+ * together — by splitting it and reading each page as its own sheet.
+ *
+ * The single-sheet reader is prompted for ONE table, so a bound PDF used to yield only
+ * its first page and the rest silently vanished. Pages that are not price pages (each
+ * fortnight's items-25-34 page, disclaimers) identify themselves by failing to match
+ * known items, and are dropped rather than guessed at. Duplicate (month, fortnight)
+ * readings keep whichever page yielded more prices.
+ */
+export async function extractJpcSheets(
+  pdf: Buffer,
+  filename: string,
+): Promise<{ ok: boolean; status?: number; error?: string; sheets?: NonNullable<JpcExtraction['data']>[]; pagesTotal?: number; pagesSkipped?: number }> {
+  const { PDFDocument } = await import('pdf-lib');
+  let pageCount = 1;
+  let source: Awaited<ReturnType<typeof PDFDocument.load>> | null = null;
+  try {
+    source = await PDFDocument.load(pdf);
+    pageCount = source.getPageCount();
+  } catch {
+    // Not splittable — treat as a single sheet and let the reader report what it can.
+  }
+
+  if (!source || pageCount <= 1) {
+    const single = await extractJpcSheet(pdf, filename);
+    if (!single.ok) return { ok: false, status: single.status, error: single.error };
+    return { ok: true, sheets: [single.data!], pagesTotal: 1, pagesSkipped: 0 };
+  }
+
+  // Each page costs one AI reading — a bound year would cost seventy. Ask for smaller
+  // uploads instead of silently reading a fraction.
+  const MAX_PAGES = 12;
+  if (pageCount > MAX_PAGES) {
+    return {
+      ok: false,
+      status: 400,
+      error: `That PDF has ${pageCount} pages. Upload one or two months at a time (up to ${MAX_PAGES} pages).`,
+    };
+  }
+
+  // Split into single-page PDFs and read them a few at a time.
+  const pageBuffers: Buffer[] = [];
+  for (let i = 0; i < pageCount; i++) {
+    const onePage = await PDFDocument.create();
+    const [page] = await onePage.copyPages(source, [i]);
+    onePage.addPage(page);
+    pageBuffers.push(Buffer.from(await onePage.save()));
+  }
+
+  const results: (JpcExtraction | null)[] = new Array(pageCount).fill(null);
+  const CONCURRENCY = 3;
+  for (let start = 0; start < pageCount; start += CONCURRENCY) {
+    const batch = pageBuffers.slice(start, start + CONCURRENCY).map((buffer, offset) =>
+      extractJpcSheet(buffer, `${filename} (page ${start + offset + 1})`).then(r => { results[start + offset] = r; }),
+    );
+    await Promise.all(batch);
+  }
+
+  // A price page matches most of the 24 known items; other pages match almost none.
+  const MIN_MATCHED_ROWS = 8;
+  const byKey = new Map<string, NonNullable<JpcExtraction['data']>>();
+  let skipped = 0;
+  for (const result of results) {
+    const data = result?.ok ? result.data : null;
+    const matched = data ? data.rows.filter(r => r.itemCode).length : 0;
+    if (!data || matched < MIN_MATCHED_ROWS) {
+      skipped++;
+      continue;
+    }
+    const key = `${data.month || 'unknown'}|${data.fortnight || 'unknown'}`;
+    const existing = byKey.get(key);
+    const pricedCount = (d: NonNullable<JpcExtraction['data']>) =>
+      d.rows.filter(r => Object.values(r.prices).some(v => v !== null)).length;
+    if (!existing || pricedCount(data) > pricedCount(existing)) byKey.set(key, data);
+  }
+
+  const sheets = [...byKey.values()].sort((a, b) => `${a.month}|${a.fortnight}`.localeCompare(`${b.month}|${b.fortnight}`));
+  if (sheets.length === 0) {
+    return { ok: false, status: 422, error: 'No page of that PDF read as a JPC price table.' };
+  }
+  return { ok: true, sheets, pagesTotal: pageCount, pagesSkipped: skipped };
+}

@@ -94,39 +94,55 @@ export default function SteelImportPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not read that sheet');
 
-      const fortnight: 'f1' | 'f2' | null = data.fortnight;
-      if (!fortnight) {
-        setExtractNote('The sheet date could not be read, so I cannot tell which fortnight it is. Enter the figures by hand.');
+      // A multi-page PDF reads as several sheets — a month's two fortnights, sometimes
+      // more months. Fill every fortnight belonging to the month on screen; name the
+      // rest instead of silently dropping them, as reading only page one used to.
+      const sheets: any[] = Array.isArray(data.sheets) && data.sheets.length > 0 ? data.sheets : [data];
+      const usable = sheets.filter(s => s.fortnight);
+      if (usable.length === 0) {
+        setExtractNote('No sheet date could be read, so I cannot tell which fortnight is which. Enter the figures by hand.');
         return;
       }
-      if (data.month && steelMonth && data.month !== steelMonth) {
-        setExtractNote(`That sheet is for ${data.month}, but the month above is ${steelMonth}. Change the month, or upload the right sheet.`);
+
+      // The month on screen decides which sheets apply; with no month chosen yet, the
+      // PDF's own first month is adopted.
+      const targetMonth = steelMonth || usable[0].month || '';
+      if (!steelMonth && usable[0].month) setSteelMonth(usable[0].month);
+      const applicable = usable.filter(s => !s.month || s.month === targetMonth);
+      const otherMonths = [...new Set(usable.filter(s => s.month && s.month !== targetMonth).map(s => s.month))];
+      if (applicable.length === 0) {
+        setExtractNote(`That PDF is for ${otherMonths.join(', ')}, but the month above is ${targetMonth}. Change the month, or upload the right sheet.`);
         return;
       }
-      if (data.month && !steelMonth) setSteelMonth(data.month);
 
       let filled = 0;
+      const fortnightsFilled: string[] = [];
       setCityData((prev) => {
         const next: CityData = JSON.parse(JSON.stringify(prev));
-        for (const row of data.rows || []) {
-          if (!row.itemCode) continue;
-          for (const city of CITIES) {
-            const value = row.prices?.[city];
-            if (value === null || value === undefined) continue;
-            if (!next[city][row.itemCode]) continue;
-            next[city][row.itemCode][fortnight] = String(value);
-            filled++;
+        for (const sheet of applicable) {
+          const fortnight: 'f1' | 'f2' = sheet.fortnight;
+          fortnightsFilled.push(fortnight === 'f1' ? 'first fortnight' : 'second fortnight');
+          for (const row of sheet.rows || []) {
+            if (!row.itemCode) continue;
+            for (const city of CITIES) {
+              const value = row.prices?.[city];
+              if (value === null || value === undefined) continue;
+              if (!next[city][row.itemCode]) continue;
+              next[city][row.itemCode][fortnight] = String(value);
+              filled++;
+            }
           }
         }
         return next;
       });
 
-      const label = fortnight === 'f1' ? 'first fortnight' : 'second fortnight';
-      toast.success(`Filled ${filled} cell(s) for the ${label}${data.priceDate ? ` (${data.priceDate})` : ''}. Check them before saving.`, { duration: 6000 });
+      toast.success(`Filled ${filled} cell(s) — ${[...new Set(fortnightsFilled)].join(' and ')} of ${targetMonth}. Check them before saving.`, { duration: 6000 });
+      const unmatchedTotal = applicable.reduce((n, s) => n + (s.summary?.unmatchedCount || 0), 0);
       setExtractNote(
         [
-          data.warning,
-          data.summary?.unmatchedCount ? `${data.summary.unmatchedCount} row(s) on the sheet matched no known item.` : '',
+          applicable.map(s => s.warning).filter(Boolean).join(' '),
+          unmatchedTotal ? `${unmatchedTotal} row(s) matched no known item.` : '',
+          otherMonths.length ? `The PDF also holds ${otherMonths.join(', ')} — switch the month above and upload again to fill those.` : '',
           'Read by AI from a scan — compare every figure with the sheet before saving.',
         ].filter(Boolean).join(' '),
       );

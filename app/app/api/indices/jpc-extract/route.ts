@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminAccess } from '@/lib/role-auth';
-import { extractJpcSheet } from '@/lib/ai/jpc-extractor';
+import { extractJpcSheets } from '@/lib/ai/jpc-extractor';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -32,28 +32,37 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const result = await extractJpcSheet(buffer, file.name || 'jpc.pdf');
+    // Reads every page — a bound PDF holds a month's two fortnights, sometimes several
+    // months, and reading only its first page silently discarded the rest.
+    const result = await extractJpcSheets(buffer, file.name || 'jpc.pdf');
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status || 502 });
     }
 
-    const data = result.data!;
-    // Say plainly how complete the reading is. The screen shows this above the grid so a
-    // half-read sheet is obvious before anyone presses save.
-    const priced = data.rows.filter(r => Object.values(r.prices).some(v => v !== null)).length;
+    const sheets = result.sheets!.map(data => {
+      const priced = data.rows.filter(r => Object.values(r.prices).some(v => v !== null)).length;
+      return {
+        ...data,
+        summary: {
+          rowsRead: data.rows.length,
+          rowsWithPrices: priced,
+          unmatchedCount: data.unmatched.length,
+          missingCount: data.missing.length,
+        },
+        warning: !data.month || !data.fortnight
+          ? 'The sheet date could not be read, so the month and fortnight need setting by hand.'
+          : data.missing.length > 0
+            ? `${data.missing.length} item(s) were not found on the sheet and will be left blank.`
+            : null,
+      };
+    });
+
+    // The first sheet also spreads onto the top level so an older client keeps working.
     return NextResponse.json({
-      ...data,
-      summary: {
-        rowsRead: data.rows.length,
-        rowsWithPrices: priced,
-        unmatchedCount: data.unmatched.length,
-        missingCount: data.missing.length,
-      },
-      warning: !data.month || !data.fortnight
-        ? 'The sheet date could not be read, so the month and fortnight need setting by hand.'
-        : data.missing.length > 0
-          ? `${data.missing.length} item(s) were not found on the sheet and will be left blank.`
-          : null,
+      ...sheets[0],
+      sheets,
+      pagesTotal: result.pagesTotal,
+      pagesSkipped: result.pagesSkipped,
     });
   } catch (error: any) {
     console.error('JPC extraction failed:', error);
