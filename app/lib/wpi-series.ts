@@ -30,14 +30,36 @@ import { getAdminSettings } from './admin-settings';
 export const WPI_NEW_SERIES_FROM = new Date(Date.UTC(2026, 4, 1));
 
 /**
- * DPIIT linking factors, PIB release of 15.06.2026: Manufactured Products 1.44 (cement,
- * machinery and explosives all live in that major group), All Commodities 1.53.
+ * Linking factors per COMMODITY, not per major group.
+ *
+ * DPIIT publishes factors only for All Commodities and the three major groups, and says
+ * plainly why: at finer levels the item basket changed so much that a published factor
+ * "may not yield reliable results". It prescribes no method and leaves the choice to
+ * the user. Taking the Manufactured Products factor (1.44) for every manufactured index
+ * was that warning coming true — machinery's own bridge is 0.85, so a bill's plant and
+ * machinery component came out 75% up when the truth was a few per cent, and explosives
+ * would have been understated by a third.
+ *
+ * These are derived by DPIIT's OWN definition — the ratio of the geometric means of the
+ * twelve monthly indices of the old and new series for FY 2024-25 — applied to each
+ * commodity rather than its group, computed from the two published workbooks:
+ *
+ *   index                old GM    new GM    factor
+ *   RBI Cement           130.41     93.41    1.3962   (group factor said 1.44)
+ *   RBI Plant Machinery   89.82    105.62    0.8504   (group factor said 1.44)
+ *   RBI Explosives       176.30     88.45    1.9932   (group factor said 1.44)
+ *   RBI Other Materials  154.85    101.03    1.5327   (All Commodities, 1.53 — agrees)
+ *
+ * Sources: eaindustry.nic.in indx_download_1112/monthly_index_202606.xls (old series)
+ * and indx_download_2223/wpi_monthly_index_202607.xlsx (new series, which carries the
+ * back series recomputed on the new base). Overridable per index from AdminSettings, so
+ * a Railway Board circular prescribing different figures is a settings change.
  */
 export const DEFAULT_WPI_LINKING_FACTORS: Record<string, number> = {
-  'RBI Cement': 1.44,
-  'RBI Plant Machinery': 1.44,
-  'RBI Explosives': 1.44,
-  'RBI Other Materials': 1.53,
+  'RBI Cement': 1.3962,
+  'RBI Plant Machinery': 0.8504,
+  'RBI Explosives': 1.9932,
+  'RBI Other Materials': 1.5327,
 };
 
 export function isWpiIndexName(name: string): boolean {
