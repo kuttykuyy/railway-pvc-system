@@ -61,6 +61,56 @@ export default function JpcCrossCheckPage() {
   const [fixingKey, setFixingKey] = useState<string | null>(null);
   /** Manual overrides typed into a row's input, same key. */
   const [manualValues, setManualValues] = useState<Record<string, string>>({});
+  /**
+   * Which bills a correction has moved.
+   *
+   * A bill's PVC is stored, not recomputed on the fly — so correcting a rate leaves
+   * existing bills quietly disagreeing with the indices they cite, and nothing says
+   * which. This asks.
+   */
+  const [impact, setImpact] = useState<any>(null);
+  const [impactLoading, setImpactLoading] = useState(false);
+  const [recalcId, setRecalcId] = useState<string | null>(null);
+  const [recalcResults, setRecalcResults] = useState<Record<string, { difference: number }>>({});
+
+  const loadImpact = async () => {
+    setImpactLoading(true);
+    try {
+      const res = await fetch('/api/admin/jpc-impact');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not check');
+      setImpact(data);
+      if ((data.bills || []).length === 0) toast.success(data.note || 'No bills depend on a corrected rate.');
+    } catch (err: any) {
+      toast.error(err.message || 'Could not check affected bills');
+    } finally {
+      setImpactLoading(false);
+    }
+  };
+
+  /** Recalculate one bill, showing what the stored figure becomes. */
+  const recalcBill = async (billId: string, billNo: string) => {
+    setRecalcId(billId);
+    try {
+      const res = await fetch('/api/admin/jpc-impact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ billId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Recalculation failed');
+      setRecalcResults(prev => ({ ...prev, [billId]: { difference: data.difference } }));
+      const delta = data.difference;
+      toast.success(
+        `${billNo}: PVC ${delta === 0 ? 'unchanged' : (delta > 0 ? 'up ' : 'down ') + Math.abs(delta).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`,
+        { duration: 7000 },
+      );
+    } catch (err: any) {
+      toast.error(err.message || 'Recalculation failed');
+    } finally {
+      setRecalcId(null);
+    }
+  };
 
   /**
    * Apply one correction — the sheet's figure, or whatever the admin typed over it
@@ -239,7 +289,91 @@ export default function JpcCrossCheckPage() {
           {running ? 'Checking...' : `Check ${year}`}
         </Button>
         {progress && <span className="text-sm text-gray-500">{progress}</span>}
+        <Button onClick={loadImpact} variant="outline" disabled={impactLoading || running} className="gap-2">
+          {impactLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
+          Which bills are affected?
+        </Button>
       </div>
+
+      {impact && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              {impact.bills.length === 0 ? (
+                <span className="flex items-center gap-2 text-green-700">
+                  <CheckCircle2 className="h-5 w-5" />
+                  {impact.corrections.length} rate correction(s) — no existing bill draws on them
+                </span>
+              ) : (
+                <span className="flex items-center gap-2 text-amber-700">
+                  <AlertTriangle className="h-5 w-5" />
+                  {impact.bills.length} bill(s) use a corrected rate
+                  {impact.summary?.needingDecision ? ` · ${impact.summary.needingDecision} already submitted or approved` : ''}
+                </span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {impact.corrections.length > 0 && (
+              <p className="text-xs text-gray-500">
+                Corrected so far:{' '}
+                {impact.touched.map((t: any) => `${t.city} ${t.monthKey} (${t.items.join(', ')})`).join(' · ')}
+              </p>
+            )}
+            {impact.bills.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="text-xs w-full">
+                  <thead><tr className="text-left text-gray-500">
+                    <th className="pr-3 py-1">Bill</th><th className="pr-3">Agreement</th><th className="pr-3">Steel city</th>
+                    <th className="pr-3">Months used</th><th className="pr-3">Status</th>
+                    <th className="pr-3 text-right">Stored PVC</th><th className="pr-3">Recalculate</th>
+                  </tr></thead>
+                  <tbody>
+                    {impact.bills.map((b: any) => {
+                      const done = recalcResults[b.billId];
+                      const signed = ['approved', 'paid', 'submitted'].includes(String(b.status).toLowerCase());
+                      return (
+                        <tr key={b.billId} className="border-t border-gray-200">
+                          <td className="pr-3 py-1 font-medium">{b.billNo}</td>
+                          <td className="pr-3">{b.agreementNo}</td>
+                          <td className="pr-3">{b.steelCity}</td>
+                          <td className="pr-3">{b.months.join(', ')}</td>
+                          <td className={`pr-3 ${signed ? 'text-amber-700 font-medium' : 'text-gray-500'}`}>{b.status}</td>
+                          <td className="pr-3 text-right font-mono">{b.storedTotalPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                          <td className="pr-3 py-0.5">
+                            {done ? (
+                              <span className={done.difference === 0 ? 'text-gray-500' : 'text-green-700 font-medium'}>
+                                {done.difference === 0
+                                  ? 'unchanged'
+                                  : `${done.difference > 0 ? '+' : ''}${done.difference.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+                              </span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant={signed ? 'outline' : 'default'}
+                                className="h-6 px-2 text-[11px]"
+                                disabled={recalcId === b.billId}
+                                onClick={() => recalcBill(b.billId, b.billNo)}
+                              >
+                                {recalcId === b.billId ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Recalculate'}
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="text-[11px] text-gray-400">
+              A bill&apos;s PVC is stored as it was computed, so a corrected rate does not reach it by
+              itself. Recalculating rewrites that figure — for a bill already submitted or approved
+              (marked above), decide first whether a revised statement is the right thing to issue.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {results.length > 0 && (
         <Card>
