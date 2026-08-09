@@ -1757,6 +1757,32 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         columnStyles: histColStyles,
       });
 
+      // Everything below follows the table, legend or no legend.
+      y = (pdf as any).lastAutoTable?.finalY ?? y;
+
+      // Legend for the P / (b) markers — shown whenever any cell is provisional or borrowed.
+      if (isProvisional || provLookup.size > 0 || borrowLookup.size > 0) {
+        // Two lines at most, but near the foot of a page they still need room.
+        y += 5;
+        ensureSpace(9);
+        let afterY = y;
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'italic');
+        if (provLookup.size > 0 || isProvisional) {
+          pdf.setTextColor(180, 83, 9);
+          pdf.text('P = provisional index (temporary — figures shaded amber will be revised when the final index is published).', mL, afterY);
+          afterY += 4;
+        }
+        if (borrowLookup.size > 0) {
+          pdf.setTextColor(107, 114, 128);
+          pdf.text('(b) = borrowed from the previous available month because this month\'s index is not yet published; used in the quarter average.', mL, afterY);
+          afterY += 4;
+        }
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFont('helvetica', 'normal');
+        y = afterY;
+      }
+
       // CPI-IW linking note. Accounts offices vet the labour index against the older
       // 2001=100 series (link factor 2.88), and a proposal has been returned for the
       // factor "not being applied". Stating both series — and that the variation is
@@ -1784,10 +1810,10 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
           const wrapped = lines.flatMap(line => pdf.splitTextToSize(pdfSafe(line), contentW - 6) as string[]);
           const lineH = 4.2;
           const boxH = 9 + wrapped.length * lineH + 2;
-          // Move y to where the box would start BEFORE asking for room: ensureSpace
-          // measures from y and resets it to the top margin if it has to break the
-          // page, and reading lastAutoTable afterwards would point at the old page.
-          y = ((pdf as any).lastAutoTable?.finalY ?? y) + 6;
+          // Start below whatever was last drawn — the table, or the marker legend if
+          // one was printed. Reaching back to lastAutoTable.finalY here put the box on
+          // top of the legend, and would point at the previous page after a break.
+          y = y + 6;
           ensureSpace(boxH + 4);
           const boxTop = y;
           pdf.setFillColor(247, 243, 226);
@@ -1814,24 +1840,6 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
           pdf.setLineWidth(0.2);
           y = boxTop + boxH + 4;
         }
-      }
-
-      // Legend for the P / (b) markers — shown whenever any cell is provisional or borrowed.
-      if (isProvisional || provLookup.size > 0 || borrowLookup.size > 0) {
-        let afterY = ((pdf as any).lastAutoTable?.finalY ?? y) + 5;
-        pdf.setFontSize(8);
-        pdf.setFont('helvetica', 'italic');
-        if (provLookup.size > 0 || isProvisional) {
-          pdf.setTextColor(180, 83, 9);
-          pdf.text('P = provisional index (temporary — figures shaded amber will be revised when the final index is published).', mL, afterY);
-          afterY += 4;
-        }
-        if (borrowLookup.size > 0) {
-          pdf.setTextColor(107, 114, 128);
-          pdf.text('(b) = borrowed from the previous available month because this month\'s index is not yet published; used in the quarter average.', mL, afterY);
-        }
-        pdf.setTextColor(0, 0, 0);
-        pdf.setFont('helvetica', 'normal');
       }
     }
   }
