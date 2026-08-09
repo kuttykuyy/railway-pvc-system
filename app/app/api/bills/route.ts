@@ -537,6 +537,8 @@ export async function POST(request: NextRequest) {
       data: {
         contractId,
         billNo: normalizedBillNo,
+        // The same fact that priced this bill, kept rather than discarded.
+        createdVia: isAiUploaded ? 'pdf' : 'manual',
         grossBillAmount: parseFloat(grossBillAmount),
         billAmount: parseFloat(billAmount),
         cementAmount: classificationPolicy.cementAmount,
