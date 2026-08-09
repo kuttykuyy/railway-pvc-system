@@ -1,11 +1,12 @@
 /**
- * Load the CPWD Delhi Schedule of Rates into the database.
+ * Load the published schedules of rates into the database.
  *
- * The book ships with the app as data/dsr-2021.json — extracted from the two official
- * volumes by scripts/extract-dsr-book.ts — rather than being uploaded, because the
- * whole schedule is well past the request size a deployment will accept and because a
- * rate book that decides money should be the same for everyone, not whatever file
- * happened to be uploaded last.
+ * Three books: CPWD DSR 2021 and 2023, and the Indian Railways USSOR 2021. Each ships
+ * with the app under data/ — extracted from the official PDFs by
+ * scripts/extract-rate-book.ts — rather than being uploaded, because a whole schedule
+ * is well past the request size a deployment accepts, and because a rate book that
+ * decides money should be the same for everyone rather than whatever file happened to
+ * be uploaded last.
  *
  * Everything here is raw SQL. The table is created by the pending-schema endpoint and
  * a Prisma model for it is deliberately absent until it exists everywhere: Prisma
@@ -17,13 +18,18 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import dsr2021 from '@/data/dsr-2021.json';
+import dsr2023 from '@/data/dsr-2023.json';
+import ussor2021 from '@/data/ussor-2021.json';
 
 export const dynamic = 'force-dynamic';
 
 interface PackedItem { c: string; s: string; n: string; d: string; u: string; r: number | null }
 interface Book { edition: string; source: string; items: PackedItem[] }
 
-const BOOKS: Book[] = [dsr2021 as Book];
+// Editions are kept apart because a code means different things in each: DSR 2023
+// reuses 2021's numbering at different rates, and USSOR numbers by chapter entirely.
+// A bill has to say which book it is quoting before a lookup can mean anything.
+const BOOKS: Book[] = [dsr2021 as Book, dsr2023 as Book, ussor2021 as Book];
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
