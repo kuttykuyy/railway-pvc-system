@@ -18,6 +18,16 @@ export interface DeterministicBillItem {
   isCementAffected: boolean;
   isSteelItem: boolean;
   steelType: 'TMT' | 'ANGLE_CHANNEL' | 'PLATES' | 'OTHER_SECTIONS' | '';
+  /**
+   * Every JPC category the item draws on, not just the first one matched.
+   *
+   * Clause 46A.9(1) prices steel against four categories, and a single item routinely
+   * uses several: "Structural steel work riveted, bolted or welded in built up
+   * sections, trusses and framed work" is angles, channels and plates together. It
+   * names none of them, so it fell past every specific rule to Other Sections — the
+   * catch-all — and was priced against that index alone.
+   */
+  steelTypes?: Array<'TMT' | 'ANGLE_CHANNEL' | 'PLATES' | 'OTHER_SECTIONS'>;
   confidence: 'high' | 'medium' | 'low';
   reason: string;
   /**

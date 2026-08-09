@@ -88,6 +88,24 @@ export interface BuildEntriesOptions {
  * its first — so an item whose exact suffix has no row (a single-class group, or a
  * bare "5") still gets a valid sub-classification instead of being dropped.
  */
+/**
+ * The 46A.9(1) steel categories an item is priced against.
+ *
+ * Prefers the full list the reader worked out, because an item can draw on several:
+ * structural steel work in built-up sections is angles, channels and plates together.
+ * Falls back to the single type for items read before the list existed, and for the AI
+ * path, which returns one.
+ */
+function steelCategoriesOf(item: {
+  isSteelItem?: boolean;
+  steelType?: string;
+  steelTypesUsed?: string[];
+}): string[] {
+  if (!item.isSteelItem) return [];
+  if (item.steelTypesUsed?.length) return [...item.steelTypesUsed];
+  return item.steelType ? [item.steelType] : [];
+}
+
 export function findSubClassificationForExtractedItem(
   item: { suggestedClassificationCode?: string | null },
   classificationGroups: ExtractedClassificationGroup[],
@@ -170,7 +188,7 @@ export function buildClassificationEntriesFromExtractedBill(
               subClassification,
               amount: netAmount,
               description: groupName ? groupName : `${item.description || ''} (Excluding Cement)`,
-              steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
+              steelTypes: steelCategoriesOf(item),
               scheduleItem,
               itemNumber: item.itemNo || '',
               quantity: qty || '',
@@ -233,7 +251,7 @@ export function buildClassificationEntriesFromExtractedBill(
           : (specialConditionOnly
             ? `${item.description || ''} (Special condition amount; printed Qty since last Bill is 0)`
             : item.description || ''),
-        steelTypes: item.isSteelItem && item.steelType ? [item.steelType] : [],
+        steelTypes: steelCategoriesOf(item),
         scheduleItem: matchExtractedSchedule(schedules, [item.schedule, item.scheduleGroup, item.chapter]),
         itemNumber,
         quantity: itemQuantity,

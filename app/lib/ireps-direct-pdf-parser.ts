@@ -210,6 +210,45 @@ function extractDescription(page: PositionedPdfPage, rowY: number, nextRowY: num
     .slice(0, 500);
 }
 
+type SteelCategory = 'TMT' | 'ANGLE_CHANNEL' | 'PLATES' | 'OTHER_SECTIONS';
+
+/**
+ * Which of Clause 46A.9(1)'s four steel categories an item draws on.
+ *
+ * Returns every one that applies. An item names its sections outright — "angles, tees
+ * and channels", "plates" — or it names none and describes the work instead:
+ * "Structural steel work riveted, bolted or welded in built up sections, trusses and
+ * framed work" (DSR 10.2) is built from angles, channels and plates, and saying so
+ * beats filing the whole amount under Other Sections because no section was spelled
+ * out. Where an item genuinely is one category, it still returns just that one.
+ */
+function steelCategoriesFor(text: string): SteelCategory[] {
+  const found = new Set<SteelCategory>();
+  if (/\b(?:tmt|reinforcement|thermo-?\s*mechanically treated|fe-?500|fe-?550)\b/.test(text)) found.add('TMT');
+  if (/\b(?:angles?|channels?|joists?|\bISA\b|\bISMC\b|\bISMB\b)\b/i.test(text)) found.add('ANGLE_CHANNEL');
+  if (/\bplates?\b|\bchequered\b|\bgussets?\b/.test(text)) found.add('PLATES');
+  if (/\b(?:flats?|rounds?|squares?|tees?|wire rope|rails?)\b/.test(text)) found.add('OTHER_SECTIONS');
+
+  // Structural work that names no section is made of all three structural categories.
+  // There is no "structural" category in 46A.9(1) to put it in, and Other Sections is
+  // the residue, not the default.
+  const structural = /\bstructural steel\b|\bbuilt[\s-]*up section/.test(text)
+    || /\btruss(?:es)?\b|\bframed work\b|\bgirders?\b|\bgantry\b|\bstanchions?\b/.test(text);
+  if (structural && !found.has('ANGLE_CHANNEL') && !found.has('PLATES')) {
+    found.add('ANGLE_CHANNEL');
+    found.add('PLATES');
+    found.add('OTHER_SECTIONS');
+  }
+
+  // Steel with nothing to say which kind. Other Sections is where the schedule puts
+  // what does not belong to the three named categories.
+  if (found.size === 0 && /\bsteel\b|\bm\.?s\.?\b/.test(text)) found.add('OTHER_SECTIONS');
+
+  // A fixed order, so the same item always reports its categories the same way.
+  const order: SteelCategory[] = ['TMT', 'ANGLE_CHANNEL', 'PLATES', 'OTHER_SECTIONS'];
+  return order.filter(category => found.has(category));
+}
+
 function materialFlags(description: string) {
   const text = description.toLowerCase();
   // Cement being supplied as its own item, rather than consumed by a work item.
@@ -218,11 +257,8 @@ function materialFlags(description: string) {
   // that was being read as a work item that merely uses cement.
   const directCement = /\b(?:supply|supplying)\b.{0,80}\bcement\b|ordinary portland cement|(?:portland pozzolana|pozzolana portland) cement|portland slag cement|\bopc\b|\bppc\b|\bpsc\b/.test(text);
   const isCementAffected = !directCement && /\b(?:cement|concrete|rcc|pcc|mortar|grout|shotcrete|1\s*:\s*\d)\b/.test(text);
-  let steelType: DeterministicBillItem['steelType'] = '';
-  if (/\b(?:tmt|reinforcement|thermo-?\s*mechanically treated|fe-?500|fe-?550|bars?)\b/.test(text)) steelType = 'TMT';
-  else if (/\b(?:angle|channel|joist)\b/.test(text)) steelType = 'ANGLE_CHANNEL';
-  else if (/\bplates?\b/.test(text)) steelType = 'PLATES';
-  else if (/\b(?:steel|wire rope|rail)\b/.test(text)) steelType = 'OTHER_SECTIONS';
+  const steelTypes = steelCategoriesFor(text);
+  let steelType: DeterministicBillItem['steelType'] = steelTypes[0] || '';
   // Recognising a steel type IS what makes this a steel item. The two used to be
   // decided separately, by keyword lists that disagreed, so a DSR sub-item came
   // out as TMT yet not steel: IREPS prints only the leaf variant on the row
@@ -248,9 +284,10 @@ function materialFlags(description: string) {
   if (railwaySupplied) {
     isSteelItem = false;
     steelType = '';
+    steelTypes.length = 0;
   }
 
-  return { isSteelItem, isCementAffected, steelType, railwaySupplied };
+  return { isSteelItem, isCementAffected, steelType, steelTypes: isSteelItem ? steelTypes : [], railwaySupplied };
 }
 
 // Reads the first positive rupee value on the Schedule Summary row whose label

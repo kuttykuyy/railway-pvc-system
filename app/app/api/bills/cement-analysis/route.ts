@@ -57,6 +57,8 @@ export interface ExtractedBillItem {
   isCementAffected?: boolean;
   isSteelItem?: boolean;
   steelType?: 'TMT' | 'ANGLE_CHANNEL' | 'PLATES' | 'OTHER_SECTIONS' | '';
+  /** Every 46A.9(1) category the item draws on; one item can use several. */
+  steelTypesUsed?: Array<'TMT' | 'ANGLE_CHANNEL' | 'PLATES' | 'OTHER_SECTIONS'>;
   suggestedClassificationCode?: string;
   suggestedClassificationReason?: string;
   confidence?: 'high' | 'medium' | 'low';
@@ -137,6 +139,9 @@ function normalizeExtractedItem(item: any): ExtractedBillItem {
     isCementAffected,
     isSteelItem: item?.isSteelItem === true,
     steelType: steelTypes.has(steelType) ? steelType as ExtractedBillItem['steelType'] : '',
+    steelTypesUsed: (Array.isArray(item?.steelTypes) ? item.steelTypes : [])
+      .map((value: any) => String(value).toUpperCase())
+      .filter((value: string) => steelTypes.has(value)) as ExtractedBillItem['steelTypesUsed'],
     suggestedClassificationCode: String(item?.suggestedClassificationCode || '').trim().toUpperCase(),
     suggestedClassificationReason: String(item?.suggestedClassificationReason || '').trim(),
     confidence: ['high', 'medium', 'low'].includes(item?.confidence) ? item.confidence : 'low',
