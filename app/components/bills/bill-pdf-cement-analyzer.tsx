@@ -54,6 +54,9 @@ export interface ExtractedBillItem {
   chapter?: string;
   groupName?: string;
   sourceBook?: 'USSR_2021' | 'DSR_2021' | 'NON_SCHEDULE' | 'UNKNOWN';
+  /** Set when the wording shown was completed from a published schedule of rates. */
+  rateBookEdition?: string;
+  rateBookCode?: string;
   requiresDsrCementCoefficient?: boolean;
   isCementAffected?: boolean;
   isSteelItem?: boolean;
@@ -1458,6 +1461,18 @@ export function BillPdfCementAnalyzer({
                               {[item.schedule, item.scheduleGroup, item.chapter, item.sourceBook].filter(Boolean).join(' / ') || 'Schedule not identified'}
                             </div>
                             <div className="mt-1 flex flex-wrap gap-1">
+                              {/* The wording shown above is longer than what the bill prints,
+                                  so the row says where the rest came from — not only the
+                                  justification text further down. */}
+                              {item.rateBookEdition && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-sky-300 text-sky-700"
+                                  title={`The bill prints only this sub-item's own line. The description above is completed from ${item.rateBookEdition} item ${item.rateBookCode}.`}
+                                >
+                                  Wording from {item.rateBookEdition} {item.rateBookCode}
+                                </Badge>
+                              )}
                               {item.isCementAffected && <Badge variant="outline">Cement</Badge>}
                               {item.isCementAffected && item.sourceBook === 'USSR_2021' && <Badge variant="outline">Separate cement supply</Badge>}
                               {item.isSteelItem && <Badge variant="outline">Steel: {item.steelType || 'Review type'}</Badge>}

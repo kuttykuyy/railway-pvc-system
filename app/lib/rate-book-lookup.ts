@@ -101,6 +101,7 @@ export function rateBookKey(code: string, edition: RateBookEdition): string {
 export async function enrichItemsFromRateBook<T extends {
   itemNo?: string; dsrCode?: string; description: string;
   schedule?: string; chapter?: string; sourceBook?: string;
+  rateBookEdition?: string; rateBookCode?: string; rateBookDescription?: string;
 }>(items: T[]): Promise<{ enriched: number; edition?: string }> {
   const wanted: Array<{ code: string; edition: RateBookEdition }> = [];
   const editionByItem = new Map<T, RateBookEdition>();
@@ -133,6 +134,13 @@ export async function enrichItemsFromRateBook<T extends {
     const better = enrichDescription(item.description, entry);
     if (better && better !== item.description) {
       item.description = better;
+      // Where the wording came from, kept on the item so the classification can say so.
+      // A statement that reasons from words the bill does not print has to name its
+      // source, or the officer checking it against the bill finds nothing and stops
+      // believing the rest of it.
+      item.rateBookEdition = entry.edition;
+      item.rateBookCode = entry.code;
+      item.rateBookDescription = entry.description;
       enriched += 1;
       editionsUsed.add(edition);
     }

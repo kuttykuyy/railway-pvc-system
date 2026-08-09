@@ -62,6 +62,10 @@ export interface ExtractedBillItem {
   reason?: string;
   /** True when the AI reviewed/wrote this item's classification (vs deterministic rules). */
   classificationReviewedByAi?: boolean;
+  /** Set when the item's wording was completed from a published schedule of rates. */
+  rateBookEdition?: string;
+  rateBookCode?: string;
+  rateBookDescription?: string;
 }
 
 type SourceBook = NonNullable<ExtractedBillItem['sourceBook']>;
@@ -121,6 +125,9 @@ function normalizeExtractedItem(item: any): ExtractedBillItem {
     groupName: String(item?.groupName || '').trim(),
     chapter: String(item?.chapter || '').trim(),
     sourceBook,
+    rateBookEdition: String(item?.rateBookEdition || '').trim() || undefined,
+    rateBookCode: String(item?.rateBookCode || '').trim() || undefined,
+    rateBookDescription: String(item?.rateBookDescription || '').trim() || undefined,
     requiresDsrCementCoefficient: isCementAffected && sourceBook !== 'USSR_2021',
     isCementAffected,
     isSteelItem: item?.isSteelItem === true,
@@ -208,9 +215,17 @@ function applyDeterministicClassification(
   const isValidAiCode = /^[1-9][A-E]?$/.test(aiCode);
   // Substantive AI-written justification from extraction is kept, not discarded.
   const aiExtractionReason = String(item.suggestedClassificationReason || '').replace(/\s+/g, ' ').trim();
-  const withAiNote = (reason: string) => aiExtractionReason.length >= 40
+  // A reason that quotes words the bill does not print must say where they came from.
+  // An officer checks the justification against the bill in front of them; finding
+  // wording there that the bill never carried reads as invention, and costs the whole
+  // statement its credibility. So the book, the item number, and the fact that the bill
+  // prints only the sub-item line are all stated.
+  const withSource = (reason: string) => (item.rateBookEdition && item.rateBookCode
+    ? `${reason} The item's wording is read from ${item.rateBookEdition} item ${item.rateBookCode}, because the bill prints only the line that distinguishes this sub-item; the schedule of rates carries the description of the work itself.`
+    : reason);
+  const withAiNote = (reason: string) => withSource(aiExtractionReason.length >= 40
     ? `${reason} AI extraction note: ${aiExtractionReason.slice(0, 700)}`
-    : reason;
+    : reason);
 
   // 2. Infer main group code from the item description itself
   const itemText = `${item.schedule || ''} ${item.scheduleGroup || ''} ${item.chapter || ''} ${item.description || ''}`.trim();
