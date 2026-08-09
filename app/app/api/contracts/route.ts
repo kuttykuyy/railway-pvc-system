@@ -144,7 +144,6 @@ export async function POST(request: NextRequest) {
       loaDate,
       contractorName,
       contractorPhone,
-      createdVia,
       workDescription, 
       dateOfOpening,
       tenderAdvertisedValue,
@@ -246,8 +245,6 @@ export async function POST(request: NextRequest) {
     const contract = await prisma.contract.create({
       data: {
         agreementNo: normalizedAgreementNo,
-        // 'pdf' when the agreement extractor filled the form, 'manual' when typed.
-        createdVia: createdVia === 'pdf' ? 'pdf' : 'manual',
         loaNo,
         loaDate: loaDateParsed,
         contractorName,

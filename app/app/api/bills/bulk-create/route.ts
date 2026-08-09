@@ -359,9 +359,6 @@ export async function POST(request: NextRequest) {
         data: {
           contractId,
           billNo: billInput.billNo.trim(),
-          // Per bill, not per batch: a batch can mix typed and uploaded bills, and each
-          // was priced on its own flag.
-          createdVia: billInput.isAiUploaded ? 'pdf' : 'manual',
           grossBillAmount,
           billAmount: grossBillAmount, // No non-schedule items for now
           dateOfMeasurement: measurementDate,

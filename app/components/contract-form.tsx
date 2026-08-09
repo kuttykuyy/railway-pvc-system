@@ -407,7 +407,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...submitData, createdVia: filledFromPdf ? 'pdf' : 'manual' }),
+        body: JSON.stringify(submitData),
       });
 
       if (!response.ok) {

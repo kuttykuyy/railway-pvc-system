@@ -222,9 +222,6 @@ model Contract {
   originalCompletionDate       DateTime?
   completionPeriodMonths       Int?
   contractValue                Float?
-  /// How this contract was created: "manual", "pdf" (filled from an uploaded
-  /// agreement), or "telegram". Null for contracts created before the column existed.
-  createdVia                   String?
   hasRailwaySuppliedMaterials  Boolean              @default(false)
   pvcApplicable                Boolean              @default(true)
   pvcEligibilityNote           String?
@@ -482,9 +479,6 @@ model Bill {
   /// this bill. GCC-2022 Cl.46A defines W as the gross value of work done EXCLUDING
   /// "cost of materials supplied by Railway either free or at fixed rate", so this is
   /// deducted from the PVC base. Null/0 = nothing supplied by the Railway.
-  /// How this bill was created: "manual", "pdf" (read from an uploaded bill PDF),
-  /// or "telegram". Null for bills created before the column existed.
-  createdVia                   String?
   railwaySuppliedMaterialValue Float?                @default(0)
   approvalHistory          BillApprovalHistory[]
   classificationEntries    BillClassificationEntry[]

@@ -407,8 +407,6 @@ async function createContractFromTelegram(conversation: any, chatId: string) {
   try {
     const contract = await prisma.contract.create({
       data: {
-        // Sent in through the bot, by definition.
-        createdVia: 'telegram',
         agreementNo: data.agreementNo!,
         contractorName: data.contractorName!,
         workDescription: data.workDescription!,
