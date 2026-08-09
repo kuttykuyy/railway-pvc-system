@@ -8,6 +8,7 @@ import { Download, ChevronLeft, ChevronRight, Database, Info, TrendingUp, Flame,
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { OfficialSheetViewer } from '@/components/official-sheet-viewer';
+import { DEFAULT_WPI_LINKING_FACTORS } from '@/lib/wpi-series';
 
 interface IndexValue { value: number | null; isProvisional?: boolean; formula?: string | null; steelDetail?: any }
 interface MonthlyData { month: string; [key: string]: IndexValue | number | string | null }
@@ -15,13 +16,22 @@ interface MonthlyData { month: string; [key: string]: IndexValue | number | stri
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const STEEL_CITIES = ['Default','Delhi','Mumbai','Chennai','Kolkata'] as const;
 
+/**
+ * Each index with the base it is published on, and the factor that bridges a rebasing.
+ *
+ * A number means nothing without its base: 151.9 on CPI-IW 2016 and 137.5 on WPI
+ * 2011-12 are not comparable quantities, and a reader checking a statement against the
+ * published index needs to know which series they are looking at. Where a series has
+ * been rebased, the factor that carries the old and new sides onto one scale is shown
+ * with it — taken from lib/wpi-series, the same constants the PVC calculation applies.
+ */
 const NON_STEEL = [
-  { key: 'labour',           label: 'Labour',       sub: 'CPI-IW 2016' },
-  { key: 'mpngFuel',         label: 'Fuel',         sub: 'PPAC Diesel' },
-  { key: 'rbiCite',          label: 'Cement',       sub: 'WPI Cement' },
-  { key: 'rbiExplosives',    label: 'Explosives',   sub: 'WPI Explosives' },
-  { key: 'rbiOtherMaterials',label: 'Materials',    sub: 'WPI All Comm.' },
-  { key: 'rbiPlantMachinery',label: 'Plant',        sub: 'WPI Const.' },
+  { key: 'labour',           label: 'Labour',       sub: 'CPI-IW',   base: '2016=100',    factor: null as number | null, factorNote: 'Link factor 2.88 bridges the older 2001 base (Railway Board).' },
+  { key: 'mpngFuel',         label: 'Fuel',         sub: 'PPAC',     base: '₹/litre',     factor: null as number | null, factorNote: null },
+  { key: 'rbiCite',          label: 'Cement',       sub: 'WPI',      base: '2022-23=100', factor: DEFAULT_WPI_LINKING_FACTORS['RBI Cement'],          factorNote: null },
+  { key: 'rbiExplosives',    label: 'Explosives',   sub: 'WPI',      base: '2022-23=100', factor: DEFAULT_WPI_LINKING_FACTORS['RBI Explosives'],      factorNote: null },
+  { key: 'rbiOtherMaterials',label: 'Materials',    sub: 'WPI All',  base: '2022-23=100', factor: DEFAULT_WPI_LINKING_FACTORS['RBI Other Materials'], factorNote: null },
+  { key: 'rbiPlantMachinery',label: 'Plant',        sub: 'WPI',      base: '2022-23=100', factor: DEFAULT_WPI_LINKING_FACTORS['RBI Plant Machinery'], factorNote: null },
 ];
 
 const STEEL_BY_CITY: Record<string, { key: string; label: string }[]> = {
@@ -50,10 +60,11 @@ const GLOSSARY = [
   ]},
   { icon: Layers, title: 'WPI Indices (RBI Series)', sub: 'Wholesale Price Index — Office of Economic Advisor', lines: [
     'Source: Office of the Economic Adviser (OEA), Ministry of Commerce & Industry, Government of India.',
-    'RBI Cement: WPI Manufacture of Cement, Lime & Plaster.',
-    'RBI Plant Machinery: WPI Construction Machinery series.',
-    'RBI Explosives: WPI Explosives series.',
-    'RBI Other Materials: WPI All Commodities Index.',
+    'RBI Cement: WPI Manufacture of Cement, Lime & Plaster. RBI Plant Machinery: WPI machinery for mining, quarrying and construction. RBI Explosives: WPI Explosives. RBI Other Materials: WPI All Commodities.',
+    'Base Year: re-based to 2022-23 = 100 on 15.06.2026. The old 2011-12 series ended with April 2026; May 2026 onward is the new series.',
+    `Link factors, per commodity: Cement ×${DEFAULT_WPI_LINKING_FACTORS['RBI Cement']}, Plant Machinery ×${DEFAULT_WPI_LINKING_FACTORS['RBI Plant Machinery']}, Explosives ×${DEFAULT_WPI_LINKING_FACTORS['RBI Explosives']}, Other Materials ×${DEFAULT_WPI_LINKING_FACTORS['RBI Other Materials']}.`,
+    'DPIIT publishes factors only for the major groups and warns they may not hold at commodity level, prescribing no method. These are derived by its own definition — the ratio of the geometric means of both series over FY 2024-25 — applied to each commodity from the two published workbooks. Machinery is below 1 because that index reads higher on the new base; using the group figure of 1.44 for it overstated a bill by 75%.',
+    'A contract based before May 2026 has its new-series months multiplied by the factor so the comparison stays like with like. Contracts based after it use the new series throughout, unconverted.',
   ]},
 ];
 
@@ -215,10 +226,10 @@ export default function IndicesViewPage() {
       {/* Stat strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Labour', sub: 'CPI-IW 2016', info: lLabour, fmt: (v: number) => v.toFixed(2), icon: Hammer },
+          { label: 'Labour', sub: 'CPI-IW 2016=100', info: lLabour, fmt: (v: number) => v.toFixed(2), icon: Hammer },
           { label: 'Steel TMT', sub: `JPC ${steelCity === 'Default' ? 'Chennai' : steelCity}`, info: lSteel, fmt: (v: number) => `₹${Math.round(v).toLocaleString('en-IN')}`, icon: TrendingUp },
-          { label: 'Cement', sub: 'WPI Cement', info: lCement, fmt: (v: number) => v.toFixed(2), icon: Construction },
-          { label: 'Fuel', sub: 'PPAC Diesel', info: lFuel, fmt: (v: number) => `₹${v.toFixed(2)}`, icon: Flame },
+          { label: 'Cement', sub: 'WPI 2022-23=100', info: lCement, fmt: (v: number) => v.toFixed(2), icon: Construction },
+          { label: 'Fuel', sub: 'PPAC Diesel ₹/l', info: lFuel, fmt: (v: number) => `₹${v.toFixed(2)}`, icon: Flame },
         ].map(({ label, sub, info, fmt: f, icon: Icon }) => (
           <div key={label} className="bg-white border border-gray-200 rounded-lg px-4 py-3">
             <div className="flex items-center gap-1.5 mb-1">
@@ -280,7 +291,15 @@ export default function IndicesViewPage() {
                   {NON_STEEL.map(c => (
                     <th key={c.key} className="px-3 py-2 text-center font-semibold text-gray-600 border-r border-gray-100 whitespace-nowrap">
                       <div>{c.label}</div>
-                      <div className="text-gray-400 font-normal text-[10px]">{c.sub}</div>
+                      <div className="text-gray-400 font-normal text-[10px]" title={c.factorNote || undefined}>{c.sub} · {c.base}</div>
+                      {c.factor != null && (
+                        <div
+                          className="text-violet-500 font-normal text-[10px]"
+                          title={`Values from May 2026 are on base 2022-23=100. For a contract based before that, they are multiplied by ${c.factor} to compare with its base month — see the note on the statement.`}
+                        >
+                          link ×{c.factor}
+                        </div>
+                      )}
                     </th>
                   ))}
                   <th colSpan={4} className="px-3 py-2 text-center font-semibold text-emerald-600 bg-emerald-50/50 border-l border-emerald-100 whitespace-nowrap">
