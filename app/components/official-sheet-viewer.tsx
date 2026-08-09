@@ -36,6 +36,81 @@ interface SheetOption {
 }
 
 /**
+ * Makes a photocopied sheet easier to read. It adds no information — every pixel it
+ * shows was already in the scan — it stops the scanner's narrow tonal range from
+ * hiding what is there: on a real sheet the ink sits at 69 and the paper at 255, so a
+ * third of the available contrast is simply unused, and the digits swim in grey.
+ *
+ * Auto-levels stretches the page's own range to full black-to-white, then an unsharp
+ * mask puts the edges back that scanning and JPEG rounded off. Applied to the canvas
+ * only: the stored document is never touched, and the marks and watermark are drawn
+ * after it so they stay clean.
+ */
+function enhanceScan(context: CanvasRenderingContext2D, width: number, height: number) {
+  const image = context.getImageData(0, 0, width, height);
+  const data = image.data;
+  const n = width * height;
+
+  const lum = new Uint8Array(n);
+  for (let i = 0, j = 0; j < n; i += 4, j++) {
+    lum[j] = (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
+  }
+
+  // Auto-levels from the page's own histogram, ignoring the extreme half-percent so a
+  // few dust specks cannot set the black point.
+  const hist = new Uint32Array(256);
+  for (let j = 0; j < n; j++) hist[lum[j]]++;
+  const cut = n * 0.005;
+  let lo = 0, hi = 255, acc = 0;
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc > cut) { lo = v; break; } }
+  acc = 0;
+  for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc > cut) { hi = v; break; } }
+  // A page with almost no tonal range is not a scan to stretch — leave it alone.
+  if (hi - lo < 32) return;
+  const span = hi - lo;
+
+  const stretched = new Uint8Array(n);
+  for (let j = 0; j < n; j++) {
+    const v = ((lum[j] - lo) * 255) / span;
+    stretched[j] = v < 0 ? 0 : v > 255 ? 255 : v;
+  }
+
+  // Separable 3-tap blur, then unsharp — sharpens strokes without hunting for edges.
+  const tmp = new Uint8Array(n);
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    for (let x = 0; x < width; x++) {
+      const a = stretched[row + (x > 0 ? x - 1 : x)];
+      const b = stretched[row + x];
+      const c = stretched[row + (x < width - 1 ? x + 1 : x)];
+      tmp[row + x] = (a + b + b + c) >> 2;
+    }
+  }
+  const blur = new Uint8Array(n);
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    const up = (y > 0 ? y - 1 : y) * width;
+    const dn = (y < height - 1 ? y + 1 : y) * width;
+    for (let x = 0; x < width; x++) {
+      blur[row + x] = (tmp[up + x] + tmp[row + x] + tmp[row + x] + tmp[dn + x]) >> 2;
+    }
+  }
+
+  const amount = 0.9;
+  for (let i = 0, j = 0; j < n; i += 4, j++) {
+    let v = stretched[j] + amount * (stretched[j] - blur[j]);
+    v = v < 0 ? 0 : v > 255 ? 255 : v;
+    // Scale the original channels toward the new luminance rather than flattening to
+    // grey, so the sheet keeps what colour it has (the JPC crest is red).
+    const k = v / (lum[j] || 1);
+    data[i] = Math.min(255, data[i] * k);
+    data[i + 1] = Math.min(255, data[i + 1] * k);
+    data[i + 2] = Math.min(255, data[i + 2] * k);
+  }
+  context.putImageData(image, 0, 0);
+}
+
+/**
  * The table's own column proportions, measured off real sheets and expressed within the
  * table frame rather than the page: table edge | Sl.No | ITEM | Kolkata | Delhi |
  * Mumbai | Chennai. Because they are relative to the frame, one set fits every scan
@@ -84,6 +159,8 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
    */
   const [frame, setFrame] = useState<TableFrame>(DEFAULT_FRAME);
   const [adjusting, setAdjusting] = useState(false);
+  /** Auto-levels and sharpening at view time — see enhanceScan for what it does not do. */
+  const [enhanced, setEnhanced] = useState(true);
   /** Which handle is being dragged: a corner index 0-3, or 'move', or null. */
   const dragRef = useRef<{ mode: number | 'move'; startX: number; startY: number; start: TableFrame } | null>(null);
   const [currentSheetId, setCurrentSheetId] = useState<string | null>(null);
@@ -181,12 +258,18 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
       const canvas = canvasRef.current!;
       const context = canvas.getContext('2d')!;
       const baseViewport = page.getViewport({ scale: 1 });
-      const scale = Math.min(2, 900 / baseViewport.width) * (window.devicePixelRatio > 1 ? 1.5 : 1);
+      // Render near the scan's own resolution. A 300 dpi A4 page carries about 2480
+      // pixels across; the old target of 900 threw away nearly half of that before the
+      // reader ever saw it — the detail the full-quality upload exists to preserve.
+      const scale = Math.min(4, 2200 / baseViewport.width);
       const viewport = page.getViewport({ scale });
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       await page.render({ canvasContext: context, viewport }).promise;
       if (cancelled) return;
+
+      // Before the marks and the watermark, so neither is sharpened or stretched.
+      if (enhanced) enhanceScan(context, viewport.width, viewport.height);
 
       // The six formula rows shaded and all four city columns boxed, placed from the
       // frame the reader positioned — see the frame state above for why this is dragged
@@ -263,7 +346,7 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
       context.restore();
     })();
     return () => { cancelled = true; };
-  }, [pdf, absolutePage, pageCount, session?.user?.email, showHighlights, frame, adjusting]);
+  }, [pdf, absolutePage, pageCount, session?.user?.email, showHighlights, frame, adjusting, enhanced]);
 
   /** Canvas coordinates as page fractions, for both mouse and touch. */
   const pointerFraction = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -409,6 +492,17 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
                     title="Shade the six items and city column the PVC steel indices use"
                   >
                     {showHighlights ? 'Highlights on' : 'Highlights off'}
+                  </button>
+                  <button
+                    onClick={() => setEnhanced(v => !v)}
+                    className={`px-2 py-1 rounded text-xs border ${
+                      enhanced
+                        ? 'bg-slate-700 text-white border-slate-700'
+                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                    }`}
+                    title="Stretch the scan's contrast and sharpen its strokes — display only"
+                  >
+                    {enhanced ? 'Sharpened' : 'Sharpen off'}
                   </button>
                   {/* Placing the frame is a one-time act per sheet, so the control is
                       quiet until it is wanted — and loud while it is on. */}
