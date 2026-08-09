@@ -9,191 +9,6 @@ import { ChevronLeft, ChevronRight, FileSearch } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { calculationRowNumbers, JPC_TABLE_ROWS } from '@/lib/pdf/utils/jpc-geometry';
 
-/**
- * Find the JPC price table on the rendered page by its own ruled lines.
- *
- * Fixed templates mark by remembered positions, and every scan crop moves those a
- * little — the misalignments users saw. The lines are right there in the pixels, so
- * read them: seven vertical rules (table edge, Sl.No, ITEM, four cities) and the row
- * separators between them. Detection doubles as the page filter — a fortnight's second
- * page (a ten-row table) and third page (a disclaimer) simply fail to yield a 24-row
- * grid, so only the page that actually carries the 24 items gets marks.
- *
- * Returns null when no confident grid is found; the caller draws nothing then.
- */
-export function detectJpcGrid(
-  context: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-): { rowLines: number[]; colRules: number[]; angle: number; fail?: undefined } | { fail: string } {
-  try {
-    const raw = context.getImageData(0, 0, width, height).data;
-    // Luminance, not the red channel alone — a raw scan often carries a colour cast,
-    // and grey or bluish ink can vanish in red while the yellowed paper glows.
-    const lum = new Uint8Array(width * height);
-    for (let i = 0, j = 0; j < lum.length; i += 4, j++) {
-      lum[j] = (raw[i] * 77 + raw[i + 1] * 150 + raw[i + 2] * 29) >> 8;
-    }
-    const cluster = (points: number[], gap: number) => {
-      const groups: number[][] = [];
-      for (const p of points) {
-        const last = groups[groups.length - 1];
-        if (last && p - last[last.length - 1] <= gap) last.push(p);
-        else groups.push([p]);
-      }
-      return groups.map(g => g[Math.floor(g.length / 2)]);
-    };
-
-    const bandTop = Math.floor(0.15 * height);
-    const bandBottom = Math.floor(0.95 * height);
-    const bandSize = bandBottom - bandTop;
-
-    // The cut-off between paper and ink is read off the page's own histogram (Otsu) —
-    // contrast is a property of the scan, not of the table.
-    const histogram = new Array(256).fill(0);
-    let sampled = 0;
-    for (let y = bandTop; y < bandBottom; y += 2) {
-      for (let x = 0; x < width; x += 2) {
-        histogram[lum[y * width + x]]++;
-        sampled++;
-      }
-    }
-    let sumAll = 0;
-    for (let i = 0; i < 256; i++) sumAll += i * histogram[i];
-    let sumBelow = 0, countBelow = 0, bestVar = 0, otsu = 160;
-    for (let t = 0; t < 256; t++) {
-      countBelow += histogram[t];
-      if (countBelow === 0 || countBelow === sampled) continue;
-      sumBelow += t * histogram[t];
-      const meanBelow = sumBelow / countBelow;
-      const meanAbove = (sumAll - sumBelow) / (sampled - countBelow);
-      const between = countBelow * (sampled - countBelow) * (meanBelow - meanAbove) ** 2;
-      if (between > bestVar) { bestVar = between; otsu = t; }
-    }
-    const threshold = Math.min(230, Math.max(100, otsu));
-
-    // ---- The scan's tilt, before anything else ----
-    // A tilted vertical rule never stays in one pixel column, so column-by-column
-    // scanning sees nothing (a real page failed with rules=1 on a visibly skewed scan).
-    // Project the dark pixels onto a rotated axis for each candidate angle: at the
-    // scan's true tilt the rules stack into a few tall bins; at every other angle they
-    // smear. The sharpest projection names the angle; everything after works in the
-    // de-rotated frame, and the caller draws the marks rotated back.
-    const cx = width / 2, cy = height / 2;
-    const darkPts: number[] = [];
-    for (let y = bandTop; y < bandBottom; y += 3) {
-      for (let x = 0; x < width; x++) {
-        if (lum[y * width + x] < threshold) darkPts.push(x, y);
-      }
-    }
-    let angle = 0, bestScore = -1;
-    for (let deg = -3; deg <= 3.01; deg += 0.5) {
-      const th = (deg * Math.PI) / 180;
-      const cos = Math.cos(th), sin = Math.sin(th);
-      const bins = new Float64Array(width);
-      for (let i = 0; i < darkPts.length; i += 2) {
-        const u = (darkPts[i] - cx) * cos + (darkPts[i + 1] - cy) * sin + cx;
-        if (u >= 0 && u < width) bins[u | 0]++;
-      }
-      const sorted = Array.from(bins).sort((a, b) => b - a);
-      let score = 0;
-      for (let k = 0; k < 12; k++) score += sorted[k];
-      if (score > bestScore) { bestScore = score; angle = th; }
-    }
-    const cosA = Math.cos(angle), sinA = Math.sin(angle);
-    // Content frame (u,v) → pixel: rotate by the found angle about the page centre.
-    const darkAt = (u: number, v: number) => {
-      const x = Math.round((u - cx) * cosA - (v - cy) * sinA + cx);
-      const y = Math.round((u - cx) * sinA + (v - cy) * cosA + cy);
-      if (x < 0 || x >= width || y < 0 || y >= height) return false;
-      return lum[y * width + x] < threshold;
-    };
-
-    // Vertical rules, by DENSITY in the de-rotated frame — a photocopied line is broken
-    // into pieces, but its column stays far darker than any text column. The bar is set
-    // RELATIVE to the page's own strongest column: on a full-page table the rules score
-    // ~0.8 of the band, on the newer sheets whose table fills half the page ~0.4 — a
-    // fixed bar either floods with text columns or sees nothing. All rules score alike,
-    // text columns score far below them, whatever the table's height.
-    const densities = new Float64Array(width);
-    let maxDensity = 0;
-    for (let u = 0; u < width; u++) {
-      let dark = 0;
-      for (let v = bandTop; v < bandBottom; v++) if (darkAt(u, v)) dark++;
-      densities[u] = dark / bandSize;
-      if (densities[u] > maxDensity) maxDensity = densities[u];
-    }
-    if (maxDensity < 0.25) {
-      return { fail: 'no-vlines thr=' + threshold + ' tilt=' + (angle * 180 / Math.PI).toFixed(1) };
-    }
-    const ruleBar = 0.6 * maxDensity;
-    const vCandidates: number[] = [];
-    for (let u = 0; u < width; u++) if (densities[u] > ruleBar) vCandidates.push(u);
-    const colRules = cluster(vCandidates, Math.max(3, width / 300));
-    if (colRules.length < 6 || colRules.length > 7) {
-      return { fail: 'rules=' + colRules.length + ' thr=' + threshold + ' tilt=' + (angle * 180 / Math.PI).toFixed(1) };
-    }
-
-    // Each rule's LONGEST gap-tolerant dark segment is the rule itself; its ends bound
-    // the table (walking from the first dark pixel instead strays into header text).
-    const gapTolerance = Math.max(6, 0.02 * height);
-    const ruleSegment = (u: number) => {
-      const dark3 = (v: number) => darkAt(u, v) || darkAt(u - 1, v) || darkAt(u + 1, v);
-      let bestStart = bandTop, bestEnd = bandTop;
-      let segStart = -1, lastDark = -1;
-      for (let v = bandTop; v <= bandBottom; v++) {
-        const isDark = v < bandBottom && dark3(v);
-        if (isDark) {
-          if (segStart === -1) segStart = v;
-          lastDark = v;
-        } else if (segStart !== -1 && (v - lastDark > gapTolerance || v === bandBottom)) {
-          if (lastDark - segStart > bestEnd - bestStart) { bestStart = segStart; bestEnd = lastDark; }
-          segStart = -1;
-        }
-      }
-      return { top: bestStart, bottom: bestEnd };
-    };
-    const segments = colRules.map(ruleSegment);
-    const median = (values: number[]) => values.sort((a, b) => a - b)[Math.floor(values.length / 2)];
-    const tableTop = median(segments.map(s => s.top));
-    const tableBottom = median(segments.map(s => s.bottom));
-
-    // Horizontal lines inside the table's own vertical extent, in the same frame.
-    const x0 = colRules[0], x1 = colRules[colRules.length - 1];
-    const hCandidates: number[] = [];
-    for (let v = Math.max(bandTop, tableTop - 4); v < tableBottom; v++) {
-      let dark = 0;
-      for (let u = x0; u < x1; u += 2) if (darkAt(u, v)) dark++;
-      if (dark / ((x1 - x0) / 2) > 0.5) hCandidates.push(v);
-    }
-    const strongLines = cluster(hCandidates, Math.max(3, height / 400));
-    if (strongLines.length === 0) return { fail: 'no-hlines thr=' + threshold };
-
-    // The header separator must EARN the job of "top of row 1": the 24-row grid its
-    // position implies has to be the grid the surviving separators actually agree with.
-    const upperLimit = tableTop + 0.35 * (tableBottom - tableTop);
-    const candidates = strongLines.filter(line => line <= upperLimit);
-    let best: { row1Top: number; pitch: number; score: number } | null = null;
-    for (const candidate of candidates) {
-      const pitch = (tableBottom - candidate) / JPC_TABLE_ROWS;
-      if (pitch < 0.012 * height || pitch > 0.035 * height) continue;
-      const below = strongLines.filter(line => line > candidate);
-      if (below.length === 0) continue;
-      const fitting = below.filter(line => {
-        const k = (line - candidate) / pitch;
-        return Math.abs(k - Math.round(k)) <= 0.25;
-      }).length;
-      const score = fitting / below.length;
-      if (!best || score > best.score) best = { row1Top: candidate, pitch, score };
-    }
-    if (!best || best.score < 0.6) return { fail: 'fit=' + (best ? best.score.toFixed(2) : 'none') + ' thr=' + threshold };
-
-    const rowLines = Array.from({ length: JPC_TABLE_ROWS + 1 }, (_, k) => best!.row1Top + k * best!.pitch);
-    return { rowLines, colRules, angle };
-  } catch (err: any) {
-    return { fail: `error ${String(err?.message || err).slice(0, 40)}` };
-  }
-}
 
 /**
  * The official JPC sheet, readable beside the extracted numbers — month by month.
@@ -220,6 +35,22 @@ interface SheetOption {
   coversMonth: boolean;
 }
 
+/**
+ * The table's own column proportions, measured off real sheets and expressed within the
+ * table frame rather than the page: table edge | Sl.No | ITEM | Kolkata | Delhi |
+ * Mumbai | Chennai. Because they are relative to the frame, one set fits every scan
+ * crop and every production of the sheet — only the frame itself moves.
+ */
+const COLUMN_FRACTIONS = [0, 0.112, 0.436, 0.577, 0.718, 0.859, 1];
+
+/** Where the table sits, as fractions of the page. Corners are dragged; rows follow. */
+interface TableFrame { x0: number; y0: number; x1: number; y1: number }
+
+/** A sensible starting frame for a sheet nobody has positioned yet. */
+const DEFAULT_FRAME: TableFrame = { x0: 0.152, y0: 0.300, x1: 0.902, y1: 0.878 };
+
+const frameStorageKey = (sheetId: string) => `jpc-frame:${sheetId}`;
+
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const PAGES_PER_FORTNIGHT = 3;
 const PAGES_PER_MONTH = PAGES_PER_FORTNIGHT * 2;
@@ -241,8 +72,21 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
   const [wholeYear, setWholeYear] = useState(false);
   /** The same six-row + city marks the bills carry, drawn on the canvas — toggleable. */
   const [showHighlights, setShowHighlights] = useState(true);
-  /** Why the current page has no marks — shown in the dialog so failures are reportable. */
-  const [detectNote, setDetectNote] = useState<string | null>(null);
+  /**
+   * Where the price table sits on the page — dragged by the reader, not guessed.
+   *
+   * Automatic detection read the table's ruled lines, and on these scans it kept
+   * losing: tilt, contrast, crop and three different productions of the sheet each
+   * broke it in a different way, and a mark in the wrong place on a paid publication
+   * is worse than no mark. So the reader places a frame over the table once — corners
+   * to drag, the whole thing to move — and the six formula rows and four city columns
+   * are derived from it. The frame is remembered per sheet, so it is a one-time act.
+   */
+  const [frame, setFrame] = useState<TableFrame>(DEFAULT_FRAME);
+  const [adjusting, setAdjusting] = useState(false);
+  /** Which handle is being dragged: a corner index 0-3, or 'move', or null. */
+  const dragRef = useRef<{ mode: number | 'move'; startX: number; startY: number; start: TableFrame } | null>(null);
+  const [currentSheetId, setCurrentSheetId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const openViewer = async () => {
@@ -287,6 +131,15 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
       // CSP — and not bundled, which the server's pdfjs external makes webpack refuse.
       pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
       const loaded = await pdfjs.getDocument({ url: urlData.url }).promise;
+
+      // The frame this reader last set for this sheet, if any.
+      setCurrentSheetId(sheet.id);
+      try {
+        const saved = localStorage.getItem(frameStorageKey(sheet.id));
+        setFrame(saved ? JSON.parse(saved) : DEFAULT_FRAME);
+      } catch {
+        setFrame(DEFAULT_FRAME);
+      }
 
       const months = [...(sheet.months || [])].sort((a, b) => a - b);
       // Trust the slice only when the rhythm holds exactly. displayed months come from
@@ -335,46 +188,63 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
       await page.render({ canvasContext: context, viewport }).promise;
       if (cancelled) return;
 
-      // The six formula rows shaded and all four city columns boxed — placed by the
-      // page's OWN ruled lines, so alignment cannot drift with the scan's crop. Pages
-      // without the 24-row table (each fortnight's items-25-34 page and its disclaimer
-      // page) fail detection and stay clean.
+      // The six formula rows shaded and all four city columns boxed, placed from the
+      // frame the reader positioned — see the frame state above for why this is dragged
+      // rather than detected.
       if (showHighlights) {
-        const grid = detectJpcGrid(context, viewport.width, viewport.height);
-        if ('rowLines' in grid) {
-          setDetectNote(null);
-          const { rowLines, colRules } = grid;
-          // The grid was found in the de-rotated frame; draw under the same rotation so
-          // the marks lie along the scan's own tilted lines.
+        const fx0 = frame.x0 * viewport.width;
+        const fx1 = frame.x1 * viewport.width;
+        const fy0 = frame.y0 * viewport.height;
+        const fy1 = frame.y1 * viewport.height;
+        const frameW = fx1 - fx0;
+        const rowH = (fy1 - fy0) / JPC_TABLE_ROWS;
+        const colX = COLUMN_FRACTIONS.map(f => fx0 + f * frameW);
+        const itemSpan: [number, number] = [colX[0], colX[2]];
+        const citySpans: [number, number][] = [3, 4, 5, 6].map(i => [colX[i - 1], colX[i]] as [number, number]);
+
+        for (const row of calculationRowNumbers()) {
+          const yTop = fy0 + (row.sno - 1) * rowH;
+          context.fillStyle = 'rgba(255, 237, 153, 0.4)';
+          context.fillRect(itemSpan[0], yTop, itemSpan[1] - itemSpan[0], rowH);
+          for (const [cx0, cx1] of citySpans) {
+            context.fillStyle = 'rgba(255, 217, 64, 0.35)';
+            context.fillRect(cx0, yTop, cx1 - cx0, rowH);
+            context.strokeStyle = 'rgba(217, 140, 0, 0.9)';
+            context.lineWidth = Math.max(1, viewport.width / 900);
+            context.strokeRect(cx0, yTop, cx1 - cx0, rowH);
+          }
+        }
+
+        // While adjusting, show the frame itself and its corner handles, plus the row
+        // guides so the reader can line them up with the printed rules exactly.
+        if (adjusting) {
           context.save();
-          context.translate(viewport.width / 2, viewport.height / 2);
-          context.rotate(grid.angle);
-          context.translate(-viewport.width / 2, -viewport.height / 2);
-          // Rules, left to right: table edge | Sl.No | ITEM | Kolkata | Delhi | Mumbai |
-          // Chennai. With the right edge detected there are 7; with 6, the last city's
-          // right edge is a column-width beyond the last rule.
-          const rules = [...colRules];
-          if (rules.length === 6) rules.push(rules[5] + (rules[5] - rules[4]));
-          const itemSpan: [number, number] = [rules[0], rules[2]];
-          const citySpans: [number, number][] = [3, 4, 5, 6].map(i => [rules[i - 1], rules[i]] as [number, number]);
-          for (const row of calculationRowNumbers()) {
-            const yTop = rowLines[row.sno - 1];
-            const h = rowLines[row.sno] - yTop;
-            context.fillStyle = 'rgba(255, 237, 153, 0.4)';
-            context.fillRect(itemSpan[0], yTop, itemSpan[1] - itemSpan[0], h);
-            for (const [cx0, cx1] of citySpans) {
-              context.fillStyle = 'rgba(255, 217, 64, 0.35)';
-              context.fillRect(cx0, yTop, cx1 - cx0, h);
-              context.strokeStyle = 'rgba(217, 140, 0, 0.9)';
-              context.lineWidth = Math.max(1, viewport.width / 900);
-              context.strokeRect(cx0, yTop, cx1 - cx0, h);
-            }
+          context.strokeStyle = 'rgba(16, 122, 87, 0.95)';
+          context.lineWidth = Math.max(2, viewport.width / 500);
+          context.setLineDash([Math.max(6, viewport.width / 120), Math.max(4, viewport.width / 180)]);
+          context.strokeRect(fx0, fy0, frameW, fy1 - fy0);
+          context.setLineDash([]);
+          context.strokeStyle = 'rgba(16, 122, 87, 0.35)';
+          context.lineWidth = Math.max(1, viewport.width / 900);
+          for (let r = 1; r < JPC_TABLE_ROWS; r++) {
+            const gy = fy0 + r * rowH;
+            context.beginPath();
+            context.moveTo(fx0, gy);
+            context.lineTo(fx1, gy);
+            context.stroke();
+          }
+          for (const cx of colX) {
+            context.beginPath();
+            context.moveTo(cx, fy0);
+            context.lineTo(cx, fy1);
+            context.stroke();
+          }
+          const handle = Math.max(10, viewport.width / 60);
+          context.fillStyle = 'rgba(16, 122, 87, 0.95)';
+          for (const [hx, hy] of [[fx0, fy0], [fx1, fy0], [fx0, fy1], [fx1, fy1]]) {
+            context.fillRect(hx - handle / 2, hy - handle / 2, handle, handle);
           }
           context.restore();
-        } else {
-          // Why marks are absent, for the dialog to say — a page without the 24-item
-          // table is normal; a first page failing is a bug report in miniature.
-          setDetectNote(grid.fail);
         }
       }
 
@@ -393,7 +263,64 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
       context.restore();
     })();
     return () => { cancelled = true; };
-  }, [pdf, absolutePage, pageCount, session?.user?.email, showHighlights]);
+  }, [pdf, absolutePage, pageCount, session?.user?.email, showHighlights, frame, adjusting]);
+
+  /** Canvas coordinates as page fractions, for both mouse and touch. */
+  const pointerFraction = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!adjusting) return;
+    const { x, y } = pointerFraction(e);
+    const corners: [number, number][] = [
+      [frame.x0, frame.y0], [frame.x1, frame.y0], [frame.x0, frame.y1], [frame.x1, frame.y1],
+    ];
+    // Generous grab radius — this is used on phones as well as with a mouse.
+    const hit = corners.findIndex(([cx, cy]) => Math.hypot(cx - x, cy - y) < 0.035);
+    const inside = x > frame.x0 && x < frame.x1 && y > frame.y0 && y < frame.y1;
+    if (hit === -1 && !inside) return;
+    dragRef.current = { mode: hit === -1 ? 'move' : hit, startX: x, startY: y, start: { ...frame } };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const { x, y } = pointerFraction(e);
+    const dx = x - drag.startX;
+    const dy = y - drag.startY;
+    const clamp = (v: number) => Math.min(1, Math.max(0, v));
+    const next = { ...drag.start };
+    if (drag.mode === 'move') {
+      const w = drag.start.x1 - drag.start.x0;
+      const h = drag.start.y1 - drag.start.y0;
+      next.x0 = clamp(Math.min(drag.start.x0 + dx, 1 - w));
+      next.y0 = clamp(Math.min(drag.start.y0 + dy, 1 - h));
+      next.x0 = Math.max(0, next.x0);
+      next.y0 = Math.max(0, next.y0);
+      next.x1 = next.x0 + w;
+      next.y1 = next.y0 + h;
+    } else {
+      if (drag.mode === 0 || drag.mode === 2) next.x0 = clamp(drag.start.x0 + dx);
+      if (drag.mode === 1 || drag.mode === 3) next.x1 = clamp(drag.start.x1 + dx);
+      if (drag.mode === 0 || drag.mode === 1) next.y0 = clamp(drag.start.y0 + dy);
+      if (drag.mode === 2 || drag.mode === 3) next.y1 = clamp(drag.start.y1 + dy);
+      // A frame narrower than this is a mis-drag, not an intention.
+      if (next.x1 - next.x0 < 0.15 || next.y1 - next.y0 < 0.15) return;
+    }
+    setFrame(next);
+  };
+
+  const onPointerUp = () => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    // Remembered per sheet, so positioning is a one-time act per document.
+    if (currentSheetId) {
+      try { localStorage.setItem(frameStorageKey(currentSheetId), JSON.stringify(frame)); } catch { /* private mode */ }
+    }
+  };
 
   /** "1st fortnight · page 2 of 3" for the sliced view; plain numbering otherwise. */
   const positionLabel = () => {
@@ -464,6 +391,14 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
                   >
                     Whole year
                   </button>
+                </div>
+              )}
+
+              {/* Highlight controls stand apart from the month chips: those only exist
+                  for documents that follow the six-pages-per-month rhythm, and a
+                  document that does not is precisely the one whose shading needs
+                  placing by hand. */}
+              <div className="flex flex-wrap items-center justify-center gap-1.5">
                   <button
                     onClick={() => setShowHighlights(v => !v)}
                     className={`px-2 py-1 rounded text-xs border ${
@@ -475,8 +410,36 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
                   >
                     {showHighlights ? 'Highlights on' : 'Highlights off'}
                   </button>
-                </div>
-              )}
+                  {/* Placing the frame is a one-time act per sheet, so the control is
+                      quiet until it is wanted — and loud while it is on. */}
+                  {showHighlights && (
+                    <button
+                      onClick={() => setAdjusting(v => !v)}
+                      className={`px-2 py-1 rounded text-xs border ${
+                        adjusting
+                          ? 'bg-emerald-700 text-white border-emerald-700'
+                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      }`}
+                      title="Drag the shading onto the table"
+                    >
+                      {adjusting ? 'Done' : 'Adjust'}
+                    </button>
+                  )}
+                  {showHighlights && adjusting && (
+                    <button
+                      onClick={() => {
+                        setFrame(DEFAULT_FRAME);
+                        if (currentSheetId) {
+                          try { localStorage.removeItem(frameStorageKey(currentSheetId)); } catch { /* private mode */ }
+                        }
+                      }}
+                      className="px-2 py-1 rounded text-xs border bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                      title="Back to the default position"
+                    >
+                      Reset
+                    </button>
+                  )}
+              </div>
 
               {!sliced && (
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
@@ -511,21 +474,19 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
               <canvas
                 ref={canvasRef}
                 onContextMenu={(e) => e.preventDefault()}
-                className="w-full h-auto border rounded shadow-sm"
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+                className={`w-full h-auto border rounded shadow-sm ${adjusting ? 'cursor-move touch-none' : ''}`}
               />
               <p className="text-[11px] text-gray-400 text-center">
-                {showHighlights && !detectNote && (
+                {showHighlights && (
                   <span className="block">
-                    Shaded: the six items used for the steel indices under GCC 46A.9(1), across all
-                    four cities, found by the sheet&apos;s own table lines. Marks are a reading aid;
-                    the figures are the sheet&apos;s own.
-                  </span>
-                )}
-                {showHighlights && detectNote && (
-                  <span className="block text-amber-600">
-                    No marks on this page — the 24-item table was not recognised ({detectNote}).
-                    Normal for a fortnight&apos;s 2nd and 3rd pages; on a price page, please report
-                    this line.
+                    Shaded: the six items the steel indices are built from under GCC 46A.9(1),
+                    across all four cities. {adjusting
+                      ? 'Drag the green corners onto the table\u2019s own edges — row one\u2019s top to row twenty-four\u2019s bottom — then press Done.'
+                      : 'If the shading sits off the table, press Adjust and drag it into place; the position is remembered for this sheet.'}
                   </span>
                 )}
                 JPC Market Price (Retail) — © Joint Plant Committee. Shown for verifying rates
