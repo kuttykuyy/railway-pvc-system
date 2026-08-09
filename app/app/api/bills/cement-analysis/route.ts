@@ -241,6 +241,13 @@ function applyDeterministicClassification(
   // 2. Infer main group code from the item description itself
   const itemText = `${item.schedule || ''} ${item.scheduleGroup || ''} ${item.chapter || ''} ${item.description || ''}`.trim();
   const itemMain = inferMainClassification(itemText);
+  // The description alone. Now that the schedule of rates supplies the full wording of
+  // an item, this is the most direct evidence there is of what the work actually is —
+  // where it names a work group more than once, it beats a heading covering a whole
+  // sub-work. One stray keyword is not evidence, so it must name its group twice, or
+  // once where the schedule chapter itself recognised nothing.
+  const descriptionMain = inferMainClassification(String(item.description || ''));
+  const descriptionScore = descriptionMain.contenders?.[0]?.score ?? 0;
 
   // 3. Fallback to contract description main group code
   const contractMain = inferMainClassification(workDescription);
@@ -311,6 +318,10 @@ function applyDeterministicClassification(
     // painting shed's own items away from the shed.
     resolvedCode = subHead.gccGroup;
     resolvedReason = `Item ${item.itemNo} is ${scheduleLabel} ${subHead.number} — ${subHead.name}.`;
+  } else if (descriptionMain.code !== '9'
+    && (descriptionScore >= 2 || (descriptionScore >= 1 && (!subHead || subHead.gccGroup === '9')))) {
+    resolvedCode = descriptionMain.code;
+    resolvedReason = `Item description names ${quoteKeywords(descriptionMain.matchedKeywords)}.`;
   } else if (subHead && subHead.gccGroup === DSR_CONTEXT) {
     // Context-dependent sub-head/chapter (e.g. Earth Work, Level Crossings): its GCC
     // group depends on the nature of the overall work, so resolve it from the

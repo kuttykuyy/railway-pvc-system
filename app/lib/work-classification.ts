@@ -18,7 +18,12 @@ const MAIN_CLASSIFICATION_RULES: Array<{ code: string; label: string; patterns: 
       /\bformation\b/i,
       // "embankement" is a persistent misspelling in real Names of Work.
       /\bembanke?ment\b/i,
-      /\bcutting\b/i, 
+      // Earthwork cutting, as the phrase is actually used: "in cutting", "cutting and
+      // filling", "earthwork in cutting". Bare "cutting" is any cutting at all.
+      /\bin\s+cutting\b/i,
+      /\bcutting\s*(?:and|&)\s*filling\b/i,
+      /\bearth\s*work\s+in\s+cutting\b/i,
+      /\bdeep\s+cutting\b/i,
       /\bcompaction\b/i,
       /\bfilling\b/i,
       /\bexcavation\b/i,
@@ -29,10 +34,13 @@ const MAIN_CLASSIFICATION_RULES: Array<{ code: string; label: string; patterns: 
     code: '2', 
     label: 'Ballast Supply Works', 
     patterns: [
-      /\bballast\b/i, 
-      /\bstone\s*chips\b/i, 
-      /\bcrushed\s*stone\b/i,
-      /\bsupply\s*of\s*ballast\b/i
+      /\bsupply\s*(?:of\s*)?(?:\w+\s+){0,3}ballast\b/i,
+      /\bballast\s*supply\b/i,
+      /\bcollection\s+of\s+ballast\b/i,
+      /\btraining\s+out\s+(?:\w+\s+){0,3}ballast\b/i,
+      /\bballast\s+train\b/i,
+      /\bstone\s*chips\b/i,
+      /\bcrushed\s*stone\b/i
     ] 
   },
   { 
@@ -96,8 +104,22 @@ const MAIN_CLASSIFICATION_RULES: Array<{ code: string; label: string; patterns: 
       /\bdeep\s*screening\b/i,
       /\brail\s*welding\b/i,
       /\bwelding\s*of\s*rail\b/i,
-      /\bglued\s*joint\b/i
-    ] 
+      /\bglued\s*joint\b/i,
+      /\bp\.?\s*way\b/i,
+      /\blinking\b/i,
+      /\b(?:LWR|SWR|CWR)\b/,
+      /\bfish\s*plates?\b/i,
+      /\bslewing\b/i,
+      /\bde-?stress(?:ing)?\b/i,
+      /\brail\s*(?:cutter|cutting|drilling)\b/i,
+      /\b(?:tongue|stock)\s+rail\b/i,
+      /\bswitch\s+assembly\b/i,
+      /\bcrossings?\b(?!\s*of\s*(?:track|road))/i,
+      /\bSEJ\b/,
+      /\btrack\b(?:(?!\s*machine).){0,30}\b(?:packing|regrading|lifting|boxing|screening)\b/i,
+      /\b(?:packing|regrading|lifting|boxing)\b(?:(?!\s*machine).){0,30}\btrack\b/i,
+      /\brails?\s*,?\s*sleepers?\b/i
+    ]
   },
   { 
     code: '8', 
