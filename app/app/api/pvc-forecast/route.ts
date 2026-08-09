@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getSteelCityForZone, getSteelIndexNamesForZone } from '@/lib/zone-steel-city-mapping';
 import { getQuarterFromDate, getQuarterMonths } from '@/lib/pvc-calculations';
+import { getWpiLinkingFactors, bridgeWpiValue } from '@/lib/wpi-series';
 
 interface QuarterForecast {
   quarter: string;
@@ -131,7 +132,7 @@ async function generateForecastResponse(
   const baseIndex = baseMonthValue?.value || priceIndex.baseValue;
 
   // Fetch ALL monthly index values from base month onwards, ordered by month
-  const monthlyValues = await prisma.monthlyIndexValue.findMany({
+  const monthlyValuesRaw = await prisma.monthlyIndexValue.findMany({
     where: {
       priceIndexId: priceIndex.id,
       month: {
@@ -140,6 +141,16 @@ async function generateForecastResponse(
     },
     orderBy: { month: 'asc' },
   });
+
+  // The WPI series changed base in May 2026. Trends and forecasts here compare every
+  // value against the contract's base month, so new-series values cross the same
+  // bridge the bill calculations use — raw, they showed a phantom ~30% crash for
+  // old-base contracts. Bridged once here; everything below reads the result.
+  const wpiFactors = await getWpiLinkingFactors();
+  const monthlyValues = monthlyValuesRaw.map((mv) => ({
+    ...mv,
+    value: bridgeWpiValue(priceIndex.name, baseMonth, new Date(mv.month), mv.value, wpiFactors),
+  }));
 
   // Build monthly trend data
   const indexTrend: IndexTrend[] = monthlyValues.map((mv) => ({
