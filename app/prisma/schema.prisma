@@ -316,6 +316,28 @@ model PriceIndex {
   @@map("price_indices")
 }
 
+/// A published schedule of rates — CPWD DSR 2021 and 2023, Railways USSOR 2021 —
+/// loaded from the official books by /api/admin/dsr-items/import. A bill cites a code
+/// and prints only what distinguishes a sub-item, so the wording of the work itself
+/// lives here and nowhere else.
+///
+/// Keyed by edition as well as code: the same number means different work in different
+/// editions, so a code without its edition is ambiguous.
+model DsrItem {
+  edition     String
+  code        String
+  subHead     String
+  subHeadName String
+  description String
+  unit        String   @default("")
+  rate        Float?
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@id([edition, code])
+  @@index([code])
+  @@map("dsr_items")
+}
+
 model DsrCementCoefficient {
   id                    String   @id @default(cuid())
   dsrCode               String   @unique

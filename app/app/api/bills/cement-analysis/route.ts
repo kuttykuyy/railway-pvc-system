@@ -15,6 +15,7 @@ import {
   summarizeCementCalculation,
 } from '@/lib/dsr-cement-calculation';
 import { inferMainClassification } from '@/lib/work-classification';
+import { enrichItemsFromRateBook } from '@/lib/rate-book-lookup';
 import { inferScheduleSubHead, CONTEXT as DSR_CONTEXT } from '@/lib/dsr-subhead-classification';
 import { recordAiUsage } from '@/lib/ai-usage';
 import { parseIrepsBillMarkdown } from '@/lib/ireps-bill-parser';
@@ -1295,6 +1296,12 @@ export async function extractBillDetailsDirect(pdfBuffer: Buffer, contractId?: s
   if (/^work as per agreement$/i.test(contractDescription.trim())) contractDescription = '';
   const workDescription = contractDescription || parsed.workDescription;
 
+  // The bill prints only what distinguishes a sub-item, so the work itself is read
+  // from the schedule of rates before anything is classified from the wording.
+  const normalizedItems = parsed.items.map(normalizeExtractedItem);
+  await enrichItemsFromRateBook(normalizedItems);
+  const severalWorks = billCoversSeveralWorks(normalizedItems);
+
   const billDetails: ExtractedBillDetails = {
     ...parsed,
     workDescription,
@@ -1302,11 +1309,7 @@ export async function extractBillDetailsDirect(pdfBuffer: Buffer, contractId?: s
     // filling in contract details that were never captured.
     billWorkDescription: parsed.workDescription,
     classificationGroupCode: inferMainClassification(workDescription).code,
-    items: (() => {
-      const normalized = parsed.items.map(normalizeExtractedItem);
-      const severalWorks = billCoversSeveralWorks(normalized);
-      return normalized.map(item => applyDeterministicClassification(item, workDescription, severalWorks));
-    })(),
+    items: normalizedItems.map(item => applyDeterministicClassification(item, workDescription, severalWorks)),
   };
 
   const aiReview = await enhanceDeterministicItemsWithAi(billDetails.items, workDescription, '');
@@ -1480,6 +1483,7 @@ async function finalizeExtractedBillDetails(
   const normalizedItems: ExtractedBillItem[] = Array.isArray(parsed.items)
     ? parsed.items.map(normalizeExtractedItem)
     : [];
+  await enrichItemsFromRateBook(normalizedItems);
   const severalWorks = billCoversSeveralWorks(normalizedItems);
   const items = normalizedItems
     .map((item: ExtractedBillItem) => applyDeterministicClassification(item, workDescription, severalWorks));
@@ -1738,8 +1742,9 @@ export async function POST(request: NextRequest) {
           ...parsed,
           workDescription,
           classificationGroupCode: inferMainClassification(workDescription).code,
-          items: (() => {
+          items: await (async () => {
             const normalized = parsed.items.map(normalizeExtractedItem);
+            await enrichItemsFromRateBook(normalized);
             const severalWorks = billCoversSeveralWorks(normalized);
             return normalized.map(item => applyDeterministicClassification(item, workDescription, severalWorks));
           })(),
