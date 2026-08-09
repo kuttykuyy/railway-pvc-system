@@ -56,6 +56,48 @@ export default function JpcCrossCheckPage() {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [results, setResults] = useState<MonthResult[]>([]);
+  /** Rows already corrected this session, keyed month|fortnight|itemCode|city. */
+  const [fixedKeys, setFixedKeys] = useState<Set<string>>(new Set());
+  const [fixingKey, setFixingKey] = useState<string | null>(null);
+  /** Manual overrides typed into a row's input, same key. */
+  const [manualValues, setManualValues] = useState<Record<string, string>>({});
+
+  /**
+   * Apply one correction — the sheet's figure, or whatever the admin typed over it
+   * after checking the scan by eye. The endpoint updates the cell AND recomputes the
+   * month's steel indices through the same formulas the import uses, so nothing
+   * downstream is left stale.
+   */
+  const applyFix = async (monthNum: number, fortnight: string, itemCode: string, city: string, value: number) => {
+    const key = `${monthNum}|${fortnight}|${itemCode}|${city}`;
+    if (!isFinite(value) || value <= 0) {
+      toast.error('Enter the value to save first');
+      return;
+    }
+    setFixingKey(key);
+    try {
+      const res = await fetch('/api/admin/jpc-cross-check/fix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemCode,
+          city,
+          month: `${year}-${String(monthNum).padStart(2, '0')}`,
+          fortnight,
+          value,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Update failed');
+      setFixedKeys(prev => new Set(prev).add(key));
+      const indices = Object.entries(data.indices || {}).map(([k, v]) => `${k}=${v}`).join(', ');
+      toast.success(`Saved ${value.toLocaleString('en-IN')} — indices recomputed (${indices})`, { duration: 6000 });
+    } catch (err: any) {
+      toast.error(err.message || 'Update failed');
+    } finally {
+      setFixingKey(null);
+    }
+  };
 
   /**
    * Walks a document page by page when it doesn't follow the six-pages-per-month
@@ -233,26 +275,85 @@ export default function JpcCrossCheckPage() {
                         <thead><tr className="text-left text-gray-500">
                           <th className="pr-3 py-1">Item</th><th className="pr-3">City</th><th className="pr-3">Fortnight</th>
                           <th className="pr-3 text-right">In database</th><th className="pr-3 text-right">On sheet</th>
+                          <th className="pr-3">Correct to</th>
                         </tr></thead>
                         <tbody>
-                          {mismatches.map((x, i) => (
-                            <tr key={i} className="border-t border-amber-200">
-                              <td className="pr-3 py-1">{x.item}</td>
-                              <td className="pr-3">{x.city}</td>
-                              <td className="pr-3">{x.fortnight.toUpperCase()}</td>
-                              <td className="pr-3 text-right font-mono text-red-700">{x.dbValue.toLocaleString('en-IN')}</td>
-                              <td className="pr-3 text-right font-mono text-green-700">{x.sheetValue.toLocaleString('en-IN')}</td>
-                            </tr>
-                          ))}
+                          {mismatches.map((x, i) => {
+                            const key = `${m.month}|${x.fortnight}|${x.itemCode}|${x.city}`;
+                            const fixed = fixedKeys.has(key);
+                            return (
+                              <tr key={i} className={`border-t border-amber-200 ${fixed ? 'opacity-60' : ''}`}>
+                                <td className="pr-3 py-1">{x.item}</td>
+                                <td className="pr-3">{x.city}</td>
+                                <td className="pr-3">{x.fortnight.toUpperCase()}</td>
+                                <td className="pr-3 text-right font-mono text-red-700">{x.dbValue.toLocaleString('en-IN')}</td>
+                                <td className="pr-3 text-right font-mono text-green-700">{x.sheetValue.toLocaleString('en-IN')}</td>
+                                <td className="pr-3 py-0.5">
+                                  {fixed ? (
+                                    <span className="text-green-700 flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> saved</span>
+                                  ) : (
+                                    <span className="flex items-center gap-1">
+                                      {/* Pre-filled with the sheet's figure; type over it when the
+                                          scan misled the reader and your eye knows better. */}
+                                      <input
+                                        type="number"
+                                        className="w-24 border rounded px-1.5 py-0.5 text-right font-mono"
+                                        value={manualValues[key] ?? String(x.sheetValue)}
+                                        onChange={(e) => setManualValues(prev => ({ ...prev, [key]: e.target.value }))}
+                                        disabled={fixingKey === key}
+                                      />
+                                      <Button
+                                        size="sm"
+                                        className="h-6 px-2 text-[11px]"
+                                        disabled={fixingKey === key}
+                                        onClick={() => applyFix(m.month, x.fortnight, x.itemCode, x.city, Number(manualValues[key] ?? x.sheetValue))}
+                                      >
+                                        {fixingKey === key ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                                      </Button>
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
                   )}
                   {sheetOnly.length > 0 && (
-                    <p className="text-xs text-gray-600">
-                      On the sheet but missing in the database:{' '}
-                      {sheetOnly.map(x => `${x.item} ${x.city} ${x.fortnight.toUpperCase()} = ${x.sheetValue.toLocaleString('en-IN')}`).join('; ')}
-                    </p>
+                    <div className="text-xs text-gray-600 space-y-1">
+                      <p className="font-medium">On the sheet but missing in the database:</p>
+                      {sheetOnly.map((x: any, i) => {
+                        const key = `${m.month}|${x.fortnight}|${x.itemCode}|${x.city}`;
+                        const fixed = fixedKeys.has(key);
+                        return (
+                          <div key={i} className="flex items-center gap-2">
+                            <span className="min-w-[16rem]">{x.item} · {x.city} · {x.fortnight.toUpperCase()}</span>
+                            {fixed ? (
+                              <span className="text-green-700 flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> saved</span>
+                            ) : (
+                              <>
+                                <input
+                                  type="number"
+                                  className="w-24 border rounded px-1.5 py-0.5 text-right font-mono"
+                                  value={manualValues[key] ?? String(x.sheetValue)}
+                                  onChange={(e) => setManualValues(prev => ({ ...prev, [key]: e.target.value }))}
+                                  disabled={fixingKey === key}
+                                />
+                                <Button
+                                  size="sm"
+                                  className="h-6 px-2 text-[11px]"
+                                  disabled={fixingKey === key}
+                                  onClick={() => applyFix(m.month, x.fortnight, x.itemCode, x.city, Number(manualValues[key] ?? x.sheetValue))}
+                                >
+                                  {fixingKey === key ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Add'}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               );
