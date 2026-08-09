@@ -90,6 +90,20 @@ export async function highlightComponentSheet(
     if (!layout) return { bytes: pdfBytes, marked: false, reason: `no known layout for ${options.componentType}` };
 
     const doc = await PDFDocument.load(pdfBytes);
+
+    // One page is one year — that is the shape these printouts come in (a WPI or
+    // Centre Index page carries a single year-row or twelve month-rows). A multi-page
+    // document means several years in one file, and this marker has no way to tell
+    // which page belongs to the registered year: it would box this year's months onto
+    // every other year's page. Refuse rather than guess.
+    if (doc.getPageCount() > 1) {
+      return {
+        bytes: pdfBytes,
+        marked: false,
+        reason: `${doc.getPageCount()} pages — cannot tell which page is the registered year`,
+      };
+    }
+
     let markedPages = 0;
 
     for (const page of doc.getPages()) {
@@ -149,7 +163,11 @@ export async function highlightComponentSheet(
 
       // Say what the marks mean and, plainly, that they were placed by position rather
       // than read off the page — so nobody takes a box as confirmation of a figure.
-      const note = `Shaded: ${monthList} — the months this bill's PVC used from this sheet`
+      // "Covered by this statement", not "used by this bill's PVC": the attachment span
+      // runs base month to measurement, which includes context months between quarters —
+      // and a bulk batch's span can include months none of its bills computed with. The
+      // marks show the span; claiming "used" overclaimed it.
+      const note = `Shaded: ${monthList} — the months of this statement's period on this sheet`
         + `${options.caption ? ` — ${options.caption}` : ''}. Marks are a reading aid placed by layout; the figures are the sheet's own.`;
       const noteY = yFor(noteTop);
       page.drawRectangle({
