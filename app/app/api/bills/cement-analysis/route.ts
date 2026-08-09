@@ -47,6 +47,8 @@ export interface ExtractedBillItem {
   agreementRateRaw?: string;
   schedule?: string;
   scheduleGroup?: string;
+  /** The bill's "Group Name:-" heading — the sub-work this item belongs to. */
+  groupName?: string;
   chapter?: string;
   sourceBook?: 'USSR_2021' | 'DSR_2021' | 'NON_SCHEDULE' | 'UNKNOWN';
   requiresDsrCementCoefficient?: boolean;
@@ -115,6 +117,7 @@ function normalizeExtractedItem(item: any): ExtractedBillItem {
     amountSinceLastBill: toFiniteNumber(item?.amountIncludingSpecialConditionSinceLastBill ?? item?.amountSinceLastBill),
     schedule,
     scheduleGroup: String(item?.scheduleGroup || '').trim(),
+    groupName: String(item?.groupName || '').trim(),
     chapter: String(item?.chapter || '').trim(),
     sourceBook,
     requiresDsrCementCoefficient: isCementAffected && sourceBook !== 'USSR_2021',
@@ -174,7 +177,31 @@ function looksLikeDirectCementSupply(item: ExtractedBillItem): boolean {
     && /\bcement\b|ordinary portland|\bOPC\b|\bPPC\b/i.test(item.description || '');
 }
 
-function applyDeterministicClassification(item: ExtractedBillItem, workDescription: string): ExtractedBillItem {
+/**
+ * Whether this bill covers more than one work.
+ *
+ * The bill answers it itself: IREPS prints a "Group Name:-" heading above each
+ * sub-work, and a bill that prints two or more of them is billing two or more works.
+ * That is firmer than reading the Name of Work, which on a composite agreement lists
+ * every scope in one sentence and lets the loudest one win — "Central
+ * Workshops/Ponmalai (i) Renewal of roof in foundry shop ... (iii) Provision of CC
+ * apron and Complete Track renewal ... (v) Provision of New Painting Shed" is six
+ * works, but reads as Building Works on sheer weight of shop and building words, and
+ * every item of the bill was taking Group 5 — track renewal and turnouts included.
+ */
+function billCoversSeveralWorks(items: ExtractedBillItem[]): boolean {
+  const headings = new Set(items.map(item => String(item.groupName || '').trim()).filter(Boolean));
+  return headings.size > 1;
+}
+
+const quoteKeywordsOf = (keywords: string[]) =>
+  keywords.slice(0, 4).map(keyword => `"${keyword}"`).join(', ');
+
+function applyDeterministicClassification(
+  item: ExtractedBillItem,
+  workDescription: string,
+  billCoversSeveralWorksFlag = false,
+): ExtractedBillItem {
   // 1. Check if the AI already suggested a valid classification code
   const aiCode = String(item.suggestedClassificationCode || '').trim().toUpperCase();
   const isValidAiCode = /^[1-9][A-E]?$/.test(aiCode);
@@ -191,10 +218,27 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
   // 3. Fallback to contract description main group code
   const contractMain = inferMainClassification(workDescription);
 
+  // The bill's own "Group Name:-" heading — the sub-work this item sits under. On a
+  // composite agreement this is the most specific statement of WHICH WORK an item
+  // belongs to, and a GCC group is a property of the work. Without it, items of one
+  // sub-work scattered across groups: "Renewal of roofing sheet in foundry shop" had
+  // its roofing under Building Works, its dismantling under Earthwork in Formation
+  // and its steelwork under Any Other Works — three groups, three sets of component
+  // percentages, for one roof.
+  //
+  // It must name its scope more than once to govern. "Provision of CC apron and
+  // Complete Track renewal" matches Bridges & Protection on the single word "apron"
+  // while its real content is track renewal; one weak keyword is not a scope.
+  const groupMain = inferMainClassification(String(item.groupName || ''));
+  const groupNamesScope = Boolean(item.groupName)
+    && groupMain.code !== '9'
+    && !groupMain.isMultiScope
+    && (groupMain.contenders?.[0]?.score ?? 0) >= 2;
+  const groupReason = `the bill's own sub-work heading "${String(item.groupName || '').trim()}" (${quoteKeywordsOf(groupMain.matchedKeywords)})`;
+
   // Determine the prefix (digit) to use:
-  const quoteKeywords = (keywords: string[]) =>
-    keywords.slice(0, 4).map(keyword => `"${keyword}"`).join(', ');
-  let resolvedCode = contractMain.code;
+  const quoteKeywords = quoteKeywordsOf;
+  let resolvedCode = groupNamesScope ? groupMain.code : contractMain.code;
   let resolvedReason = contractMain.matchedKeywords.length > 0
     ? `The item description itself does not indicate a specific GCC work group, so it inherits Group ${contractMain.code} (${contractMain.label}) from the contract's Name of Work, which mentions ${quoteKeywords(contractMain.matchedKeywords)}.`
     : contractMain.isMultiScope
@@ -223,20 +267,34 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
   // own schedule and wording decide, which is what the branches below already do.
   const contractGovernsGroup = contractMain.code !== '9'
     && contractMain.matchedKeywords.length > 0
-    && !contractMain.isMultiScope;
+    && !contractMain.isMultiScope
+    // ...and only when the bill is billing one work. Where it prints a heading per
+    // sub-work, those headings — not one sentence covering all of them — say which
+    // work each item belongs to.
+    && !billCoversSeveralWorksFlag;
 
   if (contractGovernsGroup) {
     resolvedCode = contractMain.code;
     resolvedReason = `The contract's Name of Work mentions ${quoteKeywords(contractMain.matchedKeywords)}, placing the whole work under GCC Group ${contractMain.code} (${contractMain.label}); every item of this bill takes that group and is distinguished only by its sub-classification.`;
-  } else if (subHead && subHead.gccGroup !== DSR_CONTEXT) {
+  } else if (subHead && subHead.gccGroup !== DSR_CONTEXT
+    && !(subHead.gccGroup === '9' && groupNamesScope)) {
+    // Group 9 is the "any other works" bucket — the sub-head reaching it means it
+    // recognised nothing in particular, so a named sub-work outranks it. Handling of
+    // Materials and Small Track Machines map there, and left as Group 9 they split a
+    // painting shed's own items away from the shed.
     resolvedCode = subHead.gccGroup;
     resolvedReason = `Item number ${item.itemNo} falls under ${scheduleLabel} ${subHead.number} (${subHead.name}), which is classified as GCC Group ${subHead.gccGroup}.`;
   } else if (subHead && subHead.gccGroup === DSR_CONTEXT) {
     // Context-dependent sub-head/chapter (e.g. Earth Work, Level Crossings): its GCC
     // group depends on the nature of the overall work, so resolve it from the
     // contract's Name of Work rather than a fixed mapping.
-    resolvedCode = contractMain.code;
-    resolvedReason = `Item is ${scheduleLabel} ${subHead.number} (${subHead.name}), whose GCC group depends on the nature of work; taken as Group ${contractMain.code} (${contractMain.label}) from the contract's Name of Work${contractMain.matchedKeywords.length ? ` (${quoteKeywords(contractMain.matchedKeywords)})` : ''}.`;
+    resolvedCode = groupNamesScope ? groupMain.code : contractMain.code;
+    resolvedReason = groupNamesScope
+      ? `Item is ${scheduleLabel} ${subHead.number} (${subHead.name}), whose GCC group depends on the nature of work; taken as Group ${groupMain.code} (${groupMain.label}) from ${groupReason}.`
+      : `Item is ${scheduleLabel} ${subHead.number} (${subHead.name}), whose GCC group depends on the nature of work; taken as Group ${contractMain.code} (${contractMain.label}) from the contract's Name of Work${contractMain.matchedKeywords.length ? ` (${quoteKeywords(contractMain.matchedKeywords)})` : ''}.`;
+  } else if (groupNamesScope) {
+    resolvedCode = groupMain.code;
+    resolvedReason = `This item belongs to ${groupReason}, placing it under GCC Group ${groupMain.code} (${groupMain.label}). A GCC group is a property of the work, so every item of this sub-work takes the same group and is distinguished only by its sub-classification.`;
   } else if (itemMain.code !== '9') {
     resolvedCode = itemMain.code;
     resolvedReason = `The item description mentions ${quoteKeywords(itemMain.matchedKeywords)}, which places this work under GCC Group ${itemMain.code} (${itemMain.label}).`;
@@ -274,6 +332,13 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
   const text = itemText.toLowerCase();
   const supportsFabricationClasses = resolvedCode !== '1';
   const isFabrication = /fabricat|assembl|erect|launch/.test(text);
+  // Taking steel OUT is not supplying it. A dismantling item is measured in the same
+  // weight units as a supply item and names the same steel — "Dismantling the existing
+  // crane rails ... by gas cutting" (MT), "Dismantling of existing LWR/SWR track,
+  // removing rails, sleepers, fish plates" (TRM) — and both were filed as supply of
+  // steel, which prices the whole amount against the steel index. That work is almost
+  // entirely labour; no steel is being bought.
+  const isRemoval = /dismantl|demolish|removing|removal of|taking out|dispos(?:al|ing)|scrap/.test(text);
   const excludesSteel = /excluding steel|without steel|steel supplied by railway|free issue steel/.test(text);
   const includesSteel = /including steel|with steel|contractor.{0,30}suppl/.test(text);
 
@@ -292,12 +357,17 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
     const unit = item.unit.trim().toUpperCase().replace(/[\s.]+/g, '');
     if (!['KG', 'KGS', 'MT', 'TONNE', 'TON', 'METRICTONNE', 'QUINTAL'].includes(unit)) return false;
     if (/fabricat|assembl|erect|launch/.test(text)) return false;
+    if (isRemoval) return false;
     return item.isSteelItem || /item\s*-?\s*steel|steel supply/.test(text);
   })();
 
   if (aiSuffix
     && (supportsFabricationClasses || !['D', 'E'].includes(aiSuffix))
-    && !(aiSuffix === 'A' && isSteelSupplyItem)) {
+    && !(aiSuffix === 'A' && isSteelSupplyItem)
+    // The AI reads "rails", "steel" and a weight unit and offers B for a dismantling
+    // item too. B means the contractor is supplying steel, so it cannot apply to work
+    // that takes steel out; the deterministic branches below settle it instead.
+    && !(aiSuffix === 'B' && isRemoval)) {
     suffix = aiSuffix;
     const suffixMeaning: Record<string, string> = {
       A: 'general works with composite labour/material components',
@@ -319,11 +389,14 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
     } else if (looksLikeDirectCementSupply(item)) {
       suffix = 'C';
       subReason = `The item is billed in a cement supply unit (${item.unit}) and its description refers to cement supply rather than composite work, so ${resolvedCode}C (separate cement supply) applies.`;
-    } else if (isSteelSupplyItem || item.isSteelItem || /item\s*-?\s*steel|steel supply/.test(text)) {
+    } else if (isSteelSupplyItem) {
+      // isSteelSupplyItem alone, which checks the unit and rules out fabrication and
+      // removal. The looser tests that used to sit here — the steel flag on its own,
+      // or the words "steel supply" appearing anywhere in the item text — put every
+      // item that merely mentioned steel into B whatever its unit, track dismantling
+      // measured in TRM included.
       suffix = 'B';
-      subReason = isSteelSupplyItem
-        ? `The item is steel billed by weight (${item.unit}) with no fabrication or erection wording, so it is a separate steel supply item and ${resolvedCode}B (items for supply of steel) applies.`
-        : `The item is a separate steel supply item (steel supplied by the contractor as its own billed item), so ${resolvedCode}B (items for supply of steel) applies.`;
+      subReason = `The item is steel billed by weight (${item.unit}) with no fabrication, erection or dismantling wording, so it is a separate steel supply item and ${resolvedCode}B (items for supply of steel) applies.`;
     }
   }
 
@@ -1229,9 +1302,11 @@ export async function extractBillDetailsDirect(pdfBuffer: Buffer, contractId?: s
     // filling in contract details that were never captured.
     billWorkDescription: parsed.workDescription,
     classificationGroupCode: inferMainClassification(workDescription).code,
-    items: parsed.items
-      .map(normalizeExtractedItem)
-      .map(item => applyDeterministicClassification(item, workDescription)),
+    items: (() => {
+      const normalized = parsed.items.map(normalizeExtractedItem);
+      const severalWorks = billCoversSeveralWorks(normalized);
+      return normalized.map(item => applyDeterministicClassification(item, workDescription, severalWorks));
+    })(),
   };
 
   const aiReview = await enhanceDeterministicItemsWithAi(billDetails.items, workDescription, '');
@@ -1402,11 +1477,12 @@ async function finalizeExtractedBillDetails(
 
   const workDescription = contractDescription || String(parsed.workDescription || '').trim();
   const inferredMainClassification = inferMainClassification(workDescription);
-  const items = Array.isArray(parsed.items)
-    ? parsed.items
-      .map(normalizeExtractedItem)
-      .map((item: ExtractedBillItem) => applyDeterministicClassification(item, workDescription))
+  const normalizedItems: ExtractedBillItem[] = Array.isArray(parsed.items)
+    ? parsed.items.map(normalizeExtractedItem)
     : [];
+  const severalWorks = billCoversSeveralWorks(normalizedItems);
+  const items = normalizedItems
+    .map((item: ExtractedBillItem) => applyDeterministicClassification(item, workDescription, severalWorks));
   const classificationGroupCode = inferredMainClassification.code;
   const scheduleSummary = (Array.isArray(parsed.scheduleSummary) ? parsed.scheduleSummary : [])
     .map((summary: any) => ({
@@ -1662,9 +1738,11 @@ export async function POST(request: NextRequest) {
           ...parsed,
           workDescription,
           classificationGroupCode: inferMainClassification(workDescription).code,
-          items: parsed.items
-            .map(normalizeExtractedItem)
-            .map(item => applyDeterministicClassification(item, workDescription)),
+          items: (() => {
+            const normalized = parsed.items.map(normalizeExtractedItem);
+            const severalWorks = billCoversSeveralWorks(normalized);
+            return normalized.map(item => applyDeterministicClassification(item, workDescription, severalWorks));
+          })(),
         };
         // AI pass to refine suffixes and write detailed classification justifications;
         // deterministic values are kept when the AI is unavailable or a batch fails.
