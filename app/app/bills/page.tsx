@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { FileText, Plus, Calculator, Building2, Calendar, Trash2, Filter, Search, ChevronDown, ChevronUp, Edit, Clock, IndianRupee, Gift, Grid3X3, List, Download, Eye, SortAsc, SortDesc, MoreHorizontal, Layers, AlertCircle, CheckCircle, User, FileSpreadsheet, Phone, Send, Wallet, FileUp } from 'lucide-react';
+import { CreatedViaBadge } from '@/components/ui/created-via-badge';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
@@ -101,6 +102,7 @@ interface Bill {
     provisionalIndices?: string[];
     details?: string;
   };
+  createdVia?: string | null;
 }
 
 interface BillGroup {
@@ -1861,6 +1863,7 @@ export default function BillsPage() {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <BillStatusBadge status={bill.status || 'draft'} size="sm" />
+                        <CreatedViaBadge createdVia={bill.createdVia} />
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1 flex-wrap">

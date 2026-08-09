@@ -855,6 +855,8 @@ async function findOrCreateContractFromAgreement(
   try {
     return await prisma.contract.create({
       data: {
+        // Sent in through the bot, by definition.
+        createdVia: 'telegram',
         agreementNo,
         loaNo: data.loaNo || null,
         loaDate: data.loaDate ? new Date(data.loaDate) : null,

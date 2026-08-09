@@ -600,7 +600,7 @@ async function persistTelegramBill(o: {
     });
     return;
   }
-  const bill = await prisma.bill.create({ data: { ...billData, contractId: o.contractId } });
+  const bill = await prisma.bill.create({ data: { ...billData, contractId: o.contractId, createdVia: 'telegram' } });
   await prisma.pvcCalculation.create({ data: { ...pvcData, contractId: o.contractId, billId: bill.id } });
 }
 

@@ -207,6 +207,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
    */
   const agreementFileRef = useRef<HTMLInputElement>(null);
   const [extractingAgreement, setExtractingAgreement] = useState(false);
+  /** Set once the agreement PDF fills the form, so the record remembers its origin. */
+  const [filledFromPdf, setFilledFromPdf] = useState(false);
 
   // Trim the PDF to its first pages IN THE BROWSER before uploading. Every field we
   // need is on the opening pages, and the host rejects request bodies over ~4.5 MB
@@ -251,6 +253,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
         return;
       }
       handleDocumentDataExtracted(json.data);
+      setFilledFromPdf(true);
       toast.success('Form filled from the agreement. Please review before saving.', { id: toastId });
     } catch {
       toast.error('The upload failed. Please try again.', { id: toastId });
@@ -404,7 +407,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(submitData),
+        body: JSON.stringify({ ...submitData, createdVia: filledFromPdf ? 'pdf' : 'manual' }),
       });
 
       if (!response.ok) {

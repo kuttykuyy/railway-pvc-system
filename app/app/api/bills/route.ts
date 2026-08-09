@@ -537,6 +537,9 @@ export async function POST(request: NextRequest) {
       data: {
         contractId,
         billNo: normalizedBillNo,
+        // The same fact that priced this bill, kept rather than discarded — the card
+        // can then say whether a figure was typed or read off a PDF.
+        createdVia: isAiUploaded ? 'pdf' : 'manual',
         grossBillAmount: parseFloat(grossBillAmount),
         billAmount: parseFloat(billAmount),
         cementAmount: classificationPolicy.cementAmount,

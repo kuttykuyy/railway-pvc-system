@@ -31,6 +31,7 @@ import {
   Phone,
 } from 'lucide-react';
 
+import { CreatedViaBadge } from '@/components/ui/created-via-badge';
 import { PostingDetailsNotice } from '@/components/posting-details-notice';
 import { PromoBanner } from '@/components/promo-banner';
 import { Button } from '@/components/ui/button';
@@ -68,6 +69,7 @@ interface Contract {
   agreementNo: string;
   contractorName: string;
   contractorPhone: string | null;
+  createdVia?: string | null;
   workDescription: string;
   dateOfOpening: string | Date;
   baseMonth: string | Date;
@@ -676,6 +678,7 @@ export default function ContractsPage() {
                         {contract.agreementNo}
                       </Link>
                       <StatusBadge contract={contract} />
+                      <CreatedViaBadge createdVia={contract.createdVia} />
                     </div>
                     <p className="mt-1 line-clamp-1 text-sm text-slate-500">{contract.workDescription}</p>
                   </div>
