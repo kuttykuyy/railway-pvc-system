@@ -12,8 +12,7 @@ import {
   parseWPIExcelData,
   updateIndicesFromWPI,
   getWPIDownloadUrl,
-  getLatestWPIUrl
-} from '@/lib/wpi-fetcher';
+  getLatestWPIUrl, findWPIDataForIndex } from '@/lib/wpi-fetcher';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds for fetching
@@ -56,7 +55,10 @@ export async function GET(request: NextRequest) {
     // Get preview of our indices
     const preview: any[] = [];
     for (const [indexName, mapping] of Object.entries(WPI_MAPPINGS)) {
-      const match = wpiData.find(row => row.commCode === mapping.code);
+      // Series-aware, same as the import itself: the OLD machinery code belongs to a
+      // DIFFERENT commodity in the new basket, and matching by it showed admins
+      // metallurgy-machinery numbers under the Plant Machinery preview.
+      const match = findWPIDataForIndex(indexName, wpiData);
       if (match) {
         // Get last 12 months of data
         const recentValues = match.monthlyValues

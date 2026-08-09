@@ -77,12 +77,14 @@ export async function GET(request: NextRequest) {
 
   const startedAt = Date.now();
   try {
-    // The newest month may not be published yet (WPI lags ~2-3 weeks), so step
-    // back from last month until we find a workbook that actually has our data.
+    // Step back from the CURRENT month until a workbook with our data is found. The
+    // site keeps only the newest workbook and removes superseded ones, and new-series
+    // files are named a month ahead of their data — starting at last month meant that
+    // for half of every month the loop began at a filename that no longer existed and
+    // walked backwards through more that didn't, importing nothing until the 1st.
     const now = new Date();
-    let baseYear = now.getUTCFullYear();
-    let baseMonth = now.getUTCMonth(); // 0-indexed current == 1-indexed previous
-    if (baseMonth === 0) { baseMonth = 12; baseYear -= 1; }
+    const baseYear = now.getUTCFullYear();
+    const baseMonth = now.getUTCMonth() + 1;
 
     let wpiData: any[] | null = null;
     let url = '';

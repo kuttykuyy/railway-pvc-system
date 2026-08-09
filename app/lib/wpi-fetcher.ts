@@ -258,7 +258,9 @@ export async function updateIndicesFromWPI(
         // Find the latest 2 months across all WPI data being imported
         const allMonths = new Set<string>();
         for (const wpiRow of wpiData) {
-          const hasMapping = Object.values(WPI_MAPPINGS).some(m => m.code === wpiRow.commCode);
+          // Either series' code — this only reads month columns, which every row shares,
+          // but matching the old code alone found nothing in a new-series workbook.
+          const hasMapping = Object.values(WPI_MAPPINGS).some(m => m.code === wpiRow.commCode || m.newCode === wpiRow.commCode);
           if (hasMapping) {
             wpiRow.monthlyValues.forEach(mv => {
               allMonths.add(mv.month.toISOString().slice(0, 7));
@@ -324,14 +326,20 @@ export async function updateIndicesFromWPI(
 
 // Get WPI download URL for a specific month
 export function getWPIDownloadUrl(year: number, month: number): string {
-  const monthStr = month.toString().padStart(2, '0');
-  // June 2026 onward publishes only in the new series' folder, in a new filename shape
-  // (verified against eaindustry's own download page). Earlier months stay at the old
-  // series' address for re-imports of history.
-  if (year > 2026 || (year === 2026 && month >= 6)) {
-    return `https://eaindustry.nic.in/indx_download_2223/wpi_monthly_index_${year}${monthStr}.xlsx`;
+  // The caller asks by DATA month. New-series files are named for their PUBLICATION
+  // month — one later than the data they carry (the 15-Jun-2026 release file is
+  // ...202606 and holds May data; verified against the live site, where the July file
+  // 202607 ends at June's column). Asking for May 2026 data must therefore fetch file
+  // 202606, and so on, with the year rolling over for December data.
+  if (year > 2026 || (year === 2026 && month >= 5)) {
+    const pubYear = month === 12 ? year + 1 : year;
+    const pubMonth = month === 12 ? 1 : month + 1;
+    return `https://eaindustry.nic.in/indx_download_2223/wpi_monthly_index_${pubYear}${pubMonth.toString().padStart(2, '0')}.xlsx`;
   }
-  return `https://eaindustry.nic.in/indx_download_1112/monthly_index_${year}${monthStr}.xls`;
+  // The old series' folder no longer exists on the site (soft-404s) — this URL remains
+  // only so historical requests fail visibly downstream instead of silently fetching
+  // the wrong series.
+  return `https://eaindustry.nic.in/indx_download_1112/monthly_index_${year}${month.toString().padStart(2, '0')}.xls`;
 }
 
 // Get latest available WPI file URL

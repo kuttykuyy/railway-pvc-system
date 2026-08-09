@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getQuarterMonths, getQuarterFromDate } from '@/lib/pvc-calculations';
+import { getWpiLinkingFactors, bridgeWpiValue } from '@/lib/wpi-series';
 import { format } from 'date-fns';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
@@ -58,6 +59,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     startMonth.setHours(0, 0, 0, 0);
     
     // Get all monthly values from start month to measurement date
+    // WPI series bridge — this report is a bill's calculation backup and must agree
+    // with the bridged figures the bill itself uses.
+    const wpiFactors = await getWpiLinkingFactors();
     const monthlyData: {
       month: Date;
       monthName: string;
@@ -115,7 +119,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         monthData.indices.push({
           indexName: index.name,
           baseValue: baseMonthValue?.value || index.baseValue, // Use base month value if available, fallback to static
-          currentValue: monthlyValue?.value || null,
+          // Bridged so this backup agrees with the bill's own bridged calculation.
+          currentValue: monthlyValue ? bridgeWpiValue(index.name, baseMonth, new Date(monthlyValue.month), monthlyValue.value, wpiFactors) : null,
           available: !!monthlyValue,
           isProvisional: monthlyValue?.isProvisional || false
         });
@@ -214,7 +219,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         if (monthlyValue) {
           monthlyValues.push({
             month: format(qMonth, 'MMMM yyyy'),
-            value: monthlyValue.value,
+            // Bridged so the variation below agrees with the bill's own calculation.
+            value: bridgeWpiValue(index.name, baseMonth, new Date(monthlyValue.month), monthlyValue.value, wpiFactors),
             isProvisional: monthlyValue.isProvisional || false
           });
         } else if (includesFutureMonths && qMonth > measurementMonthEnd) {

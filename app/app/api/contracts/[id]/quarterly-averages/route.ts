@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getQuarterMonths } from '@/lib/pvc-calculations';
+import { getWpiLinkingFactors, bridgeWpiValue } from '@/lib/wpi-series';
 import { format } from 'date-fns';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
@@ -52,6 +53,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Classification 7A indices
     const classificationIndices = ['Labour', 'RBI Plant Machinery', 'MPNG Fuel', 'RBI Other Materials'];
     
+    const wpiFactors = await getWpiLinkingFactors();
     const quarterlyData = [];
 
     for (const quarter of quarters) {
@@ -94,9 +96,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           }
         });
 
+        // The WPI series changed base in May 2026: values from then on must cross the
+        // same bridge the bill calculations use before comparison with the old-series
+        // base month — without it this view showed a phantom ~30% fall.
+        const bridgedValues = monthlyValues.map(mv => ({
+          ...mv,
+          value: bridgeWpiValue(indexName, contract.baseMonth, new Date(mv.month), mv.value, wpiFactors),
+        }));
         // Only calculate average if there are at least 3 months of data for a valid quarter
-        const average = monthlyValues.length >= 3 
-          ? monthlyValues.reduce((sum: number, val: any) => sum + val.value, 0) / monthlyValues.length
+        const average = bridgedValues.length >= 3
+          ? bridgedValues.reduce((sum: number, val: any) => sum + val.value, 0) / bridgedValues.length
           : null;
 
         // Get component percentage
@@ -111,7 +120,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           baseValue: baseMonthValue.value, // Use actual base month value
           averageValue: average,
           componentPercentage,
-          monthlyValues: monthlyValues.map(mv => ({
+          monthlyValues: bridgedValues.map(mv => ({
             month: format(mv.month, 'MMMM yyyy'),
             value: mv.value
           }))

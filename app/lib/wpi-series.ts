@@ -72,3 +72,25 @@ export async function getWpiLinkingFactors(): Promise<Record<string, number>> {
   }
   return factors;
 }
+
+/**
+ * Bridge one published value for comparison against a contract's base month — the same
+ * rule getQuarterlyAverages applies, packaged for the display endpoints that fetch raw
+ * monthly values themselves (contract quarterly view, detailed report, forecasts).
+ * Without it they showed a phantom ~30% price crash for old-base contracts the moment
+ * the new series started.
+ */
+export function bridgeWpiValue(
+  indexName: string,
+  baseMonth: Date,
+  publishedMonth: Date,
+  value: number,
+  factors: Record<string, number>,
+): number {
+  if (!isWpiIndexName(indexName)) return value;
+  const baseIsOld = !isNewSeriesMonth(new Date(Date.UTC(baseMonth.getUTCFullYear(), baseMonth.getUTCMonth(), 1)));
+  if (!baseIsOld) return value;
+  if (!isNewSeriesMonth(publishedMonth)) return value;
+  const factor = factors[indexName];
+  return factor ? value * factor : value;
+}

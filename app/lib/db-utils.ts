@@ -18,7 +18,10 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
   let months: Date[];
   if (['Q0', 'Base'].includes(quarter)) {
     // For Q0 or Base quarter, use the base month only
-    const normalizedBaseMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1);
+    // UTC getters: stored months are UTC and the series switch is a UTC constant —
+  // local getters shifted a May-2026 base into April on IST machines, classifying it
+  // old-series and inflating every converted month by the factor.
+  const normalizedBaseMonth = new Date(Date.UTC(baseMonth.getUTCFullYear(), baseMonth.getUTCMonth(), 1));
     months = [normalizedBaseMonth];
   } else {
     // Get quarter months with error handling for regular quarters
@@ -36,9 +39,12 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
   
   const priceIndexMap = new Map(priceIndices.map(pi => [pi.name, pi]));
   
-  // 2. Fetch all base month values in a single query
-  const normalizedBaseMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1);
-  const nextBaseMonth = new Date(normalizedBaseMonth.getFullYear(), normalizedBaseMonth.getMonth() + 1, 1);
+  // 2. Fetch all base month values in a single query.
+  // UTC getters: stored months are UTC and the series switch is a UTC constant — local
+  // getters shifted a May-2026 base into April on IST machines, classifying it
+  // old-series and inflating every converted month by the linking factor.
+  const normalizedBaseMonth = new Date(Date.UTC(baseMonth.getUTCFullYear(), baseMonth.getUTCMonth(), 1));
+  const nextBaseMonth = new Date(Date.UTC(normalizedBaseMonth.getUTCFullYear(), normalizedBaseMonth.getUTCMonth() + 1, 1));
   
   const baseMonthValues = await prisma.monthlyIndexValue.findMany({
     where: {
@@ -59,8 +65,10 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
   // formula takes stays a comparison of like with like. Contracts based after the
   // switch live wholly in the new series and are left alone. See lib/wpi-series.ts.
   const baseIsOldSeries = !isNewSeriesMonth(normalizedBaseMonth);
-  const needsWpiBridge = baseIsOldSeries && priceIndexNames.some(isWpiIndexName);
-  const wpiFactors = needsWpiBridge ? await getWpiLinkingFactors() : {};
+  // Factors load whenever WPI indices are involved: old-base contracts use them to lift
+  // new-series months, and new-base contracts may need them to scale DOWN a seeded
+  // old-series default when the base month's value is missing (below).
+  const wpiFactors = priceIndexNames.some(isWpiIndexName) ? await getWpiLinkingFactors() : {};
   
   // 3. Fetch all quarterly values in a single query
   const monthlyValuesAll = await prisma.monthlyIndexValue.findMany({
@@ -126,7 +134,15 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
       continue;
     }
     
-    const actualBaseValue = baseValueMap.get(priceIndex.id) || priceIndex.baseValue;
+    // The seeded priceIndex.baseValue is an old-series figure (~137 for cement). For a
+    // contract based AFTER the series switch whose base-month value is missing, falling
+    // back to it compares an old-scale base against new-scale months (~95) — a large
+    // phantom price fall. Scale the seed down by the linking factor instead, and say so.
+    let actualBaseValue = baseValueMap.get(priceIndex.id) || priceIndex.baseValue;
+    if (!baseValueMap.has(priceIndex.id) && !baseIsOldSeries && wpiFactors[indexName]) {
+      actualBaseValue = priceIndex.baseValue / wpiFactors[indexName];
+      console.warn(`[WPI] No stored base value for ${indexName} at ${normalizedBaseMonth.toISOString().slice(0, 7)} — seeded old-series default scaled to new base (/${wpiFactors[indexName]})`);
+    }
     
     const monthlyValues = [...(quarterlyValuesByIndex.get(priceIndex.id) || [])];
     
@@ -172,7 +188,7 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
       let wpiMonthsConverted = 0;
       const effectiveValues = monthlyValues.map((mv: any) => {
         const publishedMonth = new Date(mv.sourceMonth ?? mv.month);
-        if (factor && isNewSeriesMonth(publishedMonth)) {
+        if (baseIsOldSeries && factor && isNewSeriesMonth(publishedMonth)) {
           wpiMonthsConverted++;
           return { ...mv, value: mv.value * factor, wpiConverted: true };
         }

@@ -43,9 +43,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Only the 2016-base series counts — if the bureau ever lists rebased rows first,
+    // slicing before this filter would mark the true newest 2016 months as final while
+    // still revisable.
+    const data2016 = data.filter(d => d.baseYear === 2016);
+    if (data2016.length === 0) {
+      return NextResponse.json({ error: 'No 2016-base rows on the bureau page' }, { status: 502 });
+    }
     // Data arrives newest-first; the two newest months are still subject to revision.
-    const provisional = data.slice(0, 2);
-    const final = data.slice(2);
+    const provisional = data2016.slice(0, 2);
+    const final = data2016.slice(2);
 
     const finalResult = await updateLabourIndexFromData(final, { isProvisional: false });
     const provisionalResult = await updateLabourIndexFromData(provisional, { isProvisional: true });
