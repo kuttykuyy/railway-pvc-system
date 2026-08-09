@@ -941,6 +941,12 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       + 'A positive PVC amount is payable to the contractor; a negative PVC amount is recoverable because prices fell below the base month level.',
       mL, y,
     );
+    // Move past what was just written. This block ended without doing so, and while the
+    // next section always took a fresh page that went unnoticed; now that a section can
+    // stay on the page, the heading was printed straight through these three lines.
+    y += pdf.getTextDimensions(
+      'How to read this statement:\nPVC for a component\nA positive PVC amount',
+    ).h;
     pdf.setTextColor(0, 0, 0);
   }
 
@@ -1315,6 +1321,9 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         1: { cellWidth: 50, halign: 'right' },
       },
     });
+    // Section F ended without moving y past its own table, so section G opened above it
+    // and printed its heading through the summary.
+    y = pdf.lastAutoTable.finalY + 4;
   }
 
   }
