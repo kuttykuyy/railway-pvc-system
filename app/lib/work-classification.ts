@@ -1,4 +1,8 @@
 export interface MainWorkClassification {
+  /** Every group the Name of Work names as scope, the winner first. */
+  contenders?: { code: string; label: string; score: number }[];
+  /** True when the work covers several GCC groups, so no one group fits every item. */
+  isMultiScope?: boolean;
   code: string;
   label: string;
   reason: string;
@@ -121,6 +125,8 @@ export function inferMainClassification(workDescription: string): MainWorkClassi
       label: explosiveMatch ? 'Tunnelling Works (With Explosives)' : 'Tunnelling Works (Without Explosives)',
       reason: explosiveMatch ? 'Tunnel scope with blasting/explosives.' : 'Tunnel scope without blasting/explosives evidence.',
       matchedKeywords: explosiveMatch ? [tunnelMatch[0], explosiveMatch[0]] : [tunnelMatch[0]],
+      contenders: [{ code: explosiveMatch ? '4' : '3', label: explosiveMatch ? 'Tunnelling Works (With Explosives)' : 'Tunnelling Works (Without Explosives)', score: 1 }],
+      isMultiScope: false,
     };
   }
 
@@ -149,13 +155,25 @@ export function inferMainClassification(workDescription: string): MainWorkClassi
     .sort((left, right) => right.score - left.score);
   const best = scored[0];
   if (!best || best.score === 0) {
-    return { code: '9', label: 'Any Other Works', reason: 'No unique match to GCC main groups 1-8.', matchedKeywords: [] };
+    return { code: '9', label: 'Any Other Works', reason: 'No unique match to GCC main groups 1-8.', matchedKeywords: [], contenders: [], isMultiScope: false };
   }
+  // Which OTHER groups the Name of Work also names as scope. A single-scope agreement
+  // has one; "Station Building, ROB, RUB/LHS, Major Bridges, Earthwork in Cutting and
+  // Filling, Platform, Passenger Amenities" has four, and no single group can be right
+  // for every item in it. A contender must be named substantially — twice, and at least
+  // half as often as the winner — so an addressee's designation or an incidental
+  // "including retaining wall" does not turn a single-scope work into a multi-scope one.
+  const contenders = scored.filter(rule =>
+    rule.score > 0 && (rule.code === best.code || (rule.score >= 2 && rule.score >= best.score * 0.5)),
+  );
+
   return {
     code: best.code,
     label: best.label,
     reason: `Matched ${best.label} from Name of Work.`,
     matchedKeywords: best.matchedKeywords,
+    contenders: contenders.map(rule => ({ code: rule.code, label: rule.label, score: rule.score })),
+    isMultiScope: contenders.length > 1,
   };
 }
 

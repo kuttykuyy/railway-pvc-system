@@ -69,6 +69,13 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File;
     const mode = formData.get('mode') as string || 'extract'; // 'extract' or 'classify'
     const selectedItem = formData.get('selectedItem') as string | null;
+    // The scope the item belongs to. A GCC group is a kind of WORK, not a kind of item:
+    // the same cement concrete is Building Works inside a station building and Bridges &
+    // Protection inside an ROB, and those allocate cement 15% and 0%. Classifying the
+    // item alone cannot tell them apart, so the name of work and the schedule heading
+    // the item sits under are given to the classifier as well.
+    const nameOfWork = formData.get('nameOfWork') as string | null;
+    const scheduleName = formData.get('scheduleName') as string | null;
 
     if (!file) {
       return NextResponse.json(
@@ -217,11 +224,37 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
 
 **WORK ITEM TO CLASSIFY**:
 ${selectedItem}
+${nameOfWork ? `
+**NAME OF WORK (the whole agreement's scope)**:
+${nameOfWork}` : ''}${scheduleName ? `
+
+**THIS ITEM'S SCHEDULE / SUB-WORK HEADING**: ${scheduleName}` : ''}
+
+**WHICH SCOPE THE ITEM BELONGS TO**:
+A GCC 46A classification is a kind of WORK, not a kind of item. The same cement
+concrete belongs to Building Works inside a station building, and to Bridges &
+Protection inside an ROB or major bridge — different classifications with different
+component percentages. So:
+- If a schedule/sub-work heading is given, it decides the scope. Use it.
+- If not, and the name of work names several scopes, choose the scope this item's own
+  wording points to (a foundation for a bridge pier is bridge work; plastering in a
+  station building is building work).
+- If the item's wording does not point to any one scope, say so in the justification
+  rather than picking the scope with the largest percentages. State which scopes it
+  could belong to and that the schedule heading is needed to decide.
+NEVER choose a classification because its percentages are higher. The nature of the
+work decides; the percentages follow.
 
 **AVAILABLE CLASSIFICATIONS**:
 ${JSON.stringify(classificationReference, null, 2)}
 
 **TWO-STAGE CLASSIFICATION APPROACH**:
+
+**NAMING RULE FOR THE JUSTIFICATION**:
+Refer to a classification by the exact "code" and "name" given in AVAILABLE
+CLASSIFICATIONS above. Do not invent a title for it. (A justification once read
+"Group 1 - Concrete" when Group 1 is Earthwork in Formation — the reason printed on
+the statement was false, and the item's cement allocation was 0% as a result.)
 
 **STAGE 1: Dedicated Component Detection**
 First, check if this item is a DEDICATED COMPONENT:

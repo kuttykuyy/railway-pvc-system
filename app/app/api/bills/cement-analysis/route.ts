@@ -173,7 +173,9 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
   let resolvedCode = contractMain.code;
   let resolvedReason = contractMain.matchedKeywords.length > 0
     ? `The item description itself does not indicate a specific GCC work group, so it inherits Group ${contractMain.code} (${contractMain.label}) from the contract's Name of Work, which mentions ${quoteKeywords(contractMain.matchedKeywords)}.`
-    : `${contractMain.reason} (Fallback for item).`;
+    : contractMain.isMultiScope
+      ? `The Name of Work covers several GCC groups (${(contractMain.contenders || []).map(c => `${c.code} ${c.label}`).join('; ')}), and this item’s own wording and schedule do not say which it belongs to. Group ${contractMain.code} is taken from the most prominent scope — check it against the schedule heading before relying on it.`
+      : `${contractMain.reason} (Fallback for item).`;
 
   // 0. Highest priority: the schedule's own structure — the CPWD DSR sub-head from
   // the item number (e.g. "16.3.3" → sub-head 16 Road Work → Group 9), or the USSOR
@@ -189,7 +191,15 @@ function applyDeterministicClassification(item: ExtractedBillItem, workDescripti
   // only by its A/B/C/D/E suffix. Item-level inference is still used below when the
   // Name of Work yields nothing better than Group 9 (Any Other Works), which is what
   // inferMainClassification returns when no keyword matched at all.
-  const contractGovernsGroup = contractMain.code !== '9' && contractMain.matchedKeywords.length > 0;
+  // ...but only when the Name of Work names ONE scope. An agreement for "Station
+  // Building, ROB, RUB/LHS, Major Bridges, Earthwork in Cutting and Filling, Platform,
+  // Passenger Amenities" names four, and forcing every item into the loudest of them put
+  // cement concrete under Earthwork in Formation — which allocates 0% to cement, so the
+  // cement index never reached a concrete item. Where the work is multi-scope the item's
+  // own schedule and wording decide, which is what the branches below already do.
+  const contractGovernsGroup = contractMain.code !== '9'
+    && contractMain.matchedKeywords.length > 0
+    && !contractMain.isMultiScope;
 
   if (contractGovernsGroup) {
     resolvedCode = contractMain.code;
