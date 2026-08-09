@@ -16,6 +16,7 @@ import {
 } from '@/lib/dsr-cement-calculation';
 import { inferMainClassification } from '@/lib/work-classification';
 import { enrichItemsFromRateBook } from '@/lib/rate-book-lookup';
+import { composeJustification, repairAiJustification, officialGroupName } from '@/lib/classification-justification';
 import { inferScheduleSubHead, CONTEXT as DSR_CONTEXT } from '@/lib/dsr-subhead-classification';
 import { recordAiUsage } from '@/lib/ai-usage';
 import { parseIrepsBillMarkdown } from '@/lib/ireps-bill-parser';
@@ -224,12 +225,19 @@ function applyDeterministicClassification(
   // wording there that the bill never carried reads as invention, and costs the whole
   // statement its credibility. So the book, the item number, and the fact that the bill
   // prints only the sub-item line are all stated.
-  const withSource = (reason: string) => (item.rateBookEdition && item.rateBookCode
-    ? `${reason} The item's wording is read from ${item.rateBookEdition} item ${item.rateBookCode}, because the bill prints only the line that distinguishes this sub-item; the schedule of rates carries the description of the work itself.`
-    : reason);
-  const withAiNote = (reason: string) => withSource(aiExtractionReason.length >= 40
-    ? `${reason} AI extraction note: ${aiExtractionReason.slice(0, 700)}`
-    : reason);
+  // A justification is checked, not read: the officer wants the clause, the exact
+  // classification as the clause names it, the evidence, what was ruled out, and the
+  // percentages the money follows from — in that order, with nothing to look up.
+  const sourceNote = item.rateBookEdition && item.rateBookCode
+    ? `The item's wording is read from ${item.rateBookEdition} item ${item.rateBookCode}, because the bill prints only the line that distinguishes this sub-item; the schedule of rates carries the description of the work itself.`
+    : undefined;
+  const justify = (code: string, groupReason: string, subReason?: string) => composeJustification({
+    code,
+    groupReason,
+    subReason,
+    sourceNote,
+    aiNote: aiExtractionReason.length >= 40 ? aiExtractionReason.slice(0, 700) : undefined,
+  });
 
   // 2. Infer main group code from the item description itself
   const itemText = `${item.schedule || ''} ${item.scheduleGroup || ''} ${item.chapter || ''} ${item.description || ''}`.trim();
@@ -327,7 +335,7 @@ function applyDeterministicClassification(
     return {
       ...item,
       suggestedClassificationCode: resolvedCode,
-      suggestedClassificationReason: withAiNote(`${resolvedReason} Group ${resolvedCode} has a single classification with no sub-divisions, so ${resolvedCode} applies directly.`),
+      suggestedClassificationReason: justify(resolvedCode, resolvedReason),
     };
   }
 
@@ -341,7 +349,11 @@ function applyDeterministicClassification(
       isCementAffected: false,
       requiresDsrCementCoefficient: false,
       suggestedClassificationCode: `${resolvedCode}C`,
-      suggestedClassificationReason: withAiNote(`${resolvedReason} Item number ${item.itemNo} is a designated cement-supply item, so its full amount is classified under Sub-classification ${resolvedCode}C (items for the supply of cement) and priced only against the cement index (no work portion, no split).`),
+      suggestedClassificationReason: justify(
+        `${resolvedCode}C`,
+        resolvedReason,
+        `Item number ${item.itemNo} is a designated cement-supply item of the schedule, so its full amount is a supply of cement and none of it is work: it is priced against the cement index alone, with no work portion and no split. Sub-classifications ${resolvedCode}A, ${resolvedCode}B, ${resolvedCode}D and ${resolvedCode}E therefore do not arise.`,
+      ),
     };
   }
 
@@ -423,7 +435,7 @@ function applyDeterministicClassification(
   return {
     ...item,
     suggestedClassificationCode: `${resolvedCode}${suffix}`,
-    suggestedClassificationReason: withAiNote(`${resolvedReason} ${subReason}`),
+    suggestedClassificationReason: justify(`${resolvedCode}${suffix}`, resolvedReason, subReason),
   };
 }
 
@@ -698,8 +710,16 @@ ${JSON.stringify(payload)}`;
         const aiJustification = String(enhancement?.justification || enhancement?.reason || '')
           .replace(/\s+/g, ' ')
           .trim();
-        if (aiJustification.length >= 40) {
-          original.suggestedClassificationReason = aiJustification.slice(0, 900);
+        const repaired = repairAiJustification(aiJustification, itemMainCode);
+        // Keep the deterministic justification unless the AI's says the same thing about
+        // the same group. A justification citing "Group 6 - Concrete Work" — Group 6 is
+        // Bridges & Protection Work — is the first thing an officer checks, and the one
+        // that costs the proposal its credibility when it is wrong.
+        if (repaired && repaired.length >= 40) {
+          const official = officialGroupName(itemMainCode);
+          original.suggestedClassificationReason = official
+            ? `${repaired.slice(0, 700)} Classified under GCC-2022 Clause 46A.6 as ${original.suggestedClassificationCode} — Group ${itemMainCode} ${official}.`
+            : repaired.slice(0, 900);
           original.classificationReviewedByAi = true;
         }
       }
