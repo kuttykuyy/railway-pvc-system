@@ -1,8 +1,7 @@
 import {
   AlertCircle, BarChart3, Briefcase, Building2, Calculator, CheckSquare, CreditCard, Database,
   FileBarChart, FileText, Gift, Home, Layers, LineChart, MessageSquare, Package, Receipt, Send,
-  Settings, ShieldCheck, Sparkles, Star, Tags, TrendingUp, User, UserCircle, Wallet,
-} from 'lucide-react';
+  Settings, ShieldCheck, Sparkles, Star, Tags, TrendingUp, User, UserCircle, Wallet, BookOpen } from 'lucide-react';
 
 /**
  * Every screen in the menu, in one place.
@@ -55,6 +54,7 @@ export const ADMIN_ITEMS: NavItem[] = [
   { name: 'Work Classifications', href: '/classifications', icon: Tags, adminOnly: true },
   { name: 'Extension Categories', href: '/admin/extension-subcategories', icon: FileBarChart, adminOnly: true },
   { name: 'Price Indices Management', href: '/indices', icon: LineChart, adminOnly: true },
+  { name: 'Schedules of Rates', href: '/admin/rate-books', icon: BookOpen, adminOnly: true },
   { name: 'Cement Coefficients', href: '/admin/dsr-cement-coefficients', icon: Package, adminOnly: true },
   { name: 'Component Index Documents', href: '/indices/component-documents', icon: FileText, adminOnly: true },
   { name: 'GST Invoices', href: '/admin/gst-invoices', icon: Receipt, adminOnly: true },
