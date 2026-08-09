@@ -69,13 +69,14 @@ export default function PendingDbChangePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Pending columns</CardTitle>
+          <CardTitle className="text-base">Pending changes</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-slate-600 leading-relaxed">
-            These columns ship as migrations, but applying them normally needs the production
-            database URL, which Vercel keeps hidden. The app already holds that connection, so it
-            can add them here. Each is a single additive column — nothing is dropped or changed.
+            These ship as migrations, but applying them normally needs the production database
+            URL, which Vercel keeps hidden. The app already holds that connection, so it can
+            apply them here. Every one is additive — a column, a table or an index — and nothing
+            is dropped or changed.
           </p>
           {columns.length > 0 && (
             <ul className="text-xs space-y-1.5">
@@ -85,7 +86,10 @@ export default function PendingDbChangePage() {
                     ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
                     : <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />}
                   <span className={c.exists ? 'text-slate-400' : 'text-slate-600'}>
-                    <code className="font-medium">{c.table}.{c.column}</code>
+                    <code className="font-medium">
+                      {['table', 'index', 'constraint'].includes(c.column) ? c.table : `${c.table}.${c.column}`}
+                    </code>
+                    {['table', 'index', 'constraint'].includes(c.column) ? ` (${c.column})` : ''}
                     {c.exists ? ' — already applied' : ''}
                     <span className="block text-slate-400">{c.why}</span>
                   </span>
@@ -101,16 +105,16 @@ export default function PendingDbChangePage() {
               <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-emerald-900">All applied</p>
-                <p className="text-xs text-emerald-700 mt-0.5">Nothing to do — every column is present.</p>
+                <p className="text-xs text-emerald-700 mt-0.5">Nothing to do — every column, table and index is present.</p>
               </div>
             </div>
           ) : (
             <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
               <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-amber-900">Some columns missing</p>
+                <p className="text-sm font-medium text-amber-900">Some changes missing</p>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  Adds the missing columns with safe defaults. Creates nothing else, changes no existing data, and is safe to run twice.
+                  Adds the missing columns, tables and indexes. Changes no existing data, and is safe to run twice.
                 </p>
               </div>
             </div>

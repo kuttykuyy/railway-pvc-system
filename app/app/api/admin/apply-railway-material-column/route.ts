@@ -6,9 +6,10 @@
  * a sensitive value and will not reveal. The deployed app already holds that
  * connection, so it can apply these columns itself.
  *
- * Scope is deliberately narrow: ADD COLUMN IF NOT EXISTS only. No tables created,
- * nothing dropped, no existing data touched, and safe to run twice. GET reports
- * which columns are present; POST adds the missing ones.
+ * Scope is deliberately narrow and additive: columns are added IF NOT EXISTS, and the
+ * tables and indexes below are created the same way. Nothing is dropped, no existing
+ * data is touched, and it is safe to run twice. GET reports what is present; POST
+ * applies what is missing.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -89,7 +90,9 @@ const PENDING: PendingColumn[] = [
  * without a database-level foreign key — but without them the live schema drifts from
  * schema.prisma, and the next person to read one would not match the other.
  */
-const PENDING_EXTRAS: Array<{ label: string; sql: string; why: string }> = [
+type ExtraCheck = { kind: 'table' | 'index' | 'constraint'; name: string };
+
+const PENDING_EXTRAS: Array<{ label: string; sql: string; why: string; check: ExtraCheck }> = [
   {
     label: 'dsr_items',
     sql: `CREATE TABLE IF NOT EXISTS "dsr_items" (
@@ -103,17 +106,20 @@ const PENDING_EXTRAS: Array<{ label: string; sql: string; why: string }> = [
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT "dsr_items_pkey" PRIMARY KEY ("edition", "code")
       )`,
-    why: 'The CPWD Delhi Schedule of Rates, so an item can be looked up by its code.',
+    why: 'The published schedules of rates, so an item can be looked up by its code.',
+    check: { kind: 'table', name: 'dsr_items' },
   },
   {
     label: 'dsr_items_code_idx',
     sql: 'CREATE INDEX IF NOT EXISTS "dsr_items_code_idx" ON "dsr_items" ("code")',
     why: 'Bills cite a code without saying which edition it came from.',
+    check: { kind: 'index', name: 'dsr_items_code_idx' },
   },
   {
     label: 'bills_status_approvedAt_idx',
     sql: 'CREATE INDEX IF NOT EXISTS "bills_status_approvedAt_idx" ON "bills" ("status", "approvedAt")',
     why: 'The accounts inbox lists proposals awaiting vetting, oldest first.',
+    check: { kind: 'index', name: 'bills_status_approvedAt_idx' },
   },
   {
     label: 'bills_passedBy_fkey',
@@ -127,6 +133,7 @@ const PENDING_EXTRAS: Array<{ label: string; sql: string; why: string }> = [
         WHEN undefined_column THEN NULL;
       END $$`,
     why: 'Ties the accounts signature to a real user, and clears it if that user is deleted.',
+    check: { kind: 'constraint', name: 'bills_passedBy_fkey' },
   },
 ];
 
@@ -151,6 +158,16 @@ async function columnExists(table: string, column: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+async function extraExists(check: ExtraCheck): Promise<boolean> {
+  const sql = check.kind === 'table'
+    ? `SELECT 1 FROM information_schema.tables WHERE table_name = '${check.name}'`
+    : check.kind === 'index'
+      ? `SELECT 1 FROM pg_indexes WHERE indexname = '${check.name}'`
+      : `SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = '${check.name}'`;
+  const rows = await prisma.$queryRawUnsafe<Array<unknown>>(sql);
+  return rows.length > 0;
+}
+
 async function statuses() {
   return Promise.all(
     PENDING.map(async (c) => ({
@@ -162,11 +179,29 @@ async function statuses() {
   );
 }
 
+/**
+ * The tables and indexes, reported the same way the columns are.
+ *
+ * They were applied on POST but never reported, so once every column existed the page
+ * said "nothing to do" and disabled its own button — and the table added here could
+ * never be created through it.
+ */
+async function extraStatuses() {
+  return Promise.all(
+    PENDING_EXTRAS.map(async (extra) => ({
+      table: extra.check.name,
+      column: extra.check.kind,
+      why: extra.why,
+      exists: await extraExists(extra.check),
+    })),
+  );
+}
+
 export async function GET() {
   const auth = await requireAdmin();
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   try {
-    const columns = await statuses();
+    const columns = [...await statuses(), ...await extraStatuses()];
     const missing = columns.filter((c) => !c.exists);
     return NextResponse.json({
       columns,
@@ -174,8 +209,8 @@ export async function GET() {
       exists: missing.length === 0,
       allApplied: missing.length === 0,
       message: missing.length === 0
-        ? 'All columns already present — nothing to do.'
-        : `${missing.length} column(s) missing. Send a POST to this URL to add them.`,
+        ? 'All applied — nothing to do.'
+        : `${missing.length} change(s) missing. Send a POST to this URL to apply them.`,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Check failed' }, { status: 500 });
@@ -207,7 +242,7 @@ export async function POST() {
       }
     }
 
-    const columns = await statuses();
+    const columns = [...await statuses(), ...await extraStatuses()];
     const stillMissing = columns.filter((c) => !c.exists);
     return NextResponse.json({
       columns,
@@ -216,8 +251,9 @@ export async function POST() {
       exists: stillMissing.length === 0,
       extrasFailed,
       message: [
-        applied.length ? `Added: ${applied.join(', ')}.` : 'All columns were already present — nothing to do.',
-        extrasFailed.length ? `The index/constraint step could not finish (${extrasFailed.join(', ')}); the columns are in place and the app will work.` : '',
+        applied.length ? `Added: ${applied.join(', ')}.` : 'All columns were already present.',
+        stillMissing.length === 0 ? 'Every table and index is in place too.' : '',
+        extrasFailed.length ? `The table/index step could not finish (${extrasFailed.join(', ')}); the columns are in place and the app will work.` : '',
       ].filter(Boolean).join(' '),
     });
   } catch (error: any) {
