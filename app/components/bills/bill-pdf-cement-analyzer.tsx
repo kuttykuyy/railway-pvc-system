@@ -1223,7 +1223,7 @@ export function BillPdfCementAnalyzer({
               && Math.abs((result.billDetails.itemAmountTotal ?? 0) - (result.billDetails.scheduleSummaryTotal ?? 0)) > 0.05 && (
               <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Item total {formatAmount(result.billDetails.itemAmountTotal)} plus {formatAmount((result.billDetails.scheduleSummaryTotal ?? 0) - (result.billDetails.itemAmountTotal ?? 0))} excluded from zero-quantity rows equals the Bill Amount {formatAmount(result.billDetails.scheduleSummaryTotal)}.
+                Item total {formatAmount(result.billDetails.itemAmountTotal)} is within rounding of the Bill Amount {formatAmount(result.billDetails.scheduleSummaryTotal)} (off by {formatAmount(Math.abs((result.billDetails.itemAmountTotal ?? 0) - (result.billDetails.scheduleSummaryTotal ?? 0)))}). Each row is printed rounded to paise, so a long bill drifts by a few.
               </div>
             )}
 

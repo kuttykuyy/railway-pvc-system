@@ -459,7 +459,9 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   // Rows the reader saw but did not take. Tracked so a failed reconciliation can
   // say WHICH money went missing instead of only that some did.
   const skippedRows: Array<{ reason: string; itemNo: string; amount: number }> = [];
-  let excludedZeroQtyAmount = 0;
+  // Money on rows that measured nothing this period but are still payable — a rate
+  // revision applied to work measured earlier. Tracked only to report it.
+  let rateRevisionAmount = 0;
   // Rows the bill measured but held over for a later payment; its own Total excludes them.
   let heldOverAmount = 0;
   let currentSchedule = 'Schedule UNASSIGNED';
@@ -574,14 +576,18 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
 
       // Nothing measured this period. Silent: most rows of a long bill are idle,
       // and listing them would bury the rows that actually failed to read.
+      //
+      // But a row with no fresh quantity can still be payable: a special-condition
+      // amount against previously measured work is a rate revision, and the bill's
+      // own Total counts it. SR/TPJ/Civil/2025/0067/B7 pays Rs 2,30,850 that way over
+      // two rows. Dropping them left that money unclassified — so it drew no price
+      // variation at all, and the statement's item total fell short of the bill.
+      // A stray figure in the PLAIN amount column is a different thing and stays out:
+      // B-8 of SER/KGP/Civil/2024/0066 reads Re 1 against a zero quantity, and the
+      // bill's own Total leaves it out.
       if (quantity === 0) {
-        // Only a special-condition amount is genuinely part of the bill's total for a
-        // row with no quantity, so only that is subtracted from the expected total.
-        // A stray figure in the plain amount column is not: B-8 of
-        // SER/KGP/Civil/2024/0066 reads Re 1 against a zero quantity, and deducting it
-        // failed a bill whose rows already summed to the printed total to the rupee.
-        if (specialAmount > 0) excludedZeroQtyAmount += specialAmount;
-        continue;
+        if (specialAmount === 0) continue;
+        rateRevisionAmount += specialAmount;
       }
       if (!(agreementRate > 0 && payableAmount !== 0)) {
         skippedRows.push({ reason: 'no payable amount could be read', itemNo, amount: 0 });
@@ -592,7 +598,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       // by rupees on large items - hence 0.1% (min Re 1) rather than paise. The
       // whole-bill reconciliation below is the real guard: a misread column cannot
       // survive it, so this check does not need to be tighter than the print.
-      if (agreementAmount !== 0) {
+      if (agreementAmount !== 0 && quantity !== 0) {
         const arithmeticDifference = Math.abs(quantity * agreementRate - agreementAmount);
         if (arithmeticDifference > Math.max(1, Math.abs(agreementAmount) * 0.001)) {
           skippedRows.push({
@@ -654,7 +660,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   // (the old behaviour) made every rebate bill fail by exactly the rebate.
   const grossTotal = financials.totalAmount ?? netBillAmount;
   const itemAmountTotal = Math.round(items.reduce((sum, item) => sum + item.amountSinceLastBill, 0) * 100) / 100;
-  const expectedAmount = Math.round((grossTotal - excludedZeroQtyAmount) * 100) / 100;
+  const expectedAmount = Math.round(grossTotal * 100) / 100;
   const amountDifference = Math.round((itemAmountTotal - expectedAmount) * 100) / 100;
   // IREPS prints each row's amount rounded to two decimals, so the sum of the rows
   // can drift from the printed total by about a paisa per row. Allow for that, and
@@ -664,7 +670,6 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   if (!amountsReconciled) {
     throw new Error(
       `Direct PDF item total Rs ${itemAmountTotal.toFixed(2)} does not match Total Amount Rs ${grossTotal.toFixed(2)}` +
-      (excludedZeroQtyAmount > 0 ? ` (minus Rs ${excludedZeroQtyAmount.toFixed(2)} from zero-quantity rows excluded)` : '') +
       `. ${amountDifference < 0 ? 'Short' : 'Over'} by Rs ${Math.abs(amountDifference).toFixed(2)} after reading ${items.length} row(s).\n` +
       describeSkippedRows(skippedRows),
     );
@@ -675,9 +680,10 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   const rebatePercentage = financials.rebatePercentage;
   const rebateAmount = financials.rebateAmount;
   const warnings: string[] = [];
-  if (excludedZeroQtyAmount > 0.05) {
+  if (rateRevisionAmount > 0.05) {
     warnings.push(
-      `Excluded Rs ${excludedZeroQtyAmount.toFixed(2)} of payable amount from rows where printed Qty since last Bill is zero.`,
+      `Rs ${rateRevisionAmount.toFixed(2)} is paid on rows with no quantity this period — a revised rate on work `
+      + `measured earlier. It is included and classified like any other amount.`,
     );
   }
   if (heldOverAmount > 0.05) {

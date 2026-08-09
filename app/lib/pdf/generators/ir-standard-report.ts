@@ -331,6 +331,30 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     }
   };
 
+  /**
+   * Open a section, taking a new page only when this one cannot hold `need` mm.
+   *
+   * These sections used to call addPage() outright. On a landscape sheet — 183mm of
+   * usable height — a three-row schedule table then had a page to itself and the rest
+   * of the sheet went blank, six times over. `need` is the heading plus enough of
+   * what follows that a title is never left stranded at the foot of a page.
+   */
+  const startSection = (need: number) => {
+    // Pick up from the bottom of the last table. Several of these sections end with an
+    // autoTable and never move y past it — harmless while the next section always took
+    // a fresh page, but it would now print a heading straight over the table above.
+    // Only when that table ended on the page we are on: after a break y is the top
+    // margin of a new page and a finalY from the old one would push it back down.
+    const lastTable = (pdf as any).lastAutoTable;
+    const thisPage = (pdf as any).internal.getCurrentPageInfo().pageNumber;
+    if (lastTable && typeof lastTable.finalY === 'number'
+      && lastTable.pageNumber === thisPage && lastTable.finalY > y) {
+      y = lastTable.finalY;
+    }
+    if (y > mT) y += 8;
+    ensureSpace(need);
+  };
+
   // ── HEADER ────────────────────────────────────────────────────────────────
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
@@ -986,8 +1010,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   }
 
   if (scheduleRows.length > 0) {
-    pdf.addPage();
-    y = mT;
+    startSection(42);
 
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
@@ -1304,8 +1327,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   // "Statutory Escalate Framework & Calculations" panel, with the bill's item
   // numbers listed alongside.
   if (pvc && allComponents.length > 0) {
-    pdf.addPage();
-    y = mT;
+    startSection(58);
 
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
@@ -1458,8 +1480,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   const affectedAverages = quarterlyAverages.filter(qa => usedIndexNames.has(qa.indexName));
 
   if (affectedAverages.length > 0) {
-    pdf.addPage();
-    y = mT;
+    startSection(55);
 
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
@@ -1561,8 +1582,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     // Only show indices that are actually used
     const histFiltered = allHistoricalMonthlyData.filter(d => usedIndexNames.has(d.indexName));
     if (histFiltered.length > 0) {
-      pdf.addPage();
-      y = mT;
+      startSection(55);
 
       pdf.setFontSize(11);
       pdf.setFont('helvetica', 'bold');
@@ -2003,8 +2023,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       && s.months.some(m => m.average != null || m.values.some(v => v != null)));
 
     if (usedBreakdown.length > 0) {
-      pdf.addPage();
-      y = mT;
+      startSection(58);
       drawProformaHeader(
         'AVERAGE JPC STEEL INDICES',
         'Clause 46A.9:(1) Relevant category of steel for the purpose of Price Variation formula as mentioned in this clause. '
@@ -2019,8 +2038,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     } else {
     const steelHist = allHistoricalMonthlyData.filter(d => usedSteelIndexNames.includes(d.indexName));
     if (steelHist.length > 0) {
-      pdf.addPage();
-      y = mT;
+      startSection(55);
       drawProformaHeader(
         'AVERAGE JPC STEEL INDICES',
         'Clause 46A.9:(1) Relevant category of steel for the purpose of Price Variation formula as mentioned in this clause. '
@@ -2098,8 +2116,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       const cityLabel = fuelIndexName === 'MPNG Fuel'
         ? '4-City Average (Delhi, Mumbai, Chennai, Kolkata)'
         : fuelIndexName.replace(/^MPNG Fuel\s*-\s*/i, '');
-      pdf.addPage();
-      y = mT;
+      startSection(55);
       drawProformaHeader(
         'MONTHLY FUEL INDICES (DIESEL)',
         `Average of official Diesel prices published by the Petroleum Planning & Analysis Cell (PPAC). Basis: ${cityLabel}.`,
