@@ -99,7 +99,8 @@ function normalizeExtractedItem(item: any): ExtractedBillItem {
     sourceBook = 'DSR_2021';
   }
 
-  const isCementAffected = item?.isCementAffected === true;
+  const isCementAffected = item?.isCementAffected === true
+    && cementIsSoughtIn(itemNo, sourceBook);
   return {
     dsrCode: String(item?.dsrCode || item?.itemNo || '').trim(),
     itemNo,
@@ -134,20 +135,43 @@ function normalizeExtractedItem(item: any): ExtractedBillItem {
 // '5.35' also covers sub-items like '5.35.1'.
 const CEMENT_SUPPLY_DSR_CODES = ['5.35'];
 
-function isCementSupplyByItemNo(item: ExtractedBillItem): boolean {
-  if (item.sourceBook === 'USSR_2021') return false; // these are CPWD DSR codes
-  const raw = String(item.itemNo || '').replace(/\s+/g, '');
+function matchesCementSupplyCode(itemNo: string): boolean {
+  const raw = String(itemNo || '').replace(/\s+/g, '');
   if (!raw) return false;
   const code = (raw.match(/^\d+(?:\.\d+)*/) || [raw])[0];
   return CEMENT_SUPPLY_DSR_CODES.some(c => code === c || code.startsWith(`${c}.`));
 }
 
+function isCementSupplyByItemNo(item: ExtractedBillItem): boolean {
+  if (item.sourceBook === 'USSR_2021') return false; // these are CPWD DSR codes
+  return matchesCementSupplyCode(item.itemNo);
+}
+
+/**
+ * Whether to look inside this item for cement at all.
+ *
+ * On a CPWD-DSR schedule the only cement the contract pays for in its own right is
+ * the cement-supply item, 5.35. The other DSR rates are composite and their cement
+ * is already carried by the group's own cement percentage under Clause 46A, so
+ * deriving a cement content from them as well pays for the same cement twice.
+ * Outside DSR — USSOR, and non-schedule items quoted by the tenderer — the ordinary
+ * detection still applies.
+ */
+function cementIsSoughtIn(itemNo: string, sourceBook: string): boolean {
+  if (sourceBook !== 'DSR_2021') return true;
+  return matchesCementSupplyCode(itemNo);
+}
+
 function looksLikeDirectCementSupply(item: ExtractedBillItem): boolean {
   if (isCementSupplyByItemNo(item)) return true;
-  const text = `${item.schedule || ''} ${item.scheduleGroup || ''} ${item.description}`;
   const unit = item.unit.trim().toUpperCase().replace(/\s+/g, ' ');
   const isCementUnit = ['MT', 'M.T.', 'TONNE', 'METRIC TONNE', 'METRIC TON', 'BAG', 'BAGS'].includes(unit);
-  return !item.isCementAffected && isCementUnit && /\bcement\b|ordinary portland|OPC\b|PPC\b/i.test(text);
+  // The item's OWN wording has to name cement. The schedule heading used to count
+  // too, and headings name cement in order to EXCLUDE it: schedule A4 of a USSOR
+  // bill reads "Except supply of cement and reinforcement steel", which turned every
+  // MT row beneath it — handling of rails, carting — into a cement supply item.
+  return !item.isCementAffected && isCementUnit
+    && /\bcement\b|ordinary portland|\bOPC\b|\bPPC\b/i.test(item.description || '');
 }
 
 function applyDeterministicClassification(item: ExtractedBillItem, workDescription: string): ExtractedBillItem {
@@ -587,7 +611,8 @@ ${JSON.stringify(payload)}`;
         }
       }
       if (typeof enhancement?.isCementAffected === 'boolean') {
-        original.isCementAffected = enhancement.isCementAffected;
+        original.isCementAffected = enhancement.isCementAffected
+          && cementIsSoughtIn(original.itemNo, original.sourceBook);
       }
       original.requiresDsrCementCoefficient = original.isCementAffected && original.sourceBook !== 'USSR_2021';
       if (typeof enhancement?.isSteelItem === 'boolean') {
@@ -1676,7 +1701,9 @@ export async function POST(request: NextRequest) {
       const dsrCode = normalizeDsrCode(item.dsrCode);
       // A designated cement-supply item is pure cement, not a cement-affected work
       // item, so it must not pick up a cement coefficient or get split.
-      const coefficient = (item.sourceBook !== 'USSR_2021' && !isCementSupplyByItemNo(item))
+      const coefficient = (item.sourceBook !== 'USSR_2021'
+        && !isCementSupplyByItemNo(item)
+        && cementIsSoughtIn(item.itemNo, item.sourceBook))
         ? getCoefficient(dsrCode) : undefined;
 
       if (coefficient) {
