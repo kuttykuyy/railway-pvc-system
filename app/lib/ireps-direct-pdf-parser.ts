@@ -354,12 +354,37 @@ function labelledValue(
       .sort((left, right) => right.x - left.x)[0];
     if (!anchor) continue;
     const anchorX = normalizedX(page, anchor);
+    // How far the row extends, taken from the labels above and below it in the same
+    // label column rather than a fixed distance. The Name of Work cell on a composite
+    // agreement runs to seven or eight wrapped lines, and a fixed window centred on the
+    // label read only the middle of it: "(iii) Provision of CC apron and Complete Track
+    // renewal ... (iv) Improvements to Roller Bearing" — losing "(i) Renewal of roof in
+    // foundry shop" off the top and "(v) Provision of New Painting Shed ... (vi)
+    // Conversion of Existing Class room ... Hostel building" off the bottom. The
+    // classifier then read the work as track and crane rails with the building scope
+    // missing entirely.
+    const labelX = Math.min(...page.items
+      .filter(item => Math.abs(item.y - line.y) <= 2.5)
+      .map(item => normalizedX(page, item)));
+    const labelYs = Array.from(new Set(page.items
+      .filter(item => Math.abs(normalizedX(page, item) - labelX) <= 6 && item.text.trim())
+      .map(item => item.y)));
+    const above = labelYs.filter(y => y < line.y - 4).sort((a, b) => b - a)[0];
+    const below = labelYs.filter(y => y > line.y + 4).sort((a, b) => a - b)[0];
+    // Reach most of the way to the neighbouring label, not half way. Each label is
+    // centred in its own cell, and this cell is far taller than the one above it, so
+    // its first line sits above the midpoint between the two labels — stopping there
+    // still lost it. A quarter of the gap is left as clearance so the neighbour's own
+    // line is never picked up. Where there is no neighbour — the top and bottom of the
+    // form — the old fixed window stands.
+    const clearance = (gap: number) => Math.max(4, gap * 0.25);
+    const top = above !== undefined ? above + clearance(line.y - above) : line.y - 22;
+    const bottom = below !== undefined ? below - clearance(below - line.y) : line.y + 22;
     const value = page.items
       .filter(item => {
         const x = normalizedX(page, item);
-        // Its own value column only, and near enough in y to belong to this label
-        // rather than the header rows above or below it.
-        return x > anchorX + 20 && x < anchorX + columnWidth && Math.abs(item.y - line.y) <= 22;
+        // Its own value column, and within its own row of the form.
+        return x > anchorX + 20 && x < anchorX + columnWidth && item.y > top && item.y < bottom;
       })
       .sort((left, right) => left.y - right.y || normalizedX(page, left) - normalizedX(page, right))
       .map(item => item.text.trim())
@@ -367,7 +392,11 @@ function labelledValue(
       .join(' ')
       .replace(/\s+/g, ' ')
       .trim();
-    if (value) return value.slice(0, 200);
+    // A Name of Work that lists six sub-works runs past 200 characters and was being
+    // cut there, dropping the last scopes it names — which are the ones the classifier
+    // needs. Long enough for the longest of these; still bounded so a misread column
+    // cannot pull a whole page into a metadata field.
+    if (value) return value.slice(0, 1200);
   }
   return '';
 }
