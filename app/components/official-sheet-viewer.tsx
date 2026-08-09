@@ -126,6 +126,21 @@ const DEFAULT_FRAME: TableFrame = { x0: 0.152, y0: 0.300, x1: 0.902, y1: 0.878 }
 
 const frameStorageKey = (sheetId: string) => `jpc-frame:${sheetId}`;
 
+/**
+ * A file's own months, for the file picker: "Jan–Jun" when they run together, the list
+ * when they do not. A year is often uploaded in more than one PDF, and "which file am I
+ * looking at" is only answerable in terms of the months inside it.
+ */
+function monthRangeLabel(months: number[], fallback: string) {
+  const sorted = [...(months || [])].sort((a, b) => a - b);
+  if (sorted.length === 0) return fallback.replace(/\.pdf$/i, '').slice(0, 18);
+  const contiguous = sorted.every((m, i) => i === 0 || m === sorted[i - 1] + 1);
+  if (sorted.length === 1) return MONTH_NAMES[sorted[0] - 1];
+  return contiguous
+    ? `${MONTH_NAMES[sorted[0] - 1]}–${MONTH_NAMES[sorted[sorted.length - 1] - 1]}`
+    : sorted.map(m => MONTH_NAMES[m - 1]).join(', ');
+}
+
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const PAGES_PER_FORTNIGHT = 3;
 const PAGES_PER_MONTH = PAGES_PER_FORTNIGHT * 2;
@@ -448,6 +463,30 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
 
           {pdf && (
             <div className="space-y-3">
+              {/* A year is often uploaded as more than one PDF. Only the first was ever
+                  opened, so months living in a second file simply could not be reached —
+                  pick the file here, then the month within it. */}
+              {sheets.length > 1 && (
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  <span className="text-xs text-gray-500 mr-1">File:</span>
+                  {sheets.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => loadSheet(s)}
+                      disabled={isLoading}
+                      className={`px-2 py-1 rounded text-xs border ${
+                        currentSheetId === s.id
+                          ? 'bg-slate-700 text-white border-slate-700'
+                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      } disabled:opacity-50`}
+                      title={s.fileName}
+                    >
+                      {monthRangeLabel(s.months, s.fileName)}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Month chips — switching months re-slices the already-loaded year. */}
               {sliced && (
                 <div className="flex flex-wrap items-center justify-center gap-1.5">

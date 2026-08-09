@@ -78,8 +78,12 @@ export async function GET(request: NextRequest) {
     if (!byPath.has(doc.cloudStoragePath)) byPath.set(doc.cloudStoragePath, doc);
   }
   const unique = [...byPath.values()];
+  // Every file the year holds, with the one covering the asked-for month first so it
+  // opens by default. Returning ONLY the covering file hid the rest from the viewer's
+  // file picker, which is how months living in a second upload became unreachable.
   const covering = unique.filter((d) => d.months.includes(month));
-  const offered = (covering.length ? covering : unique).map((d) => ({
+  const others = unique.filter((d) => !d.months.includes(month));
+  const offered = [...covering, ...others].map((d) => ({
     id: d.id,
     fileName: d.fileName,
     months: d.months,
