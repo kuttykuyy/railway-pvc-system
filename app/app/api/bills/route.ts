@@ -109,6 +109,8 @@ export async function GET(request: NextRequest) {
                   id: true,
                   agreementNo: true,
                   contractorName: true,
+                  // The card offers a tap-to-call link; without this it had a name and no way to use it.
+                  contractorPhone: true,
                   workDescription: true,
                   isExtended: true,
                   extensionType: true,

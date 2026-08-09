@@ -28,6 +28,7 @@ import {
   TrendingUp,
   X,
   Zap,
+  Phone,
 } from 'lucide-react';
 
 import { PostingDetailsNotice } from '@/components/posting-details-notice';
@@ -66,6 +67,7 @@ interface Contract {
   id: string;
   agreementNo: string;
   contractorName: string;
+  contractorPhone: string | null;
   workDescription: string;
   dateOfOpening: string | Date;
   baseMonth: string | Date;
@@ -686,6 +688,18 @@ export default function ContractsPage() {
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Contractor</p>
                       <p className="mt-0.5 truncate text-sm font-semibold text-slate-800">{contract.contractorName}</p>
+                      {/* Tap to call. The number is the reason anyone opens a contractor's
+                          record, and it sat one screen further in. */}
+                      {contract.contractorPhone && (
+                        <a
+                          href={`tel:${contract.contractorPhone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800 hover:underline"
+                        >
+                          <Phone className="h-3 w-3" />
+                          {contract.contractorPhone}
+                        </a>
+                      )}
                     </div>
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Value</p>

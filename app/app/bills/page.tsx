@@ -2164,9 +2164,21 @@ export default function BillsPage() {
                             <Building2 className="h-4 w-4 text-slate-400 flex-shrink-0" />
                             <span className="font-medium text-slate-700 dark:text-slate-200">{bill.contract?.agreementNo}</span>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <User className="h-4 w-4 text-slate-400 flex-shrink-0" />
                             <span className="font-semibold text-slate-800 dark:text-slate-100">{bill.contract?.contractorName}</span>
+                            {/* Tap to call: the number is why anyone looks a contractor up
+                                from a bill, and it was a copy-paste away on another screen. */}
+                            {bill.contract?.contractorPhone && (
+                              <a
+                                href={`tel:${bill.contract.contractorPhone}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800 hover:underline dark:text-emerald-400"
+                              >
+                                <Phone className="h-3 w-3" />
+                                {bill.contract.contractorPhone}
+                              </a>
+                            )}
                           </div>
                           <div className="flex items-start gap-2">
                             <FileText className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
