@@ -28,6 +28,10 @@ export interface ExtractedAgreement {
   /** What kind of railway document this is — used to tell an agreement from a bill. */
   documentType: 'agreement' | 'bill' | 'other';
   schedules: ExtractedSchedule[];
+  /** The single overall tender percentage: above = +, below = -, at par = 0. */
+  acceptedPercentage: number | null;
+  /** A separately stated rebate %, positive. Not the same as a below-estimate offer. */
+  rebatePercentage: number | null;
   agreementNo: string | null;
   loaNo: string | null;
   loaDate: string | null;
@@ -154,7 +158,9 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   "agreementAmount": "LOA Amount / accepted contract value (number)",
   "railwayName": "Railway zone name (e.g. Southern Railway)",
   "division": "Division/Unit (e.g. Tiruchchirappalli / TPJ)",
-  "schedules": "Array of the work schedules / schedule items listed in the agreement (e.g. Schedule-A, Schedule-B, or named item groups). For each, return {\"name\": \"schedule name/title\", \"escalation\": \"escalation % if a per-schedule escalation percentage is stated, else null\", \"bidRate\": \"tender/bid rate % above(+) or below(-) the estimate if stated for that schedule, else null\"}. Return [] if no schedules are listed."
+  "schedules": "Array of the work schedules / schedule items listed in the agreement (e.g. Schedule-A, Schedule-B, or named item groups). For each, return {\"name\": \"schedule name/title\", \"escalation\": \"escalation % if a per-schedule escalation percentage is stated, else null\", \"bidRate\": \"tender/bid rate % above(+) or below(-) the estimate if stated for that schedule, else null\"}. Return [] if no schedules are listed.",
+  "acceptedPercentage": "The ONE overall tender percentage the offer was accepted at, as a number: ABOVE the estimate is POSITIVE, BELOW is NEGATIVE, 'at par' is 0. A Letter of Acceptance states this in a sentence rather than a table — 'your offer ... at 5.75% below the estimated cost is accepted' -> -5.75; 'quoted 3% excess' -> 3; '(-)7.5%' -> -7.5; 'at par' -> 0. Words to read as BELOW: below, less, discount, rebate, minus, (-). Words to read as ABOVE: above, excess, over, plus, (+). Return null if no such percentage is stated anywhere.",
+  "rebatePercentage": "Any separately stated REBATE % (a discount on the accepted rates, sometimes offered in a later letter), as a positive number. Null if the document states no separate rebate. Do NOT repeat acceptedPercentage here — a below-estimate offer is not a rebate."
 }`;
 
   const messages = [
@@ -230,6 +236,28 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   // Normalise the extracted schedules to { name, escalation, bidRate } strings and
   // drop any without a name, so the form can drop them straight into its schedule rows.
   const asStr = (v: any) => (v === null || v === undefined ? '' : String(v).trim());
+  /**
+   * A percentage as printed on a letter, to a signed number.
+   *
+   * "at par" is a real answer meaning zero, and must not become null — null says
+   * "nothing stated", which sends the reader hunting through the LOA for a figure that
+   * is not there. "(-)5.75" and "5.75% below" are the same number.
+   */
+  const parsePercent = (raw: unknown): number | null => {
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === 'number') return isFinite(raw) ? raw : null;
+    const text = String(raw).trim().toLowerCase();
+    if (!text) return null;
+    if (/ats*par/.test(text)) return 0;
+    const digits = text.match(/-?d+(?:.d+)?/);
+    if (!digits) return null;
+    let value = parseFloat(digits[0]);
+    if (!isFinite(value)) return null;
+    const saysBelow = /below|less|discount|rebate|minus|(s*-s*)|(^|[^d])-/.test(text);
+    if (saysBelow) value = -Math.abs(value);
+    return value;
+  };
+
   const schedules: ExtractedSchedule[] = Array.isArray(extracted.schedules)
     ? extracted.schedules
         .map((s: any) => ({
@@ -249,6 +277,10 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
     data: {
       documentType,
       schedules,
+      // Percentages arrive as "5.75", "(-)5.75", "-5.75 %" or "at par" depending on the
+      // letter; keep the sign, drop everything else.
+      acceptedPercentage: parsePercent(extracted.acceptedPercentage),
+      rebatePercentage: parsePercent(extracted.rebatePercentage),
       agreementNo: extracted.agreementNo ?? null,
       loaNo: extracted.loaNo ?? null,
       loaDate: extracted.loaDate ?? null,

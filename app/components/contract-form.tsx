@@ -37,6 +37,7 @@ interface ContractFormProps {
     dateOfOpening: string;
     tenderAdvertisedValue?: number;
     rebatePercentage?: number;
+    acceptedPercentage?: number;
     contractValue?: number;
     completionPeriodMonths?: number;
     hasRailwaySuppliedMaterials?: boolean;
@@ -186,9 +187,27 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
       ...updates
     }));
 
+    // A separately stated rebate, if the letter carries one.
+    if (typeof data.rebatePercentage === 'number') {
+      updates.rebatePercentage = String(data.rebatePercentage);
+    }
+
     // Fill the schedule rows from the agreement (name + per-schedule escalation/bid).
     if (Array.isArray(data.schedules) && data.schedules.length > 0) {
-      setSchedules(normalizeSchedules(data.schedules));
+      const filled = normalizeSchedules(data.schedules);
+      // An LOA states ONE accepted percentage in a sentence instead of a per-schedule
+      // table, so a schedule row can arrive with a name and no figure. Give those rows
+      // the overall percentage rather than leaving the reader to copy it in by hand.
+      if (typeof data.acceptedPercentage === 'number') {
+        for (const row of filled) {
+          if (!row.bidRate?.trim()) row.bidRate = String(data.acceptedPercentage);
+        }
+      }
+      setSchedules(filled);
+    } else if (typeof data.acceptedPercentage === 'number') {
+      // No schedule table at all — the usual shape of a Letter of Acceptance. Carry the
+      // accepted percentage on a single row so it is not silently dropped.
+      setSchedules([{ ...emptySchedule('As per LOA'), bidRate: String(data.acceptedPercentage) }]);
     }
 
     // Clear any existing field errors for updated fields
