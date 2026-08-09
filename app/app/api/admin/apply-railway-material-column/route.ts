@@ -28,6 +28,18 @@ interface PendingColumn {
 const PENDING: PendingColumn[] = [
   {
     table: 'bills',
+    column: 'createdVia',
+    ddlType: 'TEXT',
+    why: 'Whether the bill was typed in, read from a PDF, or sent through Telegram — the app priced on this fact and then forgot it.',
+  },
+  {
+    table: 'contracts',
+    column: 'createdVia',
+    ddlType: 'TEXT',
+    why: 'Whether the agreement was typed in or filled by reading the agreement PDF.',
+  },
+  {
+    table: 'bills',
     column: 'railwaySuppliedMaterialValue',
     ddlType: 'DOUBLE PRECISION DEFAULT 0',
     why: 'GCC-2022 Cl.46A excludes railway-supplied material from the PVC base (W).',
