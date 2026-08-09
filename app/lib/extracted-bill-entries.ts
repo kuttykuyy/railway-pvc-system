@@ -35,6 +35,21 @@ export interface ExtractedItemRow {
   itemNumber: string;
   quantity: number | string | '';
   agreementRate: number | string | '';
+  /**
+   * What this item is, kept per row.
+   *
+   * Items sharing a classification are merged into one entry, and the entry then
+   * carries the sub-work's name and the first item's justification. Everything that
+   * told the five items apart was dropped on the way — so a schedule of ballast,
+   * track-lifting and rail-laying showed as one line reading "Provision of CC apron and
+   * Complete Track renewal", with no way to see what each number was for.
+   */
+  description?: string;
+  /** Which page of the bill PDF it was read from. */
+  pageNumber?: number;
+  /** Set when the wording was completed from a published schedule of rates. */
+  rateBookEdition?: string;
+  rateBookCode?: string;
   /** Cement rows carry their derivation so the report can print the working. */
   sourceQty?: number;
   coefficient?: number;
@@ -160,7 +175,15 @@ export function buildClassificationEntriesFromExtractedBill(
               itemNumber: item.itemNo || '',
               quantity: qty || '',
               agreementRate: netRate,
-              itemRows: [{ itemNumber: item.itemNo || '', quantity: qty || '', agreementRate: netRate }],
+              itemRows: [{
+                itemNumber: item.itemNo || '',
+                quantity: qty || '',
+                agreementRate: netRate,
+                description: item.description || '',
+                pageNumber: (item as any).pageNumber,
+                rateBookEdition: (item as any).rateBookEdition,
+                rateBookCode: (item as any).rateBookCode,
+              }],
               classificationJustification: item.suggestedClassificationReason || '',
               aiReviewed: !!item.classificationReviewedByAi,
             },
@@ -181,6 +204,8 @@ export function buildClassificationEntriesFromExtractedBill(
                 itemNumber: item.itemNo ? `${item.itemNo}-CEM` : 'CEM',
                 quantity: cementQty || '',
                 agreementRate: cementRate,
+                description: item.description || '',
+                pageNumber: (item as any).pageNumber,
                 // Keep the derivation with the row so the report prints the working.
                 sourceQty: item.cementSourceQty,
                 coefficient: item.cementCoefficient,
@@ -213,7 +238,15 @@ export function buildClassificationEntriesFromExtractedBill(
         itemNumber,
         quantity: itemQuantity,
         agreementRate: itemRate,
-        itemRows: specialConditionOnly ? [] : [{ itemNumber, quantity: itemQuantity, agreementRate: itemRate }],
+        itemRows: specialConditionOnly ? [] : [{
+          itemNumber,
+          quantity: itemQuantity,
+          agreementRate: itemRate,
+          description: item.description || '',
+          pageNumber: (item as any).pageNumber,
+          rateBookEdition: (item as any).rateBookEdition,
+          rateBookCode: (item as any).rateBookCode,
+        }],
         classificationJustification: item.suggestedClassificationReason || '',
         aiReviewed: !!item.classificationReviewedByAi,
       },

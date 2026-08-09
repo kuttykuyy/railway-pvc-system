@@ -67,19 +67,40 @@ export async function GET() {
     available: BOOKS.map(book => ({ edition: book.edition, items: book.items.length, source: book.source })),
     loaded: ready ? await countByEdition() : [],
     message: ready
-      ? 'Send a POST to load or refresh the schedule.'
-      : 'The dsr_items table does not exist yet — apply the pending database change first.',
+      ? 'Send a POST to load or refresh the schedules.'
+      : 'Nothing loaded yet. A POST creates the table and loads the books.',
   });
 }
 
 export async function POST() {
   const auth = await requireAdmin();
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  // Create the table here rather than depend on the pending-changes page. That page
+  // applies the same DDL, but it decides what to offer from what is missing, and a
+  // deploy landing between the two left this endpoint waiting on a button that had
+  // nothing to say. The statement is additive and safe to run twice, and this route is
+  // already admin-only, so the importer owns the table it writes to.
   if (!await tableExists()) {
-    return NextResponse.json(
-      { error: 'The dsr_items table does not exist yet. Apply the pending database change first.' },
-      { status: 409 },
-    );
+    try {
+      await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "dsr_items" (
+        "edition" TEXT NOT NULL,
+        "code" TEXT NOT NULL,
+        "subHead" TEXT NOT NULL,
+        "subHeadName" TEXT NOT NULL,
+        "description" TEXT NOT NULL,
+        "unit" TEXT NOT NULL DEFAULT '',
+        "rate" DOUBLE PRECISION,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "dsr_items_pkey" PRIMARY KEY ("edition", "code")
+      )`);
+      await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "dsr_items_code_idx" ON "dsr_items" ("code")');
+    } catch (error: any) {
+      console.error('could not create dsr_items:', error);
+      return NextResponse.json(
+        { error: `The dsr_items table could not be created: ${error?.message || 'unknown error'}` },
+        { status: 500 },
+      );
+    }
   }
 
   try {

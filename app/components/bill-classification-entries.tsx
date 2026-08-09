@@ -44,6 +44,17 @@ interface ItemRow {
   itemNumber: string;
   quantity: number | string | '';
   agreementRate: number | string | '';
+  /**
+   * What this item is. Items sharing a classification merge into one entry, and the
+   * entry then shows the sub-work's name — so five rows of ballast, track-lifting and
+   * rail-laying all read "Provision of CC apron and Complete Track renewal" with
+   * nothing to say what each figure was for.
+   */
+  description?: string;
+  /** Which page of the bill PDF this row was read from. */
+  pageNumber?: number;
+  rateBookEdition?: string;
+  rateBookCode?: string;
 }
 
 interface ClassificationEntry {
@@ -904,7 +915,8 @@ export function BillClassificationEntries({
                     // Show the same GST basis as the entry amount, so the row maths ties out.
                     const calculated = rowsTotal([row]);
                     return (
-                      <div key={rowIndex} className="grid gap-2 sm:grid-cols-[minmax(90px,0.7fr)_minmax(100px,1fr)_24px_minmax(120px,1fr)_minmax(110px,0.8fr)_32px] sm:items-center">
+                      <div key={rowIndex} className="space-y-1">
+                      <div className="grid gap-2 sm:grid-cols-[minmax(90px,0.7fr)_minmax(100px,1fr)_24px_minmax(120px,1fr)_minmax(110px,0.8fr)_32px] sm:items-center">
                         <Input
                           disabled={locked}
                           value={row.itemNumber || ''}
@@ -931,7 +943,8 @@ export function BillClassificationEntries({
                           placeholder="Agreement rate"
                           className="h-9 bg-white text-sm"
                         />
-                        <div className="flex h-9 items-center justify-end rounded-md bg-slate-50 px-3 text-sm font-medium text-slate-700">
+                        <div className="flex h-9 items-center justify-end rounded-md bg-slate-50 px-3 text-sm font-medium text-slate-700"
+                          title={row.description || undefined}>
                           {calculated > 0 ? `Rs ${formatMoney(calculated)}` : '-'}
                         </div>
                         {rows.length > 1 ? (
@@ -948,6 +961,24 @@ export function BillClassificationEntries({
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         ) : <span />}
+                      </div>
+                      {/* What this particular item is. The entry above it names the
+                          sub-work, which is the same sentence for every row under it. */}
+                      {(row.description || row.pageNumber) && (
+                        <div className="flex flex-wrap items-baseline gap-x-2 pl-1 text-[11px] leading-snug text-slate-500">
+                          {row.pageNumber ? (
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-600">
+                              bill p.{row.pageNumber}
+                            </span>
+                          ) : null}
+                          {row.rateBookEdition ? (
+                            <span className="text-sky-600" title="The bill prints only this sub-item's own line; the rest is the schedule's wording.">
+                              {row.rateBookEdition} {row.rateBookCode}
+                            </span>
+                          ) : null}
+                          <span className="flex-1 min-w-[200px]">{row.description}</span>
+                        </div>
+                      )}
                       </div>
                     );
                   })}
