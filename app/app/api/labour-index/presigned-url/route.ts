@@ -99,6 +99,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // Admins only — an upload URL for the official index sheets is an admin act; any
+    // signed-in user could otherwise write into the bucket without limit.
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     // Check if S3 is active
     if (!isS3Configured()) {
       return NextResponse.json({ 

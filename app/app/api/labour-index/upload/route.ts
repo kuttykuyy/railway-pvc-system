@@ -33,6 +33,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Admins only. These documents are the official index sheets every user's bills are
+    // verified against — an open door here lets any signed-in contractor register a
+    // forged "official" sheet that the viewer and every bill then present as authority.
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const cloudStoragePathParam = formData.get("cloudStoragePath") as string | null;
@@ -114,6 +121,16 @@ export async function POST(request: NextRequest) {
     let remarksValue: string | undefined = undefined;
 
     if (cloudStoragePathParam) {
+      // Only keys the upload flow itself mints. A verbatim client key let a caller
+      // register ANY object in the bucket under their own name and then collect a
+      // signed URL for it from the viewer route — the per-document owner check
+      // defeated by naming someone else's object at registration time.
+      if (!/^component-indices\/[a-z0-9_-]+\/[A-Za-z0-9._-]+\.pdf$/i.test(cloudStoragePathParam)) {
+        return NextResponse.json(
+          { error: "cloudStoragePath must be a component-indices key issued by the upload flow" },
+          { status: 400 }
+        );
+      }
       cloudStoragePath = cloudStoragePathParam;
       fileName = cloudStoragePathParam.split("/").pop() || `${folderName}-${year}-${months.join("-")}.pdf`;
     } else if (file) {

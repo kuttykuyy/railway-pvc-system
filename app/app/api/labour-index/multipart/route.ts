@@ -34,6 +34,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // Admins only, same as the single-shot presigned route — chunked writes into the
+    // official sheets bucket are no less an admin act for arriving in parts.
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     if (!isS3Configured()) {
       return NextResponse.json({
         s3Available: false,
@@ -43,6 +49,12 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const action = body.action as string;
+
+    // Every action after 'create' takes a key from the client; none may reach outside
+    // the folder 'create' mints keys in. Defense in depth beside the uploadId secrecy.
+    if (body.key && !String(body.key).startsWith('component-indices/')) {
+      return NextResponse.json({ error: 'key must be a component-indices path' }, { status: 400 });
+    }
 
     if (action === "create") {
       const { fileType, year, months } = body;

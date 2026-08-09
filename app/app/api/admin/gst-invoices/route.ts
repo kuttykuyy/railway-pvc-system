@@ -218,6 +218,13 @@ export async function POST(request: NextRequest) {
           razorpayOrderId: tx.orderId,
           razorpayPaymentId: tx.razorpayPaymentId || tx.orderId,
         });
+        // Two admins clicking at the same moment both find nothing and both create —
+        // collapse any duplicates immediately, keeping the oldest.
+        const { dedupeZohoInvoicesByReference } = await import('@/lib/zoho-books');
+        const dedupe = await dedupeZohoInvoicesByReference(tx.orderId).catch(() => ({ deleted: 0 }));
+        if (dedupe.deleted > 0) {
+          logger.log(`[Admin GST Invoices] Removed ${dedupe.deleted} duplicate Zoho invoice(s) for ${tx.orderId}`);
+        }
         logger.log(`[Admin GST Invoices] Zoho invoice ${created.invoiceNumber} pushed by ${admin.email} for app invoice ${appInvoice.invoiceNumber}`);
         return NextResponse.json({
           success: true,
@@ -292,6 +299,8 @@ export async function POST(request: NextRequest) {
           razorpayOrderId: transaction.orderId,
           razorpayPaymentId: transaction.razorpayPaymentId || transaction.orderId,
         });
+        const { dedupeZohoInvoicesByReference } = await import('@/lib/zoho-books');
+        await dedupeZohoInvoicesByReference(transaction.orderId).catch(() => ({}));
         zoho = { pushed: true, detail: `Zoho invoice ${created.invoiceNumber} created` };
       }
     } catch (zohoError: any) {

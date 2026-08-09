@@ -284,3 +284,42 @@ export async function findZohoInvoiceByReference(razorpayOrderId: string): Promi
   const invoice = data.invoices?.[0];
   return invoice ? { invoiceId: invoice.invoice_id, invoiceNumber: invoice.invoice_number } : null;
 }
+
+/**
+ * Collapse duplicate Zoho invoices for one payment down to one.
+ *
+ * "Look, then create" has a gap: two admins clicking Push at the same moment both find
+ * nothing and both create, and Zoho's reference number is not a unique key — the ledger
+ * and the GSTR-1 silently double. Nothing in Zoho closes that gap, so it is closed from
+ * behind: after any create, list what the reference now holds, keep the OLDEST invoice
+ * id, and delete the rest. Both racers run this and reach the same verdict, because the
+ * ordering is by id, not by who asks; deleting an invoice the other racer already
+ * deleted just fails quietly.
+ */
+export async function dedupeZohoInvoicesByReference(razorpayOrderId: string): Promise<{ kept?: string; deleted: number }> {
+  const token = await getAccessToken();
+  const res = await fetch(
+    `${ZOHO_API_BASE}/invoices?organization_id=${ORG_ID}&reference_number=${encodeURIComponent(razorpayOrderId)}`,
+    { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+  );
+  const data = await res.json();
+  const invoices: any[] = data.invoices || [];
+  if (invoices.length <= 1) return { kept: invoices[0]?.invoice_number, deleted: 0 };
+
+  const sorted = [...invoices].sort((a, b) => String(a.invoice_id).localeCompare(String(b.invoice_id)));
+  const keep = sorted[0];
+  let deleted = 0;
+  for (const extra of sorted.slice(1)) {
+    try {
+      const del = await fetch(
+        `${ZOHO_API_BASE}/invoices/${extra.invoice_id}?organization_id=${ORG_ID}`,
+        { method: 'DELETE', headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+      );
+      const delData = await del.json().catch(() => ({}));
+      if (del.ok && delData.code === 0) deleted++;
+    } catch {
+      // The other racer may have deleted it first — the outcome is the same.
+    }
+  }
+  return { kept: keep.invoice_number, deleted };
+}

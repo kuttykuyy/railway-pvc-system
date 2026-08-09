@@ -235,14 +235,26 @@ export async function embedComponentIndicesRange(
     }
 
     // Deduplicate by cloud storage path to avoid embedding the same physical document multiple times
-    // This handles cases where the same JPC document might be referenced under different component types
+    // This handles cases where the same JPC document might be referenced under different component types.
+    //
+    // A path shared across records with DIFFERENT year/month tags (one straddling PDF
+    // registered under two years, say) is marked slice-unsafe: the kept record's tags
+    // speak for only part of the file, and slicing by them would cut away the other
+    // record's pages while the selection logic believes them covered. Such documents
+    // attach whole — attach-whole is what made path sharing harmless before slicing.
     const documentsByPath = new Map<string, any>();
     for (const doc of uniqueDocuments) {
-      if (!documentsByPath.has(doc.cloudStoragePath)) {
+      const kept = documentsByPath.get(doc.cloudStoragePath);
+      if (!kept) {
         documentsByPath.set(doc.cloudStoragePath, doc);
+      } else if (
+        kept.year !== doc.year ||
+        JSON.stringify([...(kept.months || [])].sort()) !== JSON.stringify([...(doc.months || [])].sort())
+      ) {
+        kept.sliceUnsafe = true;
       }
     }
-    
+
     const deduplicatedDocuments = Array.from(documentsByPath.values());
     logger.log(`Found ${uniqueDocuments.length} total documents, ${deduplicatedDocuments.length} unique by file (deduped by cloud storage path)`);
 
@@ -291,12 +303,19 @@ export async function embedComponentIndicesRange(
           // trusted only when the page count fits the rhythm exactly; a document that
           // does not fit attaches whole, since slicing it would put the WRONG months
           // into a legal document while labelling them as the right ones.
-          if (JPC_SHEET_TYPES.includes(doc.componentType) && yearInRange && usedMonths.length) {
+          // Whether this document's pages are known to follow the six-per-month rhythm.
+          // The marker leans on that rhythm (every third page carries the 24-item
+          // table); on a document that does not fit, the same stride lands on the
+          // items-25-34 page or the disclaimer and boxes the wrong rows — so marking is
+          // only allowed when the rhythm held, or the document is a single sheet.
+          let jpcRhythmKnown = false;
+          if (JPC_SHEET_TYPES.includes(doc.componentType) && yearInRange && usedMonths.length && !doc.sliceUnsafe) {
             try {
               const PAGES_PER_MONTH = 6;
               const docMonths: number[] = [...(doc.months || [])].sort((a: number, b: number) => a - b);
               const src = await PDFDocument.load(indexBytes);
               const fitsRhythm = docMonths.length > 0 && src.getPageCount() === docMonths.length * PAGES_PER_MONTH;
+              jpcRhythmKnown = fitsRhythm || src.getPageCount() === 1;
               const wanted = usedMonths.filter(m => docMonths.includes(m));
               if (fitsRhythm && wanted.length > 0 && wanted.length < docMonths.length) {
                 const slicedDoc = await PDFDocument.create();
@@ -325,19 +344,22 @@ export async function embedComponentIndicesRange(
           // exactly when its own revision dates fall in the used months. Anything
           // unreadable or fully-used attaches whole. Imported lazily — this is the one
           // path that needs text extraction, and it should cost nothing when unused.
-          if (doc.componentType === ComponentType.MPNG_FUEL && yearInRange && usedMonths.length) {
+          if (doc.componentType === ComponentType.MPNG_FUEL && yearInRange && usedMonths.length && !doc.sliceUnsafe) {
             try {
               const { sliceFuelSheetByMonths } = await import('./fuel-sheet-slicer');
-              const result = await sliceFuelSheetByMonths(new Uint8Array(indexBytes), {
-                year: docYear,
-                months: usedMonths,
-              });
+              // The window spans the BILL's whole period, not this document's year:
+              // revision runs cross year boundaries, and the figure governing the first
+              // days of the base month sits on the last revision BEFORE it — the window
+              // opens 45 days early to keep the page that carries it.
+              const windowStart = new Date(Date.UTC(startDate.getFullYear(), startDate.getMonth(), 1) - 45 * 86400000);
+              const windowEnd = new Date(Date.UTC(endDate.getFullYear(), endDate.getMonth() + 1, 0, 23, 59, 59));
+              const result = await sliceFuelSheetByMonths(new Uint8Array(indexBytes), { windowStart, windowEnd });
               if (result.sliced) {
                 indexBytes = result.bytes.buffer.slice(
                   result.bytes.byteOffset,
                   result.bytes.byteOffset + result.bytes.byteLength,
                 ) as ArrayBuffer;
-                console.log(`Sliced MPNG_FUEL ${docYear} to months ${usedMonths.join(',')} — kept ${result.keptPages} of ${result.totalPages} pages`);
+                console.log(`Sliced MPNG_FUEL ${docYear} to ${windowStart.toISOString().slice(0, 10)}..${windowEnd.toISOString().slice(0, 10)} — kept ${result.keptPages} of ${result.totalPages} pages`);
               } else {
                 console.log(`MPNG_FUEL ${docYear} attached whole (${result.reason})`);
               }
@@ -369,7 +391,7 @@ export async function embedComponentIndicesRange(
             }
           }
 
-          if (jpcCity && JPC_SHEET_TYPES.includes(doc.componentType)) {
+          if (jpcCity && JPC_SHEET_TYPES.includes(doc.componentType) && jpcRhythmKnown) {
             try {
               const marked = await highlightJpcSheet(new Uint8Array(indexBytes), {
                 city: jpcCity as any,
@@ -389,6 +411,8 @@ export async function embedComponentIndicesRange(
             } catch (markError) {
               console.error('JPC marking failed, attaching the sheet as it is:', markError);
             }
+          } else if (jpcCity && JPC_SHEET_TYPES.includes(doc.componentType)) {
+            console.log(`JPC marks skipped for ${doc.componentType} ${doc.displayYear || doc.year} — page rhythm unknown, marking by position would risk boxing the wrong rows`);
           }
 
           // Load component index PDF
