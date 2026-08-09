@@ -775,41 +775,45 @@ export default function ComponentDocumentsPage() {
         toast.dismiss(presignedToastId);
       }
 
-      // Step 2: Handle PDF compression/optimization
+      // Step 2: compress ONLY when the file must travel through our own server.
+      //
+      // Compression exists for exactly one reason: Vercel caps a request body at 4.5 MB,
+      // and the database fallback posts the file to our API. A direct-to-storage upload
+      // never touches that cap — so compressing there was quality thrown away for
+      // nothing, and these are photocopier scans where the lost pixels are the ones that
+      // keep a 6 apart from an 8. Full quality now goes straight up whenever storage is
+      // reachable, whatever the size.
       if (selectedFile.size > LIMIT_BYTES) {
-        const toastId = toast.loading("Optimizing PDF size client-side...");
-        try {
-          const optimization = await optimizeAndCompressPdf(selectedFile, s3Available, (msg) => {
-            toast.loading(msg, { id: toastId });
-          });
-          
-          if (optimization.success && optimization.file.size <= LIMIT_BYTES) {
-            fileToUpload = optimization.file;
-            const originalMB = (optimization.originalSize / (1024 * 1024)).toFixed(2);
-            const compressedMB = (optimization.compressedSize / (1024 * 1024)).toFixed(2);
-            toast.dismiss(toastId);
-            toast.success(`PDF successfully optimized from ${originalMB} MB to ${compressedMB} MB`);
-          } else {
-            const finalMB = (optimization.compressedSize / (1024 * 1024)).toFixed(2);
-            toast.dismiss(toastId);
-            
-            if (s3Available) {
+        if (s3Available) {
+          const originalMB = (selectedFile.size / (1024 * 1024)).toFixed(2);
+          toast.success(`Uploading at full quality (${originalMB} MB) — cloud storage takes the original.`);
+        } else {
+          const toastId = toast.loading("Cloud storage is off — squeezing the PDF to fit the 4.5 MB request limit...");
+          try {
+            const optimization = await optimizeAndCompressPdf(selectedFile, s3Available, (msg) => {
+              toast.loading(msg, { id: toastId });
+            });
+
+            if (optimization.success && optimization.file.size <= LIMIT_BYTES) {
               fileToUpload = optimization.file;
-              toast.success(`PDF compression completed (${finalMB} MB). Uploading directly to cloud storage...`);
+              const originalMB = (optimization.originalSize / (1024 * 1024)).toFixed(2);
+              const compressedMB = (optimization.compressedSize / (1024 * 1024)).toFixed(2);
+              toast.dismiss(toastId);
+              toast.success(`PDF compressed from ${originalMB} MB to ${compressedMB} MB to fit database storage`);
             } else {
+              const finalMB = (optimization.compressedSize / (1024 * 1024)).toFixed(2);
+              toast.dismiss(toastId);
               toast.error(
-                `Vercel enforces a strict 4.5 MB request payload limit. Your file size is ${finalMB} MB (after browser optimization). Please compress your PDF using an online tool (e.g. Smallpdf) to get it below 3.3 MB before uploading.`,
+                `Cloud storage is off, so the file must fit Vercel's 4.5 MB request limit — it is ${finalMB} MB even after squeezing. Fix cloud storage (Test storage now), or compress the PDF below 3.3 MB first.`,
                 { duration: 10000 }
               );
               setIsUploading(false);
               return;
             }
-          }
-        } catch (compressErr) {
-          console.error("Compression failed:", compressErr);
-          toast.dismiss(toastId);
-          if (!s3Available) {
-            toast.error("Compression failed. Raw file is too large for database storage.");
+          } catch (compressErr) {
+            console.error("Compression failed:", compressErr);
+            toast.dismiss(toastId);
+            toast.error("Compression failed, and cloud storage is off — the raw file is too large for database storage.");
             setIsUploading(false);
             return;
           }
