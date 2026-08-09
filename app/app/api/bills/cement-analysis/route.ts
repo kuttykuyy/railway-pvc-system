@@ -596,6 +596,11 @@ interface HybridAiEnhancementStatus {
 
 function needsDescriptionRepair(item: ExtractedBillItem) {
   const description = String(item.description || '').trim();
+  // A description read out of the published schedule of rates is the wording of record.
+  // A model must never rewrite it — a low-confidence row could otherwise have the
+  // book's own words replaced by paraphrase, and the classification that follows would
+  // rest on something no document says.
+  if (item.rateBookEdition && description.length >= 24) return false;
   return item.confidence === 'low'
     || description.length < 24
     || /^IREPS item\b/i.test(description)
