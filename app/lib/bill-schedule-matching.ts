@@ -6,9 +6,27 @@ function normalizeSchedule(value: string): string {
     .trim();
 }
 
+/**
+ * The schedule's short identifier — "A4", "B1" — from either side of the match.
+ *
+ * The bill writes it out in full ("Schedule B4-Items which are not covered by Unified
+ * Standard Schedule of rates 2021 and CPWD-DSR-2021..."), while a contract usually
+ * holds the bare tag ("B4"). Requiring the word SCHEDULE found it on the bill and never
+ * on the contract, so the two could not be matched by identifier at all.
+ *
+ * That left only the token scoring below, which cannot tell B1 from B4: every B
+ * schedule on a bill repeats the same sentence about items not covered by USSOR and
+ * CPWD-DSR, differing by the tag alone. It scored them equal and returned nothing, so
+ * every B item lost its schedule — and with it the bid rate and escalation for that
+ * schedule.
+ */
 function scheduleIdentifier(value: string): string {
-  const match = normalizeSchedule(value).match(/\bSCHEDULE\s+([A-Z0-9]+)\b/);
-  return match?.[1] || '';
+  const normalized = normalizeSchedule(value);
+  const labelled = normalized.match(/\bSCHEDULE\s+([A-Z]\s?\d{0,2}|\d{1,2}\s?[A-Z]?)\b/);
+  if (labelled) return labelled[1].replace(/\s+/g, '');
+  // A bare tag, as a contract records it: "B4", "B-4", "A 5".
+  const bare = normalized.match(/^([A-Z]\s?\d{1,2}|\d{1,2}\s?[A-Z])\b/);
+  return bare ? bare[1].replace(/\s+/g, '') : '';
 }
 
 export function matchExtractedSchedule(
