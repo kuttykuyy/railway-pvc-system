@@ -644,6 +644,10 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   pdf.setFont('helvetica', 'normal');
   const certText = 'Certified that the above Price Variation Clause has been calculated\nas per the contract conditions and the indices published by the\ncompetent authority.';
   pdf.text(certText, mL, summaryStartY + 4);
+  // The notes below stack under the certification, and the next section starts under
+  // THEM: a fixed offset was fine while the notes were one line, and ran the WPI note
+  // straight through the next heading once it wrapped to four.
+  let leftBlockBottom = summaryStartY + 4 + pdf.getTextDimensions(certText).h;
 
   if (isProvisional && provisionalIndices.length > 0) {
     pdf.setFontSize(7.5);
@@ -651,7 +655,9 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     pdf.setTextColor(180, 0, 0);
     const note = `Note: Provisional indices used: ${provisionalIndices.join(', ')}`;
     const noteLines = pdf.splitTextToSize(note, summaryX - mL - 5);
-    pdf.text(noteLines, mL, summaryStartY + 22);
+    const noteY = Math.max(summaryStartY + 22, leftBlockBottom + 3);
+    pdf.text(noteLines, mL, noteY);
+    leftBlockBottom = noteY + pdf.getTextDimensions(noteLines).h;
     pdf.setTextColor(0, 0, 0);
   }
 
@@ -665,12 +671,13 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     pdf.setFontSize(7.5);
     pdf.setFont('helvetica', 'italic');
     pdf.setTextColor(80, 80, 80);
-    const wpiNote = `Note: WPI indices from May 2026 are published on base 2022-23=100 (old 2011-12 series discontinued with Apr 2026). ` +
-      `For comparison with this contract's base month they are converted to the 2011-12 base using commodity-level linking factors, ` +
-      `computed as DPIIT defines them (ratio of geometric means of the twelve monthly indices of both series for FY 2024-25) ` +
-      `from the published old and new series: ${parts.join('; ')}.`;
+    const wpiNote = `Note: WPI from May 2026 is published on base 2022-23=100 (old 2011-12 series ended Apr 2026). ` +
+      `Values are converted to the 2011-12 base for comparison with the base month, using commodity-level linking ` +
+      `factors derived as DPIIT defines them (geometric means of both series, FY 2024-25): ${parts.join('; ')}.`;
     const wpiNoteLines = pdf.splitTextToSize(wpiNote, summaryX - mL - 5);
-    pdf.text(wpiNoteLines, mL, summaryStartY + (isProvisional && provisionalIndices.length > 0 ? 30 : 22));
+    const wpiNoteY = Math.max(summaryStartY + 22, leftBlockBottom + 3);
+    pdf.text(wpiNoteLines, mL, wpiNoteY);
+    leftBlockBottom = wpiNoteY + pdf.getTextDimensions(wpiNoteLines).h;
     pdf.setTextColor(0, 0, 0);
   }
 
@@ -682,7 +689,8 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   const detailEntries = entries.filter(entry =>
     (Number(entry.amount) || 0) !== 0 || entry.classificationJustification || entry.description);
   if (detailEntries.length > 0) {
-    y = Math.max(pdf.lastAutoTable.finalY, summaryStartY + 30) + 6;
+    const notesBottom = summaryPage === pagesAfterSummary ? leftBlockBottom : 0;
+    y = Math.max(pdf.lastAutoTable.finalY, notesBottom, summaryStartY + 30) + 6;
     ensureSpace(30);
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
