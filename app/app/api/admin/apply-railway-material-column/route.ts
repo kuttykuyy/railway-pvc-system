@@ -91,6 +91,26 @@ const PENDING: PendingColumn[] = [
  */
 const PENDING_EXTRAS: Array<{ label: string; sql: string; why: string }> = [
   {
+    label: 'dsr_items',
+    sql: `CREATE TABLE IF NOT EXISTS "dsr_items" (
+        "edition" TEXT NOT NULL,
+        "code" TEXT NOT NULL,
+        "subHead" TEXT NOT NULL,
+        "subHeadName" TEXT NOT NULL,
+        "description" TEXT NOT NULL,
+        "unit" TEXT NOT NULL DEFAULT '',
+        "rate" DOUBLE PRECISION,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "dsr_items_pkey" PRIMARY KEY ("edition", "code")
+      )`,
+    why: 'The CPWD Delhi Schedule of Rates, so an item can be looked up by its code.',
+  },
+  {
+    label: 'dsr_items_code_idx',
+    sql: 'CREATE INDEX IF NOT EXISTS "dsr_items_code_idx" ON "dsr_items" ("code")',
+    why: 'Bills cite a code without saying which edition it came from.',
+  },
+  {
     label: 'bills_status_approvedAt_idx',
     sql: 'CREATE INDEX IF NOT EXISTS "bills_status_approvedAt_idx" ON "bills" ("status", "approvedAt")',
     why: 'The accounts inbox lists proposals awaiting vetting, oldest first.',
