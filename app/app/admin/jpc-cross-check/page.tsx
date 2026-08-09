@@ -57,6 +57,45 @@ export default function JpcCrossCheckPage() {
   const [progress, setProgress] = useState<string | null>(null);
   const [results, setResults] = useState<MonthResult[]>([]);
 
+  /**
+   * Walks a document page by page when it doesn't follow the six-pages-per-month
+   * rhythm (the 2026 production is 16 pages for 3 months). Each page identifies
+   * ITSELF by its printed date; pages that aren't 24-item price tables say so and
+   * are skipped. Results regroup into months exactly as the rhythm mode reports.
+   */
+  const runScanMode = async (docId: string, pageCount: number, collected: MonthResult[]) => {
+    const byMonth = new Map<number, FortnightResult[]>();
+    for (let page = 1; page <= pageCount; page++) {
+      setProgress(`Reading page ${page} of ${pageCount} — pages identify themselves by their printed date...`);
+      try {
+        const res = await fetch(`/api/admin/jpc-cross-check?year=${year}&docId=${docId}&page=${page}`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok || data.skipped) continue;
+        const monthNum = parseInt(String(data.month).split('-')[1], 10);
+        if (!monthNum) continue;
+        const list = byMonth.get(monthNum) || [];
+        list.push({
+          fortnight: data.fortnight,
+          pageIndex: data.page,
+          priceDate: data.priceDate,
+          matched: data.matched,
+          mismatched: data.mismatched,
+          sheetOnly: data.sheetOnly,
+          dbOnly: data.dbOnly,
+          unreadableCells: data.unreadableCells,
+        });
+        byMonth.set(monthNum, list);
+      } catch {
+        // A failed page read is a skipped page; the summary counts what was verified.
+      }
+      const merged = [...byMonth.entries()].sort((a, b) => a[0] - b[0]).map(([m, f]) => ({ month: m, fortnights: f }));
+      setResults([...collected, ...merged]);
+    }
+    const merged = [...byMonth.entries()].sort((a, b) => a[0] - b[0]).map(([m, f]) => ({ month: m, fortnights: f }));
+    collected.push(...merged);
+    setResults([...collected]);
+  };
+
   const run = async () => {
     setRunning(true);
     setResults([]);
@@ -67,6 +106,12 @@ export default function JpcCrossCheckPage() {
         try {
           const res = await fetch(`/api/admin/jpc-cross-check?year=${year}&month=${month}`, { method: 'POST' });
           const data = await res.json();
+          if (res.status === 422 && data.scanMode) {
+            // This document doesn't follow the rhythm — switch to walking its pages
+            // once; every price page declares its own month, so the month loop ends.
+            await runScanMode(data.scanMode.docId, data.scanMode.pageCount, collected);
+            break;
+          }
           if (!res.ok) {
             collected.push({ month, error: data.error || `HTTP ${res.status}` });
           } else {
