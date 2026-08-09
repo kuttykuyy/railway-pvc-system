@@ -20,7 +20,10 @@ export interface RateBookItem {
   code: string;
   subHead: string;
   subHeadName: string;
+  /** With the parent's wording in front of it, where a parent was recognised. */
   description: string;
+  /** This row's own printed words, on their own. */
+  own: string;
   unit: string;
   rate: number | null;
   page: number;
@@ -111,6 +114,7 @@ export async function extractRateBook(pdfPath: string, profileName: string): Pro
     const own = current.parts.join(' ').replace(/\s+/g, ' ').trim();
     const isChild = parent !== null
       && (profile.nesting === 'order' || current.code.startsWith(`${parent.code}.`));
+    current.own = own;
     current.description = (isChild ? `${parent!.text} ${own}` : own).replace(/\s+/g, ' ').trim();
     // A heading carries wording but no price. USSOR prints them without a unit as well,
     // which is what tells a heading apart from a priced row ending in a colon.
@@ -168,7 +172,7 @@ export async function extractRateBook(pdfPath: string, profileName: string): Pro
         flush();
         current = {
           code: first.text.trim(), subHead, subHeadName,
-          description: '', unit: '', rate: null, page: n, parts: [],
+          description: '', own: '', unit: '', rate: null, page: n, parts: [],
         };
       }
       if (!current) continue;

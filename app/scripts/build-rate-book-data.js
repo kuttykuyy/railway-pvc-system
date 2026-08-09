@@ -15,7 +15,7 @@ if (!edition || !source || !outFile || !volumes.length) {
 const items = [];
 for (const file of volumes) {
   for (const item of JSON.parse(fs.readFileSync(path.resolve(file), 'utf8')).items) {
-    items.push({ c: item.code, s: item.subHead, n: item.subHeadName, d: item.description, u: item.unit || '', r: item.rate });
+    items.push({ c: item.code, s: item.subHead, n: item.subHeadName, d: item.description, own: item.own || item.description, u: item.unit || '', r: item.rate });
   }
 }
 
@@ -63,6 +63,32 @@ for (const item of items) {
   const held = byCode.get(item.c);
   if (!held || held.score < score) byCode.set(item.c, { item, score });
 }
+
+/**
+ * Give every DSR item its parents' wording.
+ *
+ * DSR numbers a variant inside its item — 2.7 holds "Earth work in excavation by
+ * mechanical means over areas exceeding 30 cm in depth", and 2.7.2 prints only "Hard
+ * rock (requiring blasting)". Reading the parent off the page depended on it ending in
+ * a colon, which DSR 2023 often does not, and 654 of its items were left as three or
+ * four words that say nothing about the work. The code says who the parent is, so the
+ * chain is composed from the codes instead of from punctuation.
+ *
+ * USSOR is untouched: its six-digit codes carry no ancestry, so its parents are found
+ * by position when the book is read and are already in place.
+ */
+const ownByCode = new Map([...byCode.values()].map(entry => [entry.item.c, entry.item.own]));
+for (const { item } of byCode.values()) {
+  if (!item.c.includes('.')) continue;
+  const segments = item.c.split('.');
+  const chain = [];
+  for (let depth = 1; depth <= segments.length; depth += 1) {
+    const own = ownByCode.get(segments.slice(0, depth).join('.'));
+    if (own) chain.push(own.replace(/\s*:$/, '').trim());
+  }
+  if (chain.length > 1) item.d = chain.join(' — ').replace(/\s+/g, ' ').trim();
+}
+for (const { item } of byCode.values()) delete item.own;
 
 const merged = [...byCode.values()].map(entry => entry.item)
   .sort((left, right) => left.c.localeCompare(right.c, undefined, { numeric: true }));
