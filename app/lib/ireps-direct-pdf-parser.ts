@@ -115,18 +115,27 @@ function extractItemCode(
   // not exist. A fixed margin cannot work — the code sits above its line on some rows
   // and forty units below it on others — but the midpoint always separates them.
   const rowBoundary = (rowY + nextRowY) / 2;
-  const itemTokens = page.items
+  const pageTokens = page.items
     .filter(item => {
       const x = normalizedX(page, item);
       return x >= X.item[0] && x < X.item[1] && item.y >= rowY - 12 && item.y < rowBoundary;
     })
     .sort((left, right) => left.y - right.y)
     .map(item => item.text.replace(/[()IG\s-]/gi, '').trim())
-    .filter(Boolean)
-    .concat(continuedTokens.map(token => token.replace(/[()IG\s-]/gi, '').trim()).filter(Boolean));
-  const base = itemTokens.find(token => /^\d+(?:\.\d+)*\.?$/.test(token))?.replace(/\.$/, '') || '';
+    .filter(Boolean);
+  const carried = continuedTokens.map(token => token.replace(/[()IG\s-]/gi, '').trim()).filter(Boolean);
+  const itemTokens = pageTokens;
+  // The code is read from this page only. A token from the next page may complete a
+  // code but must never start one, or the last row of a page would take the code of
+  // the first row of the next.
+  const base = pageTokens.find(token => /^\d+(?:\.\d+)*\.?$/.test(token))?.replace(/\.$/, '') || '';
   if (/^\d{4}$/.test(base)) {
-    const suffix = itemTokens.find(token => token !== base && /^\d{1,2}$/.test(token));
+    // A six-digit USSOR code is printed on two lines — "0820" above "11" — and when the
+    // row is the last on its page, the second line is printed at the top of the next
+    // one. The bill then yielded "0820", which is no item at all: item 082012 of
+    // SR/TPJ/Civil/2025/0067/B7 came out that way, and 171024 with it.
+    const suffix = pageTokens.find(token => token !== base && /^\d{1,2}$/.test(token))
+      ?? carried.find(token => /^\d{1,2}$/.test(token));
     if (suffix) return `${base}${suffix.padStart(2, '0')}`;
   }
   if (base === '00') {
@@ -579,7 +588,8 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       // minus quantity, and that row reduces the bill just like any other.
       const payableAmount = specialAmount !== 0 ? specialAmount : agreementAmount;
       const nextRowY = deduped[index + 1]?.y || page.height - 5;
-      const itemNo = extractItemCode(page, unitItem.y, nextRowY, straddlesPageBreak && nextPage
+      const rowMayContinue = straddlesPageBreak || index === deduped.length - 1;
+      const itemNo = extractItemCode(page, unitItem.y, nextRowY, rowMayContinue && nextPage
         ? nextPageTop
             .filter(topItem => {
               const x = normalizedX(nextPage, topItem);

@@ -154,7 +154,11 @@ export async function enrichItemsFromRateBook<T extends {
 }
 
 export function enrichDescription(billDescription: string, entry: RateBookEntry): string | null {
-  const bill = (billDescription || '').replace(/\s+/g, ' ').trim();
+  const raw = (billDescription || '').replace(/\s+/g, ' ').trim();
+  // "IREPS item 082012" is what the reader writes when a row's wording is not on the
+  // page — it continues on the next one. It is a placeholder, not a description, and
+  // gluing it onto the book's wording would carry the gap forward instead of closing it.
+  const bill = /^IREPS item\b/i.test(raw) ? '' : raw;
   const book = (entry.description || '').replace(/\s+/g, ' ').trim();
   if (!book) return null;
   const squash = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
