@@ -20,6 +20,14 @@ export interface DeterministicBillItem {
   steelType: 'TMT' | 'ANGLE_CHANNEL' | 'PLATES' | 'OTHER_SECTIONS' | '';
   confidence: 'high' | 'medium' | 'low';
   reason: string;
+  /**
+   * Which page of the bill PDF this row was read from, 1-based.
+   *
+   * A classification is checked by finding the row on the bill and reading it, and on a
+   * 27-page bill that means hunting. The reader knows the page; carrying it costs
+   * nothing and turns the check into a glance.
+   */
+  pageNumber?: number;
 }
 
 export interface DeterministicBillDetails {

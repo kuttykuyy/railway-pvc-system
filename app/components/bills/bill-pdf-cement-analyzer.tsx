@@ -57,6 +57,7 @@ export interface ExtractedBillItem {
   /** Set when the wording shown was completed from a published schedule of rates. */
   rateBookEdition?: string;
   rateBookCode?: string;
+  pageNumber?: number;
   requiresDsrCementCoefficient?: boolean;
   isCementAffected?: boolean;
   isSteelItem?: boolean;
@@ -1454,7 +1455,16 @@ export function BillPdfCementAnalyzer({
                     <tbody className="divide-y">
                       {(result.billDetails?.items || result.extractedItems || []).slice(0, compact ? 5 : (showAllItems ? undefined : 12)).map((item, index) => (
                         <tr key={`${item.itemNo || item.dsrCode}-${index}`}>
-                          <td className="whitespace-nowrap px-2 py-2 font-medium">{item.itemNo || item.dsrCode || '-'}</td>
+                          <td className="whitespace-nowrap px-2 py-2 font-medium">
+                            {item.itemNo || item.dsrCode || '-'}
+                            {/* Where to find this row in the bill PDF, so the classification
+                                can be checked against the printed page without hunting. */}
+                            {item.pageNumber ? (
+                              <span className="block text-[11px] font-normal text-muted-foreground">
+                                bill p.{item.pageNumber}
+                              </span>
+                            ) : null}
+                          </td>
                           <td className="max-w-[420px] px-2 py-2">
                             <div className="line-clamp-2">{item.description}</div>
                             <div className="mt-1 text-[11px] text-muted-foreground">

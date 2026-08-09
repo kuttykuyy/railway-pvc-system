@@ -82,6 +82,12 @@ const PENDING: PendingColumn[] = [
     ddlType: 'JSONB',
     why: 'Which checks the accounts office ticked when passing — what answers an audit query later.',
   },
+  {
+    table: 'bill_classification_entries',
+    column: 'billPageNumber',
+    ddlType: 'INTEGER',
+    why: 'Which page of the bill PDF the item was read from, so a classification can be checked against the printed row without hunting through 27 pages.',
+  },
 ];
 
 /**

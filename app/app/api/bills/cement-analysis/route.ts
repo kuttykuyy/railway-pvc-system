@@ -66,6 +66,8 @@ export interface ExtractedBillItem {
   rateBookEdition?: string;
   rateBookCode?: string;
   rateBookDescription?: string;
+  /** Which page of the bill PDF this item was read from. */
+  pageNumber?: number;
 }
 
 type SourceBook = NonNullable<ExtractedBillItem['sourceBook']>;
@@ -125,6 +127,8 @@ function normalizeExtractedItem(item: any): ExtractedBillItem {
     groupName: String(item?.groupName || '').trim(),
     chapter: String(item?.chapter || '').trim(),
     sourceBook,
+    pageNumber: Number.isFinite(Number(item?.pageNumber)) && Number(item?.pageNumber) > 0
+      ? Number(item?.pageNumber) : undefined,
     rateBookEdition: String(item?.rateBookEdition || '').trim() || undefined,
     rateBookCode: String(item?.rateBookCode || '').trim() || undefined,
     rateBookDescription: String(item?.rateBookDescription || '').trim() || undefined,

@@ -668,6 +668,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         chapter: currentChapter,
         groupName: currentGroupName,
         sourceBook,
+        pageNumber: page.pageNumber,
         ...materialFlags(description),
         confidence: itemNo ? 'high' : 'medium',
         reason: 'Direct PDF coordinates; Qty since last Bill x Agreement Rate verified against current amount.',
