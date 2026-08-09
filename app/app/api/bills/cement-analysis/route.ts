@@ -229,14 +229,13 @@ function applyDeterministicClassification(
   // classification as the clause names it, the evidence, what was ruled out, and the
   // percentages the money follows from — in that order, with nothing to look up.
   const sourceNote = item.rateBookEdition && item.rateBookCode
-    ? `The item's wording is read from ${item.rateBookEdition} item ${item.rateBookCode}, because the bill prints only the line that distinguishes this sub-item; the schedule of rates carries the description of the work itself.`
+    ? `Wording per ${item.rateBookEdition} item ${item.rateBookCode}.`
     : undefined;
   const justify = (code: string, groupReason: string, subReason?: string) => composeJustification({
     code,
     groupReason,
     subReason,
     sourceNote,
-    aiNote: aiExtractionReason.length >= 40 ? aiExtractionReason.slice(0, 700) : undefined,
   });
 
   // 2. Infer main group code from the item description itself
@@ -268,10 +267,10 @@ function applyDeterministicClassification(
   const quoteKeywords = quoteKeywordsOf;
   let resolvedCode = groupNamesScope ? groupMain.code : contractMain.code;
   let resolvedReason = contractMain.matchedKeywords.length > 0
-    ? `The item description itself does not indicate a specific GCC work group, so it inherits Group ${contractMain.code} (${contractMain.label}) from the contract's Name of Work, which mentions ${quoteKeywords(contractMain.matchedKeywords)}.`
+    ? `Item names no work group of its own; taken from the Name of Work, which names ${quoteKeywords(contractMain.matchedKeywords)}.`
     : contractMain.isMultiScope
-      ? `The Name of Work covers several GCC groups (${(contractMain.contenders || []).map(c => `${c.code} ${c.label}`).join('; ')}), and this item’s own wording and schedule do not say which it belongs to. Group ${contractMain.code} is taken from the most prominent scope — check it against the schedule heading before relying on it.`
-      : `${contractMain.reason} (Fallback for item).`;
+      ? `The Name of Work covers ${(contractMain.contenders || []).map(c => c.label).join(', ')}, and neither this item nor its schedule says which it belongs to. Check against the schedule heading before relying on it.`
+      : 'Item and Name of Work name no GCC work group.';
 
   // 0. Highest priority: the schedule's own structure — the CPWD DSR sub-head from
   // the item number (e.g. "16.3.3" → sub-head 16 Road Work → Group 9), or the USSOR
@@ -303,7 +302,7 @@ function applyDeterministicClassification(
 
   if (contractGovernsGroup) {
     resolvedCode = contractMain.code;
-    resolvedReason = `The contract's Name of Work mentions ${quoteKeywords(contractMain.matchedKeywords)}, placing the whole work under GCC Group ${contractMain.code} (${contractMain.label}); every item of this bill takes that group and is distinguished only by its sub-classification.`;
+    resolvedReason = `Name of Work names ${quoteKeywords(contractMain.matchedKeywords)}.`;
   } else if (subHead && subHead.gccGroup !== DSR_CONTEXT
     && !(subHead.gccGroup === '9' && groupNamesScope)) {
     // Group 9 is the "any other works" bucket — the sub-head reaching it means it
@@ -311,24 +310,24 @@ function applyDeterministicClassification(
     // Materials and Small Track Machines map there, and left as Group 9 they split a
     // painting shed's own items away from the shed.
     resolvedCode = subHead.gccGroup;
-    resolvedReason = `Item number ${item.itemNo} falls under ${scheduleLabel} ${subHead.number} (${subHead.name}), which is classified as GCC Group ${subHead.gccGroup}.`;
+    resolvedReason = `Item ${item.itemNo} is ${scheduleLabel} ${subHead.number} — ${subHead.name}.`;
   } else if (subHead && subHead.gccGroup === DSR_CONTEXT) {
     // Context-dependent sub-head/chapter (e.g. Earth Work, Level Crossings): its GCC
     // group depends on the nature of the overall work, so resolve it from the
     // contract's Name of Work rather than a fixed mapping.
     resolvedCode = groupNamesScope ? groupMain.code : contractMain.code;
     resolvedReason = groupNamesScope
-      ? `Item is ${scheduleLabel} ${subHead.number} (${subHead.name}), whose GCC group depends on the nature of work; taken as Group ${groupMain.code} (${groupMain.label}) from ${groupReason}.`
-      : `Item is ${scheduleLabel} ${subHead.number} (${subHead.name}), whose GCC group depends on the nature of work; taken as Group ${contractMain.code} (${contractMain.label}) from the contract's Name of Work${contractMain.matchedKeywords.length ? ` (${quoteKeywords(contractMain.matchedKeywords)})` : ''}.`;
+      ? `Item ${item.itemNo} is ${scheduleLabel} ${subHead.number} — ${subHead.name}, which takes its group from the work; sub-work "${String(item.groupName || '').trim()}".`
+      : `Item ${item.itemNo} is ${scheduleLabel} ${subHead.number} — ${subHead.name}, which takes its group from the work; Name of Work names ${quoteKeywords(contractMain.matchedKeywords)}.`;
   } else if (groupNamesScope) {
     resolvedCode = groupMain.code;
-    resolvedReason = `This item belongs to ${groupReason}, placing it under GCC Group ${groupMain.code} (${groupMain.label}). A GCC group is a property of the work, so every item of this sub-work takes the same group and is distinguished only by its sub-classification.`;
+    resolvedReason = `Billed under sub-work "${String(item.groupName || '').trim()}".`;
   } else if (itemMain.code !== '9') {
     resolvedCode = itemMain.code;
-    resolvedReason = `The item description mentions ${quoteKeywords(itemMain.matchedKeywords)}, which places this work under GCC Group ${itemMain.code} (${itemMain.label}).`;
+    resolvedReason = `Item description names ${quoteKeywords(itemMain.matchedKeywords)}.`;
   } else if (isValidAiCode) {
     resolvedCode = aiCode.charAt(0);
-    resolvedReason = `AI review of the item text assigned GCC Group ${resolvedCode}; no group keyword matched deterministically.`;
+    resolvedReason = `No group keyword matched the item or the schedule; group taken from AI review of the item text.`;
   }
 
   if (resolvedCode === '2' || resolvedCode === '7') {
@@ -352,7 +351,7 @@ function applyDeterministicClassification(
       suggestedClassificationReason: justify(
         `${resolvedCode}C`,
         resolvedReason,
-        `Item number ${item.itemNo} is a designated cement-supply item of the schedule, so its full amount is a supply of cement and none of it is work: it is priced against the cement index alone, with no work portion and no split. Sub-classifications ${resolvedCode}A, ${resolvedCode}B, ${resolvedCode}D and ${resolvedCode}E therefore do not arise.`,
+        `Item ${item.itemNo} is a designated cement-supply item of the schedule — whole amount is cement, priced against the cement index alone.`,
       ),
     };
   }
@@ -375,9 +374,7 @@ function applyDeterministicClassification(
   const includesSteel = /including steel|with steel|contractor.{0,30}suppl/.test(text);
 
   let suffix = 'A';
-  let subReason = `Sub-classification ${resolvedCode}A (general works) applies because this is a composite work item: `
-    + `it is not a separate steel supply item (${resolvedCode}B), not a separate cement supply item (${resolvedCode}C), `
-    + `and contains no fabrication/assembly/erection wording that would indicate ${resolvedCode}D or ${resolvedCode}E.`;
+  let subReason = 'Composite work item — no separate steel or cement supply, no fabrication or erection.';
 
   // A separate steel-supply item, billed by weight with no fabrication/erection
   // wording (which would make it D or E). Cement supply already overrides the AI
@@ -408,19 +405,19 @@ function applyDeterministicClassification(
       D: 'fabrication/assembly/erection work including contractor-supplied steel',
       E: 'fabrication/assembly/erection work excluding steel supply',
     };
-    subReason = `AI review of the item characteristics identified it as ${suffixMeaning[aiSuffix] || 'a specific work type'}, so sub-classification ${resolvedCode}${aiSuffix} applies.`;
+    subReason = `Read as ${suffixMeaning[aiSuffix] || 'a specific work type'} on AI review of the item.`;
   } else {
     // Deterministic fallback
     const fabricationKeyword = text.match(/fabricat\w*|assembl\w*|erect\w*|launch\w*/)?.[0];
     if (supportsFabricationClasses && isFabrication && excludesSteel) {
       suffix = 'E';
-      subReason = `The item text contains "${fabricationKeyword}" together with wording that steel is excluded/supplied by railway, so ${resolvedCode}E (fabrication and erection excluding steel supply) applies.`;
+      subReason = `Item says "${fabricationKeyword}" and that steel is excluded or railway-supplied.`;
     } else if (supportsFabricationClasses && isFabrication && includesSteel) {
       suffix = 'D';
-      subReason = `The item text contains "${fabricationKeyword}" together with wording that the contractor supplies the steel, so ${resolvedCode}D (fabrication and erection including steel supply) applies.`;
+      subReason = `Item says "${fabricationKeyword}" and that the contractor supplies the steel.`;
     } else if (looksLikeDirectCementSupply(item)) {
       suffix = 'C';
-      subReason = `The item is billed in a cement supply unit (${item.unit}) and its description refers to cement supply rather than composite work, so ${resolvedCode}C (separate cement supply) applies.`;
+      subReason = `Cement supplied as its own item, billed in ${item.unit}.`;
     } else if (isSteelSupplyItem) {
       // isSteelSupplyItem alone, which checks the unit and rules out fabrication and
       // removal. The looser tests that used to sit here — the steel flag on its own,
@@ -428,7 +425,7 @@ function applyDeterministicClassification(
       // item that merely mentioned steel into B whatever its unit, track dismantling
       // measured in TRM included.
       suffix = 'B';
-      subReason = `The item is steel billed by weight (${item.unit}) with no fabrication, erection or dismantling wording, so it is a separate steel supply item and ${resolvedCode}B (items for supply of steel) applies.`;
+      subReason = `Steel supplied as its own item, billed by weight in ${item.unit}.`;
     }
   }
 

@@ -8,11 +8,12 @@
  * figure on the proposal — the reasoning may have been sound, but nothing in it can be
  * relied on once a citation is wrong.
  *
- * A justification is checked, not read. It has to give the officer, in order: the
- * authority, the exact classification as the clause prints it, the evidence it rests
- * on, why the neighbouring sub-classifications do not apply, and the component
- * percentages the money follows from — so each can be ticked off against the contract
- * and the schedule without asking anyone anything.
+ * A justification is checked, not read: the evidence for THIS item, then the
+ * classification that follows from it, and nothing else. It said far more than that at
+ * first — the component percentages, the PVC formula, what a GCC group is as a concept,
+ * every sub-classification that did not apply — all of it identical on every line of
+ * the statement and all of it printed elsewhere on the same document. Padding is not
+ * neutral: it buries the one sentence the officer is actually checking.
  */
 import { GCC_CLASSIFICATIONS } from './gcc-classifications-data';
 
@@ -24,32 +25,6 @@ export function officialGroupName(mainCode: string): string | null {
   return found ? found.mainClassification : null;
 }
 
-/** The sub-classification's own wording, e.g. "All Items (excluding 6B/6C/6D/6E)". */
-export function officialSubName(code: string): string | null {
-  return BY_CODE.get(String(code).toUpperCase())?.subClassification ?? null;
-}
-
-/**
- * The percentages this classification carries, listed as the statement applies them.
- * The whole PVC follows from these, so they belong in the justification rather than
- * only in a table further down.
- */
-export function componentLine(code: string): string {
-  const entry = BY_CODE.get(String(code).toUpperCase());
-  if (!entry) return '';
-  const parts: string[] = [];
-  const push = (label: string, value: number) => { if (value) parts.push(`${label} ${value}%`); };
-  push('Fixed', entry.components.fixed);
-  push('Labour', entry.components.labour);
-  push('Steel', entry.components.steel);
-  push('Cement', entry.components.cement);
-  push('Plant & Machinery', entry.components.plantMachinery);
-  push('Fuel', entry.components.fuel);
-  push('Other Materials', entry.components.otherMaterials);
-  push('Explosives', entry.components.explosives);
-  return parts.join(', ');
-}
-
 export interface JustificationParts {
   /** The full code, e.g. "6A" — or "2"/"7", which have no sub-divisions. */
   code: string;
@@ -59,48 +34,27 @@ export interface JustificationParts {
   subReason?: string;
   /** Where the item's wording came from, when not the bill itself. */
   sourceNote?: string;
-  /** The AI's own note from extraction, kept when it said something substantive. */
-  aiNote?: string;
 }
 
 /**
- * Assemble the paragraph. Kept as continuous prose rather than a list, because it is
- * stored in one field and printed into one cell of the statement.
+ * Assemble it. Kept as continuous prose rather than a list, because it is stored in one
+ * field and printed into one cell of the statement.
  */
 export function composeJustification(parts: JustificationParts): string {
   const code = String(parts.code || '').toUpperCase();
   const mainCode = code.charAt(0);
   const groupName = officialGroupName(mainCode);
-  const subName = officialSubName(code);
-  const components = componentLine(code);
 
-  const sentences: string[] = [];
+  const evidence = (parts.groupReason || '').trim().replace(/\s+/g, ' ');
+  const conclusion = groupName
+    ? `Classified ${code} — ${groupName} (GCC-2022 Cl. 46A.6).`
+    : `Classified ${code} (GCC-2022 Cl. 46A.6).`;
 
-  // 1. The authority and the exact classification, named as the clause names it.
-  sentences.push(groupName
-    ? (subName && code.length > 1
-      ? `Classified under GCC-2022 Clause 46A.6 as ${code} — Group ${mainCode} ${groupName}, sub-classification ${code} (${subName}).`
-      : `Classified under GCC-2022 Clause 46A.6 as Group ${mainCode} ${groupName}, which the clause carries as a single classification with no sub-divisions.`)
-    : `Classified under GCC-2022 Clause 46A.6 as ${code}.`);
-
-  // 2. The evidence for the group.
-  if (parts.groupReason) sentences.push(parts.groupReason.trim());
-
-  // 3. Where the wording came from, if the bill did not print it in full.
-  if (parts.sourceNote) sentences.push(parts.sourceNote.trim());
-
-  // 4. Why the neighbouring sub-classifications do not apply.
-  if (parts.subReason) sentences.push(parts.subReason.trim());
-
-  // 5. What the money follows from.
-  if (components) {
-    sentences.push(`Component percentages applied for ${code} per Clause 46A.6: ${components}. `
-      + `The price variation for each component is its share of this item's value multiplied by the change in that component's published index between the base month and the bill quarter.`);
-  }
-
-  if (parts.aiNote) sentences.push(`AI extraction note: ${parts.aiNote.trim()}`);
-
-  return sentences.join(' ').replace(/\s+/g, ' ').trim();
+  return [evidence, parts.subReason?.trim(), parts.sourceNote?.trim(), conclusion]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
