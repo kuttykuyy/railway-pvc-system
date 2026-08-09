@@ -59,9 +59,19 @@ export async function POST(request: NextRequest) {
       where: { componentType: { in: JPC_TYPES }, year },
       orderBy: { createdAt: 'desc' },
     });
+    // A year can hold several uploads — a part-year file per quarter, say — and the
+    // same physical file is often registered under each steel component type. Distinct
+    // FILES are what matter: one per storage path, newest first.
+    const distinctDocs: typeof documents = [];
+    const seenPaths = new Set<string>();
+    for (const d of documents) {
+      if (seenPaths.has(d.cloudStoragePath)) continue;
+      seenPaths.add(d.cloudStoragePath);
+      distinctDocs.push(d);
+    }
     const doc = docId
-      ? documents.find(d => d.id === docId)
-      : documents.find(d => month && d.months.includes(month)) || documents[0];
+      ? distinctDocs.find(d => d.id === docId)
+      : distinctDocs.find(d => month && d.months.includes(month)) || distinctDocs[0];
     if (!doc) {
       return NextResponse.json({ error: `No JPC document uploaded for ${year}` }, { status: 404 });
     }
@@ -126,21 +136,23 @@ export async function POST(request: NextRequest) {
     // ---- Scan mode: one page, self-identifying ----
     if (pageParam) {
       if (pageParam < 1 || pageParam > pageCount) {
-        return NextResponse.json({ error: `page must be 1..${pageCount}` }, { status: 400 });
+        // Past the end is how the walk learns where to stop — not an error.
+        return NextResponse.json({ page: pageParam, pageCount, done: true });
       }
       const extraction = await extractPage(pageParam - 1);
       const data = extraction.ok ? extraction.data : null;
       const matched = data ? data.rows.filter(r => r.itemCode).length : 0;
       // Not a price page (items 25-34, disclaimers) — matched almost nothing.
       if (!data || matched < 8) {
-        return NextResponse.json({ page: pageParam, skipped: true, reason: extraction.ok ? 'not a 24-item price page' : (extraction.error || 'unreadable') });
+        return NextResponse.json({ page: pageParam, pageCount, skipped: true, reason: extraction.ok ? 'not a 24-item price page' : (extraction.error || 'unreadable') });
       }
       if (!data.month || !data.fortnight) {
-        return NextResponse.json({ page: pageParam, skipped: true, reason: 'price page but its date could not be read' });
+        return NextResponse.json({ page: pageParam, pageCount, skipped: true, reason: 'price page but its date could not be read' });
       }
       const comparison = await compare(data, data.fortnight, data.month);
       return NextResponse.json({
         page: pageParam,
+        pageCount,
         month: data.month,
         fortnight: data.fortnight,
         priceDate: data.priceDate,
@@ -158,7 +170,13 @@ export async function POST(request: NextRequest) {
       // Not refusal — redirection: tell the screen how to walk this document instead.
       return NextResponse.json({
         error: `The ${year} document has ${pageCount} pages for ${docMonths.length} recorded month(s) — pages will be identified by their own printed dates instead.`,
-        scanMode: { docId: doc.id, pageCount },
+        // Every distinct file for the year, so the walk cannot stop at the first —
+        // a second upload was being left unchecked entirely.
+        scanMode: {
+          docs: distinctDocs.map(d => ({ docId: d.id, fileName: d.fileName })),
+          docId: doc.id,
+          pageCount,
+        },
       }, { status: 422 });
     }
     const monthIdx = docMonths.indexOf(month);

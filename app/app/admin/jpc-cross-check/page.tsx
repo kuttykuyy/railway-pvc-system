@@ -105,33 +105,45 @@ export default function JpcCrossCheckPage() {
    * ITSELF by its printed date; pages that aren't 24-item price tables say so and
    * are skipped. Results regroup into months exactly as the rhythm mode reports.
    */
-  const runScanMode = async (docId: string, pageCount: number, collected: MonthResult[]) => {
+  const runScanMode = async (
+    docs: { docId: string; fileName?: string }[],
+    collected: MonthResult[],
+  ) => {
     const byMonth = new Map<number, FortnightResult[]>();
-    for (let page = 1; page <= pageCount; page++) {
-      setProgress(`Reading page ${page} of ${pageCount} — pages identify themselves by their printed date...`);
-      try {
-        const res = await fetch(`/api/admin/jpc-cross-check?year=${year}&docId=${docId}&page=${page}`, { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok || data.skipped) continue;
-        const monthNum = parseInt(String(data.month).split('-')[1], 10);
-        if (!monthNum) continue;
-        const list = byMonth.get(monthNum) || [];
-        list.push({
-          fortnight: data.fortnight,
-          pageIndex: data.page,
-          priceDate: data.priceDate,
-          matched: data.matched,
-          mismatched: data.mismatched,
-          sheetOnly: data.sheetOnly,
-          dbOnly: data.dbOnly,
-          unreadableCells: data.unreadableCells,
-        });
-        byMonth.set(monthNum, list);
-      } catch {
-        // A failed page read is a skipped page; the summary counts what was verified.
+    for (let d = 0; d < docs.length; d++) {
+      const { docId } = docs[d];
+      // The page count comes back with the first page; walking past the end simply
+      // reports done, so no document needs measuring in advance.
+      let pageCount = Infinity;
+      for (let page = 1; page <= pageCount; page++) {
+        const ofDocs = docs.length > 1 ? ` (file ${d + 1} of ${docs.length})` : '';
+        setProgress(`Reading page ${page}${isFinite(pageCount) ? ` of ${pageCount}` : ''}${ofDocs} — pages identify themselves by their printed date...`);
+        try {
+          const res = await fetch(`/api/admin/jpc-cross-check?year=${year}&docId=${docId}&page=${page}`, { method: 'POST' });
+          const data = await res.json();
+          if (typeof data.pageCount === 'number') pageCount = data.pageCount;
+          if (data.done) break;
+          if (!res.ok || data.skipped) continue;
+          const monthNum = parseInt(String(data.month).split('-')[1], 10);
+          if (!monthNum) continue;
+          const list = byMonth.get(monthNum) || [];
+          list.push({
+            fortnight: data.fortnight,
+            pageIndex: data.page,
+            priceDate: data.priceDate,
+            matched: data.matched,
+            mismatched: data.mismatched,
+            sheetOnly: data.sheetOnly,
+            dbOnly: data.dbOnly,
+            unreadableCells: data.unreadableCells,
+          });
+          byMonth.set(monthNum, list);
+        } catch {
+          // A failed page read is a skipped page; the summary counts what was verified.
+        }
+        const merged = [...byMonth.entries()].sort((a, b) => a[0] - b[0]).map(([m, f]) => ({ month: m, fortnights: f }));
+        setResults([...collected, ...merged]);
       }
-      const merged = [...byMonth.entries()].sort((a, b) => a[0] - b[0]).map(([m, f]) => ({ month: m, fortnights: f }));
-      setResults([...collected, ...merged]);
     }
     const merged = [...byMonth.entries()].sort((a, b) => a[0] - b[0]).map(([m, f]) => ({ month: m, fortnights: f }));
     collected.push(...merged);
@@ -149,9 +161,17 @@ export default function JpcCrossCheckPage() {
           const res = await fetch(`/api/admin/jpc-cross-check?year=${year}&month=${month}`, { method: 'POST' });
           const data = await res.json();
           if (res.status === 422 && data.scanMode) {
-            // This document doesn't follow the rhythm — switch to walking its pages
-            // once; every price page declares its own month, so the month loop ends.
-            await runScanMode(data.scanMode.docId, data.scanMode.pageCount, collected);
+            // A document that doesn't follow the rhythm turns the whole year over to the
+            // page walk, across EVERY file the year holds — a second upload was being
+            // left unread entirely. Anything the month loop had already gathered is
+            // discarded first: the walk covers those months too, and keeping both would
+            // report the same fortnight twice.
+            collected.length = 0;
+            setResults([]);
+            await runScanMode(
+              data.scanMode.docs || [{ docId: data.scanMode.docId }],
+              collected,
+            );
             break;
           }
           if (!res.ok) {
