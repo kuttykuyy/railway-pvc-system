@@ -38,6 +38,8 @@ interface ClassificationEntry {
   quantity?: number | null;
   agreementRate?: number | null;
   itemRows?: Array<{
+    /** The billed amount for the row, where the entry was saved carrying it. */
+    amount?: number;
     itemNumber?: string | null;
     quantity?: number | null;
     agreementRate?: number | null;
@@ -993,12 +995,18 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       for (const row of usableRows) {
         const qty = Number(row.quantity) || 0;
         const rate = Number(row.agreementRate) || 0;
+        // The row's billed amount, where it was saved. Qty x Rate is the fallback for
+        // rows saved before the amount travelled with them — and it is exactly wrong
+        // wherever a special condition revised the rate: F. BILL SCHEDULE SUMMARY came
+        // out Rs 16,05,996.21 short on SR/TPJ/Civil/2025/0067/B9 rebuilding rows that
+        // way, and balanced the gap with a note instead of the items.
+        const stored = Number((row as { amount?: unknown }).amount);
         scheduleRows.push({
           itemNumber: String(row.itemNumber || '').trim() || '-',
           schedule,
           qty,
           rate,
-          amount: qty * rate,
+          amount: Number.isFinite(stored) && (row as { amount?: unknown }).amount !== null ? stored : qty * rate,
         });
       }
     } else if (entry.itemNumber || entry.quantity || entry.agreementRate) {

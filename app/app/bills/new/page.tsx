@@ -1206,6 +1206,11 @@ function NewBillPageContent() {
               itemNumber: r.itemNumber || '',
               quantity: r.quantity === '' ? null : parseFloat(String(r.quantity)) || null,
               agreementRate: r.agreementRate === '' ? null : parseFloat(String(r.agreementRate)) || null,
+              // The billed amount and provenance travel with the row; stripping them
+              // here is why the statement had to re-derive amounts from Qty x Rate.
+              ...((r as any).amount !== undefined && (r as any).amount !== '' ? { amount: Number((r as any).amount) } : {}),
+              ...((r as any).description ? { description: (r as any).description } : {}),
+              ...((r as any).pageNumber ? { pageNumber: (r as any).pageNumber } : {}),
               // Carry the cement derivation (source qty x coefficient / block) so the PDF can show the working.
               ...((r as any).sourceQty !== undefined ? { sourceQty: (r as any).sourceQty, coefficient: (r as any).coefficient, workUnit: (r as any).workUnit } : {}),
             })) : null

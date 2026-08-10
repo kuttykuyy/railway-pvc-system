@@ -45,6 +45,8 @@ interface ItemRow {
   itemNumber: string;
   quantity: number | string | '';
   agreementRate: number | string | '';
+  /** The billed amount, where extraction saved it — differs from Qty x Rate under a special condition. */
+  amount?: number | string | '';
   /**
    * What this item is. Items sharing a classification merge into one entry, and the
    * entry then shows the sub-work's name — so five rows of ballast, track-lifting and
@@ -179,9 +181,13 @@ export function BillClassificationEntries({
   // PVC must be computed on the work value EXCLUDING GST, so when the rates include
   // it, strip GST back out of the row total.
   const rowsTotal = (rows: ItemRow[], includeGst: boolean = ratesIncludeGst) => {
-    const gross = rows.reduce((sum, row) => (
-      sum + (Number(row.quantity) || 0) * (Number(row.agreementRate) || 0)
-    ), 0);
+    const gross = rows.reduce((sum, row) => {
+      const byRate = (Number(row.quantity) || 0) * (Number(row.agreementRate) || 0);
+      // A special-condition row pays an amount Qty x Rate cannot reproduce — a rate
+      // revision has quantity zero. Where the extraction saved the billed amount, that
+      // is the figure; multiplying would price the row at nothing.
+      return sum + (byRate !== 0 ? byRate : Number(row.amount) || 0);
+    }, 0);
     const net = includeGst ? gross / (1 + AGREEMENT_GST_RATE) : gross;
     return Math.round(net * 100) / 100;
   };

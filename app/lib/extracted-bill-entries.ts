@@ -36,6 +36,15 @@ export interface ExtractedItemRow {
   quantity: number | string | '';
   agreementRate: number | string | '';
   /**
+   * What the bill actually pays for this row — the "Amt including Special Condition"
+   * column, not Qty x Rate. The two differ wherever a special condition revises or
+   * deducts from the rate, and on a row paying a rate revision the quantity is zero, so
+   * Qty x Rate is zero while the bill pays lakhs. Everything downstream that rebuilds a
+   * total from rows must start from this figure and fall back to Qty x Rate only for
+   * rows saved before it existed.
+   */
+  amount?: number;
+  /**
    * What this item is, kept per row.
    *
    * Items sharing a classification are merged into one entry, and the entry then
@@ -197,6 +206,7 @@ export function buildClassificationEntriesFromExtractedBill(
                 itemNumber: item.itemNo || '',
                 quantity: qty || '',
                 agreementRate: netRate,
+                amount: netAmount,
                 description: item.description || '',
                 pageNumber: (item as any).pageNumber,
                 rateBookEdition: (item as any).rateBookEdition,
@@ -222,6 +232,7 @@ export function buildClassificationEntriesFromExtractedBill(
                 itemNumber: item.itemNo ? `${item.itemNo}-CEM` : 'CEM',
                 quantity: cementQty || '',
                 agreementRate: cementRate,
+                amount: cementCost,
                 description: item.description || '',
                 pageNumber: (item as any).pageNumber,
                 // Keep the derivation with the row so the report prints the working.
@@ -256,10 +267,14 @@ export function buildClassificationEntriesFromExtractedBill(
         itemNumber,
         quantity: itemQuantity,
         agreementRate: itemRate,
-        itemRows: specialConditionOnly ? [] : [{
+        itemRows: [{
           itemNumber,
           quantity: itemQuantity,
           agreementRate: itemRate,
+          // Kept even when the printed quantity is zero: the special-condition amount
+          // is still paid, and an entry with no rows vanished from the schedule items
+          // of the statement while its money stayed in the total.
+          amount: Number(item.amountSinceLastBill) || 0,
           description: item.description || '',
           pageNumber: (item as any).pageNumber,
           rateBookEdition: (item as any).rateBookEdition,
