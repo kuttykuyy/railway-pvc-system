@@ -213,6 +213,9 @@ function NewBillPageContent() {
   
   // Non-schedule items state - array of { description, amount }
   const [nonScheduleItems, setNonScheduleItems] = useState<Array<{ description: string; amount: string }>>([]);
+
+  // Value of extra items ordered under Cl.39(1)(b) that carry no PVC — see Cl.46A.1(b).
+  const [extraItemsOutsidePvc, setExtraItemsOutsidePvc] = useState('');
   
   // Accordion state - start with basic info open
   const [openAccordion, setOpenAccordion] = useState<string[]>(['basic']);
@@ -1209,6 +1212,7 @@ function NewBillPageContent() {
           })),
           subClassifications: formattedSubClassifications, // Legacy support
           nonScheduleItems: formattedNonScheduleItems,
+          extraItemsOutsidePvc: parseFloat(extraItemsOutsidePvc) || 0,
           paymentConfirmed: true, // Always set as confirmed since we removed payments
           paymentMethod: 'free',
           paymentReference: null,
@@ -1984,6 +1988,29 @@ function NewBillPageContent() {
                   {/* SECTION 3: Non-Schedule Items (Optional) */}
                   <div className={billPanelCls('optional')}>
                     <div className="border border-slate-200 rounded-xl bg-white px-4 py-4 space-y-4">
+                      {/* Extra items outside PVC — GCC-2022 Cl.46A.1(b) */}
+                      <div className="space-y-2 p-3 border border-amber-200 rounded-lg bg-amber-50">
+                        <Label htmlFor="extraItemsOutsidePvc" className="text-sm font-semibold text-amber-900">
+                          Extra items outside PVC (Cl. 39(1)(b))
+                        </Label>
+                        <p className="text-xs text-amber-800">
+                          Value of extra items ordered during execution that fall outside the tender&apos;s Bill of
+                          Quantities. Clause 46A.1(b) keeps these out of the value price variation is worked out on —
+                          unless PVC and a base month were specially agreed when their rates were fixed, in which case
+                          leave this blank. Not for B-schedule items: those are part of the contract and do get PVC.
+                        </p>
+                        <Input
+                          id="extraItemsOutsidePvc"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={extraItemsOutsidePvc}
+                          onChange={(event) => setExtraItemsOutsidePvc(event.target.value)}
+                          placeholder="0.00"
+                          className="bg-white max-w-xs"
+                        />
+                      </div>
+
                       {/* Non-Schedule Items Section */}
                       <div className="space-y-3 p-3 border border-orange-200 rounded-lg bg-orange-50 mt-4">
                         <div className="flex items-center justify-between">

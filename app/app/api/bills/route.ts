@@ -248,6 +248,7 @@ export async function POST(request: NextRequest) {
       classificationEntries = [],
       isAiUploaded,
       railwaySuppliedMaterialValue = 0,
+      extraItemsOutsidePvc = 0,
     } = body;
 
     // GCC-2022 Cl.46A: W (the PVC base) is the gross value of work done EXCLUDING the
@@ -255,12 +256,20 @@ export async function POST(request: NextRequest) {
     // entry amounts stay as-is (that is the real work value); only the base the PVC is
     // computed on is reduced, spread across entries in proportion to their amounts.
     const railwaySupplied = Math.max(0, parseFloat(railwaySuppliedMaterialValue) || 0);
+    // Cl.46A.1(b): an extra item added under Cl.39(1)(b) — one outside the tender's Bill
+    // of Quantities — is excluded from the value price variation is computed on, unless
+    // applicability of PVC and a base month were specially agreed when its rate was
+    // fixed. Where they were agreed, that item is not entered here and is priced like
+    // any other. Not to be confused with the B-schedule items a tender itself carries:
+    // those are part of the contract and attract PVC in the ordinary way.
+    const extraItems = Math.max(0, parseFloat(extraItemsOutsidePvc) || 0);
+    const outsidePvc = railwaySupplied + extraItems;
     const entriesTotalAmount = (classificationEntries || []).reduce(
       (sum: number, e: any) => sum + (parseFloat(e?.amount) || 0),
       0,
     );
-    const pvcBaseFactor = railwaySupplied > 0 && entriesTotalAmount > railwaySupplied
-      ? (entriesTotalAmount - railwaySupplied) / entriesTotalAmount
+    const pvcBaseFactor = outsidePvc > 0 && entriesTotalAmount > outsidePvc
+      ? (entriesTotalAmount - outsidePvc) / entriesTotalAmount
       : 1;
 
     // ===== STEP 2: Payment Validation =====

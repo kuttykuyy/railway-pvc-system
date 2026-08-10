@@ -83,6 +83,12 @@ const PENDING: PendingColumn[] = [
     why: 'Which checks the accounts office ticked when passing — what answers an audit query later.',
   },
   {
+    table: 'bills',
+    column: 'extraItemsOutsidePvc',
+    ddlType: 'DOUBLE PRECISION DEFAULT 0',
+    why: "GCC-2022 Cl.46A.1(b) puts extra items added under Cl.39(1)(b) outside price variation, unless PVC and a base month were specially agreed when their rates were fixed.",
+  },
+  {
     table: 'bill_classification_entries',
     column: 'billPageNumber',
     ddlType: 'INTEGER',
