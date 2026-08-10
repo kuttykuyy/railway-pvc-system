@@ -393,6 +393,32 @@ export async function POST(request: NextRequest) {
         if (brandUser?.reportHeaderText) irOrgName = brandUser.reportHeaderText;
       }
 
+      // The single-bill route loads the owner's default report template and lets it
+      // hide sections and the calculation steps; this branch never did, so a bulk run
+      // of the very same bills came out with every section shown regardless of the
+      // template — the two reports differed by whatever the template hides.
+      let irSections: {
+        contractDetails?: boolean;
+        workClassification?: boolean;
+        monthlyIndices?: boolean;
+        showCalculationSteps?: boolean;
+      } | undefined;
+      if (bills.length > 0 && bills[0].contract?.userId) {
+        const template = await prisma.reportTemplate.findFirst({
+          where: { userId: bills[0].contract.userId, isDefault: true },
+        });
+        if (template) {
+          const sections = (template.sections || {}) as any;
+          const fields = (template.fields || {}) as any;
+          irSections = {
+            contractDetails: sections?.contractDetails,
+            workClassification: sections?.workClassification,
+            monthlyIndices: sections?.monthlyIndices,
+            showCalculationSteps: fields?.pvcCalculation?.showCalculationSteps,
+          };
+        }
+      }
+
       const mergedPdf = await PDFDocument.create();
 
       const allContractBillsForCumulative = await prisma.bill.findMany({
@@ -549,6 +575,7 @@ export async function POST(request: NextRequest) {
           provisionalIndices: indicesStatus.provisionalIndices,
           allHistoricalMonthlyData,
           previousCumulativePvc: cumulativeSummaries.get(bill.id)?.previousPvcTotal ?? 0,
+          sections: irSections,
         });
 
         const billPdfDoc = await PDFDocument.load(billPdfBuf);
