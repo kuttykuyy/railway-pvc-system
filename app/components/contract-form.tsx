@@ -289,12 +289,12 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     const allWarnings: string[] = [];
     const newFieldErrors: Record<string, string> = {};
 
-    // An LOA comes first and the agreement is signed weeks later, so a contract set up
-    // from an LOA has no agreement number yet. The LOA number stands in for it until
-    // one exists — the column is unique and every lookup goes through it, so it cannot
-    // simply be left empty. Where neither is given, the agreement number is still
-    // required: something has to identify the contract.
-    const hasLoaNumber = Boolean(String(formData.loaNo || '').trim());
+    // Only when the form was filled by uploading a document. An LOA is issued weeks
+    // before the agreement is signed, so a contract read out of one has no agreement
+    // number to give and the LOA number stands in until there is one. Typing a contract
+    // in by hand is a different act — the agreement number is still asked for there,
+    // because nothing else was read to stand in for it.
+    const hasLoaNumber = filledFromPdf && Boolean(String(formData.loaNo || '').trim());
     const agreementValidation = validateAgreementNumber(formData.agreementNo);
     if (!agreementValidation.isValid && !(hasLoaNumber && !formData.agreementNo.trim())) {
       allErrors.push(...agreementValidation.errors);
@@ -572,7 +572,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
               <div className="space-y-2">
                 <Label htmlFor="agreementNo" className="text-sm font-semibold text-slate-700">
                   {t('form.contract.agreement_no')}
-                  {String(formData.loaNo || '').trim()
+                  {filledFromPdf && String(formData.loaNo || '').trim()
                     ? <span className="ml-1 text-xs font-normal text-slate-500">— optional, the LOA number stands in until the agreement is signed</span>
                     : <span className="text-red-500"> *</span>}
                 </Label>
@@ -582,7 +582,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   value={formData.agreementNo}
                   onChange={handleInputChange}
                   placeholder={t('form.contract.agreement_no_placeholder')}
-                  required={!String(formData.loaNo || '').trim()}
+                  required={!(filledFromPdf && String(formData.loaNo || '').trim())}
                   aria-invalid={Boolean(fieldErrors.agreementNo) || agreementAvailability === 'duplicate'}
                   aria-describedby="agreementNo-help agreementNo-status"
                   className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${fieldErrors.agreementNo || agreementAvailability === 'duplicate' ? 'border-red-500 focus:border-red-500' : agreementAvailability === 'available' ? 'border-emerald-500 focus:border-emerald-500' : ''}`}
