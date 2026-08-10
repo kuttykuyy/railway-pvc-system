@@ -103,6 +103,41 @@ function pagePlainText(page: PositionedPdfPage) {
   return pageLines(page).map(line => line.text.replace(/\s+/g, ' ').trim()).join('\n');
 }
 
+/**
+ * Lines that read as data rows but were never anchored.
+ *
+ * A row is anchored by its unit, so a unit the reader does not know makes the row
+ * invisible — and a shortfall with no skipped rows is exactly that. A line with a
+ * numeric agreement rate AND a numeric amount in their own columns is a data row
+ * whatever its unit says, so the ones that no unit matched are the rows that went
+ * missing, and their amounts should account for the gap.
+ */
+function findUnanchoredRows(pages: PositionedPdfPage[]): Array<{ page: number; unit: string; amount: number }> {
+  const missed: Array<{ page: number; unit: string; amount: number }> = [];
+  for (const page of pages) {
+    const seen = new Set<number>();
+    for (const item of page.items) {
+      const x = normalizedX(page, item);
+      if (x < X.unit[0] || x >= X.unit[1]) continue;
+      const y = Math.round(item.y);
+      if (seen.has(y)) continue;
+      seen.add(y);
+
+      const unitCell = cellText(page, page.items, X.unit, item.y);
+      if (UNIT_PATTERN.test(item.text.trim()) || UNIT_PATTERN.test(unitCell)) continue;
+
+      const rate = numericValue(cellText(page, page.items, X.agreementRate, item.y));
+      const special = numericValue(cellText(page, page.items, X.specialAmount, item.y));
+      const plain = numericValue(cellText(page, page.items, X.amountSinceLast, item.y));
+      const amount = special !== undefined && special !== 0 ? special : plain;
+      if (!(rate && rate > 0) || amount === undefined) continue;
+
+      missed.push({ page: page.pageNumber, unit: unitCell.slice(0, 24), amount });
+    }
+  }
+  return missed;
+}
+
 function extractItemCode(
   page: PositionedPdfPage,
   rowY: number,
@@ -781,28 +816,16 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   const roundingTolerance = 0.05 + items.length * 0.01;
   const amountsReconciled = Math.abs(amountDifference) <= roundingTolerance;
   if (!amountsReconciled) {
-    // What sat in the unit column and matched nothing. A row is anchored by its unit,
-    // so an unknown one is invisible — and invisible is what a shortfall with no
-    // skipped rows means.
-    const unknownUnits = new Map<string, number>();
-    for (const page of pages) {
-      for (const item of page.items) {
-        const x = normalizedX(page, item);
-        if (x < X.unit[0] || x >= X.unit[1]) continue;
-        const text = item.text.trim();
-        if (!text || UNIT_PATTERN.test(text)) continue;
-        if (UNIT_PATTERN.test(cellText(page, page.items, X.unit, item.y))) continue;
-        if (!/^[A-Za-z][A-Za-z.\/ -]{0,18}$/.test(text)) continue;
-        unknownUnits.set(text, (unknownUnits.get(text) || 0) + 1);
-      }
-    }
-    const unknownUnitNote = unknownUnits.size > 0
-      ? `\nText in the unit column that the reader does not recognise, which is how a row goes unread: `
-        + [...unknownUnits.entries()]
-            .sort((left, right) => right[1] - left[1])
+    // Which lines read as data rows and yet were never anchored, and what they carry.
+    const unanchored = findUnanchoredRows(pages);
+    const unanchoredValue = unanchored.reduce((sum, row) => sum + row.amount, 0);
+    const unknownUnitNote = unanchored.length > 0
+      ? `\n${unanchored.length} line(s) carry a rate and an amount but no unit the reader knows, so they were never read `
+        + `(Rs ${unanchoredValue.toFixed(2)} in total): `
+        + unanchored
             .slice(0, 8)
-            .map(([text, count]) => `"${text}" x${count}`)
-            .join(', ')
+            .map(row => `p${row.page} "${row.unit || '(blank)'}" Rs ${row.amount.toFixed(2)}`)
+            .join('; ')
         + '.'
       : '';
     throw new Error(
