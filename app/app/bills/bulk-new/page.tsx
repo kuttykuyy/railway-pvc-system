@@ -1,7 +1,7 @@
 
 'use client';
 
-import { ChangeEvent, useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Trash2, Save, AlertCircle, Edit, Upload, Download, Sparkles, ClipboardList, Loader2, Calculator } from 'lucide-react';
+import { Plus, Trash2, Save, AlertCircle, Edit, Upload, Sparkles, ClipboardList, Loader2, Calculator } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
@@ -150,7 +150,6 @@ export default function BulkBillCreationPage() {
 
   const [showClassificationDialog, setShowClassificationDialog] = useState(false);
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
-  const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { loadInitialData(); }, []);
 
@@ -329,104 +328,6 @@ export default function BulkBillCreationPage() {
     return String(value || '').trim();
   };
 
-  const downloadTemplate = () => {
-    const headers = ['billNo', 'measurementDate', 'classificationCode', 'classificationAmount', 'cementAmount', 'steelTmtBarsAmount', 'steelAngleChannelAmount', 'steelPlatesAmount', 'steelOtherSectionsAmount', 'description', 'itemNumber', 'quantity', 'agreementRate'];
-    const rows = [
-      ['B1', '2026-04-15', 'CIVIL', '300000', '85000', '60000', 'Earthwork', '1', '10', '30000'],
-      ['B1', '2026-04-15', 'CONCRETE', '400000', '85000', '60000', 'Concrete work', '2', '20', '20000'],
-      ['B1', '2026-04-15', 'STEEL', '300000', '85000', '60000', 'Steel work', '3', '15', '20000'],
-      ['B2', '2026-04-20', 'CIVIL', '200000', '', '', 'Earthwork', '1', '', ''],
-      ['B2', '2026-04-20', 'TRACK', '600000', '', '', 'Track work', '2', '', ''],
-    ];
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'bulk_bill_template.csv';
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    if (classificationGroups.length === 0) {
-      toast.error('Classifications are still loading. Please try again in a moment.');
-      return;
-    }
-    try {
-      const XLSX = await import('xlsx');
-      const fileName = file.name.toLowerCase();
-      const workbook = fileName.endsWith('.csv')
-        ? XLSX.read(await file.text(), { type: 'string' })
-        : XLSX.read(await file.arrayBuffer(), { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const importedRows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' });
-
-      if (importedRows.length === 0) { toast.error('Import file has no rows'); return; }
-
-      const grouped = new Map<string, BillRow>();
-      const errors: string[] = [];
-
-      importedRows.forEach((importRow, index) => {
-        const rowNumber = index + 2;
-        const billNo = String(getImportValue(importRow, ['billNo', 'bill number', 'bill']) || '').trim();
-        const measurementDate = normalizeImportedDate(getImportValue(importRow, ['measurementDate', 'dateOfMeasurement', 'date']));
-        const classificationValue = getImportValue(importRow, ['subClassificationId', 'classificationCode', 'subClassificationCode', 'classificationName', 'classification']);
-        const subClassification = findSubClassification(classificationValue);
-        const classificationAmount = parseAmount(getImportValue(importRow, ['classificationAmount', 'classAmount', 'entryAmount']));
-
-        if (!billNo) errors.push(`Row ${rowNumber}: billNo is required`);
-        if (!measurementDate) errors.push(`Row ${rowNumber}: measurementDate is required`);
-        if (!subClassification) errors.push(`Row ${rowNumber}: classification not found (${classificationValue || 'blank'})`);
-        if (classificationAmount <= 0) errors.push(`Row ${rowNumber}: classificationAmount must be greater than 0`);
-        if (!billNo || !measurementDate || !subClassification || classificationAmount <= 0) return;
-
-        const existing = grouped.get(billNo);
-        const nextRow: BillRow = existing || {
-          id: Math.random().toString(36).substr(2, 9),
-          billNo,
-          dateOfMeasurement: measurementDate,
-          cementAmount: parseAmount(getImportValue(importRow, ['cementAmount', 'cement'])) || '',
-          steelTmtBarsAmount: parseAmount(getImportValue(importRow, ['steelTmtBarsAmount', 'steelAmount', 'steelTmt'])) || '',
-          steelAngleChannelAmount: parseAmount(getImportValue(importRow, ['steelAngleChannelAmount', 'steelAngleChannel'])) || '',
-          steelPlatesAmount: parseAmount(getImportValue(importRow, ['steelPlatesAmount', 'steelPlates'])) || '',
-          steelOtherSectionsAmount: parseAmount(getImportValue(importRow, ['steelOtherSectionsAmount', 'steelOtherSections'])) || '',
-          classificationEntries: [],
-        };
-
-        if (!existing) grouped.set(billNo, nextRow);
-
-        nextRow.classificationEntries.push({
-          subClassificationId: subClassification.id,
-          subClassification,
-          amount: classificationAmount,
-          description: String(getImportValue(importRow, ['description', 'remarks']) || ''),
-          itemNumber: String(getImportValue(importRow, ['itemNumber', 'itemNo']) || ''),
-          quantity: parseAmount(getImportValue(importRow, ['quantity', 'qty'])) || '',
-          agreementRate: parseAmount(getImportValue(importRow, ['agreementRate', 'rate'])) || '',
-        });
-      });
-
-      if (errors.length > 0) {
-        toast.error(`Import has errors:\n${errors.slice(0, 8).join('\n')}${errors.length > 8 ? `\n...and ${errors.length - 8} more` : ''}`, { duration: 10000 });
-        return;
-      }
-
-      const importedBills = Array.from(grouped.values());
-      if (importedBills.length === 0) { toast.error('No valid bills found in import file'); return; }
-
-      setBillRows(importedBills);
-      toast.success(`Imported ${importedBills.length} bills with ${importedRows.length} classification rows`);
-    } catch (err) {
-      console.error('Bulk bill import failed:', err);
-      toast.error('Failed to import file. Please check the template format.');
-    }
-  };
 
   const openClassificationDialog = (billId: string) => {
     setEditingBillId(billId);
@@ -990,33 +891,7 @@ export default function BulkBillCreationPage() {
           {/* Bills Table */}
           {selectedContract && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label className="text-lg">Bills</Label>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input ref={importInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleImportFile} />
-                  <Button type="button" variant="outline" size="sm" onClick={downloadTemplate} disabled={isSaving}>
-                    <Download className="h-4 w-4 mr-2" />Template
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => importInputRef.current?.click()} disabled={isSaving}>
-                    <Upload className="h-4 w-4 mr-2" />Import Excel
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={addBillRow} disabled={isSaving}>
-                    <Plus className="h-4 w-4 mr-2" />Add Bill
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void previewAllRows()}
-                    disabled={isSaving || previewingRows}
-                  >
-                    {previewingRows
-                      ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      : <Calculator className="h-4 w-4 mr-2" />}
-                    {previewingRows ? 'Checking PVC…' : 'Preview PVC'}
-                  </Button>
-                </div>
-              </div>
+              <Label className="text-lg">Bills</Label>
 
               <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg">
                 <p className="text-sm text-emerald-900">
@@ -1206,7 +1081,9 @@ export default function BulkBillCreationPage() {
       />
 
       <Dialog open={showClassificationDialog} onOpenChange={setShowClassificationDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        {/* overflow-x-hidden as a backstop: one over-wide child used to widen the whole
+            dialog and leave a horizontal scrollbar across the bottom. */}
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle>Manage Bill Classifications</DialogTitle>
             <DialogDescription>
@@ -1275,6 +1152,19 @@ export default function BulkBillCreationPage() {
           <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur">
             <Button type="button" size="sm" variant="outline" onClick={addBillRow} disabled={isSaving} className="rounded-full">
               <Plus className="h-4 w-4 mr-1.5" />Add Bill
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void previewAllRows()}
+              disabled={isSaving || previewingRows}
+              className="rounded-full"
+            >
+              {previewingRows
+                ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                : <Calculator className="h-4 w-4 mr-1.5" />}
+              {previewingRows ? 'Checking PVC…' : 'Preview PVC'}
             </Button>
             {billMode === 'ai' && (
               <Button

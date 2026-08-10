@@ -535,7 +535,11 @@ export function BillClassificationEntries({
             "Rate is inclusive of GST: Yes". So the bill value as billed IS the base, and
             stripping 18% understates the PVC. The old wording asserted the opposite
             ("PVC uses the GST-free value"), which is how this became a trap. */}
-        <span className={`text-[11px] ${ratesIncludeGst ? 'text-amber-700' : 'text-slate-500'}`}>
+        {/* basis-full min-w-0: a flex item will not shrink below its content by default,
+            so this paragraph — the longest string on the panel — set the width of the
+            whole dialog and put a horizontal scrollbar under it, with its own last
+            words cut off. It gets a line of its own and wraps. */}
+        <span className={`basis-full min-w-0 text-[11px] ${ratesIncludeGst ? 'text-amber-700' : 'text-slate-500'}`}>
           {ratesIncludeGst
             ? `Caution: this removes ${(AGREEMENT_GST_RATE * 100).toFixed(0)}% from items entered as quantity × rate. GCC Cl.46A takes W as the gross value per the on-account bill and does not exclude GST, so on a bill raised at GST-inclusive rates this understates the PVC by ${(AGREEMENT_GST_RATE * 100).toFixed(0)}%. Use only if your accounts office has directed a GST-free base in writing.`
             : 'Items are used for PVC exactly as billed — the correct basis under GCC Cl.46A.'}
