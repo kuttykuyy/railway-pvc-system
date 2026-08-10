@@ -93,6 +93,8 @@ interface BillRow {
   billNo: string;
   dateOfMeasurement: string;
   isAiUploaded?: boolean;
+  /** Cl.46A.1(b): extra items ordered under Cl.39(1)(b), outside price variation. */
+  extraItemsOutsidePvc?: string;
   cementAmount: number | string | '';
   steelTmtBarsAmount: number | string | '';
   steelAngleChannelAmount: number | string | '';
@@ -106,6 +108,7 @@ function createEmptyBillRow(id?: string): BillRow {
     id: id || Math.random().toString(36).substr(2, 9),
     billNo: '',
     dateOfMeasurement: '',
+    extraItemsOutsidePvc: '',
     cementAmount: '',
     steelTmtBarsAmount: '',
     steelAngleChannelAmount: '',
@@ -670,6 +673,7 @@ export default function BulkBillCreationPage() {
             fuelPriceType: globalFuelPriceType || 'four_city_avg',
             grossBillAmount: classificationTotal,
             billAmount: classificationTotal,
+            extraItemsOutsidePvc: parseFloat(row.extraItemsOutsidePvc || '') || 0,
             steelTmtBarsAmount: parseAmount(row.steelTmtBarsAmount),
             steelAngleChannelAmount: parseAmount(row.steelAngleChannelAmount),
             steelPlatesAmount: parseAmount(row.steelPlatesAmount),
@@ -1102,6 +1106,33 @@ export default function BulkBillCreationPage() {
               measurementDate={getEditingBill()?.dateOfMeasurement || undefined}
               lockEntries={!!getEditingBill()?.isAiUploaded}
             />
+          )}
+
+          {/* Per bill, because extra items are ordered per bill. */}
+          {editingBillId && getEditingBill() && (
+            <div className="mt-4 space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <Label htmlFor="bulkExtraItems" className="text-sm font-semibold text-amber-900">
+                Extra items outside PVC (Cl. 39(1)(b))
+              </Label>
+              <p className="text-[11px] text-amber-800">
+                Value of extra items ordered during execution, outside the tender&apos;s Bill of Quantities.
+                Clause 46A.1(b) keeps these out of the value the variation is worked out on — unless PVC and a
+                base month were specially agreed when their rates were fixed, in which case leave it blank.
+                The bill is still paid in full; only the variation is not computed on this part.
+              </p>
+              <Input
+                id="bulkExtraItems"
+                type="number"
+                step="0.01"
+                min="0"
+                value={getEditingBill()?.extraItemsOutsidePvc || ''}
+                onChange={(event) => setBillRows(rows => rows.map(row => (
+                  row.id === editingBillId ? { ...row, extraItemsOutsidePvc: event.target.value } : row
+                )))}
+                placeholder="0.00"
+                className="bg-white max-w-xs"
+              />
+            </div>
           )}
 
           {/* Deriving cement out of DSR items is off — see lib/cement-derivation.ts. */}

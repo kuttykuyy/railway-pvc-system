@@ -21,6 +21,10 @@ interface BillInput {
   isAiUploaded?: boolean;
   grossBillAmount?: number;
   billAmount?: number;
+  /** Cl.46A.1(a): railway-supplied material is outside the value PVC is computed on. */
+  railwaySuppliedMaterialValue?: number;
+  /** Cl.46A.1(b): extra items ordered under Cl.39(1)(b), likewise outside it. */
+  extraItemsOutsidePvc?: number;
   steelTmtBarsAmount?: number;
   steelAngleChannelAmount?: number;
   steelPlatesAmount?: number;
@@ -253,6 +257,19 @@ export async function POST(request: NextRequest) {
       );
       const grossBillAmount = Number(billInput.grossBillAmount || billInput.billAmount || classificationTotal);
 
+      // What Cl.46A.1 puts outside price adjustment: railway-supplied material, and
+      // extra items ordered under Cl.39(1)(b) where PVC was not specially agreed for
+      // them. The single-bill route has excluded these since they were added; this one
+      // never did, so a batch quietly paid variation on material the contractor never
+      // bought. The billed amounts are untouched — that is the real work value — and
+      // only the base the variation is worked out on is reduced, spread across the
+      // entries in proportion to their amounts, exactly as the single-bill route does.
+      const outsidePvc = Math.max(0, Number(billInput.railwaySuppliedMaterialValue) || 0)
+        + Math.max(0, Number(billInput.extraItemsOutsidePvc) || 0);
+      const pvcBaseFactor = outsidePvc > 0 && classificationTotal > outsidePvc
+        ? (classificationTotal - outsidePvc) / classificationTotal
+        : 1;
+
       // Generate PVC auto-number
       const sequenceNumber = String(maxSequence + i + 1).padStart(3, '0');
       const autoPvcNumber = `PVC/${contract.agreementNo}/${sequenceNumber}`;
@@ -316,7 +333,7 @@ export async function POST(request: NextRequest) {
         const entryPvc = await calculateClassificationEntryPvc(
           {
             subClassificationId: entry.subClassificationId,
-            amount: Number(entry.amount),
+            amount: Number(entry.amount) * pvcBaseFactor,
             steelTypes: entrySteelTypes
           },
           quarterlyAverages,
