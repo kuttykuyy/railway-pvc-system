@@ -15,7 +15,7 @@ import type { DeterministicBillDetails, DeterministicBillItem } from './ireps-bi
 // "Kilometre" spells out what "Km" abbreviates elsewhere on the same bill. Item NS2 of
 // SR/MDU/Civil/2025/0070/B1/R1 is billed in Shifts and went unanchored, leaving that
 // bill Rs 13,335 short — the whole of the row.
-const UNIT_PATTERN = /^(?:Cum|Cu\.?m\.?|Sqm|Sq\.?m\.?|Kg|MT|M\.?T\.?|Metre|Meter|Kilo\s*met(?:re|er)|Each|Num|Nos?\.?|RM|Rmt|TRM|Km|Litre|Ltr|Set|Job|LS|Shifts?|Nights?|Hours?|Hrs?|Days?|Quintal|Qtl|Tonne|Pair|Bags?|Sqft|Cft)$/i;
+const UNIT_PATTERN = /^(?:Cum|Cu\.?m\.?|Sqm|Sq\.?m\.?|Kg|MT|M\.?T\.?|Metre|Meter|Kilo\s*met(?:re|er)|Each|Num|Nos?\.?|RM|Rmt|TRM|Km|Litre|Ltr|Set|Job|LS|Shifts?|Nights?|Hours?|Hrs?|Days?|Quintal|Qtl|Tonne|Pair|Bags?|Sqft|Cft|Joints?|ERC|Numbers?|MT-?Km|Tonne-?Km)$/i;
 const NUMBER_PATTERN = /^-?[\d,]+(?:\.\d*)?$/;
 const X = {
   serial: [50, 88],
@@ -686,11 +686,14 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       const quantity = numericValue(quantityRaw) || 0;
       const agreementAmount = numericValue(agreementAmountRaw) || 0;
       const specialAmount = numericValue(specialAmountRaw) || 0;
-      // What this row actually adds to the bill: the special-condition amount when
-      // the bill carries one, otherwise the plain amount at agreement rate. Either
-      // can be negative — a bill reverses an earlier over-measurement by billing a
-      // minus quantity, and that row reduces the bill just like any other.
-      const payableAmount = specialAmount !== 0 ? specialAmount : agreementAmount;
+      // What this row actually adds to the bill: the special-condition amount whenever
+      // that column is printed for the row — including when it is printed as 0.00, which
+      // is the bill saying this row pays nothing. Only a BLANK cell means the bill has
+      // no such column, and only then does the plain amount at agreement rate stand in.
+      // Either can be negative — a bill reverses an earlier over-measurement by billing
+      // a minus quantity, and that row reduces the bill like any other.
+      const specialPrinted = numericValue(specialAmountRaw) !== undefined;
+      const payableAmount = specialPrinted ? specialAmount : agreementAmount;
       const nextRowY = deduped[index + 1]?.y || page.height - 5;
       const rowMayContinue = straddlesPageBreak || index === deduped.length - 1;
       const itemNo = extractItemCode(page, unitItem.y, nextRowY, rowMayContinue && nextPage
@@ -731,6 +734,10 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       if (quantity === 0) {
         if (specialAmount === 0) continue;
         rateRevisionAmount += specialAmount;
+      }
+      if (payableAmount === 0 && (specialPrinted || numericValue(agreementAmountRaw) !== undefined)) {
+        // The bill printed an amount and it is zero: nothing measured, nothing to read.
+        continue;
       }
       if (!(agreementRate > 0 && payableAmount !== 0)) {
         skippedRows.push({ reason: 'no payable amount could be read', itemNo, amount: 0 });
