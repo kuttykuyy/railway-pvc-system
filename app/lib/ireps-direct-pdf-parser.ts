@@ -624,15 +624,49 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         }
       }
     };
-    const units = page.items
-      .filter(item => {
-        const x = normalizedX(page, item);
-        if (!(x >= X.unit[0] && x < X.unit[1])) return false;
-        if (UNIT_PATTERN.test(item.text.trim())) return true;
-        // Wrapped: the halves join into the unit the row is really billed in.
-        return UNIT_PATTERN.test(cellText(page, page.items, X.unit, item.y));
-      })
-      .sort((left, right) => left.y - right.y);
+    const unitAnchored = page.items.filter(item => {
+      const x = normalizedX(page, item);
+      if (!(x >= X.unit[0] && x < X.unit[1])) return false;
+      if (UNIT_PATTERN.test(item.text.trim())) return true;
+      // Wrapped: the halves join into the unit the row is really billed in.
+      return UNIT_PATTERN.test(cellText(page, page.items, X.unit, item.y));
+    });
+
+    // A row whose unit the list does not hold is invisible, and the list can never be
+    // complete: DSR prices pre-moulded joint filler "per cm depth per cm width per
+    // metre length", printed down ten lines of the unit column, and no whitelist will
+    // ever contain that. Item 16.45 of SR/MDU/Civil/2025/0065/B5 is Rs 4,03,110 billed
+    // that way, and the reader had been learning one unit per bill — TRM, Shift, Joint,
+    // ERC — with each one found only after a bill came out short.
+    //
+    // So a line is also taken as a row when it does its own arithmetic: a rate, a
+    // quantity and an amount in their own columns, where Qty x Rate reproduces the
+    // amount within what the print's rounding allows. A description line has no numbers
+    // in those columns and a schedule total does not multiply out, so neither qualifies.
+    // Anything this admits wrongly is caught by the whole-bill reconciliation, which is
+    // the same guard that catches anything it misses.
+    const anchoredYs = unitAnchored.map(item => item.y);
+    const arithmeticAnchored: PositionedPdfTextItem[] = [];
+    const consideredY = new Set<number>();
+    for (const item of page.items) {
+      const x = normalizedX(page, item);
+      if (!(x >= X.unit[0] && x < X.unit[1])) continue;
+      const y = Math.round(item.y);
+      if (consideredY.has(y)) continue;
+      consideredY.add(y);
+      if (anchoredYs.some(other => Math.abs(other - item.y) <= 6)) continue;
+
+      const rate = numericValue(cellText(page, page.items, X.agreementRate, item.y));
+      const quantity = numericValue(cellText(page, page.items, X.qtySinceLast, item.y));
+      const plain = numericValue(cellText(page, page.items, X.amountSinceLast, item.y));
+      if (!(rate && rate > 0) || !quantity || !plain) continue;
+      const tolerance = Math.max(1, Math.abs(plain) * 0.001, Math.abs(rate) * 0.01);
+      if (Math.abs(quantity * rate - plain) > tolerance) continue;
+      arithmeticAnchored.push(item);
+      anchoredYs.push(item.y);
+    }
+
+    const units = [...unitAnchored, ...arithmeticAnchored].sort((left, right) => left.y - right.y);
     const candidates = units.filter(unitItem => {
       const agreementRaw = cellText(page, page.items, X.agreementRate, unitItem.y);
       const quantityRaw = cellText(page, page.items, X.qtySinceLast, unitItem.y);
