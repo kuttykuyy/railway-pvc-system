@@ -39,6 +39,13 @@ interface BillInput {
     quantity?: number;
     agreementRate?: number;
     steelTypes?: string[];
+    /**
+     * The per-item rows behind the entry — billed amount, description, bill page.
+     * The single-bill route has always stored these; this one silently dropped them,
+     * so a bulk-created bill's statement rebuilt every amount as Qty x Rate (wrong
+     * wherever a special condition prices the row) and had no page numbers to print.
+     */
+    itemRows?: Array<Record<string, unknown>>;
   }>;
   processingFee: number;
 }
@@ -359,6 +366,7 @@ export async function POST(request: NextRequest) {
           itemNumber: entry.itemNumber || null,
           quantity: entry.quantity || null,
           agreementRate: entry.agreementRate || null,
+          itemRows: Array.isArray(entry.itemRows) && entry.itemRows.length > 0 ? entry.itemRows : undefined,
           steelTypes: entrySteelTypes,
           labourPvc: entryPvc.labourPvc,
           plantMachineryPvc: entryPvc.plantMachineryPvc,

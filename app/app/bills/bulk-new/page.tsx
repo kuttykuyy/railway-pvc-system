@@ -689,6 +689,18 @@ export default function BulkBillCreationPage() {
               itemNumber: entry.itemNumber || null,
               quantity: entry.quantity === '' || entry.quantity === null || entry.quantity === undefined ? null : parseFloat(String(entry.quantity)) || null,
               agreementRate: entry.agreementRate === '' || entry.agreementRate === null || entry.agreementRate === undefined ? null : parseFloat(String(entry.agreementRate)) || null,
+              // The rows are the statement: each carries its billed amount (which
+              // Qty x Rate cannot reproduce under a special condition), its own
+              // description, and the bill page it was read from.
+              itemRows: entry.itemRows && entry.itemRows.length > 0 ? entry.itemRows.map(r => ({
+                itemNumber: r.itemNumber || '',
+                quantity: r.quantity === '' || r.quantity === null || r.quantity === undefined ? null : parseFloat(String(r.quantity)) || null,
+                agreementRate: r.agreementRate === '' || r.agreementRate === null || r.agreementRate === undefined ? null : parseFloat(String(r.agreementRate)) || null,
+                ...((r as any).amount !== undefined && (r as any).amount !== '' ? { amount: Number((r as any).amount) } : {}),
+                ...((r as any).description ? { description: (r as any).description } : {}),
+                ...((r as any).pageNumber ? { pageNumber: (r as any).pageNumber } : {}),
+                ...((r as any).sourceQty !== undefined ? { sourceQty: (r as any).sourceQty, coefficient: (r as any).coefficient, workUnit: (r as any).workUnit } : {}),
+              })) : null,
             })),
             processingFee: processingFee,
           };
