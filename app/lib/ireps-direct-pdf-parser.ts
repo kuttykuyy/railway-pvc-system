@@ -708,7 +708,10 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       // survive it, so this check does not need to be tighter than the print.
       if (agreementAmount !== 0 && quantity !== 0) {
         const arithmeticDifference = Math.abs(quantity * agreementRate - agreementAmount);
-        if (arithmeticDifference > Math.max(1, Math.abs(agreementAmount) * 0.001)) {
+        // Rate x the quantity's own printed rounding is the error the print can carry;
+        // 0.1% of the amount covers large items, and Re 1 is the floor for small ones.
+        const printTolerance = Math.max(1, Math.abs(agreementAmount) * 0.001, Math.abs(agreementRate) * 0.01);
+        if (arithmeticDifference > printTolerance) {
           skippedRows.push({
             reason: `Qty x Rate did not reproduce the printed amount (off by Rs ${arithmeticDifference.toFixed(2)})`,
             itemNo,
@@ -778,10 +781,34 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   const roundingTolerance = 0.05 + items.length * 0.01;
   const amountsReconciled = Math.abs(amountDifference) <= roundingTolerance;
   if (!amountsReconciled) {
+    // What sat in the unit column and matched nothing. A row is anchored by its unit,
+    // so an unknown one is invisible — and invisible is what a shortfall with no
+    // skipped rows means.
+    const unknownUnits = new Map<string, number>();
+    for (const page of pages) {
+      for (const item of page.items) {
+        const x = normalizedX(page, item);
+        if (x < X.unit[0] || x >= X.unit[1]) continue;
+        const text = item.text.trim();
+        if (!text || UNIT_PATTERN.test(text)) continue;
+        if (UNIT_PATTERN.test(cellText(page, page.items, X.unit, item.y))) continue;
+        if (!/^[A-Za-z][A-Za-z.\/ -]{0,18}$/.test(text)) continue;
+        unknownUnits.set(text, (unknownUnits.get(text) || 0) + 1);
+      }
+    }
+    const unknownUnitNote = unknownUnits.size > 0
+      ? `\nText in the unit column that the reader does not recognise, which is how a row goes unread: `
+        + [...unknownUnits.entries()]
+            .sort((left, right) => right[1] - left[1])
+            .slice(0, 8)
+            .map(([text, count]) => `"${text}" x${count}`)
+            .join(', ')
+        + '.'
+      : '';
     throw new Error(
       `Direct PDF item total Rs ${itemAmountTotal.toFixed(2)} does not match Total Amount Rs ${grossTotal.toFixed(2)}` +
       `. ${amountDifference < 0 ? 'Short' : 'Over'} by Rs ${Math.abs(amountDifference).toFixed(2)} after reading ${items.length} row(s).\n` +
-      describeSkippedRows(skippedRows),
+      describeSkippedRows(skippedRows) + unknownUnitNote,
     );
   }
   const scheduleTotals = new Map<string, number>();
