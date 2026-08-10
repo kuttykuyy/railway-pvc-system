@@ -24,12 +24,25 @@ export type ContractSchedule = {
   /** Percentages kept as strings so an empty box stays empty (not 0). */
   escalation: string;
   bidRate: string;
+  /**
+   * The item numbers the LOA accepted under this schedule.
+   *
+   * The LOA fixes the work at the time it is issued. An item appearing on a bill under
+   * a B schedule that is not in this list was ordered afterwards — an extra item under
+   * Cl.39(1)(b), which Cl.46A.1(b) puts outside price variation unless PVC and a base
+   * month were specially agreed when its rate was fixed.
+   *
+   * Empty means unknown, not "no items": a contract entered before this was captured,
+   * or an LOA the reader could not list. Nothing is treated as extra on an empty list.
+   */
+  items?: string[];
 };
 
 export const emptySchedule = (name = ''): ContractSchedule => ({
   name,
   escalation: '',
   bidRate: '',
+  items: [],
 });
 
 const asPercentString = (v: unknown): string =>
@@ -47,6 +60,9 @@ export function normalizeSchedules(raw: unknown): ContractSchedule[] {
           name: String(o.name ?? ''),
           escalation: asPercentString(o.escalation),
           bidRate: asPercentString(o.bidRate),
+          items: Array.isArray(o.items)
+            ? o.items.map(value => String(value).trim()).filter(Boolean)
+            : [],
         };
       }
       return emptySchedule();

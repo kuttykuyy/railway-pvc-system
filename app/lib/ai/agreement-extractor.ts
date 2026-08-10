@@ -22,6 +22,8 @@ export interface ExtractedSchedule {
   name: string;
   escalation: string;
   bidRate: string;
+  /** Item numbers accepted under this schedule, as printed in the LOA. */
+  items: string[];
 }
 
 export interface ExtractedAgreement {
@@ -158,7 +160,7 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   "agreementAmount": "LOA Amount / accepted contract value (number)",
   "railwayName": "Railway zone name (e.g. Southern Railway)",
   "division": "Division/Unit (e.g. Tiruchchirappalli / TPJ)",
-  "schedules": "Array of the work schedules / schedule items listed in the agreement (e.g. Schedule-A, Schedule-B, or named item groups). For each, return {\"name\": \"schedule name/title\", \"escalation\": \"escalation % if a per-schedule escalation percentage is stated, else null\", \"bidRate\": \"tender/bid rate % above(+) or below(-) the estimate if stated for that schedule, else null\"}. Return [] if no schedules are listed.",
+  "schedules": "Array of the work schedules / schedule items listed in the agreement (e.g. Schedule-A, Schedule-B, or named item groups). For each, return {\"name\": \"schedule name/title\", \"escalation\": \"escalation % if a per-schedule escalation percentage is stated, else null\", \"bidRate\": \"tender/bid rate % above(+) or below(-) the estimate if stated for that schedule, else null\", \"items\": [\"every item number listed under that schedule in the LOA, exactly as printed — e.g. '1', '2', '5.35', '082011'. Return [] if the LOA does not list item numbers for it\"]}. Return [] if no schedules are listed.",
   "acceptedPercentage": "The ONE overall tender percentage the offer was accepted at, as a number: ABOVE the estimate is POSITIVE, BELOW is NEGATIVE, 'at par' is 0. A Letter of Acceptance states this in a sentence rather than a table — 'your offer ... at 5.75% below the estimated cost is accepted' -> -5.75; 'quoted 3% excess' -> 3; '(-)7.5%' -> -7.5; 'at par' -> 0. Words to read as BELOW: below, less, discount, rebate, minus, (-). Words to read as ABOVE: above, excess, over, plus, (+). Return null if no such percentage is stated anywhere.",
   "rebatePercentage": "Any separately stated REBATE % (a discount on the accepted rates, sometimes offered in a later letter), as a positive number. Null if the document states no separate rebate. Do NOT repeat acceptedPercentage here — a below-estimate offer is not a rebate."
 }`;
@@ -264,6 +266,12 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
           name: asStr(s?.name),
           escalation: asStr(s?.escalation).replace(/%/g, ''),
           bidRate: asStr(s?.bidRate).replace(/%/g, ''),
+          // The item numbers accepted under this schedule, kept exactly as printed —
+          // a bill cites them the same way, and normalising here would only make the
+          // two sides disagree about what counts as the same item.
+          items: Array.isArray(s?.items)
+            ? Array.from(new Set(s.items.map((value: unknown) => asStr(value)).filter(Boolean)))
+            : [],
         }))
         .filter((s: any) => s.name)
     : [];
