@@ -465,6 +465,8 @@ export interface ExtractedBillDetails {
   workDescription?: string;
   /** The Name of Work printed on the bill itself, before the contract's own wins. */
   billWorkDescription?: string;
+  /** What happened to the contract's agreement number when this bill was read. */
+  agreementNumberFill?: { applied: boolean; from?: string; to?: string; reason?: string; conflict?: boolean };
   /** Contract details the bill header repeats — used to complete a contract set up from an LOA. */
   agreementDate?: string;
   loaNo?: string;
@@ -1343,11 +1345,13 @@ export async function extractBillDetailsDirect(pdfBuffer: Buffer, contractId?: s
   // A contract set up from an LOA stands on its LOA number until a bill supplies the
   // real one. Done here because this is the moment both are known, and before the bill
   // is created — a PVC number is built from the agreement number, and one issued
-  // against the placeholder would carry it for good.
+  // against the placeholder would carry it for good. The bill's own LOA number goes
+  // along as the second witness, for contracts whose loaNo field is blank.
+  let agreementFill: Awaited<ReturnType<typeof fillAgreementNumberFromBill>> | undefined;
   if (contractId) {
-    const filled = await fillAgreementNumberFromBill(contractId, parsed.agreementNo);
-    if (filled.applied) {
-      console.info('[bill-extraction] agreement number taken from the bill', filled);
+    agreementFill = await fillAgreementNumberFromBill(contractId, parsed.agreementNo, parsed.loaNo);
+    if (agreementFill.applied) {
+      console.info('[bill-extraction] agreement number taken from the bill', agreementFill);
     }
   }
 
@@ -1377,6 +1381,7 @@ export async function extractBillDetailsDirect(pdfBuffer: Buffer, contractId?: s
     // The contract's description wins above, so keep the bill's own available for
     // filling in contract details that were never captured.
     billWorkDescription: parsed.workDescription,
+    agreementNumberFill: agreementFill,
     classificationGroupCode: inferMainClassification(workDescription).code,
     items: normalizedItems.map(item => applyDeterministicClassification(item, workDescription, severalWorks)),
   };
@@ -1779,7 +1784,11 @@ export async function POST(request: NextRequest) {
       // the real agreement number from the bill that prints it. Harmless to reach twice
       // — once the contract has its own number, this does nothing.
       if (contractId) {
-        await fillAgreementNumberFromBill(contractId, billDetails.agreementNo);
+        (billDetails as any).agreementNumberFill = await fillAgreementNumberFromBill(
+          contractId,
+          billDetails.agreementNo,
+          (billDetails as any).loaNo,
+        );
       }
     } else {
       const formData = await request.formData();

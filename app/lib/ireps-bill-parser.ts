@@ -43,6 +43,9 @@ export interface DeterministicBillItem {
 export interface DeterministicBillDetails {
   billNo: string;
   agreementNo: string;
+  /** The LOA number as the bill prints it — the second witness that a contract still
+   * stands on its LOA number when its own loaNo field was never filled. */
+  loaNo?: string;
   contractorName: string;
   workDescription: string;
   measurementDate: string;

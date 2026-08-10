@@ -814,6 +814,16 @@ export function BillPdfCementAnalyzer({
 
       const data = json.data as CementAnalysisData;
       setResult(data);
+
+      // The contract's agreement number can change as a side effect of reading the
+      // bill; that must never happen silently, and a refusal because the number is
+      // held elsewhere means the bill probably went against the wrong contract.
+      const fill = (data.billDetails as any)?.agreementNumberFill;
+      if (fill?.applied) {
+        toast.success(`Contract agreement number set to ${fill.to} — read from the bill (was ${fill.from}).`, { duration: 8000 });
+      } else if (fill?.conflict) {
+        toast.error(fill.reason, { duration: 10000 });
+      }
       setExtractionId(json.extractionId || null);
 
       const unlocked = !!json.isUnlocked;
