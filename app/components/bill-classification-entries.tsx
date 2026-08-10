@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { inferMainClassification } from '@/lib/work-classification';
 import { findScheduleRates, type ContractSchedule } from '@/lib/contract-schedules';
+import { scheduleTag } from '@/lib/bill-schedule-matching';
 
 interface SubClassification {
   id: string;
@@ -629,8 +630,15 @@ export function BillClassificationEntries({
                   <ChevronRight className={`h-4 w-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                   <span className="font-mono text-xs font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{summaryCode}</span>
                   <span className="flex-1 min-w-0 truncate text-sm text-slate-800">{summaryName}</span>
-                  <span className="hidden sm:block text-xs text-slate-400 whitespace-nowrap">
-                    {entry.scheduleItem ? `Sch ${entry.scheduleItem} · ` : ''}{rowCount || 0} item{rowCount === 1 ? '' : 's'}
+                  {/* The bill names a schedule in a whole sentence, and when the contract
+                      lists none of its own that sentence is what gets stored. Printed
+                      whole and told never to wrap, it set the width of every row. Only
+                      the tag tells one schedule from another; the rest is on hover. */}
+                  <span
+                    className="hidden sm:block max-w-[14rem] shrink-0 truncate text-xs text-slate-400"
+                    title={entry.scheduleItem || undefined}
+                  >
+                    {entry.scheduleItem ? `Sch ${scheduleTag(entry.scheduleItem)} · ` : ''}{rowCount || 0} item{rowCount === 1 ? '' : 's'}
                   </span>
                   <span className="text-sm font-semibold text-slate-800 whitespace-nowrap">Rs {formatMoney(Number(entry.amount) || 0)}</span>
                   {entry.aiReviewed && (

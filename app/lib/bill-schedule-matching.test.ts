@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchExtractedSchedule } from './bill-schedule-matching';
+import { matchExtractedSchedule, scheduleTag } from './bill-schedule-matching';
 
 /**
  * The schedules of SR/TPJ/Civil/2025/0067/B7, as the bill prints them. Every B schedule
@@ -39,5 +39,20 @@ describe('matchExtractedSchedule', () => {
 
   it('gives nothing rather than a guess when no tag matches', () => {
     expect(matchExtractedSchedule(['C1', 'C2'], [B4])).toBe('');
+  });
+});
+
+describe('scheduleTag', () => {
+  it('reduces a spelled-out schedule to its tag', () => {
+    expect(scheduleTag(B4)).toBe('B4');
+    expect(scheduleTag(A4)).toBe('A4');
+  });
+
+  it('leaves a bare tag alone', () => {
+    expect(scheduleTag('B4')).toBe('B4');
+  });
+
+  it('returns the text unchanged when it carries no tag, for the caller to clamp', () => {
+    expect(scheduleTag('Miscellaneous works')).toBe('Miscellaneous works');
   });
 });

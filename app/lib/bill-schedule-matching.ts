@@ -29,6 +29,20 @@ function scheduleIdentifier(value: string): string {
   return bare ? bare[1].replace(/\s+/g, '') : '';
 }
 
+/**
+ * The short form of a schedule, for showing on a crowded row.
+ *
+ * A bill names a schedule in a whole sentence — "Schedule B4-Items which are not
+ * covered by Unified Standard Schedule of rates 2021 and CPWD-DSR-2021 for
+ * Tiruchirappalli Division. DTTC hostel/Diesel shed/Ponmalai." — and when a contract
+ * lists no schedules of its own that sentence is what gets stored and displayed. All
+ * that distinguishes one from another is the tag, so that is what a summary row shows.
+ * Falls back to the original text where no tag can be read, for the caller to clamp.
+ */
+export function scheduleTag(value: string): string {
+  return scheduleIdentifier(value) || String(value || '').trim();
+}
+
 export function matchExtractedSchedule(
   contractSchedules: string[],
   extractedValues: Array<string | null | undefined>,
