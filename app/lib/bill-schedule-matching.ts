@@ -43,6 +43,48 @@ export function scheduleTag(value: string): string {
   return scheduleIdentifier(value) || String(value || '').trim();
 }
 
+/**
+ * A schedule named by its tag and the work it covers, with the boilerplate dropped.
+ *
+ * A tender writes a schedule as a paragraph: which rate book it draws on, for which
+ * division, what it excludes, and on what terms the tenderer quotes — all of it repeated
+ * almost word for word on every schedule of the contract. The part that differs is the
+ * tag and the work named at the end. Stored whole, the schedule rows on a contract are
+ * indistinguishable and each one overflows its box.
+ *
+ * "Schedule B2-Items which are not covered by Unified Standard Schedule of rates 2021
+ * and CPWD-DSR-2021 for Tiruchirappalli Division. (The tenderer/contractor shall quote
+ * unit rate)-Renewal of worn out EOT crane gantry rails in Wheel Shop, BRS and Diesel
+ * POH shop" becomes "B2 - Renewal of worn out EOT crane gantry rails in Wheel Shop, BRS
+ * and Diesel POH shop".
+ *
+ * Where nothing but boilerplate is left, the tag alone is returned; where no tag can be
+ * read, the original text is returned untouched rather than mangled.
+ */
+export function shortScheduleName(value: string): string {
+  const original = String(value || '').trim();
+  const tag = scheduleIdentifier(original);
+  if (!tag) return original;
+
+  const rest = original
+    // Conditions on how the rate is quoted, always parenthesised.
+    .replace(/\([^)]*\)/g, ' ')
+    // "Schedule B2-", and the tag wherever it opens the text.
+    .replace(/^\s*schedule\s*/i, '')
+    .replace(new RegExp(`^${tag.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\s*[-–—:]*\\s*`, 'i'), '')
+    // Which book it draws on, and for which division.
+    .replace(/\b(?:all\s+)?items?\s+which\s+(?:is|are)\s*(?:\/\s*are\s*)?(?:not\s+)?covered\s+by\b[^.]*/gi, ' ')
+    .replace(/\bfor\s+[A-Za-z]+\s+division\b/gi, ' ')
+    .replace(/\bexcept\s+supply\s+of\b[^.\-–—]*/gi, ' ')
+    .replace(/\bthe\s+advertised\s+value\b[^.]*/gi, ' ')
+    .replace(/\s*[-–—.]+\s*/g, ' - ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s\-–—.]+|[\s\-–—.]+$/g, '')
+    .trim();
+
+  return rest ? `${tag} - ${rest}` : tag;
+}
+
 export function matchExtractedSchedule(
   contractSchedules: string[],
   extractedValues: Array<string | null | undefined>,

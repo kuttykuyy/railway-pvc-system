@@ -25,6 +25,7 @@ import {
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { useLanguage } from './i18n-provider';
 import { normalizeSchedules, emptySchedule, type ContractSchedule } from '@/lib/contract-schedules';
+import { shortScheduleName } from '@/lib/bill-schedule-matching';
 
 interface ContractFormProps {
   initialData?: {
@@ -194,7 +195,13 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
 
     // Fill the schedule rows from the agreement (name + per-schedule escalation/bid).
     if (Array.isArray(data.schedules) && data.schedules.length > 0) {
-      const filled = normalizeSchedules(data.schedules);
+      // A tender writes each schedule as a paragraph — which rate book, which division,
+      // what it excludes, on what terms the tenderer quotes — repeated almost word for
+      // word on every schedule. Stored whole, the rows are indistinguishable and each
+      // overflows its box. Kept as the tag and the work it covers; matching a bill goes
+      // by the tag, so nothing downstream depends on the rest.
+      const filled = normalizeSchedules(data.schedules)
+        .map(schedule => ({ ...schedule, name: shortScheduleName(schedule.name) }));
       // An LOA states ONE accepted percentage in a sentence instead of a per-schedule
       // table, so a schedule row can arrive with a name and no figure. Give those rows
       // the overall percentage rather than leaving the reader to copy it in by hand.

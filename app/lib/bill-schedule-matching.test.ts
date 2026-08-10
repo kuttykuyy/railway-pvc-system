@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchExtractedSchedule, scheduleTag } from './bill-schedule-matching';
+import { matchExtractedSchedule, scheduleTag, shortScheduleName } from './bill-schedule-matching';
 
 /**
  * The schedules of SR/TPJ/Civil/2025/0067/B7, as the bill prints them. Every B schedule
@@ -54,5 +54,27 @@ describe('scheduleTag', () => {
 
   it('returns the text unchanged when it carries no tag, for the caller to clamp', () => {
     expect(scheduleTag('Miscellaneous works')).toBe('Miscellaneous works');
+  });
+});
+
+describe('shortScheduleName', () => {
+  it('keeps the tag and the work, drops the boilerplate', () => {
+    expect(shortScheduleName(B2))
+      .toBe('B2 - Renewal of worn out EOT crane gantry rails in Wheel Shop, BRS and Diesel POH shop');
+    expect(shortScheduleName(B4)).toBe('B4 - DTTC hostel/Diesel shed/Ponmalai');
+  });
+
+  it('returns the tag alone where the schedule names no work', () => {
+    expect(shortScheduleName(A4)).toBe('A4');
+    expect(shortScheduleName('B4')).toBe('B4');
+  });
+
+  it('leaves text with no tag untouched rather than mangling it', () => {
+    expect(shortScheduleName('Miscellaneous works')).toBe('Miscellaneous works');
+  });
+
+  it('still matches a bill after shortening', () => {
+    expect(matchExtractedSchedule([shortScheduleName(B2), shortScheduleName(B4)], [B2]))
+      .toBe(shortScheduleName(B2));
   });
 });
