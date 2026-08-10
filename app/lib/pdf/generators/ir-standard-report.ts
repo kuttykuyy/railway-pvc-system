@@ -1228,6 +1228,9 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     const showBid = Math.abs(bidAdj) >= 0.01;
     const showEsc = Math.abs(escAdj) >= 0.01;
     const showRebate = rebatePct > 0 && rebate >= 0.01;
+    // Value the schedule items do not account for, kept for the note under the table.
+    let roundingCouldExplainIt = true;
+    let unaccounted = 0;
 
     // Reserve room for the whole summary (title + header + one row per schedule,
     // each of which can wrap to ~2 lines, + up to 3 total/rebate/net rows) so the
@@ -1274,13 +1277,22 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       // quantities, so Qty x Rate does not reproduce the printed amount to the paisa
       // (item 0510 of SR/MDU/Civil/2024/0037/B8: 127.1 x 3517.49 is Rs 161.72 below
       // the printed 4,47,234.70, because the true quantity is 127.146).
+      // Rounding is worth a few hundred rupees on a bill of this size: a paisa or two
+      // per item, as the note above describes. Beyond that the schedule items simply do
+      // not account for the bill, and calling the gap "rounded quantities" tells an
+      // accounts office the statement is complete when it is not — one bill of
+      // SR/TPJ/Civil/2025/0067 balanced Rs 16,05,996 that way, a third of its value.
+      roundingCouldExplainIt = Math.abs(totalAdjust) <= Math.max(100, grossTotal * 0.001);
+      unaccounted = roundingCouldExplainIt || cementSplitOutOfItems ? 0 : totalAdjust;
       summaryBody.push([
         cementSplitOutOfItems
           // The schedule lines above are net of cement, so the cement value has to come
           // back to reach W. Naming it "rounded quantities" hid an entire component of
           // the bill behind a rounding note.
           ? 'Add: Cement value separated out of the work items (per cement breakup above)'
-          : `${totalAdjust < 0 ? 'Less' : 'Add'}: Difference to printed Bill Amount (rounded quantities)`,
+          : roundingCouldExplainIt
+            ? `${totalAdjust < 0 ? 'Less' : 'Add'}: Difference to printed Bill Amount (rounded quantities)`
+            : `${totalAdjust < 0 ? 'Less' : 'Add'}: NOT ACCOUNTED FOR by the schedule items listed above`,
         { content: signed(totalAdjust), styles: { halign: 'right' as const } },
       ]);
       summaryBody.push([
@@ -1324,6 +1336,26 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     // Section F ended without moving y past its own table, so section G opened above it
     // and printed its heading through the summary.
     y = pdf.lastAutoTable.finalY + 4;
+
+    // Said plainly, under the table, where an officer reading the summary will see it.
+    // A gap this size means items are missing from the statement, not that quantities
+    // were rounded, and the bill's own Schedule Summary is the thing to check it against.
+    if (unaccounted !== 0) {
+      ensureSpace(12);
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(150, 0, 0);
+      const lines = pdf.splitTextToSize(
+        `Rs ${fmt(Math.abs(unaccounted))} of the Bill Amount is not accounted for by the schedule items above. `
+        + `This is too large to be rounding of quantities. Check the bill's own Schedule Summary against the items read, `
+        + `and re-read the bill before submitting this statement.`,
+        contentW,
+      );
+      pdf.text(lines, mL, y);
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFont('helvetica', 'normal');
+      y += pdf.getTextDimensions(lines).h + 2;
+    }
   }
 
   }
