@@ -17,6 +17,7 @@ import {
 import { inferMainClassification } from '@/lib/work-classification';
 import { enrichItemsFromRateBook } from '@/lib/rate-book-lookup';
 import { composeJustification, repairAiJustification, officialGroupName } from '@/lib/classification-justification';
+import { fillAgreementNumberFromBill } from '@/lib/agreement-number-from-bill';
 import { inferScheduleSubHead, CONTEXT as DSR_CONTEXT } from '@/lib/dsr-subhead-classification';
 import { recordAiUsage } from '@/lib/ai-usage';
 import { parseIrepsBillMarkdown } from '@/lib/ireps-bill-parser';
@@ -1339,6 +1340,17 @@ ${markdownPart}
 export async function extractBillDetailsDirect(pdfBuffer: Buffer, contractId?: string): Promise<ExtractedBillDetails> {
   const parsed = await parseIrepsBillPdfDirect(pdfBuffer);
 
+  // A contract set up from an LOA stands on its LOA number until a bill supplies the
+  // real one. Done here because this is the moment both are known, and before the bill
+  // is created — a PVC number is built from the agreement number, and one issued
+  // against the placeholder would carry it for good.
+  if (contractId) {
+    const filled = await fillAgreementNumberFromBill(contractId, parsed.agreementNo);
+    if (filled.applied) {
+      console.info('[bill-extraction] agreement number taken from the bill', filled);
+    }
+  }
+
   let contractDescription = '';
   if (contractId) {
     const contract = await prisma.contract.findUnique({
@@ -1763,6 +1775,12 @@ export async function POST(request: NextRequest) {
         markdownParts,
         false,
       );
+      // Same as the direct reader: a contract still standing on its LOA number takes
+      // the real agreement number from the bill that prints it. Harmless to reach twice
+      // — once the contract has its own number, this does nothing.
+      if (contractId) {
+        await fillAgreementNumberFromBill(contractId, billDetails.agreementNo);
+      }
     } else {
       const formData = await request.formData();
       const file = formData.get('file') as File | null;
