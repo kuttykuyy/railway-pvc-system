@@ -956,7 +956,13 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   // Item-wise listing of the bill schedule (item no., schedule, quantity,
   // agreement rate, amount) followed by a schedule-wise summary, so every
   // classified amount can be traced back to the source bill lines.
-  type ScheduleRow = { itemNumber: string; schedule: string; qty: number; rate: number; amount: number };
+  type ScheduleRow = {
+    itemNumber: string; schedule: string; qty: number; rate: number; amount: number;
+    /** Which page of the bill PDF the row was read from — the officer checks it there. */
+    page?: number;
+    /** The bill's own "Group Name" sub-work heading, where the bill printed one. */
+    group?: string;
+  };
   // A split-off cement row (manual "Cement (derived)" or AI "(Cement Portion)") is a
   // classification artifact for PVC (Section D), not a real bill line item — the work
   // item's agreement rate already includes its cement. Listing it in the schedule items
@@ -1001,12 +1007,23 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         // out Rs 16,05,996.21 short on SR/TPJ/Civil/2025/0067/B9 rebuilding rows that
         // way, and balanced the gap with a note instead of the items.
         const stored = Number((row as { amount?: unknown }).amount);
+        // The entry's description is the bill's "Group Name" sub-work heading when the
+        // items were merged under one. A standalone entry's description is the item's
+        // own wording — squashed, one contains the other — and printing that as a group
+        // of one would give every item a heading saying what the row already says.
+        const squash = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const entryDesc = String(entry.description || '').trim();
+        const rowDesc = String((row as { description?: unknown }).description || '').trim();
+        const isGroupHeading = Boolean(entryDesc)
+          && (!rowDesc || (!squash(entryDesc).includes(squash(rowDesc)) && !squash(rowDesc).includes(squash(entryDesc))));
         scheduleRows.push({
           itemNumber: String(row.itemNumber || '').trim() || '-',
           schedule,
           qty,
           rate,
           amount: Number.isFinite(stored) && (row as { amount?: unknown }).amount !== null ? stored : qty * rate,
+          page: Number((row as { pageNumber?: unknown }).pageNumber) || undefined,
+          group: isGroupHeading ? entryDesc : undefined,
         });
       }
     } else if (entry.itemNumber || entry.quantity || entry.agreementRate) {
@@ -1031,7 +1048,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     pdf.text('E. BILL SCHEDULE ITEMS', mL, y);
     y += 2;
 
-    const itemHead = [['Sl.', 'Item No.', 'Quantity', 'Agreement Rate (Rs.)', 'Amount (Rs.)']];
+    const itemHead = [['Sl.', 'Item No.', 'Bill Page', 'Quantity', 'Agreement Rate (Rs.)', 'Amount (Rs.)']];
 
     // Group items by schedule (rendered as a header row instead of a column),
     // sorted by item number within each schedule.
@@ -1049,25 +1066,49 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       halign: 'left' as const,
     };
 
+    // The bill's own sub-work heading, lighter than the schedule band above it, the way
+    // IREPS prints its pink "Group Name:-" strips inside a schedule.
+    const eSubGroupStyle = {
+      fontStyle: 'bold' as const,
+      fillColor: [244, 240, 235] as [number, number, number],
+      textColor: [90, 70, 40] as [number, number, number],
+      halign: 'left' as const,
+      fontSize: 7.5,
+    };
     const itemBody: any[] = [];
     let eSl = 0;
     for (const [sched, rows] of sortedEGroups) {
-      rows.sort((a, b) => compareItemNumbers(a.itemNumber, b.itemNumber));
-      itemBody.push([{ content: pdfSafe(`Schedule: ${sched}`), colSpan: 5, styles: eGroupHeaderStyle }]);
-      let groupTotal = 0;
+      itemBody.push([{ content: pdfSafe(`Schedule: ${sched}`), colSpan: 6, styles: eGroupHeaderStyle }]);
+      // Sub-works in the order the bill printed them, ungrouped items first; item
+      // numbers sort within each, not across the whole schedule — sorting the schedule
+      // as one list interleaved the sub-works back together.
+      const bySubWork = new Map<string, typeof rows>();
       for (const row of rows) {
-        eSl++;
-        groupTotal += row.amount;
-        itemBody.push([
-          eSl,
-          pdfSafe(row.itemNumber),
-          row.qty ? row.qty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : '-',
-          row.rate ? fmt(row.rate) : '-',
-          fmt(row.amount),
-        ]);
+        const key = row.group || '';
+        if (!bySubWork.has(key)) bySubWork.set(key, []);
+        bySubWork.get(key)!.push(row);
+      }
+      let groupTotal = 0;
+      for (const [subWork, subRows] of bySubWork) {
+        if (subWork) {
+          itemBody.push([{ content: pdfSafe(`Group: ${subWork}`), colSpan: 6, styles: eSubGroupStyle }]);
+        }
+        subRows.sort((a, b) => compareItemNumbers(a.itemNumber, b.itemNumber));
+        for (const row of subRows) {
+          eSl++;
+          groupTotal += row.amount;
+          itemBody.push([
+            eSl,
+            pdfSafe(row.itemNumber),
+            row.page ? `p.${row.page}` : '-',
+            row.qty ? row.qty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : '-',
+            row.rate ? fmt(row.rate) : '-',
+            fmt(row.amount),
+          ]);
+        }
       }
       itemBody.push([
-        { content: 'Schedule Total', colSpan: 4, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [242, 242, 242] as [number, number, number] } },
+        { content: 'Schedule Total', colSpan: 5, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [242, 242, 242] as [number, number, number] } },
         { content: fmt(groupTotal), styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [242, 242, 242] as [number, number, number] } },
       ]);
     }
@@ -1098,10 +1139,11 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       tableWidth: contentW,
       columnStyles: {
         0: { cellWidth: 12, halign: 'center' },
-        1: { cellWidth: 55, halign: 'left' },
-        2: { cellWidth: 60, halign: 'right' },
-        3: { cellWidth: 68, halign: 'right' },
-        4: { cellWidth: 78, halign: 'right' },
+        1: { cellWidth: 48, halign: 'left' },
+        2: { cellWidth: 20, halign: 'center' },
+        3: { cellWidth: 52, halign: 'right' },
+        4: { cellWidth: 63, halign: 'right' },
+        5: { cellWidth: 78, halign: 'right' },
       },
     });
 
