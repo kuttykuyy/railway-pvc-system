@@ -11,7 +11,11 @@ import type { DeterministicBillDetails, DeterministicBillItem } from './ireps-bi
 // The duplicate guard below is the backstop if a pair like that ever slips in.
 // "TRM" is track running metre — five rows of SR/TPJ/Civil/2025/0067/B8 were billed in
 // it, went unanchored, and left the bill Rs 83,571.79 short.
-const UNIT_PATTERN = /^(?:Cum|Cu\.?m\.?|Sqm|Sq\.?m\.?|Kg|MT|M\.?T\.?|Metre|Meter|Each|Num|Nos?\.?|RM|Rmt|TRM|Km|Litre|Ltr|Set|Job|LS|Hours?|Hrs?|Days?|Quintal|Qtl|Tonne|Pair|Bags?|Sqft|Cft)$/i;
+// "Shift" and "Night" price a track machine or a traffic block by the turn worked, and
+// "Kilometre" spells out what "Km" abbreviates elsewhere on the same bill. Item NS2 of
+// SR/MDU/Civil/2025/0070/B1/R1 is billed in Shifts and went unanchored, leaving that
+// bill Rs 13,335 short — the whole of the row.
+const UNIT_PATTERN = /^(?:Cum|Cu\.?m\.?|Sqm|Sq\.?m\.?|Kg|MT|M\.?T\.?|Metre|Meter|Kilo\s*met(?:re|er)|Each|Num|Nos?\.?|RM|Rmt|TRM|Km|Litre|Ltr|Set|Job|LS|Shifts?|Nights?|Hours?|Hrs?|Days?|Quintal|Qtl|Tonne|Pair|Bags?|Sqft|Cft)$/i;
 const NUMBER_PATTERN = /^-?[\d,]+(?:\.\d*)?$/;
 const X = {
   serial: [50, 88],
@@ -588,7 +592,10 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     const units = page.items
       .filter(item => {
         const x = normalizedX(page, item);
-        return x >= X.unit[0] && x < X.unit[1] && UNIT_PATTERN.test(item.text.trim());
+        if (!(x >= X.unit[0] && x < X.unit[1])) return false;
+        if (UNIT_PATTERN.test(item.text.trim())) return true;
+        // Wrapped: the halves join into the unit the row is really billed in.
+        return UNIT_PATTERN.test(cellText(page, page.items, X.unit, item.y));
       })
       .sort((left, right) => left.y - right.y);
     const candidates = units.filter(unitItem => {
