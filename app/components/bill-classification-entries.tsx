@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { inferMainClassification } from '@/lib/work-classification';
-import { findScheduleRates, type ContractSchedule } from '@/lib/contract-schedules';
+import { findScheduleRates, findSubWorkRates, type ContractSchedule } from '@/lib/contract-schedules';
 import { scheduleTag } from '@/lib/bill-schedule-matching';
 
 interface SubClassification {
@@ -195,21 +195,25 @@ export function BillClassificationEntries({
   // Per-schedule rate adjustment: the amount is the estimate value, and the agreed
   // bid rate % and escalation % (from the contract, for this entry's schedule) are
   // applied on top before PVC — factor = (1 + bid/100) x (1 + escalation/100).
-  const scheduleFactor = (scheduleItem?: string) => {
-    const rates = findScheduleRates(scheduleRates, scheduleItem || '');
+  // By sub-work, not only by schedule: the LOA awards each sub-work its own bid and
+  // escalation, and one schedule of SR/TPJ/Civil/2025/0067 carries three escalations.
+  // The entry's description holds the bill's sub-work heading, which is the same work
+  // the LOA priced.
+  const scheduleFactor = (scheduleItem?: string, subWork?: string) => {
+    const rates = findSubWorkRates(scheduleRates, scheduleItem || '', subWork);
     if (!rates) return 1;
     const bid = Number(rates.bidRate) || 0;
     const esc = Number(rates.escalation) || 0;
     return (1 + bid / 100) * (1 + esc / 100);
   };
-  const factorPct = (scheduleItem?: string) =>
-    Math.round((scheduleFactor(scheduleItem) - 1) * 10000) / 100;
+  const factorPct = (scheduleItem?: string, subWork?: string) =>
+    Math.round((scheduleFactor(scheduleItem, subWork) - 1) * 10000) / 100;
 
   // Amount actually stored for an entry: row total (GST-adjusted) x its schedule factor.
   // Derived-cement rows already have escalation/bid/rebate baked into the DSR cement rate,
   // so the schedule factor must NOT be applied again to them.
   const deriveAmount = (entry: ClassificationEntry, rows: ItemRow[], includeGst: boolean = ratesIncludeGst) => {
-    const factor = entry.isDerivedCement ? 1 : scheduleFactor(entry.scheduleItem);
+    const factor = entry.isDerivedCement ? 1 : scheduleFactor(entry.scheduleItem, entry.description);
     return Math.round(rowsTotal(rows, includeGst) * factor * 100) / 100;
   };
 
@@ -812,9 +816,9 @@ export function BillClassificationEntries({
                     {(() => {
                       // Derived-cement rows already bake escalation/bid into the DSR rate, so no factor note.
                       if (entry.isDerivedCement) return null;
-                      const rates = findScheduleRates(scheduleRates, entry.scheduleItem || '');
+                      const rates = findSubWorkRates(scheduleRates, entry.scheduleItem || '', entry.description);
                       if (!rates || (!rates.bidRate && !rates.escalation)) return null;
-                      const pct = factorPct(entry.scheduleItem);
+                      const pct = factorPct(entry.scheduleItem, entry.description);
                       return (
                         <p className="text-[11px] text-emerald-700">
                           Bid {rates.bidRate ? `${rates.bidRate}%` : '—'} · Escalation {rates.escalation ? `${rates.escalation}%` : '—'}

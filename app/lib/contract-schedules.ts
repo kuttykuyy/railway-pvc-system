@@ -18,12 +18,29 @@
  * index signature, so ContractSchedule[] would not satisfy Prisma's InputJsonValue
  * when written to the Json column. A type alias does.
  */
+/**
+ * One sub-work inside a schedule, with the rates the LOA awarded IT.
+ *
+ * The LOA's "Awarded Quantities And Rates" table prices each sub-work separately:
+ * Schedule A4 of SR/TPJ/Civil/2025/0067 carries the CC apron at 5.36% escalation,
+ * the painting shed at 5.36%, and the DTTC conversion at par — one schedule, three
+ * escalations. A single figure per schedule cannot represent that, and holding only
+ * one silently repriced every sub-work at whichever figure was captured.
+ */
+export type SubWorkRate = {
+  name: string;
+  escalation: string;
+  bidRate: string;
+};
+
 export type ContractSchedule = {
   /** Free-text label, e.g. "A1" or "Schedule A1 - Road work". */
   name: string;
   /** Percentages kept as strings so an empty box stays empty (not 0). */
   escalation: string;
   bidRate: string;
+  /** Per-sub-work rates, where the LOA awarded them separately. */
+  subWorks?: SubWorkRate[];
   /**
    * The item numbers the LOA accepted under this schedule.
    *
@@ -43,6 +60,7 @@ export const emptySchedule = (name = ''): ContractSchedule => ({
   escalation: '',
   bidRate: '',
   items: [],
+  subWorks: [],
 });
 
 const asPercentString = (v: unknown): string =>
@@ -63,6 +81,18 @@ export function normalizeSchedules(raw: unknown): ContractSchedule[] {
           items: Array.isArray(o.items)
             ? o.items.map(value => String(value).trim()).filter(Boolean)
             : [],
+          subWorks: Array.isArray(o.subWorks)
+            ? o.subWorks
+                .map((w): SubWorkRate => {
+                  const sub = (w && typeof w === 'object' ? w : {}) as Record<string, unknown>;
+                  return {
+                    name: String(sub.name ?? '').trim(),
+                    escalation: asPercentString(sub.escalation),
+                    bidRate: asPercentString(sub.bidRate),
+                  };
+                })
+                .filter(w => w.name)
+            : [],
         };
       }
       return emptySchedule();
@@ -80,6 +110,38 @@ export function scheduleNames(raw: unknown): string[] {
  * while the contract may store a fuller label ("Schedule A1 - Road work"), so
  * match exactly first, then fall back to a loose contains/leading-code match.
  */
+/**
+ * The rates that govern one sub-work of a schedule.
+ *
+ * The sub-work's own rates where the LOA awarded them, the schedule's otherwise. The
+ * bill's "Group Name" heading and the LOA's item description name the same work in
+ * slightly different words ("...at Diesel POH/GOC" against "...at Diesel POH and"), so
+ * the match is by squashed containment either way round, never exact.
+ */
+export function findSubWorkRates(
+  raw: unknown,
+  scheduleLabel: string,
+  subWork?: string | null,
+): { name: string; escalation: string; bidRate: string } | undefined {
+  const schedule = findScheduleRates(raw, scheduleLabel);
+  if (!schedule) return undefined;
+  const wanted = String(subWork || '').trim();
+  if (!wanted || !schedule.subWorks?.length) return schedule;
+
+  const squash = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const needle = squash(wanted);
+  const hit = schedule.subWorks.find(w => {
+    const own = squash(w.name);
+    return own && needle && (own.includes(needle) || needle.includes(own));
+  });
+  if (!hit) return schedule;
+  return {
+    name: hit.name,
+    escalation: hit.escalation || schedule.escalation,
+    bidRate: hit.bidRate || schedule.bidRate,
+  };
+}
+
 export function findScheduleRates(raw: unknown, label: string): ContractSchedule | undefined {
   const schedules = normalizeSchedules(raw);
   const needle = String(label || '').trim().toLowerCase();

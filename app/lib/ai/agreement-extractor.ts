@@ -22,6 +22,8 @@ export interface ExtractedSchedule {
   name: string;
   escalation: string;
   bidRate: string;
+  /** The sub-works awarded under this schedule, each with its own rates. */
+  subWorks: Array<{ name: string; escalation: string; bidRate: string }>;
   /** Item numbers accepted under this schedule, as printed in the LOA. */
   items: string[];
 }
@@ -160,7 +162,7 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   "agreementAmount": "LOA Amount / accepted contract value (number)",
   "railwayName": "Railway zone name (e.g. Southern Railway)",
   "division": "Division/Unit (e.g. Tiruchchirappalli / TPJ)",
-  "schedules": "Array of the work schedules / schedule items listed in the agreement (e.g. Schedule-A, Schedule-B, or named item groups). For each, return {\"name\": \"schedule name/title\", \"escalation\": \"escalation % if a per-schedule escalation percentage is stated, else null\", \"bidRate\": \"tender/bid rate % above(+) or below(-) the estimate if stated for that schedule, else null\", \"items\": [\"every item number listed under that schedule in the LOA, exactly as printed — e.g. '1', '2', '5.35', '082011'. Return [] if the LOA does not list item numbers for it\"]}. Return [] if no schedules are listed.",
+  "schedules": "Array of the work schedules / schedule items listed in the agreement (e.g. Schedule-A, Schedule-B, or named item groups). For each, return {\"name\": \"schedule name/title\", \"escalation\": \"escalation % if a per-schedule escalation percentage is stated, else null\", \"bidRate\": \"tender/bid rate % above(+) or below(-) the estimate if stated for that schedule, else null\", \"subWorks\": [\"every row listed under that schedule in the 'Awarded Quantities And Rates' table — each is a sub-work with ITS OWN rates. Return {\\\"name\\\": \\\"the item description, e.g. 'Renewal of roofing sheet in foundry shop.'\\\", \\\"escalation\\\": \\\"the Escl. (%) column as a signed number; 'At Par' means 0\\\", \\\"bidRate\\\": \\\"the Bid Rate as a signed number: '17.00 % Above' is 17, '5.00 % Below' is -5, 'At Par' is 0\\\"}. Return [] only if the table lists no rows for it\"], \"items\": [\"every item number listed under that schedule in the LOA, exactly as printed — e.g. '1', '2', '5.35', '082011'. Return [] if the LOA does not list item numbers for it\"]}. Return [] if no schedules are listed.",
   "acceptedPercentage": "The ONE overall tender percentage the offer was accepted at, as a number: ABOVE the estimate is POSITIVE, BELOW is NEGATIVE, 'at par' is 0. A Letter of Acceptance states this in a sentence rather than a table — 'your offer ... at 5.75% below the estimated cost is accepted' -> -5.75; 'quoted 3% excess' -> 3; '(-)7.5%' -> -7.5; 'at par' -> 0. Words to read as BELOW: below, less, discount, rebate, minus, (-). Words to read as ABOVE: above, excess, over, plus, (+). Return null if no such percentage is stated anywhere.",
   "rebatePercentage": "Any separately stated REBATE % (a discount on the accepted rates, sometimes offered in a later letter), as a positive number. Null if the document states no separate rebate. Do NOT repeat acceptedPercentage here — a below-estimate offer is not a rebate."
 }`;
@@ -271,6 +273,17 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
           // two sides disagree about what counts as the same item.
           items: Array.isArray(s?.items)
             ? Array.from(new Set(s.items.map((value: unknown) => asStr(value)).filter(Boolean)))
+            : [],
+          // Each sub-work keeps its own rates. "At Par" reads as 0 and "% Below" as
+          // negative, the same way the whole-LOA percentage is read above.
+          subWorks: Array.isArray(s?.subWorks)
+            ? s.subWorks
+                .map((w: any) => ({
+                  name: asStr(w?.name),
+                  escalation: asStr(parsePercent(w?.escalation) ?? asStr(w?.escalation).replace(/%/g, '')),
+                  bidRate: asStr(parsePercent(w?.bidRate) ?? asStr(w?.bidRate).replace(/%/g, '')),
+                }))
+                .filter((w: any) => w.name)
             : [],
         }))
         .filter((s: any) => s.name)

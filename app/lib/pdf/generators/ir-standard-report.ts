@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import type { SteelBreakdownSection } from '@/lib/jpc-items';
-import { findScheduleRates } from '@/lib/contract-schedules';
+import { findSubWorkRates } from '@/lib/contract-schedules';
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -1256,13 +1256,23 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     const billValue = round2(Number(bill.grossBillAmount ?? bill.billAmount) || grossTotal); // W
     const contractSchedules = (bill.contract as any)?.schedules;
     let bidAdj = 0, escAdj = 0;
-    for (const [schedule, gs] of scheduleTotals.entries()) {
-      const rates = findScheduleRates(contractSchedules, schedule);
+    // Per (schedule, sub-work), because the LOA awards each sub-work its own bid and
+    // escalation. Rated per schedule, a schedule holding sub-works at 5.36% and at par
+    // was reconciled at one figure and the summary could not reach the bill.
+    const subWorkTotals = new Map<string, { schedule: string; group?: string; total: number }>();
+    for (const row of scheduleRows) {
+      const key = `${row.schedule}||${row.group || ''}`;
+      const held = subWorkTotals.get(key) || { schedule: row.schedule, group: row.group, total: 0 };
+      held.total += row.amount;
+      subWorkTotals.set(key, held);
+    }
+    for (const { schedule, group, total } of subWorkTotals.values()) {
+      const rates = findSubWorkRates(contractSchedules, schedule, group);
       const bid = Number(rates?.bidRate) || 0;
       const esc = Number(rates?.escalation) || 0;
-      const afterBid = gs * (1 + bid / 100);
+      const afterBid = total * (1 + bid / 100);
       const afterEsc = afterBid * (1 + esc / 100);
-      bidAdj += afterBid - gs;         // bid rate effect (signed)
+      bidAdj += afterBid - total;      // bid rate effect (signed)
       escAdj += afterEsc - afterBid;   // escalation effect (signed)
     }
     bidAdj = round2(bidAdj);

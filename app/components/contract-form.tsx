@@ -974,6 +974,23 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                       </Button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-8">
+                      {(schedule.subWorks?.length ?? 0) > 0 && (
+                        <div className="sm:col-span-2 rounded-md border border-emerald-100 bg-emerald-50/50 p-2">
+                          <p className="text-[11px] font-medium text-emerald-900">
+                            Sub-works awarded under this schedule, each at its own rates:
+                          </p>
+                          <ul className="mt-1 space-y-0.5 text-[11px] text-emerald-800">
+                            {schedule.subWorks!.map((w, wi) => (
+                              <li key={wi} className="flex justify-between gap-2">
+                                <span className="truncate">{w.name}</span>
+                                <span className="shrink-0 text-emerald-700">
+                                  bid {w.bidRate || '—'}% · escl {w.escalation === '0' ? 'at par' : (w.escalation ? w.escalation + '%' : '—')}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                       <div>
                         <Label className="text-xs text-slate-600">Escalation %</Label>
                         <Input type="number" step="0.01" className="mt-1 bg-white" placeholder="e.g. -25.00"
