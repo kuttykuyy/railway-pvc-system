@@ -66,6 +66,8 @@ export interface ExtractedBillItem {
   reason?: string;
   /** True when the AI reviewed/wrote this item's classification (vs deterministic rules). */
   classificationReviewedByAi?: boolean;
+  /** The schedule heading as the bill prints it, in full. */
+  scheduleHeading?: string;
   /** Set when the item's wording was completed from a published schedule of rates. */
   rateBookEdition?: string;
   rateBookCode?: string;
@@ -128,6 +130,7 @@ function normalizeExtractedItem(item: any): ExtractedBillItem {
     amountSinceLastBill: toFiniteNumber(item?.amountIncludingSpecialConditionSinceLastBill ?? item?.amountSinceLastBill),
     schedule,
     scheduleGroup: String(item?.scheduleGroup || '').trim(),
+    scheduleHeading: String(item?.scheduleHeading || '').trim() || undefined,
     groupName: String(item?.groupName || '').trim(),
     chapter: String(item?.chapter || '').trim(),
     sourceBook,

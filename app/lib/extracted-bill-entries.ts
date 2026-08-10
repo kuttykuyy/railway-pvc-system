@@ -13,7 +13,7 @@
  */
 
 import { scheduleNames } from './contract-schedules';
-import { matchExtractedSchedule } from './bill-schedule-matching';
+import { matchExtractedSchedule, scheduleWorkName } from './bill-schedule-matching';
 
 export interface ExtractedSubClassification {
   id: string;
@@ -257,11 +257,19 @@ export function buildClassificationEntriesFromExtractedBill(
         subClassificationId: subClassification.id,
         subClassification,
         amount: Number(item.amountSinceLastBill || 0),
-        description: groupName
-          ? groupName
-          : (specialConditionOnly
+        description: (() => {
+          // The A schedules print a "Group Name" heading over their items; the B
+          // schedules do not, and their sub-work is named in the schedule heading's
+          // own tail instead. Without it the entry fell back to the item's wording,
+          // and the list read as pipes and shutters where every A entry read as the
+          // work it belonged to.
+          const subWork = groupName
+            || scheduleWorkName(String(item.scheduleHeading || item.schedule || item.scheduleGroup || ''));
+          if (subWork) return subWork;
+          return specialConditionOnly
             ? `${item.description || ''} (Special condition amount; printed Qty since last Bill is 0)`
-            : item.description || ''),
+            : item.description || '';
+        })(),
         steelTypes: steelCategoriesOf(item),
         scheduleItem: matchExtractedSchedule(schedules, [item.schedule, item.scheduleGroup, item.chapter]),
         itemNumber,

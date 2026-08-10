@@ -12,6 +12,9 @@ export interface DeterministicBillItem {
   amountSinceLastBill: number;
   schedule: string;
   scheduleGroup: string;
+  /** The schedule heading as the bill prints it in full. Its tail names the sub-work
+   * for B schedules, which print no "Group Name" heading over their items. */
+  scheduleHeading?: string;
   chapter: string;
   groupName: string;
   sourceBook: 'USSR_2021' | 'DSR_2021' | 'NON_SCHEDULE' | 'UNKNOWN';

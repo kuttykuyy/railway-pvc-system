@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchExtractedSchedule, scheduleTag, shortScheduleName } from './bill-schedule-matching';
+import { matchExtractedSchedule, scheduleTag, shortScheduleName, scheduleWorkName } from './bill-schedule-matching';
 
 /**
  * The schedules of SR/TPJ/Civil/2025/0067/B7, as the bill prints them. Every B schedule
@@ -76,5 +76,23 @@ describe('shortScheduleName', () => {
   it('still matches a bill after shortening', () => {
     expect(matchExtractedSchedule([shortScheduleName(B2), shortScheduleName(B4)], [B2]))
       .toBe(shortScheduleName(B2));
+  });
+});
+
+describe('scheduleWorkName', () => {
+  it('gives the sub-work alone, for entries whose bill printed no Group Name', () => {
+    expect(scheduleWorkName(B2)).toBe('Renewal of worn out EOT crane gantry rails in Wheel Shop, BRS and Diesel POH shop');
+    expect(scheduleWorkName(B4)).toBe('DTTC hostel/Diesel shed/Ponmalai');
+  });
+
+  it('keeps a dash-joined sub-work that the boilerplate strip used to eat', () => {
+    const B1 = 'Schedule B1-Items which are not covered by Unified Standard Schedule of rates 2021 and CPWD-DSR-2021 for Tiruchirappalli Division- Renewal of roofing sheet in foundry shop. (The tenderer/contractor shall quote unit rate)';
+    expect(scheduleWorkName(B1)).toBe('Renewal of roofing sheet in foundry shop');
+  });
+
+  it('gives nothing where the heading names no work', () => {
+    expect(scheduleWorkName(A4)).toBe('');
+    expect(scheduleWorkName('B4')).toBe('');
+    expect(scheduleWorkName('Miscellaneous works')).toBe('');
   });
 });

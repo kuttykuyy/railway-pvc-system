@@ -549,16 +549,41 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     const nextPage = pages[pageIndex + 1];
     const nextPageTop = pageTopItems(nextPage);
     const lines = pageLines(page);
+    // A schedule heading is printed as a band wrapping over three or four lines, and
+    // its tail is where a B schedule names its sub-work — "...for Tiruchirappalli
+    // Division. DTTC hostel/Diesel shed/Ponmalai." Keeping only the first line cut the
+    // tail off mid-word. The lines after a schedule line are appended until one reads
+    // as a marker or as table matter. Idempotent under the parser's replaying of lines:
+    // each pass replays from the top of the page, so the heading is rebuilt the same
+    // way every time rather than growing.
+    let headingContinue = 0;
     const updateContext = (lineText: string) => {
       const scheduleMatch = lineText.match(/Schedule\s+([A-Z]\d*[A-Za-z]?)\b/i);
       if (scheduleMatch) {
         currentSchedule = `Schedule ${scheduleMatch[1]}`;
         currentScheduleHeading = lineText;
+        headingContinue = 3;
+        return;
       }
       const chapterMatch = lineText.match(/Chapter Name:-\s*(.+)/i);
       if (chapterMatch) currentChapter = chapterMatch[1].trim();
       const groupNameMatch = lineText.match(/Group Name:-\s*(.+)/i);
       if (groupNameMatch) currentGroupName = groupNameMatch[1].trim();
+      if (chapterMatch || groupNameMatch) {
+        headingContinue = 0;
+        return;
+      }
+      if (headingContinue > 0) {
+        const tableish = /Sr\.|Item\s*No|Account of work|Payment on the basis|Amount\s+(?:up\s*to|Since)|Base\s*Rate|^Total\b/i.test(lineText)
+          || (lineText.match(/\d+\.\d/g) || []).length >= 2
+          || !/[A-Za-z]{3}/.test(lineText);
+        if (tableish) {
+          headingContinue = 0;
+        } else {
+          currentScheduleHeading += ` ${lineText}`;
+          headingContinue -= 1;
+        }
+      }
     };
     const units = page.items
       .filter(item => {
@@ -712,6 +737,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         amountSinceLastBill: payableAmount,
         schedule: currentSchedule,
         scheduleGroup: currentSchedule,
+        scheduleHeading: currentScheduleHeading,
         chapter: currentChapter,
         groupName: currentGroupName,
         sourceBook,

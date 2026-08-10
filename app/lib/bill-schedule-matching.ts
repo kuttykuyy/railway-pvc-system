@@ -73,7 +73,10 @@ export function shortScheduleName(value: string): string {
     .replace(/^\s*schedule\s*/i, '')
     .replace(new RegExp(`^${tag.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\s*[-–—:]*\\s*`, 'i'), '')
     // Which book it draws on, and for which division.
-    .replace(/\b(?:all\s+)?items?\s+which\s+(?:is|are)\s*(?:\/\s*are\s*)?(?:not\s+)?covered\s+by\b[^.]*/gi, ' ')
+    // Runs to a period OR a spaced dash — "…Division- Renewal of roofing sheet…"
+    // joins its sub-work with a dash, and running to the period ate the sub-work with
+    // the boilerplate. Hyphens inside CPWD-DSR-2021 touch letters and are no boundary.
+    .replace(/\b(?:all\s+)?items?\s+which\s+(?:is|are)\s*(?:\/\s*are\s*)?(?:not\s+)?covered\s+by\b(?:(?!\.|[-–—]\s|\s[-–—]).)*/gi, ' ')
     .replace(/\bfor\s+[A-Za-z]+\s+division\b/gi, ' ')
     .replace(/\bexcept\s+supply\s+of\b[^.\-–—]*/gi, ' ')
     .replace(/\bthe\s+advertised\s+value\b[^.]*/gi, ' ')
@@ -83,6 +86,22 @@ export function shortScheduleName(value: string): string {
     .trim();
 
   return rest ? `${tag} - ${rest}` : tag;
+}
+
+/**
+ * The work a schedule covers, without its tag — "" where the heading names none.
+ *
+ * The B schedules print no "Group Name" heading over their items; their sub-work is
+ * named in the schedule heading's own tail ("Schedule B2-Items which are not covered
+ * by ... Division. (The tenderer/contractor shall quote unit rate)-Renewal of worn out
+ * EOT crane gantry rails in Wheel Shop, BRS and Diesel POH shop"). This is that tail,
+ * for use where the sub-work is wanted on its own.
+ */
+export function scheduleWorkName(value: string): string {
+  const short = shortScheduleName(value);
+  const tag = scheduleIdentifier(value).toUpperCase();
+  if (!tag) return '';
+  return short.toUpperCase().startsWith(`${tag} - `) ? short.slice(tag.length + 3).trim() : '';
 }
 
 export function matchExtractedSchedule(
