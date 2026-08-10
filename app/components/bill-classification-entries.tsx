@@ -617,7 +617,13 @@ export function BillClassificationEntries({
             const locked = lockEntries && !unlockedEntries.has(entryIndex);
             const isExpanded = expandedEntry === entryIndex;
             const summaryCode = selectedSub?.code || selectedGroup?.code || '—';
-            const summaryName = selectedSub?.name || selectedGroup?.name || 'Select classification';
+            const classificationName = selectedSub?.name || selectedGroup?.name || 'Select classification';
+            // What this entry is FOR, not what its class is called. The class name is the
+            // same words on every row sharing a class — nine rows reading "All Items
+            // (excluding 5B/5C/5D/5E)" tell you nothing about which is which. The bill's
+            // own sub-work heading is what separates them, and the entry carries it.
+            const subWork = String(entry.description || '').trim();
+            const summaryName = subWork && subWork !== classificationName ? subWork : classificationName;
             const rowCount = (rows || []).filter(r => r.itemNumber || r.quantity || r.agreementRate).length;
 
             return (

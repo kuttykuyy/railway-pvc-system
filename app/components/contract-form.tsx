@@ -289,13 +289,18 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     const allWarnings: string[] = [];
     const newFieldErrors: Record<string, string> = {};
 
-    // Validate agreement number
+    // An LOA comes first and the agreement is signed weeks later, so a contract set up
+    // from an LOA has no agreement number yet. The LOA number stands in for it until
+    // one exists — the column is unique and every lookup goes through it, so it cannot
+    // simply be left empty. Where neither is given, the agreement number is still
+    // required: something has to identify the contract.
+    const hasLoaNumber = Boolean(String(formData.loaNo || '').trim());
     const agreementValidation = validateAgreementNumber(formData.agreementNo);
-    if (!agreementValidation.isValid) {
+    if (!agreementValidation.isValid && !(hasLoaNumber && !formData.agreementNo.trim())) {
       allErrors.push(...agreementValidation.errors);
       newFieldErrors.agreementNo = agreementValidation.errors[0];
     }
-    allWarnings.push(...agreementValidation.warnings);
+    if (formData.agreementNo.trim()) allWarnings.push(...agreementValidation.warnings);
     if (agreementAvailability === 'duplicate') {
       const duplicateMessage = 'This agreement number already exists. Enter a different agreement number.';
       allErrors.push(duplicateMessage);
@@ -566,7 +571,10 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="agreementNo" className="text-sm font-semibold text-slate-700">
-                  {t('form.contract.agreement_no')} <span className="text-red-500">*</span>
+                  {t('form.contract.agreement_no')}
+                  {String(formData.loaNo || '').trim()
+                    ? <span className="ml-1 text-xs font-normal text-slate-500">— optional, the LOA number stands in until the agreement is signed</span>
+                    : <span className="text-red-500"> *</span>}
                 </Label>
                 <Input
                   id="agreementNo"
@@ -574,7 +582,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   value={formData.agreementNo}
                   onChange={handleInputChange}
                   placeholder={t('form.contract.agreement_no_placeholder')}
-                  required
+                  required={!String(formData.loaNo || '').trim()}
                   aria-invalid={Boolean(fieldErrors.agreementNo) || agreementAvailability === 'duplicate'}
                   aria-describedby="agreementNo-help agreementNo-status"
                   className={`bg-slate-50/50 border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${fieldErrors.agreementNo || agreementAvailability === 'duplicate' ? 'border-red-500 focus:border-red-500' : agreementAvailability === 'available' ? 'border-emerald-500 focus:border-emerald-500' : ''}`}

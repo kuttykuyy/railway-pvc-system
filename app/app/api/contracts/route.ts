@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const {
-      agreementNo,
+      agreementNo: agreementNoInput,
       loaNo,
       loaDate,
       contractorName,
@@ -157,10 +157,20 @@ export async function POST(request: NextRequest) {
       rebatePercentage
     } = body;
 
+    // Set up from an LOA, before an agreement exists: the LOA number stands in as the
+    // contract's identifier. agreementNo is unique and every lookup and PVC number is
+    // built from it, so it cannot be empty — but it need not be an agreement number
+    // yet. Contract.loaNo keeps the LOA number too, so the two staying equal is what
+    // marks the agreement number as still awaited.
+    const agreementNo = agreementNoInput && String(agreementNoInput).trim()
+      ? agreementNoInput
+      : (loaNo && String(loaNo).trim() ? String(loaNo).trim() : agreementNoInput);
+
     // Store for error handling
     agreementNoForError = agreementNo;
 
     // Validate required fields
+
     if (!agreementNo || !contractorName || !workDescription || !dateOfOpening) {
       return NextResponse.json(
         { error: 'Missing required fields' },
