@@ -306,7 +306,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   const gccVerdict = resolvePre2022Setup({
     dateOfOpening: bill.contract.dateOfOpening,
     workDescription: bill.contract.workDescription,
-    gccVersion: (bill.contract as any).gccVersion,
+    pvcClauseVersion: (bill.contract as any).pvcClauseVersion,
     pre2022WorkType: (bill.contract as any).pre2022WorkType,
   });
 

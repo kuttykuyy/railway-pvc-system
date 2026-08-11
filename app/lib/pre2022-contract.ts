@@ -19,7 +19,7 @@ export interface ContractForPre2022 {
   dateOfOpening: Date | string | null | undefined;
   workDescription?: string | null;
   /** Recorded by a human: 'pre-2022' or 'gcc-2022'. Null when nobody has decided. */
-  gccVersion?: string | null;
+  pvcClauseVersion?: string | null;
   /** Recorded by a human. Null when nobody has decided. */
   pre2022WorkType?: string | null;
 }
@@ -61,7 +61,7 @@ export function resolvePre2022Setup(contract: ContractForPre2022): Pre2022Setup 
   const derived = gccVersionForTenderDate(contract.dateOfOpening ?? null);
 
   // A recorded decision wins outright. Someone read the agreement; the date did not.
-  const recordedVersion = isKnownVersion(contract.gccVersion) ? contract.gccVersion : null;
+  const recordedVersion = isKnownVersion(contract.pvcClauseVersion) ? contract.pvcClauseVersion : null;
   const version = recordedVersion ?? derived.version;
   const versionSource: Pre2022Setup['versionSource'] = recordedVersion ? 'recorded' : 'tender-date';
   const warning = recordedVersion === 'gcc-2022' ? '' : derived.warning;

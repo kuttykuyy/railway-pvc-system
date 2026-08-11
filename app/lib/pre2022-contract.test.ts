@@ -40,7 +40,7 @@ describe('a recorded decision beats a worked-out one', () => {
 
   it('takes a recorded GCC version over the tender date', () => {
     // A 2021 tender that a human has read and found to be on the 2022 clause.
-    const setup = resolvePre2022Setup({ ...THIS_CONTRACT, gccVersion: 'gcc-2022' });
+    const setup = resolvePre2022Setup({ ...THIS_CONTRACT, pvcClauseVersion: 'gcc-2022' });
     expect(setup.isPre2022).toBe(false);
     expect(setup.versionSource).toBe('recorded');
     expect(setup.warning).toBe(''); // nothing left to warn about
@@ -51,7 +51,7 @@ describe('a recorded decision beats a worked-out one', () => {
     const setup = resolvePre2022Setup({
       dateOfOpening: '2022-09-01',
       workDescription: 'Earthwork in formation',
-      gccVersion: 'pre-2022',
+      pvcClauseVersion: 'pre-2022',
     });
     expect(setup.isPre2022).toBe(true);
     expect(setup.workType).toBe('earthwork-bridges-ballast-tunnelling');

@@ -228,7 +228,12 @@ model Contract {
   /// Which General Conditions of Contract price this: "pre-2022" or "gcc-2022".
   /// Null means nobody has decided, and the tender date is used to work it out.
   /// Only ever set by a human, because around April 2022 the date cannot settle it.
-  gccVersion                   String?
+  ///
+  /// NOT named gccVersion: the live database already has a column of that name holding
+  /// a Postgres ENUM (values like GCC_APR_2022) that schema.prisma never declared.
+  /// Declaring a String field over it broke every contract query with a type conversion
+  /// error. This is a separate column and leaves that one untouched.
+  pvcClauseVersion             String?
   /// For pre-2022 contracts only: which of Clause 46A.6's six work types applies.
   /// The tender fixes one for the whole work — there are no sub-classes in that
   /// clause. Null means the work description is used to propose one.

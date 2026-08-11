@@ -90,9 +90,9 @@ const PENDING: PendingColumn[] = [
   },
   {
     table: 'contracts',
-    column: 'gccVersion',
+    column: 'pvcClauseVersion',
     ddlType: 'TEXT',
-    why: 'Which GCC prices the contract. A tender closing before April 2022 carries a different price variation clause, and around the changeover only a human reading the agreement can tell.',
+    why: 'Which GCC prices the contract. A tender closing before April 2022 carries a different price variation clause, and around the changeover only a human reading the agreement can tell. (Not "gccVersion" — the database already has a column of that name holding an enum this app does not own.)',
   },
   {
     table: 'contracts',
