@@ -225,6 +225,14 @@ model Contract {
   /// How this contract was created: "manual", "pdf" (filled from an uploaded
   /// agreement), or "telegram". Null for contracts created before the column existed.
   createdVia                   String?
+  /// Which General Conditions of Contract price this: "pre-2022" or "gcc-2022".
+  /// Null means nobody has decided, and the tender date is used to work it out.
+  /// Only ever set by a human, because around April 2022 the date cannot settle it.
+  gccVersion                   String?
+  /// For pre-2022 contracts only: which of Clause 46A.6's six work types applies.
+  /// The tender fixes one for the whole work — there are no sub-classes in that
+  /// clause. Null means the work description is used to propose one.
+  pre2022WorkType              String?
   hasRailwaySuppliedMaterials  Boolean              @default(false)
   pvcApplicable                Boolean              @default(true)
   pvcEligibilityNote           String?

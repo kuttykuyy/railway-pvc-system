@@ -9,7 +9,7 @@ import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import type { SteelBreakdownSection } from '@/lib/jpc-items';
 import { findSubWorkRates } from '@/lib/contract-schedules';
-import { gccVersionForTenderDate } from '@/lib/gcc-version';
+import { resolvePre2022Setup } from '@/lib/pre2022-contract';
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -301,7 +301,14 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   // tender that closed before it carries a clause differing in the 46A.6 table, the
   // quarter rule, and the fuel and steel indices — so the figures below would be wrong.
   // Said on the page rather than logged, because the page is what gets submitted.
-  const gccVerdict = gccVersionForTenderDate(bill.contract.dateOfOpening);
+  // A decision recorded on the contract wins over the tender date, so a contract someone
+  // has actually read stops being warned about.
+  const gccVerdict = resolvePre2022Setup({
+    dateOfOpening: bill.contract.dateOfOpening,
+    workDescription: bill.contract.workDescription,
+    gccVersion: (bill.contract as any).gccVersion,
+    pre2022WorkType: (bill.contract as any).pre2022WorkType,
+  });
 
   const pvc = bill.pvcCalculation;
   const billAmount = bill.grossBillAmount ?? bill.billAmount;
@@ -466,7 +473,15 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   // rules. Whoever signs this has to know before they sign it, not after an accounts
   // office finds the quarters a month out.
   if (gccVerdict.warning) {
-    const lines = pdf.splitTextToSize(pdfSafe(gccVerdict.warning), contentW - 6);
+    // The work type is named on the page too. Under the old clause it is the single
+    // choice the whole statement turns on, and reading it here is how an accounts office
+    // catches a subway that has been priced as a major bridge.
+    const workTypeNote = gccVerdict.workType
+      ? ` Work type under Clause 46A.6: ${gccVerdict.workTypeLabel}`
+        + `${gccVerdict.workTypeSource === 'from-description' ? ' (proposed from the work description, not yet confirmed)' : ''}.`
+      : '';
+    const decisionNote = gccVerdict.decisionNeeded ? ` ${gccVerdict.decisionNeeded}` : '';
+    const lines = pdf.splitTextToSize(pdfSafe(gccVerdict.warning + workTypeNote + decisionNote), contentW - 6);
     const boxH = 5 + lines.length * 3.6;
     ensureSpace(boxH + 4);
     pdf.setFillColor(253, 235, 235);

@@ -89,6 +89,18 @@ const PENDING: PendingColumn[] = [
     why: "GCC-2022 Cl.46A.1(b) puts extra items added under Cl.39(1)(b) outside price variation, unless PVC and a base month were specially agreed when their rates were fixed.",
   },
   {
+    table: 'contracts',
+    column: 'gccVersion',
+    ddlType: 'TEXT',
+    why: 'Which GCC prices the contract. A tender closing before April 2022 carries a different price variation clause, and around the changeover only a human reading the agreement can tell.',
+  },
+  {
+    table: 'contracts',
+    column: 'pre2022WorkType',
+    ddlType: 'TEXT',
+    why: "For pre-2022 contracts: which of Clause 46A.6's six work types applies. The tender fixes one for the whole work, and the percentages differ a great deal between them.",
+  },
+  {
     table: 'bill_classification_entries',
     column: 'billPageNumber',
     ddlType: 'INTEGER',
