@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/select';
 import { ClassificationComparisonDialog } from '@/components/classification-comparison-dialog';
 import { getFuelIndexNameForBill, getSteelCityForZone } from '@/lib/zone-steel-city-mapping';
+import { resolvePre2022Setup } from '@/lib/pre2022-contract';
 
 // Helper: resolve the correct fuel index name for a bill (handles city-specific with fallback)
 function resolveFuelIndexName(bill: any): string {
@@ -646,6 +647,9 @@ function ComponentPvcTable({
 export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, detailedMonthlyData }: BillDetailClientProps) {
   const router = useRouter();
   const { toast } = useToast();
+  // Which price variation clause governs. Derived from the contract itself, so this
+  // needs no fetch and cannot disagree with what the statement prints.
+  const pre2022Setup = resolvePre2022Setup(bill.contract as any);
   const [isDownloading, setIsDownloading] = useState(false);
   const [defaultTemplate, setDefaultTemplate] = useState<any>(null);
   const [templates, setTemplates] = useState<any[]>([]);
@@ -751,6 +755,19 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
               <span className="text-slate-300 dark:text-slate-700 flex-shrink-0">•</span>
               <span className="truncate max-w-[200px] md:max-w-md">{bill.contract.workDescription}</span>
             </p>
+            {/* A contract on the older GCC is priced by a different clause entirely, and
+                everything else on this page is computed on GCC April 2022. Said here, at
+                the top, because a figure read off the wrong clause looks exactly like a
+                right one. */}
+            {pre2022Setup.isPre2022 && (
+              <a
+                href={`/bills/${bill.id}/pre2022`}
+                className="inline-flex items-center gap-2 mt-1 text-xs md:text-sm font-semibold text-amber-900 bg-amber-100 border border-amber-300 rounded-md px-3 py-1.5 hover:bg-amber-200"
+              >
+                <AlertTriangle size={14} className="flex-shrink-0" />
+                This contract is on the older GCC — open the correct statement
+              </a>
+            )}
           </div>
         </div>
 

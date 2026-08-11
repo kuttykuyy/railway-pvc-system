@@ -37,7 +37,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const pricing = await pricePre2022BillById(id);
 
+    // The contract is returned so a screen can offer the work-type choice without a
+    // second round trip to find out which contract this bill belongs to.
+    const bill = await prisma.bill.findUnique({
+      where: { id },
+      select: { billNo: true, contractId: true, contract: { select: { agreementNo: true } } },
+    });
+
     return NextResponse.json({
+      billNo: bill?.billNo ?? null,
+      contractId: bill?.contractId ?? null,
+      agreementNo: bill?.contract?.agreementNo ?? null,
       quarter: pricing.quarter,
       baseMonth: pricing.baseMonth.toISOString().slice(0, 7),
       quarterMonths: pricing.quarterMonths.map(m => m.toISOString().slice(0, 7)),
