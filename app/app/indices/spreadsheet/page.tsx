@@ -31,6 +31,21 @@ const NON_STEEL_COLUMNS = [
   { key: "rbiPlantMachinery", name: "Plant", dbName: "RBI Plant Machinery" },
 ];
 
+/**
+ * The series only pre-2022 GCC contracts use: that clause prices fuel on the WPI Fuel &
+ * Power group instead of the diesel price, and steel on WPI mild steel instead of JPC
+ * rates. Kept in their own group because they mean nothing for a current contract, and
+ * sitting them beside MPNG Fuel and the JPC steel columns would invite reading the wrong
+ * one. Shown only when at least one of them has values, so a user with no old contracts
+ * never sees four empty columns.
+ */
+const PRE_2022_COLUMNS = [
+  { key: "wpiFuelPower", name: "Fuel (WPI)", dbName: "WPI Fuel & Power" },
+  { key: "wpiSteelBrightBars", name: "Bars (WPI)", dbName: "WPI Steel Bright Bars" },
+  { key: "wpiSteelAngles", name: "Angle (WPI)", dbName: "WPI Steel Angles & Channels" },
+  { key: "wpiSteelFlats", name: "Plates (WPI)", dbName: "WPI Steel Flat Products" },
+];
+
 // Steel columns per city
 const STEEL_CITIES = ['Default', 'Delhi', 'Mumbai', 'Chennai', 'Kolkata'] as const;
 type SteelCity = typeof STEEL_CITIES[number];
@@ -205,6 +220,7 @@ export default function SpreadsheetPage() {
         // Build the full list of all column keys to extract from API response
         const allColumnKeys = [
           ...INDEX_COLUMNS.map(c => c.key),
+          ...PRE_2022_COLUMNS.map(c => c.key),
           // City-specific steel columns
           ...getAllSteelColumns().map(c => c.key),
         ];
@@ -263,7 +279,7 @@ export default function SpreadsheetPage() {
     const monthStr = getMonthDateString(monthName);
     if (!monthStr) return;
 
-    const col = [...NON_STEEL_COLUMNS, ...getAllSteelColumns()].find(c => c.key === colKey);
+    const col = [...NON_STEEL_COLUMNS, ...PRE_2022_COLUMNS, ...getAllSteelColumns()].find(c => c.key === colKey);
     if (!col) {
       toast.error("Invalid column");
       return;
@@ -345,7 +361,8 @@ export default function SpreadsheetPage() {
       return;
     }
 
-    const col = INDEX_COLUMNS.find(c => c.key === addIndex);
+    // Includes the pre-2022 series, so a missing month can be typed in for them too.
+    const col = [...INDEX_COLUMNS, ...PRE_2022_COLUMNS].find(c => c.key === addIndex);
     if (!col) {
       toast.error("Invalid index");
       return;
@@ -812,7 +829,7 @@ export default function SpreadsheetPage() {
                       <SelectValue placeholder="Select index" />
                     </SelectTrigger>
                     <SelectContent>
-                      {INDEX_COLUMNS.map(col => (
+                      {[...INDEX_COLUMNS, ...PRE_2022_COLUMNS].map(col => (
                         <SelectItem key={col.key} value={col.key}>{col.dbName}</SelectItem>
                       ))}
                     </SelectContent>
@@ -1646,7 +1663,15 @@ export default function SpreadsheetPage() {
               }
             }
             
-            const allVisibleColumns = [...NON_STEEL_COLUMNS, ...steelColumns];
+            // The pre-2022 series appear only once they hold values, so a user with no
+            // old contracts is not shown four permanently empty columns.
+            const hasPre2022 = data.some(row =>
+              PRE_2022_COLUMNS.some(col => row[col.key]?.value != null));
+            const nonSteelColumns = hasPre2022
+              ? [...NON_STEEL_COLUMNS, ...PRE_2022_COLUMNS]
+              : NON_STEEL_COLUMNS;
+
+            const allVisibleColumns = [...nonSteelColumns, ...steelColumns];
             
             return (
               <table className="w-full text-xs sm:text-sm border-collapse">
@@ -1656,7 +1681,7 @@ export default function SpreadsheetPage() {
                     <tr>
                       <th className="border px-2 py-1 sticky left-0 z-20 bg-gray-100" rowSpan={1}></th>
                       {/* Non-steel spacer */}
-                      <th className="border px-2 py-1" colSpan={NON_STEEL_COLUMNS.length}></th>
+                      <th className="border px-2 py-1" colSpan={nonSteelColumns.length}></th>
                       {steelCityGroups.map(group => (
                         <th 
                           key={group.city} 
@@ -1678,7 +1703,7 @@ export default function SpreadsheetPage() {
                   <tr>
                     {/* Sticky: the wide grid scrolls sideways, the month must not leave. */}
                     <th className="border px-2 py-2 text-left font-semibold min-w-[4.5rem] sticky left-0 z-20 bg-gray-100">Month</th>
-                    {NON_STEEL_COLUMNS.map(col => (
+                    {nonSteelColumns.map(col => (
                       <th key={col.key} className="border px-2 py-2 text-center font-semibold" title={col.dbName}>
                         {col.name}
                       </th>
@@ -1704,7 +1729,7 @@ export default function SpreadsheetPage() {
                   {/* F/P toggle row */}
                   <tr className="bg-gray-50">
                     <th className="border px-1 py-1 text-xs text-gray-400 font-normal sticky left-0 z-20 bg-gray-50">F / P</th>
-                    {NON_STEEL_COLUMNS.map(col => {
+                    {nonSteelColumns.map(col => {
                       const status = getColumnProvisionalStatus(col.key);
                       const isToggling = togglingCol === col.key;
                       return (
@@ -1807,7 +1832,7 @@ export default function SpreadsheetPage() {
                           </button>
                         </div>
                       </td>
-                      {NON_STEEL_COLUMNS.map(col => {
+                      {nonSteelColumns.map(col => {
                         const cell = row[col.key];
                         const hasValue = cell?.value !== null && cell?.value !== undefined;
                         return (

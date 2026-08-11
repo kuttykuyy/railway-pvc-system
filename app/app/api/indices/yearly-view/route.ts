@@ -15,6 +15,12 @@ const INDEX_NAME_MAP: Record<string, string> = {
   'RBI Explosives': 'rbiExplosives',
   'RBI Other Materials': 'rbiOtherMaterials',
   'RBI Plant Machinery': 'rbiPlantMachinery',
+  // Pre-2022 GCC contracts only: that clause prices fuel on the WPI Fuel & Power group
+  // rather than the diesel price, and steel on WPI mild steel rather than JPC rates.
+  'WPI Fuel & Power': 'wpiFuelPower',
+  'WPI Steel Bright Bars': 'wpiSteelBrightBars',
+  'WPI Steel Angles & Channels': 'wpiSteelAngles',
+  'WPI Steel Flat Products': 'wpiSteelFlats',
   'Steel Angle/Channel': 'steelAngleChannel',
   'Steel Other Sections': 'steelOtherSections',
   'Steel Plates': 'steelPlates',
