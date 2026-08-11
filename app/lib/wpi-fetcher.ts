@@ -42,7 +42,53 @@ export const WPI_MAPPINGS: Record<string, { code: string; name: string; wpiName:
     wpiName: 'All commodities',
     newCode: '1000000000',
     newWpiName: 'All Commodities'
+  },
+
+  // The three below serve pre-2022 GCC contracts only. That clause prices fuel on the
+  // WPI Fuel & Power group rather than the PPAC diesel price, and steel on WPI mild
+  // steel rather than JPC ex-works rates — so these have no bearing on a GCC-2022
+  // contract, which keeps using 'MPNG Fuel' and the 'Steel *' JPC indices.
+  //
+  // Old-series codes are left empty deliberately. The 2011-12 workbooks are no longer
+  // downloadable (eaindustry's indx_download_1112 folder now answers every request with
+  // a 1 KB error page), so those codes cannot be verified — and a code guessed wrong
+  // matches a real row for a different commodity and quietly prices the contract on it.
+  // An empty code can never match, which forces the name fallback below. Should an old
+  // workbook be imported by hand, it matches on the clause's own wording or not at all.
+  'WPI Fuel & Power': {
+    code: '',
+    name: 'WPI Fuel & Power',
+    wpiName: 'FUEL & POWER',
+    newCode: '1200000000',
+    newWpiName: 'II FUEL & POWER'
+  },
+  // Clause 46A.9(1): reinforcement bars and other rounds.
+  'WPI Steel Bright Bars': {
+    code: '',
+    name: 'WPI Steel Bright Bars',
+    wpiName: 'MS Bright Bars',
+    newCode: '1314010016',
+    newWpiName: 'Mild Steel Bright Rectangular Bars'
+  },
+  // Clause 46A.9(2): all types and sizes of angles, channels and joists.
+  'WPI Steel Angles & Channels': {
+    code: '',
+    name: 'WPI Steel Angles & Channels',
+    wpiName: 'Angles, Channels, Sections, Steel',
+    newCode: '1314010019',
+    newWpiName: 'Hot-Rolled Structural Angles, Shapes, Sections, Beams, Channels, and Girders of Iron and Non-Alloy Steel'
   }
+
+  // Clause 46A.9(3) — plates — is NOT here, and that is not an oversight. It names the
+  // sub-group 'e. Mild Steel - Flat Products' of (N) Manufacture of Basic Metals. The
+  // 2022-23 rebase abolished that sub-group: (N) now holds only 'a. basic iron and
+  // steel', 'b. precious and non-ferrous' and 'c. casting'. The nearest surviving row,
+  // item 1314010029 'Mild steel (MS) flats & sheets', carries a weight of 0.00115
+  // against the old sub-group's whole basket and moves the other way (93.8 -> 109.9
+  // over Apr 2023 - Jun 2026, while every bar and section row fell). It is a different
+  // thing wearing a similar name, and substituting it would misprice every plate item —
+  // and, through 46A.9(4)'s average of the three, every other section too. Plates are
+  // entered by hand from a published source until a defensible mapping exists.
 };
 
 // Parse INDX column name to date

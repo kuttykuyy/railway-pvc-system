@@ -41,6 +41,16 @@ async function main() {
     { name: 'RBI Other Materials', baseValue: 154.00, description: 'RBI Other Materials index' },
     { name: 'RBI Cement', baseValue: 137.40, description: 'RBI Cement index' },
     { name: 'RBI Explosives', baseValue: 190.10, description: 'RBI Explosives index' },
+    // Pre-2022 GCC contracts only. That clause prices fuel on the WPI Fuel & Power group
+    // and steel on WPI mild steel, where GCC-2022 uses PPAC diesel and JPC rates. Fuel,
+    // bright bars and angles are filled by the WPI import; flat products and other
+    // sections are entered by hand — see the note in lib/wpi-fetcher.ts for why the
+    // 2022-23 rebase left them without a defensible mapping.
+    { name: 'WPI Fuel & Power', baseValue: 94.00, description: 'WPI Fuel & Power group (pre-2022 GCC fuel component)' },
+    { name: 'WPI Steel Bright Bars', baseValue: 98.00, description: 'WPI MS Bright Bars (pre-2022 GCC Cl.46A.9(1) reinforcement)' },
+    { name: 'WPI Steel Angles & Channels', baseValue: 97.80, description: 'WPI Angles, Channels, Sections (pre-2022 GCC Cl.46A.9(2))' },
+    { name: 'WPI Steel Flat Products', baseValue: 93.80, description: 'WPI Mild Steel Flat Products (pre-2022 GCC Cl.46A.9(3) plates) - entered manually' },
+    { name: 'WPI Steel Other Sections', baseValue: 96.53, description: 'Average of the three WPI steel categories (pre-2022 GCC Cl.46A.9(4)) - entered manually' },
     { name: 'Steel TMT Bars', baseValue: 70150.00, description: 'Steel TMT Bars index' },
     { name: 'Steel Angle/Channel', baseValue: 69740.00, description: 'Steel Angle/Channel index' },
     { name: 'Steel Plates', baseValue: 75540.00, description: 'Steel Plates index' },
