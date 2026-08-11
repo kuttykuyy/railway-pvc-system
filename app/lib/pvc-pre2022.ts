@@ -50,30 +50,42 @@ export interface Pre2022Percentages {
  * Clause 46A.6, copied from the agreement. Each column sums to 100 and there is no
  * cement or steel row — those sit outside this table entirely, which is the structural
  * difference from GCC-2022 and the reason `varyingAmount` below is net of them.
+ *
+ * The clause classifies the CONTRACT, not the item. Its heading reads "the percentages
+ * of labour component, material component, fuel component etc. in various types of
+ * Engineering contracts", and every column below is named "... Contracts" — so one type
+ * covers a whole agreement, however many trades its schedules span. That is the
+ * structural difference from GCC-2022, which sorts each item into a group and sub-class,
+ * and it is why nothing here classifies items.
+ *
+ * Labels are the agreement's own wording, since they are printed on the statement.
  */
 export const PRE_2022_WORK_TYPES: Record<Pre2022WorkType, { label: string; percentages: Pre2022Percentages }> = {
   'earthwork-bridges-ballast-tunnelling': {
-    label: 'Earthwork, Bridges, Ballast supply and Tunnelling not involving explosives',
+    // "Minor" is the agreement's word and it decides RUBs and subways: a box structure
+    // with no waterway is a minor bridge, so it belongs here and not in the major and
+    // important bridges column. See lib/pre2022-work-type.ts.
+    label: 'E/Work & Minor Bridges Contracts, Ballast Supply Contracts, Tunnelling Contracts (without explosive)',
     percentages: { labour: 20, otherMaterial: 10, plantMachinery: 30, fuel: 25, explosives: 0, fixed: 15 },
   },
   'minor-tunnelling-explosives': {
-    label: 'Minor works and Tunnelling involving explosives',
+    label: 'Tunnelling Contracts (with explosives)',
     percentages: { labour: 20, otherMaterial: 15, plantMachinery: 15, fuel: 15, explosives: 20, fixed: 15 },
   },
   'major-important-bridges': {
-    label: 'Major and Important Bridges',
+    label: 'Major and Important Bridges Contracts',
     percentages: { labour: 20, otherMaterial: 30, plantMachinery: 20, fuel: 15, explosives: 0, fixed: 15 },
   },
   building: {
-    label: 'Building works',
+    label: 'Building Contracts',
     percentages: { labour: 40, otherMaterial: 35, plantMachinery: 5, fuel: 5, explosives: 0, fixed: 15 },
   },
   'permanent-way-linking': {
-    label: 'Permanent Way linking works',
+    label: 'Permanent Way linking Contracts (Manual)',
     percentages: { labour: 50, otherMaterial: 5, plantMachinery: 15, fuel: 15, explosives: 0, fixed: 15 },
   },
   'other-works-manual': {
-    label: 'Other works done manually',
+    label: 'Other Works Contracts',
     percentages: { labour: 20, otherMaterial: 20, plantMachinery: 30, fuel: 15, explosives: 0, fixed: 15 },
   },
 };
