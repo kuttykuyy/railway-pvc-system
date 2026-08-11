@@ -159,8 +159,12 @@ export async function POST(request: NextRequest) {
       fileName = `${folderName}-${year}-${monthsStr}-${timestamp}.pdf`;
       const s3Key = `component-indices/${folderName}/${fileName}`;
 
-      // Upload to S3 (returns db://... virtual path in serverless mode)
-      cloudStoragePath = await uploadFile(buffer, s3Key);
+      // Kept in the database when it fits. A component index document is embedded into
+      // every statement that cites it, so in object storage it is downloaded again for
+      // each one and billed as egress every time — which is what exhausted the quota and
+      // stopped uploads altogether. Held in the database it is read over a connection
+      // already open, at no egress, however many reports embed it.
+      cloudStoragePath = await uploadFile(buffer, s3Key, { preferDatabase: true });
       remarksValue = cloudStoragePath.startsWith('db://') ? `base64:${buffer.toString('base64')}` : undefined;
     }
 
