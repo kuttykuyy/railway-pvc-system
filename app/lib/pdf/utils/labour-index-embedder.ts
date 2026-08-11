@@ -50,6 +50,54 @@ export async function embedLabourIndex(
 /**
  * Fetch and embed component index documents into a PDF
  */
+/**
+ * A document's bytes, fetched once per running instance.
+ *
+ * The same handful of index documents is embedded into statement after statement, and
+ * each one was fetched again every time — 45 MB of files against 7.3 GB of egress.
+ * Held here, a warm instance embeds them without asking for them again. Bounded, and
+ * keyed by storage path, so it holds the few documents in current use rather than
+ * everything ever embedded.
+ */
+const documentBytesCache = new Map<string, Buffer>();
+const DOCUMENT_CACHE_MAX = 24;
+
+/** A detached copy, so a caller that slices or marks it cannot alter the cached one. */
+function toArrayBuffer(bytes: Buffer): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+async function loadDocumentBytes(cloudStoragePath: string): Promise<Buffer> {
+  const cached = documentBytesCache.get(cloudStoragePath);
+  if (cached) return cached;
+
+  let bytes: Buffer;
+  if (cloudStoragePath.startsWith('db://')) {
+    // Read the base64 only now, and only for a document that is actually being
+    // embedded. Selecting it alongside every candidate is what made this expensive.
+    const row = await prisma.labourIndexDocument.findFirst({
+      where: { cloudStoragePath },
+      select: { remarks: true },
+    });
+    const remarks = row?.remarks || '';
+    if (!remarks.startsWith('base64:')) {
+      throw new Error(`${cloudStoragePath} is held in the database but carries no bytes`);
+    }
+    bytes = Buffer.from(remarks.substring(7).split('|')[0], 'base64');
+  } else {
+    const url = await getFileUrl(cloudStoragePath);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`download returned HTTP ${response.status}`);
+    bytes = Buffer.from(await response.arrayBuffer());
+  }
+
+  if (documentBytesCache.size >= DOCUMENT_CACHE_MAX) {
+    documentBytesCache.delete(documentBytesCache.keys().next().value as string);
+  }
+  documentBytesCache.set(cloudStoragePath, bytes);
+  return bytes;
+}
+
 export async function embedComponentIndices(
   mainPdfBytes: Uint8Array,
   options: ComponentIndexOptions
@@ -60,7 +108,10 @@ export async function embedComponentIndices(
     // If no component types specified, fetch all component types
     const typesToFetch = componentTypes || Object.values(ComponentType);
 
-    // Fetch all relevant component index documents
+    // Only the columns needed to CHOOSE documents. remarks holds an entire PDF as
+    // base64, and selecting it here dragged every candidate's bytes across the wire —
+    // including the duplicates thrown away immediately below. The bytes are fetched
+    // afterwards, for the few documents that survive.
     const documents = await prisma.labourIndexDocument.findMany({
       where: {
         componentType: {
@@ -70,6 +121,10 @@ export async function embedComponentIndices(
         months: {
           has: month,
         },
+      },
+      select: {
+        id: true, componentType: true, year: true, months: true,
+        fileName: true, cloudStoragePath: true, createdAt: true,
       },
       orderBy: [
         { componentType: 'asc' },
@@ -108,16 +163,7 @@ export async function embedComponentIndices(
     // Embed each unique component index document
     for (const doc of deduplicatedDocuments) {
       try {
-        // Get PDF bytes from database (Base64) or fallback to S3/URL download
-        let indexBytes: ArrayBuffer;
-        if (doc.cloudStoragePath.startsWith('db://') && doc.remarks?.startsWith('base64:')) {
-          const base64Data = doc.remarks.substring(7).split('|')[0];
-          indexBytes = Buffer.from(base64Data, 'base64').buffer;
-        } else {
-          const indexUrl = await getFileUrl(doc.cloudStoragePath);
-          const indexResponse = await fetch(indexUrl);
-          indexBytes = await indexResponse.arrayBuffer();
-        }
+        const indexBytes = toArrayBuffer(await loadDocumentBytes(doc.cloudStoragePath));
 
         // Load component index PDF
         const indexPdf = await PDFDocument.load(indexBytes);
@@ -180,12 +226,20 @@ export async function embedComponentIndicesRange(
     const allDocuments: Map<string, any> = new Map();
 
     for (const year of yearsInRange) {
+      // Every document of the year, and remarks holds an entire PDF as base64 — so
+      // selecting it here pulled the bytes of every document of every year in range,
+      // for the handful that end up embedded. The bytes are loaded afterwards, once
+      // each, for the documents that survive the choosing.
       const documents = await prisma.labourIndexDocument.findMany({
         where: {
           componentType: {
             in: typesToFetch,
           },
           year,
+        },
+        select: {
+          id: true, componentType: true, year: true, months: true,
+          fileName: true, cloudStoragePath: true, createdAt: true,
         },
         orderBy: [
           { componentType: 'asc' },
@@ -271,16 +325,7 @@ export async function embedComponentIndicesRange(
     // Embed unique documents (sorted by component type, then by year)
     for (const doc of sortedDocuments) {
         try {
-          // Get PDF bytes from database (Base64) or fallback to S3/URL download
-          let indexBytes: ArrayBuffer;
-          if (doc.cloudStoragePath.startsWith('db://') && doc.remarks?.startsWith('base64:')) {
-            const base64Data = doc.remarks.substring(7).split('|')[0];
-            indexBytes = Buffer.from(base64Data, 'base64').buffer;
-          } else {
-            const indexUrl = await getFileUrl(doc.cloudStoragePath);
-            const indexResponse = await fetch(indexUrl);
-            indexBytes = await indexResponse.arrayBuffer();
-          }
+          let indexBytes: ArrayBuffer = toArrayBuffer(await loadDocumentBytes(doc.cloudStoragePath));
 
           // Mark, on each sheet, the figures this bill's PVC actually used. Best-effort
           // by design: the highlighters return the document untouched if a page is not
@@ -505,15 +550,14 @@ export async function getComponentIndexDocuments(
       where.componentType = componentType;
     }
 
+    // A listing, so no bytes: remarks holds an entire PDF as base64 and nothing here
+    // displays it. Included, every load of the documents screen carried every file.
     return await prisma.labourIndexDocument.findMany({
       where,
-      include: {
-        user: {
-          select: {
-            name: true,
-            email: true,
-          },
-        },
+      select: {
+        id: true, componentType: true, year: true, months: true,
+        fileName: true, cloudStoragePath: true, createdAt: true, uploadedBy: true,
+        user: { select: { name: true, email: true } },
       },
       orderBy: [
         { componentType: 'asc' },

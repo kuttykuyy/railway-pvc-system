@@ -284,34 +284,21 @@ export async function getDeletePresignedUrl(key: string, expiresIn: number = 360
 }
 
 /**
- * The size below which a file is better kept in the database than in object storage.
- *
- * Every report that embeds a component index document downloads it again, and object
- * storage bills egress by the byte — this project hit its quota and had storage cut off
- * entirely, which took uploads down with it. A file held in the database is read over a
- * connection already open and costs no egress at all, however many reports embed it.
- * Index pages and JPC sheets sit comfortably under this; anything larger still goes to
- * storage, where a database row would be the wrong home for it.
+ * The largest file the database will hold, for the migration that pulls a document out
+ * of storage. Not a preference: Supabase counts egress across the database as well as
+ * storage, so a row is no cheaper to read than an object — and base64 is a third larger
+ * than the file it encodes. Files belong in storage; this bound exists only so the
+ * migration refuses to put something absurd in a column.
  */
 export const DB_STORAGE_MAX_BYTES = 6 * 1024 * 1024;
 
-export async function uploadFile(
-  buffer: Buffer,
-  fileName: string,
-  options: { preferDatabase?: boolean } = {},
-): Promise<string> {
+export async function uploadFile(buffer: Buffer, fileName: string): Promise<string> {
   if (useLocalFallback || !s3Client) {
     // If S3 is not available, store the file in the database instead of exposing
     // it on the public filesystem.
     return `db://${fileName}`;
   }
 
-  // A file the caller knows will be read many times, small enough to hold: keep it out
-  // of object storage so re-reading it never costs anything.
-  if (options.preferDatabase && buffer.byteLength <= DB_STORAGE_MAX_BYTES) {
-    logger.log(`Keeping ${fileName} in the database (${buffer.byteLength} bytes) — read repeatedly, no egress`);
-    return `db://${fileName}`;
-  }
 
   try {
     const command = new PutObjectCommand({

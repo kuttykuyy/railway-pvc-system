@@ -55,8 +55,15 @@ export async function POST(request: NextRequest) {
 
   try {
     // The document: by id in scan mode, else the year's newest covering the month.
+    // Columns only: remarks holds an entire sheet as base64, and one is read below —
+    // not every candidate. Fetching them all to pick one is what a year of JPC uploads
+    // costs in egress each time this runs.
     const documents = await prisma.labourIndexDocument.findMany({
       where: { componentType: { in: JPC_TYPES }, year },
+      select: {
+        id: true, componentType: true, year: true, months: true,
+        fileName: true, cloudStoragePath: true, createdAt: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
     // A year can hold several uploads — a part-year file per quarter, say — and the
@@ -77,8 +84,15 @@ export async function POST(request: NextRequest) {
     }
 
     let bytes: Buffer;
-    if (doc.cloudStoragePath.startsWith('db://') && doc.remarks?.startsWith('base64:')) {
-      bytes = Buffer.from(doc.remarks.substring(7).split('|')[0], 'base64');
+    if (doc.cloudStoragePath.startsWith('db://')) {
+      // Read now, for the one document chosen.
+      const row = await prisma.labourIndexDocument.findFirst({
+        where: { cloudStoragePath: doc.cloudStoragePath },
+        select: { remarks: true },
+      });
+      const remarks = row?.remarks || '';
+      if (!remarks.startsWith('base64:')) throw new Error('the sheet is held in the database but carries no bytes');
+      bytes = Buffer.from(remarks.substring(7).split('|')[0], 'base64');
     } else {
       const url = await getFileUrl(doc.cloudStoragePath);
       const res = await fetch(url);
