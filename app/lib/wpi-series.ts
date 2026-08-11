@@ -60,6 +60,26 @@ export const DEFAULT_WPI_LINKING_FACTORS: Record<string, number> = {
   'RBI Plant Machinery': 0.8504,
   'RBI Explosives': 1.9932,
   'RBI Other Materials': 1.5327,
+
+  // Pre-2022 GCC contracts, derived the same way from the same two workbooks:
+  //
+  //   index                        old GM    new GM    factor
+  //   WPI Fuel & Power             149.99     91.09    1.6467
+  //   WPI Steel Bright Bars        136.70     86.87    1.5736
+  //   WPI Steel Angles & Channels  140.04     89.21    1.5698
+  //
+  // These bite later than the others. The old series runs to April 2026, so a pre-2022
+  // contract's quarters up to then are published on one consistent series and need no
+  // bridging at all — the factors matter only from May 2026 onward.
+  'WPI Fuel & Power': 1.6467,
+  'WPI Steel Bright Bars': 1.5736,
+  'WPI Steel Angles & Channels': 1.5698,
+
+  // 'WPI Steel Flat Products' is deliberately absent. The 2022-23 basket has no
+  // equivalent of the old flat-products sub-group (see lib/wpi-fetcher.ts), so there is
+  // no new-series geometric mean to divide by and no honest factor to state. Without an
+  // entry here the value passes through unbridged, which is right: there will be no
+  // new-series plates values to bridge.
 };
 
 export function isWpiIndexName(name: string): boolean {

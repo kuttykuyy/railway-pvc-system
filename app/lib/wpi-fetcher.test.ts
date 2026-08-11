@@ -50,32 +50,64 @@ describe('pre-2022 GCC index mappings', () => {
     expect(match?.commCode).toBe('1314010019');
   });
 
-  it('has no mapping for plates or other sections, so neither can be filled by mistake', () => {
-    // The 2022-23 rebase abolished the 'Mild Steel - Flat Products' sub-group the clause
-    // names. Until a defensible row exists these are entered by hand; an accidental
-    // mapping would price plate items on a 0.00115-weight row moving the other way.
-    expect(WPI_MAPPINGS['WPI Steel Flat Products']).toBeUndefined();
-    expect(WPI_MAPPINGS['WPI Steel Other Sections']).toBeUndefined();
+  it('finds nothing for plates in the new series rather than taking a lookalike', () => {
+    // The 2022-23 rebase abolished the 'Mild Steel - Flat products' sub-group the clause
+    // names. Item 1314010029 'Mild steel (MS) flats & sheets' is in NEW_SERIES above and
+    // must NOT be picked up: it carries 0.00115 of the basket against the old sub-group's
+    // whole one, and rose while every bar and section row fell.
+    expect(WPI_MAPPINGS['WPI Steel Flat Products'].newCode).toBe('');
     expect(findWPIDataForIndex('WPI Steel Flat Products', NEW_SERIES)).toBeNull();
   });
 
-  it('will not match a pre-2022 series on an unverified old code', () => {
-    // Old-series codes are unknown (the 2011-12 archive is offline) and are stored
-    // empty. Matching must fall through to the name, so an old workbook whose codes were
-    // reassigned cannot silently supply a different commodity's numbers.
-    for (const name of ['WPI Fuel & Power', 'WPI Steel Bright Bars', 'WPI Steel Angles & Channels']) {
-      expect(WPI_MAPPINGS[name].code).toBe('');
-    }
-    const oldWorkbook: WPIDataRow[] = [{ ...row('1200000000', 'Some Reassigned Commodity'), series: 'old' }];
-    expect(findWPIDataForIndex('WPI Fuel & Power', oldWorkbook)).toBeNull();
+  it('has no mapping for other sections, because it is an average and not an index', () => {
+    // Clause 46A.9(4) is the average of the other three, worked out at calculation time.
+    expect(WPI_MAPPINGS['WPI Steel Other Sections']).toBeUndefined();
+  });
+});
+
+/**
+ * Rows from the final 2011-12 workbook (monthly_index_202606.xls), which carries
+ * Apr 2012 - Apr 2026 — the series a pre-2022 contract's base month and most of its
+ * quarters actually live on.
+ */
+const OLD_SERIES: WPIDataRow[] = [
+  { ...row('1000000000', 'All commodities'), series: 'old' },
+  { ...row('1200000000', 'II FUEL & POWER'), series: 'old' },
+  { ...row('1313050000', 'e. Manufacture of cement, lime and plaster'), series: 'old' },
+  { ...row('1314040000', 'd. Mild Steel -Long Products'), series: 'old' },
+  { ...row('1314040002', 'MS Bright Bars'), series: 'old' },
+  { ...row('1314040004', 'Angles, Channels, Sections, steel (coated/not)'), series: 'old' },
+  { ...row('1314050000', 'e. Mild Steel - Flat products'), series: 'old' },
+  { ...row('1318110000', 'k. Manufacture of machinery for mining, quarrying and construction'), series: 'old' },
+];
+
+describe('the old 2011-12 series, which pre-2022 contracts are based on', () => {
+  it('finds each steel category the clause names', () => {
+    expect(findWPIDataForIndex('WPI Steel Bright Bars', OLD_SERIES)?.commCode).toBe('1314040002');
+    expect(findWPIDataForIndex('WPI Steel Angles & Channels', OLD_SERIES)?.commCode).toBe('1314040004');
+    expect(findWPIDataForIndex('WPI Steel Flat Products', OLD_SERIES)?.commCode).toBe('1314050000');
   });
 
-  it('matches an old workbook on the clause wording when the name is right', () => {
-    const oldWorkbook: WPIDataRow[] = [{ ...row('1200000000', 'FUEL & POWER'), series: 'old' }];
-    expect(findWPIDataForIndex('WPI Fuel & Power', oldWorkbook)?.commName).toBe('FUEL & POWER');
+  it('takes plates from the sub-group, not its parent', () => {
+    // 'd. Mild Steel -Long Products' sits right beside it and is the wrong basket.
+    expect(findWPIDataForIndex('WPI Steel Flat Products', OLD_SERIES)?.commName).toMatch(/Flat products/);
   });
 
-  it('leaves the GCC-2022 mappings exactly as they were', () => {
+  it('finds fuel and the four GCC-2022 series too', () => {
+    expect(findWPIDataForIndex('WPI Fuel & Power', OLD_SERIES)?.commCode).toBe('1200000000');
+    expect(findWPIDataForIndex('RBI Cement', OLD_SERIES)?.commCode).toBe('1313050000');
+    expect(findWPIDataForIndex('RBI Plant Machinery', OLD_SERIES)?.commCode).toBe('1318110000');
+  });
+
+  it('keeps the two series apart, because the rebase moved mild steel', () => {
+    // Old mild steel sits under 13140400/13140500, new under 13140100. Matching a row
+    // by the other series' code would pick a real row for a different commodity.
+    expect(WPI_MAPPINGS['WPI Steel Bright Bars'].code).not.toBe(WPI_MAPPINGS['WPI Steel Bright Bars'].newCode);
+    // The old bright-bars code must not resolve to anything in the new basket.
+    expect(NEW_SERIES.some(r => r.commCode === WPI_MAPPINGS['WPI Steel Bright Bars'].code)).toBe(false);
+  });
+
+  it('leaves the GCC-2022 mappings exactly as they were, in the new series', () => {
     // These four price every current contract. Adding pre-2022 series must not disturb
     // which row any of them resolves to.
     expect(findWPIDataForIndex('RBI Other Materials', NEW_SERIES)?.commCode).toBe('1000000000');
