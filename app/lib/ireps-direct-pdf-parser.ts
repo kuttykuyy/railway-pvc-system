@@ -667,6 +667,15 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     // the same guard that catches anything it misses.
     const anchoredYs = unitAnchored.map(item => item.y);
     const arithmeticAnchored: PositionedPdfTextItem[] = [];
+    /**
+     * Rows proved by their own amount columns rather than by Qty x Rate.
+     *
+     * Such a row is exempt from the Qty x Rate check further down. It has already proved
+     * itself a different way, and it reached that path precisely because the
+     * multiplication does not hold at face value — so applying the check would throw
+     * away the row the new anchor was added to rescue.
+     */
+    const amountProvenYs: number[] = [];
     const consideredY = new Set<number>();
     for (const item of page.items) {
       const x = normalizedX(page, item);
@@ -681,11 +690,39 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       const plain = numericValue(cellText(page, page.items, X.amountSinceLast, item.y));
       // Sign is not a filter here either: quantity x rate carries it, so a deduction row
       // multiplies out to its own negative amount and matches exactly as any other does.
-      if (!rate || !quantity || !plain) continue;
-      const tolerance = Math.max(1, Math.abs(plain) * 0.001, Math.abs(rate) * 0.01);
-      if (Math.abs(quantity * rate - plain) > tolerance) continue;
-      arithmeticAnchored.push(item);
-      anchoredYs.push(item.y);
+      if (!rate) continue;
+      const tolerance = (value: number) => Math.max(1, Math.abs(value) * 0.001, Math.abs(rate) * 0.01);
+
+      if (quantity && plain && Math.abs(quantity * rate - plain) <= tolerance(plain)) {
+        arithmeticAnchored.push(item);
+        anchoredYs.push(item.y);
+        continue;
+      }
+
+      // A row also proves itself across its own amount columns: what was paid up to the
+      // last bill, plus what this bill pays, equals the total up to date. That holds
+      // whatever the unit says and whatever the quantity column reads, which is what
+      // makes it worth having as well as the multiplication.
+      //
+      // It rescues a row whose item code is long enough to spill out of the item column
+      // and into the unit column, so the unit never prints where the reader looks for it
+      // AND the quantity cannot be trusted to multiply out. (SCR/GNT/Civil/2022/0012
+      // page 10: item 013010 prints as "0130" then "10", leaving "10" where "cum" sits on
+      // every other row, and the bill came up Rs 6,819.87 short — the whole of that row.)
+      //
+      // A schedule total line looks similar but carries no agreement rate, and the check
+      // above already required one, so totals cannot be picked up here and counted twice.
+      const uptoLast = numericValue(cellText(page, page.items, X.amountUptoLast, item.y));
+      const uptoDate = numericValue(cellText(page, page.items, X.totalUptoDate, item.y));
+      if (
+        plain !== undefined && plain !== 0
+        && uptoLast !== undefined && uptoDate !== undefined
+        && Math.abs(uptoLast + plain - uptoDate) <= tolerance(uptoDate)
+      ) {
+        arithmeticAnchored.push(item);
+        anchoredYs.push(item.y);
+        amountProvenYs.push(item.y);
+      }
     }
 
     const units = [...unitAnchored, ...arithmeticAnchored].sort((left, right) => left.y - right.y);
@@ -813,7 +850,8 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       // by rupees on large items - hence 0.1% (min Re 1) rather than paise. The
       // whole-bill reconciliation below is the real guard: a misread column cannot
       // survive it, so this check does not need to be tighter than the print.
-      if (agreementAmount !== 0 && quantity !== 0) {
+      const provenByAmounts = amountProvenYs.some(other => Math.abs(other - unitItem.y) <= 6);
+      if (agreementAmount !== 0 && quantity !== 0 && !provenByAmounts) {
         const arithmeticDifference = Math.abs(quantity * agreementRate - agreementAmount);
         // Rate x the quantity's own printed rounding is the error the print can carry;
         // 0.1% of the amount covers large items, and Re 1 is the floor for small ones.
