@@ -38,6 +38,26 @@ function normalizedX(page: PositionedPdfPage, item: PositionedPdfTextItem) {
   return item.x * (842 / page.width);
 }
 
+/**
+ * Units written as several words, matched with the spaces taken out.
+ *
+ * The single-token list above cannot reach these: the unit cell wraps across lines and
+ * pdf.js hands the pieces back joined without spaces, so "Track metre" arrives as
+ * "Trackmetre" and "per cm width" as "percmwidth". Every one of these is a real IR unit
+ * of measure — a row billed in track metres or per cm of width is an ordinary row, and
+ * one whose unit is not recognised is never read at all, which shows up as a bill that
+ * reconciles short by exactly those rows.
+ */
+const SQUASHED_UNIT_PATTERN = /^(?:track(?:metre|meter)|r(?:metre|meter)|runningmetre|percmwidth|percmdepth|bridgefor(?:1|one)track|per(?:cm)?width|cubicmetre|squaremetre)$/;
+
+/** Does this text name a unit of measure, written either way? */
+function isUnitText(raw: string): boolean {
+  const text = (raw || '').trim();
+  if (!text) return false;
+  if (UNIT_PATTERN.test(text)) return true;
+  return SQUASHED_UNIT_PATTERN.test(text.toLowerCase().replace(/[\s.]/g, ''));
+}
+
 function numericValue(raw: string) {
   const value = Number(raw.replace(/,/g, '').replace(/\s+/g, ''));
   return Number.isFinite(value) ? value : undefined;
@@ -124,7 +144,7 @@ function findUnanchoredRows(pages: PositionedPdfPage[]): Array<{ page: number; u
       seen.add(y);
 
       const unitCell = cellText(page, page.items, X.unit, item.y);
-      if (UNIT_PATTERN.test(item.text.trim()) || UNIT_PATTERN.test(unitCell)) continue;
+      if (isUnitText(item.text) || isUnitText(unitCell)) continue;
 
       const rate = numericValue(cellText(page, page.items, X.agreementRate, item.y));
       const special = numericValue(cellText(page, page.items, X.specialAmount, item.y));
@@ -627,9 +647,9 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     const unitAnchored = page.items.filter(item => {
       const x = normalizedX(page, item);
       if (!(x >= X.unit[0] && x < X.unit[1])) return false;
-      if (UNIT_PATTERN.test(item.text.trim())) return true;
+      if (isUnitText(item.text)) return true;
       // Wrapped: the halves join into the unit the row is really billed in.
-      return UNIT_PATTERN.test(cellText(page, page.items, X.unit, item.y));
+      return isUnitText(cellText(page, page.items, X.unit, item.y));
     });
 
     // A row whose unit the list does not hold is invisible, and the list can never be
@@ -659,7 +679,9 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       const rate = numericValue(cellText(page, page.items, X.agreementRate, item.y));
       const quantity = numericValue(cellText(page, page.items, X.qtySinceLast, item.y));
       const plain = numericValue(cellText(page, page.items, X.amountSinceLast, item.y));
-      if (!(rate && rate > 0) || !quantity || !plain) continue;
+      // Sign is not a filter here either: quantity x rate carries it, so a deduction row
+      // multiplies out to its own negative amount and matches exactly as any other does.
+      if (!rate || !quantity || !plain) continue;
       const tolerance = Math.max(1, Math.abs(plain) * 0.001, Math.abs(rate) * 0.01);
       if (Math.abs(quantity * rate - plain) > tolerance) continue;
       arithmeticAnchored.push(item);
@@ -672,7 +694,14 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       const quantityRaw = cellText(page, page.items, X.qtySinceLast, unitItem.y);
       const specialRaw = cellText(page, page.items, X.specialAmount, unitItem.y);
       const amountRaw = cellText(page, page.items, X.amountSinceLast, unitItem.y);
-      return (numericValue(agreementRaw) || 0) > 0
+      // A NEGATIVE agreement rate is a real row, not a misread. A bill recovers an
+      // earlier overpayment by billing the same item at a minus rate, and that row
+      // reduces the bill. Requiring a positive rate dropped those rows before they were
+      // ever considered — silently, because a dropped row is not a skipped row and never
+      // appeared in the diagnostics. The bill then reconciled OVER by the deduction's
+      // whole value. (SCR/GNT/Civil/2022/0012 Schedule B: a cum item at -69.3427,
+      // -Rs 49,589.74, which made an otherwise sound bill refuse to load.)
+      return (numericValue(agreementRaw) ?? 0) !== 0
         && numericValue(quantityRaw) !== undefined
         // Bills with no special condition leave that column blank, so also accept
         // a readable plain "Amt since last Bill". Requiring the special column
@@ -773,7 +802,9 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         // The bill printed an amount and it is zero: nothing measured, nothing to read.
         continue;
       }
-      if (!(agreementRate > 0 && payableAmount !== 0)) {
+      // Rate non-zero rather than positive, for the same reason as above: a recovery row
+      // is billed at a minus rate and is a real row.
+      if (!(agreementRate !== 0 && payableAmount !== 0)) {
         skippedRows.push({ reason: 'no payable amount could be read', itemNo, amount: 0 });
         continue;
       }
