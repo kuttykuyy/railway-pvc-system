@@ -3,7 +3,20 @@ import { prisma } from './db';
 import { getQuarterMonths } from './pvc-calculations';
 import { getWpiLinkingFactors, isWpiIndexName, isNewSeriesMonth } from './wpi-series';
 
-export async function getQuarterlyAverages(quarter: string, priceIndexNames: string[], baseMonth: Date, calculationMethod: string = 'auto') {
+/**
+ * `monthsOverride` exists for pre-2022 GCC contracts, whose quarters start the month
+ * after the tender OPENED rather than after the base month — so the three months to
+ * average cannot be derived from the base month here. The caller works them out with its
+ * own quarter rule and passes them in.
+ *
+ * Everything else this function does is shared and must be: the base-month lookup, the
+ * WPI series bridge, the missing-month fallbacks and the UTC normalisation are the same
+ * whichever clause is being priced, and duplicating them for the old clause would be
+ * duplicating exactly the parts that are subtle enough to get wrong.
+ *
+ * Optional and last, so every existing caller behaves exactly as before.
+ */
+export async function getQuarterlyAverages(quarter: string, priceIndexNames: string[], baseMonth: Date, calculationMethod: string = 'auto', monthsOverride?: Date[]) {
   // Validate inputs
   if (!quarter || !Array.isArray(priceIndexNames) || priceIndexNames.length === 0) {
     throw new Error('Invalid parameters: quarter and priceIndexNames are required');
@@ -23,6 +36,10 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
   // old-series and inflating every converted month by the factor.
   const normalizedBaseMonth = new Date(Date.UTC(baseMonth.getUTCFullYear(), baseMonth.getUTCMonth(), 1));
     months = [normalizedBaseMonth];
+  } else if (monthsOverride && monthsOverride.length > 0) {
+    // Normalised the same way the derived months are, so the `month: { in: months }`
+    // lookup matches stored values whatever timezone the caller built its dates in.
+    months = monthsOverride.map(m => new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth(), 1)));
   } else {
     // Get quarter months with error handling for regular quarters
     try {
