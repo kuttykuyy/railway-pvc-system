@@ -9,6 +9,7 @@ import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import type { SteelBreakdownSection } from '@/lib/jpc-items';
 import { findSubWorkRates } from '@/lib/contract-schedules';
+import { gccVersionForTenderDate } from '@/lib/gcc-version';
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -296,6 +297,12 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
 
   let y = mT;
 
+  // Which GCC governs this contract. The app prices on GCC April 2022 throughout, and a
+  // tender that closed before it carries a clause differing in the 46A.6 table, the
+  // quarter rule, and the fuel and steel indices — so the figures below would be wrong.
+  // Said on the page rather than logged, because the page is what gets submitted.
+  const gccVerdict = gccVersionForTenderDate(bill.contract.dateOfOpening);
+
   const pvc = bill.pvcCalculation;
   const billAmount = bill.grossBillAmount ?? bill.billAmount;
   const entries = (bill.classificationEntries || []) as ClassificationEntry[];
@@ -452,6 +459,38 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   });
 
   y = pdf.lastAutoTable.finalY + 3;
+
+  // A contract on the older clause, said on the face of the statement. Everything below
+  // this line is computed on GCC April 2022 — its table, its quarter rule, its fuel and
+  // steel indices — and for a tender that closed before that GCC those are the wrong
+  // rules. Whoever signs this has to know before they sign it, not after an accounts
+  // office finds the quarters a month out.
+  if (gccVerdict.warning) {
+    const lines = pdf.splitTextToSize(pdfSafe(gccVerdict.warning), contentW - 6);
+    const boxH = 5 + lines.length * 3.6;
+    ensureSpace(boxH + 4);
+    pdf.setFillColor(253, 235, 235);
+    pdf.setDrawColor(190, 60, 60);
+    pdf.setLineWidth(0.4);
+    pdf.rect(mL, y, contentW, boxH, 'FD');
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(150, 0, 0);
+    pdf.text(
+      gccVerdict.version === 'pre-2022'
+        ? 'PRICED ON THE WRONG CLAUSE — CHECK BEFORE SUBMITTING'
+        : 'WHICH PRICE VARIATION CLAUSE GOVERNS IS NOT SETTLED',
+      mL + 3, y + 4,
+    );
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(80, 20, 20);
+    pdf.text(lines, mL + 3, y + 8);
+    pdf.setTextColor(0, 0, 0);
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.2);
+    y += boxH + 4;
+  }
 
   // Section separator
   pdf.setDrawColor(150, 150, 150);
