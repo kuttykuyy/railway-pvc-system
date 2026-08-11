@@ -110,6 +110,8 @@ export default function SpreadsheetPage() {
   // WPI import state
   const [isImportingWPI, setIsImportingWPI] = useState(false);
   const [wpiPreview, setWpiPreview] = useState<any>(null);
+  /** Which workbook the current preview came from, so the import loads the same one. */
+  const [wpiSourceUrl, setWpiSourceUrl] = useState<string | undefined>(undefined);
   const [showWPIDialog, setShowWPIDialog] = useState(false);
   
   // Labour import state
@@ -388,11 +390,22 @@ export default function SpreadsheetPage() {
   };
 
   // WPI Import handlers
-  const handleFetchWPIPreview = async () => {
+  /**
+   * The final 2011-12 workbook, carrying April 2012 to April 2026 in one file.
+   *
+   * Pre-2022 GCC contracts are priced entirely on this series — their base month and
+   * every quarter up to April 2026 — and it also holds the fuel and mild steel series
+   * that clause uses, which the current 2022-23 basket either renamed or dropped.
+   */
+  const OLD_SERIES_URL = 'https://eaindustry.nic.in/indx_download_1112/monthly_index_202606.xls';
+
+  const handleFetchWPIPreview = async (url?: string) => {
     try {
       setIsImportingWPI(true);
-      const response = await fetch('/api/indices/wpi-import');
+      const response = await fetch(`/api/indices/wpi-import${url ? `?url=${encodeURIComponent(url)}` : ''}`);
       const data = await response.json();
+      // Remembered so the import that follows loads the same file the preview showed.
+      setWpiSourceUrl(url);
       
       if (data.success) {
         setWpiPreview(data);
@@ -413,7 +426,9 @@ export default function SpreadsheetPage() {
       const response = await fetch('/api/indices/wpi-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isProvisional })
+        // Without the URL the import silently loads the LATEST file instead of the one
+        // just previewed — so an old-series preview would import new-series months.
+        body: JSON.stringify({ isProvisional, ...(wpiSourceUrl ? { url: wpiSourceUrl } : {}) })
       });
       const data = await response.json();
       
@@ -830,14 +845,26 @@ export default function SpreadsheetPage() {
           </Dialog>
           
           {/* WPI Import Button */}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleFetchWPIPreview}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleFetchWPIPreview()}
             disabled={isImportingWPI}
           >
             <Globe className="h-4 w-4 mr-1" />
             {isImportingWPI ? "Fetching..." : "Fetch WPI"}
+          </Button>
+
+          {/* The 2011-12 series, which pre-2022 GCC contracts are priced on end to end. */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleFetchWPIPreview(OLD_SERIES_URL)}
+            disabled={isImportingWPI}
+            title="Loads the final 2011-12 workbook: April 2012 to April 2026, including the fuel and mild steel series that pre-2022 contracts use."
+          >
+            <Globe className="h-4 w-4 mr-1" />
+            {isImportingWPI ? "Fetching..." : "Fetch WPI (old series)"}
           </Button>
           
           {/* Labour Import Button */}
