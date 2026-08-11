@@ -121,9 +121,20 @@ export async function createRestSignedDownloadUrl(bucket: string, key: string, e
     headers,
     body: JSON.stringify({ expiresIn: expiresInSeconds }),
   });
-  const data: any = await res.json().catch(() => ({}));
+  const rawBody = await res.text().catch(() => '');
+  let data: any = {};
+  try { data = rawBody ? JSON.parse(rawBody) : {}; } catch { data = {}; }
   if (!res.ok) {
-    throw new Error(`Supabase refused to sign a download: ${res.status} ${data?.message || data?.error || ''}`.trim());
+    const refused = (`${data?.message || data?.error || ''}`.trim())
+      || rawBody.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+    // A paused project (410) or one restricted for exceeding a quota (402) serves
+    // nothing at all — which is why a document cannot even be read out of it.
+    const platform = res.status === 410
+      ? ' The project is paused, so Supabase is serving nothing for it. Resume it from the Supabase dashboard.'
+      : res.status === 402
+        ? ' The project is restricted for exceeding a quota — usually egress.'
+        : '';
+    throw new Error(`Supabase refused to sign a download: ${res.status} ${refused}.${platform}`.trim());
   }
   const url: string | undefined = data?.signedURL || data?.signedUrl || data?.url;
   if (!url) throw new Error('Supabase returned no download URL');
@@ -152,12 +163,19 @@ export async function createRestSignedUploadUrl(bucket: string, key: string): Pr
     headers,
     body: JSON.stringify({}),
   });
-  const data: any = await res.json().catch(() => ({}));
+  // Read once as text: a refusal from the platform gateway — a paused or restricted
+  // project — is not JSON, and parsing it as JSON threw the whole explanation away.
+  const rawBody = await res.text().catch(() => '');
+  let data: any = {};
+  try { data = rawBody ? JSON.parse(rawBody) : {}; } catch { data = {}; }
   if (!res.ok) {
     // A refused key has exactly three usual causes, and the key's own label plus the
     // endpoint name between them: wrong role, wrong project, or a key
     // invalidated by a JWT-secret rotation. Name the one the evidence supports.
-    const refused = `${data?.message || data?.error || ''}`.trim();
+    // The gateway answers in plain text or HTML when it refuses at the platform level,
+    // so fall back to the body itself rather than reporting a bare status.
+    const refused = (`${data?.message || data?.error || ''}`.trim())
+      || rawBody.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
     const endpointRef = endpointProjectRef();
     let why = '';
     if (described.kind === 'jwt' && described.role && described.role !== 'service_role') {
@@ -168,6 +186,21 @@ export async function createRestSignedUploadUrl(bucket: string, key: string): Pr
       why = ' The key is for the right project but its signature no longer verifies — this happens when the JWT secret was rotated after the key was copied. Copy a fresh service_role key (or an sb_secret_ key) from the Supabase dashboard.';
     } else if (described.kind === 'publishable') {
       why = ' The key in use is the publishable one — signing uploads needs the secret key.';
+    }
+
+    // Nothing to do with the key: the platform has stopped serving this project.
+    // 410 is a paused project, 402 one restricted for exceeding a quota — both refuse
+    // downloads as well as uploads, which is why nothing can be moved out either.
+    if (res.status === 410) {
+      why = ' The project is paused, so Supabase is serving nothing for it —'
+        + ' storage, database and all. Resume it from the Supabase dashboard;'
+        + ' a project restricted for exceeding its egress quota is paused this way,'
+        + ' and resumes when the billing cycle resets, the plan is upgraded, or the'
+        + ' spend cap is removed.';
+    } else if (res.status === 402) {
+      why = ' The project is restricted for exceeding a quota — usually egress.'
+        + ' It clears at the start of the next billing cycle, or at once if the plan'
+        + ' is upgraded or the spend cap removed.';
     }
     throw new Error(`Supabase refused to sign an upload: ${res.status} ${refused}.${why}`.trim());
   }
