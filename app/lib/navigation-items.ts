@@ -1,7 +1,7 @@
 import {
   AlertCircle, BarChart3, Briefcase, Building2, Calculator, CheckSquare, CreditCard, Database,
   FileBarChart, FileText, Gift, Home, Layers, LineChart, MessageSquare, Package, Receipt, Send,
-  Settings, ShieldCheck, Sparkles, Star, Tags, TrendingUp, User, UserCircle, Wallet, BookOpen } from 'lucide-react';
+  Settings, ShieldCheck, Sparkles, Star, Tags, TrendingUp, User, UserCircle, Wallet, BookOpen, HardDrive } from 'lucide-react';
 
 /**
  * Every screen in the menu, in one place.
@@ -68,6 +68,7 @@ export const ADMIN_ITEMS: NavItem[] = [
   { name: 'JPC Cross-check', href: '/admin/jpc-cross-check', icon: ShieldCheck, adminOnly: true },
   { name: 'Classification %', href: '/admin/classification-audit', icon: Tags, adminOnly: true },
   { name: 'Pending DB Changes', href: '/admin/pending-db-change', icon: Database, adminOnly: true },
+  { name: 'Storage', href: '/admin/storage', icon: HardDrive, adminOnly: true },
   { name: 'Demo Accounts', href: '/admin/demo-accounts', icon: User, adminOnly: true },
   { name: 'Review Rewards', href: '/admin/review-rewards', icon: Star, adminOnly: true },
   { name: 'AI Usage & Credit', href: '/admin/ai-usage', icon: Sparkles, adminOnly: true },
