@@ -18,7 +18,7 @@ import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, RefreshCw, Info } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Info, Download } from 'lucide-react';
 
 interface Component {
   name: string;
@@ -266,9 +266,18 @@ export default function Pre2022BillPage() {
         </CardContent>
       </Card>
 
-      <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-        <RefreshCw className="h-4 w-4 mr-1" />Recalculate
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button asChild size="sm">
+          {/* A plain link, not a fetch: the route streams the file and the browser's own
+              download handling does the rest. */}
+          <a href={`/api/bills/${billId}/pre2022-pvc/report`}>
+            <Download className="h-4 w-4 mr-1" />Download statement (PDF)
+          </a>
+        </Button>
+        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+          <RefreshCw className="h-4 w-4 mr-1" />Recalculate
+        </Button>
+      </div>
     </div>
   );
 }
