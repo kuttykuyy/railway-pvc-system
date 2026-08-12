@@ -12,6 +12,7 @@ import { formatContractValue } from '@/lib/gcc-compliance';
 import { BackButton } from '@/components/ui/back-button';
 import { ShareContractDialog } from '@/components/contracts/share-contract-dialog';
 import { BillCard } from '@/components/bill-card';
+import { resolvePre2022Setup } from '@/lib/pre2022-contract';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +49,11 @@ export default async function ContractDetailPage({ params }: Props) {
   const pvcApplicable = contract.tenderAdvertisedValue && contract.tenderAdvertisedValue > 20000000;
   const pvcUnknown = !contract.tenderAdvertisedValue;
 
+  // Which price variation clause governs. On the older GCC the correct statement lives
+  // on its own screen per bill, and until now the only doorway to it was a banner on the
+  // bill page — someone starting from the contract had no way in at all.
+  const pre2022 = resolvePre2022Setup(contract as any);
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
 
@@ -59,6 +65,37 @@ export default async function ContractDetailPage({ params }: Props) {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mt-2 break-all">{contract.agreementNo}</h1>
           <p className="text-sm text-gray-500 mt-1 line-clamp-2">{contract.workDescription}</p>
+          {/* The doorway to the older-GCC statement, from the contract side. Each bill
+              links straight to its correct statement; with no bills yet, it says the next
+              step is uploading one, so nobody hunts for a "create old PVC" button that
+              rightly does not exist — the bill IS the input. */}
+          {pre2022.isPre2022 && (
+            <div className="mt-3 border border-amber-300 bg-amber-50 rounded-lg p-3 space-y-2">
+              <p className="text-sm font-semibold text-amber-900 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                This contract is on the older GCC — its bills are priced under the pre-2022 clause
+              </p>
+              {contract.bills.length === 0 ? (
+                <p className="text-sm text-amber-800">
+                  Upload a bill below and its statement under the old clause will be ready on the
+                  bill&apos;s page.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {contract.bills.map((b: any) => (
+                    <Link
+                      key={b.id}
+                      href={`/bills/${b.id}/pre2022`}
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-900 bg-amber-100 border border-amber-300 rounded-md px-2.5 py-1 hover:bg-amber-200"
+                    >
+                      <Calculator className="h-3.5 w-3.5" />
+                      {b.billNo}: old-GCC statement
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
           <ShareContractDialog contractId={contract.id} agreementNo={contract.agreementNo} />
