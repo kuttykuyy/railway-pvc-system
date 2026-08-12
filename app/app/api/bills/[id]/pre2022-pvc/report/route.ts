@@ -55,8 +55,36 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       dateOfMeasurement: bill.dateOfMeasurement,
     });
 
+    // Append the published index sheets the office has uploaded — the same annexes the
+    // GCC-2022 report carries. Only the series the OLD clause actually uses are
+    // attached: Labour (CPI-IW), Other Materials, Plant & Machinery and Cement are the
+    // same series under both clauses, so their sheets prove these figures too. The
+    // MPNG diesel and JPC steel sheets are deliberately NOT attached — this clause
+    // prices fuel and steel on WPI, and a diesel sheet stapled to a WPI figure would
+    // invite checking it against the wrong table. Fuel and steel are traceable through
+    // the index-values annex to the 2011-12 WPI workbook named on it.
+    let finalBytes: Uint8Array = new Uint8Array(pdfBuffer);
+    try {
+      const { embedComponentIndicesRange } = await import('@/lib/pdf/utils/labour-index-embedder');
+      const { ComponentType } = await import('@prisma/client');
+      const lastQuarterMonth = pricing.quarterMonths[pricing.quarterMonths.length - 1];
+      finalBytes = await embedComponentIndicesRange(finalBytes, {
+        startDate: pricing.baseMonth,
+        endDate: lastQuarterMonth,
+        componentTypes: [
+          ComponentType.LABOUR,
+          ComponentType.OTHER_MATERIALS,
+          ComponentType.PLANT_MACHINERY_SPARES,
+          ComponentType.CEMENT,
+        ],
+      });
+    } catch (err) {
+      // The statement stands on its own; missing annex sheets must not block it.
+      console.error('pre-2022 report: could not embed index documents:', err);
+    }
+
     const safeBillNo = bill.billNo.replace(/[^A-Za-z0-9-]+/g, '_');
-    return new NextResponse(new Uint8Array(pdfBuffer), {
+    return new NextResponse(finalBytes, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="PVC_pre2022_${safeBillNo}.pdf"`,

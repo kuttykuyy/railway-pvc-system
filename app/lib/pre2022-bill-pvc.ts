@@ -37,6 +37,14 @@ const STEEL_BARS = 'WPI Steel Bright Bars';
 const STEEL_ANGLES = 'WPI Steel Angles & Channels';
 const STEEL_PLATES = 'WPI Steel Flat Products';
 
+/** One published series as used: its base value and each month that fed the average. */
+export interface Pre2022IndexUsed {
+  indexName: string;
+  baseValue: number;
+  average: number;
+  monthlyValues: Array<{ month: string; value: number }>;
+}
+
 export interface Pre2022BillPricing {
   quarter: string;
   baseMonth: Date;
@@ -45,6 +53,12 @@ export interface Pre2022BillPricing {
   /** True when the work type was proposed from the description rather than recorded. */
   workTypeProposed: boolean;
   result: Pre2022PvcResult;
+  /**
+   * Every series fetched, with the monthly values behind each average — so a statement
+   * can print the numbers it used and an accounts office can trace each one to the
+   * published sheet without the app.
+   */
+  indexValues: Pre2022IndexUsed[];
   /** Anything the person signing should know, in plain words. */
   notes: string[];
 }
@@ -190,6 +204,12 @@ export async function pricePre2022Bill(bill: BillLike): Promise<Pre2022BillPrici
     workTypeLabel: setup.workTypeLabel,
     workTypeProposed: setup.workTypeSource === 'from-description',
     result,
+    indexValues: averages.map((row: any) => ({
+      indexName: row.indexName,
+      baseValue: row.baseValue,
+      average: row.average,
+      monthlyValues: (row.monthlyValues || []).map((mv: any) => ({ month: mv.month, value: mv.value })),
+    })),
     notes,
   };
 }

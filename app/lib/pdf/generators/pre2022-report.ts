@@ -210,6 +210,43 @@ export function generatePre2022Report(opts: Pre2022ReportOptions): Buffer {
   });
   y = (pdf as any).lastAutoTable.finalY + 6;
 
+  // ---- The index values used, month by month ---------------------------------------
+  // The averages above are useless to a checker without the months behind them. This
+  // table lets every figure be traced to its published sheet; the sheets themselves are
+  // appended after the statement when the office has uploaded them.
+  if (pricing.indexValues?.length) {
+    if (y + 40 > 280) { pdf.addPage(); y = 16; }
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    pdf.text('D. Index values adopted', mL, y);
+    const monthCols = pricing.quarterMonths.map(m =>
+      new Date(m).toLocaleDateString('en-IN', { month: 'short', year: '2-digit', timeZone: 'UTC' }));
+    autoTable(pdf, {
+      startY: y + 2,
+      margin: { left: mL, right: mL },
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 1.6 },
+      headStyles: { fillColor: [230, 230, 230], textColor: 20, fontStyle: 'bold' as const },
+      head: [['Index series', `Base (${monthName(pricing.baseMonth).replace(' ', ' ')})`, ...monthCols, 'Quarter Avg.']],
+      body: pricing.indexValues.map(row => {
+        // The months in printed order, whatever order they were fetched in.
+        const byMonth = new Map(row.monthlyValues.map(mv => [mv.month, mv.value]));
+        const monthVals = pricing.quarterMonths.map(m => {
+          const key = new Date(m).toISOString().slice(0, 7);
+          const v = byMonth.get(key);
+          return v === undefined ? '-' : v.toFixed(2);
+        });
+        return [pdfSafe(row.indexName), row.baseValue.toFixed(2), ...monthVals, row.average.toFixed(2)];
+      }),
+      columnStyles: Object.fromEntries(
+        Array.from({ length: 2 + monthCols.length + 1 }, (_, i) => i)
+          .filter(i => i > 0)
+          .map(i => [i, { halign: 'right' as const, cellWidth: 24 }]),
+      ),
+    });
+    y = (pdf as any).lastAutoTable.finalY + 6;
+  }
+
   // ---- How this statement was worked -----------------------------------------------
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(9);
