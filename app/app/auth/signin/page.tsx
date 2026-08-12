@@ -13,6 +13,20 @@ import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { clearAllCookies } from '@/lib/session-error-handler';
 
+/**
+ * Where to go after signing in.
+ *
+ * Only a path on this site is ever accepted — it must start with a single slash. That
+ * rejects "https://elsewhere", and also "//elsewhere", which browsers treat as an
+ * absolute URL and which is the usual way a redirect parameter gets used to bounce
+ * someone to another site while looking like a link to this one.
+ */
+function safeCallbackUrl(requested: string | null): string {
+  if (!requested) return '/contracts';
+  if (!requested.startsWith('/') || requested.startsWith('//')) return '/contracts';
+  return requested;
+}
+
 function SignInForm() {
   const { status } = useSession();
   const [email, setEmail] = useState('');
@@ -112,8 +126,11 @@ function SignInForm() {
           console.error('Failed to send login notification:', error);
         });
         
-        // Force a full page refresh to ensure session is updated
-        window.location.href = '/contracts';
+        // Force a full page refresh to ensure session is updated.
+        // Honour a requested destination so a just-verified account lands on the
+        // onboarding uploads rather than an empty contracts table. Only same-site paths
+        // are accepted, so the parameter cannot be used to bounce someone off the site.
+        window.location.href = safeCallbackUrl(searchParams.get('callbackUrl'));
       } else {
         setError('An unexpected error occurred. Please try again.');
       }

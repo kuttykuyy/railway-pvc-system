@@ -28,7 +28,7 @@ export default function VerifySuccessPage() {
     if (countdown === 0 && !isRedirecting) {
       setIsRedirecting(true);
       // Use window.location for more reliable redirect
-      window.location.href = '/auth/signin';
+      window.location.href = '/auth/signin?callbackUrl=%2Fwelcome';
     }
   }, [countdown, isRedirecting]);
 
@@ -72,7 +72,7 @@ export default function VerifySuccessPage() {
           <Button 
             onClick={() => {
               setIsRedirecting(true);
-              window.location.href = '/auth/signin';
+              window.location.href = '/auth/signin?callbackUrl=%2Fwelcome';
             }}
             className="w-full"
             size="lg"

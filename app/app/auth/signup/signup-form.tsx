@@ -154,7 +154,9 @@ export function SignUpForm() {
           }
         }
 
-        router.push('/contracts');
+        // A brand-new account has nothing in it, so /contracts is an empty table and a
+        // shrug. Send them to the two uploads that end in a real statement instead.
+        router.push('/welcome');
       } else {
         setError(data.error || 'An error occurred during signup');
       }
