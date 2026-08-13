@@ -37,6 +37,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { STEEL_COMPONENT_OPTIONS } from '@/lib/types';
 import { getRailwayZoneOptions, getSteelCityForZone } from '@/lib/zone-steel-city-mapping';
+import { parseAgreementNumber } from '@/lib/railway-division-helper';
 import { ProvisionalDateNotification } from '@/components/ui/provisional-date-notification';
 import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
@@ -280,6 +281,20 @@ function NewBillPageContent() {
   } | null>(null);
 
   const selectedContract = contracts.find(c => c.id === formData.contractId);
+
+  // The agreement number names its own zone — SR/MDU/... is Southern Railway — so once
+  // a contract is chosen, an empty zone field is a question the bill has already
+  // answered. Filled only when empty: a zone someone chose by hand, or one carried
+  // forward from a previous bill, is never overwritten. The steel city and fuel basis
+  // follow from the zone, so this one fill completes all three.
+  useEffect(() => {
+    if (formData.zone || !selectedContract?.agreementNo) return;
+    const parsed = parseAgreementNumber(selectedContract.agreementNo);
+    if (parsed?.zone && getRailwayZoneOptions().some(option => option.value === parsed.zone)) {
+      setFormData(prev => (prev.zone ? prev : { ...prev, zone: parsed.zone }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedContract?.agreementNo, formData.zone]);
 
   useEffect(() => {
     fetch('/api/user/profile')

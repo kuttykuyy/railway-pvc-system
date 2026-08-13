@@ -24,6 +24,13 @@ import { shortScheduleName } from '@/lib/bill-schedule-matching';
 type AgreementStage =
   | { step: 'idle' }
   | { step: 'reading' }
+  /**
+   * The one thing typed by hand. An LOA usually carries no agreement number — it is
+   * issued weeks before the agreement is signed — and the bill will name one, so a
+   * contract saved without it cannot be matched to its own bills and the instant flow
+   * stalls at "select a contract". Asked here, once, pre-filled when the PDF had it.
+   */
+  | { step: 'confirm'; extracted: any; agreementNo: string }
   | { step: 'saving' }
   | { step: 'done'; agreementNo: string }
   | { step: 'failed'; message: string };
@@ -84,14 +91,28 @@ export default function WelcomePage() {
         setAgreement({ step: 'failed', message: extracted.error || 'The agreement could not be read.' });
         return;
       }
-      const d = extracted.data;
+      // Stop for the agreement number before saving anything. The bill matches its
+      // contract by this number, so getting it right here is what lets the bill upload
+      // run start to finish without showing a form.
+      setAgreement({
+        step: 'confirm',
+        extracted: extracted.data,
+        agreementNo: String(extracted.data.agreementNo || '').trim(),
+      });
+    } catch {
+      setAgreement({ step: 'failed', message: 'The upload failed. Check the connection and try again.' });
+    }
+  };
 
-      setAgreement({ step: 'saving' });
+  /** Save the contract: everything the PDF gave, plus the confirmed agreement number. */
+  const saveContract = async (d: any, agreementNo: string) => {
+    setAgreement({ step: 'saving' });
+    try {
       const createRes = await fetch('/api/contracts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          agreementNo: d.agreementNo || '',
+          agreementNo,
           loaNo: d.loaNo || null,
           loaDate: d.loaDate || null,
           contractorName: d.contractorName || '',
@@ -118,10 +139,10 @@ export default function WelcomePage() {
         });
         return;
       }
-      setAgreement({ step: 'done', agreementNo: created.agreementNo || d.agreementNo || d.loaNo || 'your contract' });
+      setAgreement({ step: 'done', agreementNo: created.agreementNo || agreementNo || d.loaNo || 'your contract' });
       setHasContract(true);
     } catch {
-      setAgreement({ step: 'failed', message: 'The upload failed. Check the connection and try again.' });
+      setAgreement({ step: 'failed', message: 'The save failed. Check the connection and try again.' });
     }
   };
 
@@ -186,6 +207,34 @@ export default function WelcomePage() {
                 : <><FileUp className="h-4 w-4 mr-2" />{agreementDone ? 'Add another' : 'Choose PDF'}</>}
             </Button>
           </div>
+
+          {agreement.step === 'confirm' && (
+            <div className="border border-emerald-300 bg-emerald-50 rounded-md p-3 space-y-2">
+              <p className="text-sm font-medium">
+                One thing to type: the agreement number
+              </p>
+              <p className="text-xs text-muted-foreground">
+                It is on the front page of the agreement (like SCR/GNT/Civil/2022/0012). Your bills
+                carry the same number — it is how they find this contract.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={agreement.agreementNo}
+                  onChange={e => setAgreement({ ...agreement, agreementNo: e.target.value })}
+                  placeholder="e.g. SR/MDU/Civil/2024/0037"
+                  className="flex-1 border rounded-md px-3 py-2 text-sm font-mono"
+                  autoFocus
+                />
+                <Button
+                  onClick={() => saveContract(agreement.extracted, agreement.agreementNo.trim())}
+                  disabled={!agreement.agreementNo.trim()}
+                >
+                  Save contract
+                </Button>
+              </div>
+            </div>
+          )}
 
           {agreement.step === 'failed' && (
             <div className="border border-red-300 bg-red-50 rounded-md p-3 space-y-2">
