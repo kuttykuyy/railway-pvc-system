@@ -16,6 +16,18 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+
+    // Ownership: every handler here read or WROTE another user's contract freely —
+    // extensions move completion dates and PVC eligibility, so this was a write hole,
+    // not just a read one. Reading requires the corresponding right on the contract.
+    const requester = session.user?.email
+      ? await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } })
+      : null;
+    const { checkUserContractAccess } = await import('@/lib/permissions');
+    const access = requester ? await checkUserContractAccess(requester.id, id) : null;
+    if (!access?.canView) {
+      return NextResponse.json({ error: 'You do not have access to this contract.' }, { status: 403 });
+    }
     const extensions = await prisma.contractExtension.findMany({
       where: {
         contractId: id
@@ -45,6 +57,18 @@ export async function POST(
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Ownership: extensions move completion dates and PVC eligibility, and this
+    // handler wrote them onto ANY contract for any signed-in user — a write hole, not
+    // just a read one.
+    const requester = session.user?.email
+      ? await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } })
+      : null;
+    const { checkUserContractAccess } = await import('@/lib/permissions');
+    const access = requester ? await checkUserContractAccess(requester.id, id) : null;
+    if (!access?.canEdit) {
+      return NextResponse.json({ error: 'You do not have access to this contract.' }, { status: 403 });
     }
 
     const data = await request.json();

@@ -32,6 +32,19 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Only someone with access to the contract may resolve it — this route let any
+    // signed-in account turn contract ids into contractor identities, plus a roster of
+    // officials' names, emails and postings for the zone.
+    const requester = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    });
+    const { checkUserContractAccess } = await import('@/lib/permissions');
+    const access = requester ? await checkUserContractAccess(requester.id, contractId) : null;
+    if (!access?.canView) {
+      return NextResponse.json({ error: 'You do not have access to this contract.' }, { status: 403 });
+    }
+
     // Get the contract
     const contract = await prisma.contract.findUnique({
       where: { id: contractId },

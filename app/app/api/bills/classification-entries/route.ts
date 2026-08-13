@@ -3,6 +3,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { checkUserBillAccess } from '@/lib/permissions';
+
+/**
+ * The requester's access to a bill, resolved from the session.
+ *
+ * Every handler here reads or WRITES a bill's classification entries — the rows the PVC
+ * is computed from — and each one checked only that a session existed, never whose bill
+ * it was. Any signed-in user could read any bill's breakdown, inject entries into
+ * another user's bill, or edit and delete entries by id. Writes require canEdit, reads
+ * canView, and the entry-id handlers resolve the entry to its bill first so an id
+ * cannot sidestep the check.
+ */
+async function billAccessFor(email: string, billId: string) {
+  const requester = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (!requester) return null;
+  return checkUserBillAccess(requester.id, billId);
+}
 
 // GET - Fetch classification entries for a bill
 export async function GET(request: NextRequest) {
@@ -17,6 +34,11 @@ export async function GET(request: NextRequest) {
 
     if (!billId) {
       return NextResponse.json({ error: 'Bill ID is required' }, { status: 400 });
+    }
+
+    const access = await billAccessFor(session.user.email, billId);
+    if (!access?.canView) {
+      return NextResponse.json({ error: 'You do not have access to this bill.' }, { status: 403 });
     }
 
     const entries = await prisma.billClassificationEntry.findMany({
@@ -71,14 +93,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify bill exists and user has access
+    // Verify bill exists and user has access — the old comment claimed this and the
+    // code only checked existence.
     const bill = await prisma.bill.findUnique({
       where: { id: billId },
-      include: { contract: true },
+      select: { id: true },
     });
-
     if (!bill) {
       return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
+    }
+    const access = await billAccessFor(session.user.email, billId);
+    if (!access?.canEdit) {
+      return NextResponse.json({ error: 'You do not have access to this bill.' }, { status: 403 });
     }
 
     // Create the entry
@@ -120,6 +146,18 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Entry ID is required' }, { status: 400 });
     }
 
+    const existing = await prisma.billClassificationEntry.findUnique({
+      where: { id },
+      select: { billId: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
+    }
+    const access = await billAccessFor(session.user.email, existing.billId);
+    if (!access?.canEdit) {
+      return NextResponse.json({ error: 'You do not have access to this bill.' }, { status: 403 });
+    }
+
     const entry = await prisma.billClassificationEntry.update({
       where: { id },
       data: {
@@ -155,6 +193,18 @@ export async function DELETE(request: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: 'Entry ID is required' }, { status: 400 });
+    }
+
+    const existing = await prisma.billClassificationEntry.findUnique({
+      where: { id },
+      select: { billId: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
+    }
+    const access = await billAccessFor(session.user.email, existing.billId);
+    if (!access?.canEdit) {
+      return NextResponse.json({ error: 'You do not have access to this bill.' }, { status: 403 });
     }
 
     await prisma.billClassificationEntry.delete({

@@ -6,6 +6,15 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    // Admin only. The middleware requires a session, but this returned database
+    // topology (largest tables, connection stats) and business volume to any
+    // signed-in account.
+    const { validateAdminAccess } = await import('@/lib/role-auth');
+    const adminCheck = await validateAdminAccess(request);
+    if (!adminCheck.authorized) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const report: any = {
       timestamp: new Date().toISOString(),
       status: 'healthy',

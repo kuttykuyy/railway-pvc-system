@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
                   }
                 : {}),
               pvcCalculation: true,
-              billTransaction: true
+              billTransaction: { select: { id: true, amount: true, discount: true, discountType: true, status: true, isFree: true, createdAt: true } }
             }
           })
         ]);
@@ -859,7 +859,7 @@ export async function POST(request: NextRequest) {
         contract: true,
         workClassification: true,
         pvcCalculation: true,
-        billTransaction: true, // Include transaction in response
+        billTransaction: { select: { id: true, amount: true, discount: true, discountType: true, status: true, isFree: true, createdAt: true } }, // Include transaction in response
         classificationEntries: {
           include: {
             subClassification: true,

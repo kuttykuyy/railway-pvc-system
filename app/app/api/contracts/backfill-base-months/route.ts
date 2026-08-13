@@ -9,14 +9,18 @@ export const dynamic = "force-dynamic";
 // POST /api/contracts/backfill-base-months - Backfill missing base month values for existing contracts
 export async function POST(request: NextRequest) {
   try {
-    // Validate API access - admin only
+    // Admin only — the comment always said so, but validateApiAccess checks no role,
+    // so any signed-in user could trigger a write loop across every contract's indices.
     const { authorized, user, message } = await validateApiAccess(request);
-    
+
     if (!authorized) {
       return NextResponse.json(
         { error: message },
         { status: 401 }
       );
+    }
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
     // Get all contracts

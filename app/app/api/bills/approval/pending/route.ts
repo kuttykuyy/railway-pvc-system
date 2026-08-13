@@ -40,14 +40,25 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get all submitted bills
-    const pendingBills = await prisma.bill.findMany({
+    // Get submitted bills — the official's OWN zone only. This listed every submitted
+    // bill in the system to any official of any zone, with the whole contract record
+    // attached (contractor phone, contract value, rebate). Admins still see all; an
+    // official with no zone recorded sees none rather than everything.
+    const isAdminViewer = user.role === 'admin' || user.role === 'superadmin';
+    const allPending = await prisma.bill.findMany({
       where: {
         status: 'submitted'
       },
       include: {
         contract: {
-          include: {
+          select: {
+            id: true,
+            agreementNo: true,
+            contractorName: true,
+            workDescription: true,
+            contractValue: true,
+            baseMonth: true,
+            dateOfOpening: true,
             user: {
               select: {
                 id: true,
@@ -64,6 +75,10 @@ export async function GET(req: NextRequest) {
         submittedAt: 'asc' // Oldest first
       }
     });
+    const { agreementMatchesZone } = await import('@/lib/railway-division-helper');
+    const pendingBills = isAdminViewer
+      ? allPending
+      : allPending.filter(b => agreementMatchesZone(b.contract?.agreementNo, user.railwayZone));
 
     // Get counts for dashboard
     const statusCounts = await prisma.bill.groupBy({

@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { notifyApprovalEvent } from '@/lib/approval-telegram';
+import { agreementMatchesZone } from '@/lib/railway-division-helper';
 
 /**
  * POST /api/bills/approval/request-revision
@@ -57,13 +58,26 @@ export async function POST(req: NextRequest) {
 
     // Get the bill
     const bill = await prisma.bill.findUnique({
-      where: { id: billId }
+      where: { id: billId },
+      include: { contract: { select: { agreementNo: true } } }
     });
 
     if (!bill) {
       return NextResponse.json(
         { error: 'Bill not found' },
         { status: 404 }
+      );
+    }
+
+    // An official acts only inside their own zone. The role check alone let any
+    // railway official on the platform act on every submitted bill nationwide — the
+    // pending list and the submit routing are both zone-scoped, so this gap was plainly
+    // unintentional. Admins remain unrestricted; a blank zone fails closed.
+    const isAdminActor = user.role === 'admin' || user.role === 'superadmin';
+    if (!isAdminActor && !agreementMatchesZone(bill.contract?.agreementNo, user.railwayZone)) {
+      return NextResponse.json(
+        { error: 'This bill belongs to a different railway zone.' },
+        { status: 403 }
       );
     }
 

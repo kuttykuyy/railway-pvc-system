@@ -67,9 +67,13 @@ export async function GET(
       );
     }
 
-    // Get user details
+    // Get user details — only what the invoice template actually reads. The bare
+    // findUnique pulled the whole row (password hash, reset token, login IP) into a
+    // handler on a token-authorized public route; nothing leaked only because the
+    // template never dereferenced them, which is one template edit away from a leak.
     const user = await prisma.user.findUnique({
       where: { id: invoice.userId },
+      select: { id: true, name: true, email: true, companyName: true, gstin: true, phone: true },
     });
 
     if (!user) {

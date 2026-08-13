@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import { checkUserContractAccess } from '@/lib/permissions';
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
 import { generateAbstractPdf, AbstractNotAvailableError } from '@/lib/pdf/generators/abstract-report';
@@ -11,6 +15,23 @@ export async function GET(request: NextRequest) {
     const contractId = new URL(request.url).searchParams.get('contractId');
     if (!contractId) {
       return NextResponse.json({ error: 'Contract ID is required' }, { status: 400 });
+    }
+
+    // Ownership, checked before anything is generated. This route took a contract id
+    // and streamed the whole abstract with no check at all — any signed-in user could
+    // read any contract's bills by id. The combined-pdf route calls this internally
+    // with the caller's own cookie, so it passes the same gate its caller already did.
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    const requester = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    });
+    const access = requester ? await checkUserContractAccess(requester.id, contractId) : null;
+    if (!access?.canView) {
+      return NextResponse.json({ error: 'You do not have access to this contract.' }, { status: 403 });
     }
 
     const { pdfBuffer, agreementNo } = await generateAbstractPdf(contractId);

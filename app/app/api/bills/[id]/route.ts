@@ -156,7 +156,7 @@ export async function GET(
             subClassification: true
           }
         },
-        billTransaction: true
+        billTransaction: { select: { id: true, amount: true, discount: true, discountType: true, status: true, isFree: true, createdAt: true } }
       }
     });
 

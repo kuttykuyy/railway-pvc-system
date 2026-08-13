@@ -16,6 +16,25 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Ownership on the contract, and the extension must BELONG to that contract - the
+    // handlers took any extensionId with no ownership check and never used the contract
+    // param at all.
+    const requester = session.user?.email
+      ? await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } })
+      : null;
+    const { checkUserContractAccess } = await import('@/lib/permissions');
+    const access = requester ? await checkUserContractAccess(requester.id, id) : null;
+    if (!access?.canView) {
+      return NextResponse.json({ error: 'You do not have access to this contract.' }, { status: 403 });
+    }
+    const belongs = await prisma.contractExtension.findFirst({
+      where: { id: extensionId, contractId: id },
+      select: { id: true },
+    });
+    if (!belongs) {
+      return NextResponse.json({ error: 'Extension not found' }, { status: 404 });
+    }
+
     const extension = await prisma.contractExtension.findUnique({
       where: {
         id: extensionId
@@ -49,6 +68,25 @@ export async function PATCH(
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Ownership on the contract, and the extension must BELONG to that contract - the
+    // handlers took any extensionId with no ownership check and never used the contract
+    // param at all.
+    const requester = session.user?.email
+      ? await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } })
+      : null;
+    const { checkUserContractAccess } = await import('@/lib/permissions');
+    const access = requester ? await checkUserContractAccess(requester.id, id) : null;
+    if (!access?.canEdit) {
+      return NextResponse.json({ error: 'You do not have access to this contract.' }, { status: 403 });
+    }
+    const belongs = await prisma.contractExtension.findFirst({
+      where: { id: extensionId, contractId: id },
+      select: { id: true },
+    });
+    if (!belongs) {
+      return NextResponse.json({ error: 'Extension not found' }, { status: 404 });
     }
 
     const data = await request.json();
@@ -121,6 +159,25 @@ export async function DELETE(
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Ownership on the contract, and the extension must BELONG to that contract - the
+    // handlers took any extensionId with no ownership check and never used the contract
+    // param at all.
+    const requester = session.user?.email
+      ? await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } })
+      : null;
+    const { checkUserContractAccess } = await import('@/lib/permissions');
+    const access = requester ? await checkUserContractAccess(requester.id, id) : null;
+    if (!access?.canEdit) {
+      return NextResponse.json({ error: 'You do not have access to this contract.' }, { status: 403 });
+    }
+    const belongs = await prisma.contractExtension.findFirst({
+      where: { id: extensionId, contractId: id },
+      select: { id: true },
+    });
+    if (!belongs) {
+      return NextResponse.json({ error: 'Extension not found' }, { status: 404 });
     }
 
     await prisma.contractExtension.delete({
