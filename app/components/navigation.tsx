@@ -336,56 +336,37 @@ export default function Navigation() {
                   );
                 })}
                 
-                {/* Credit Balance & Top-up - Show for all authenticated users */}
+                {/* Credit Balance & Top-up - Show for all authenticated users.
+                    One line, one chip, one small button. The two-row label with its
+                    sublabel made this the widest thing in the header; the amount (or
+                    the free-bill count) says everything the sublabel said. */}
                 {creditData && (
-                  <div className="flex items-center space-x-2 ml-2 pl-2 border-l border-gray-200">
-                    {/* Credit Balance Display */}
-                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                      <Wallet className="h-4 w-4 text-gray-600" />
-                      <div className="flex flex-col">
-                        {creditData.trialInfo.isActive ? (
-                          <>
-                            <span className="text-xs font-semibold text-gray-800 leading-tight">
-                              {creditData.trialInfo.billsRemaining} Free Bill{creditData.trialInfo.billsRemaining !== 1 ? 's' : ''}
-                            </span>
-                            <span className="text-xs text-gray-500 leading-tight">Trial Active</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className={cn(
-                              "text-xs font-semibold leading-tight",
-                              hasInsufficientBalance ? "text-red-600" : "text-gray-800"
-                            )}>
-                              ₹{creditData.balance.toFixed(2)}
-                            </span>
-                            <span className="text-xs text-gray-500 leading-tight">Balance</span>
-                          </>
-                        )}
-                      </div>
-                      {/* One quiet signal, not three. The icon marks the state; the
-                          amount is already red; a separate pill and a pulsing button
-                          made the header shout at anyone with an empty wallet —
-                          including people whose next bill costs nothing. */}
-                      {hasInsufficientBalance && (
-                        <div className="ml-1">
-                          <AlertCircle className="h-4 w-4 text-red-500" />
-                        </div>
+                  <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-gray-200">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 rounded-lg text-xs font-semibold whitespace-nowrap">
+                      <Wallet className="h-3.5 w-3.5 text-gray-500" />
+                      {creditData.trialInfo.isActive ? (
+                        <span className="text-emerald-700">
+                          {creditData.trialInfo.billsRemaining} free bill{creditData.trialInfo.billsRemaining !== 1 ? 's' : ''}
+                        </span>
+                      ) : (
+                        <span className={hasInsufficientBalance ? 'text-red-600' : 'text-gray-800'}>
+                          ₹{creditData.balance.toFixed(0)}
+                        </span>
                       )}
+                      {hasInsufficientBalance && <AlertCircle className="h-3.5 w-3.5 text-red-500" />}
                     </div>
-
-                    {/* Top-up Button */}
                     <Button
                       onClick={() => setShowTopupDialog(true)}
                       size="sm"
+                      title={translateNav('Top-up')}
                       className={cn(
-                        "shadow-sm",
+                        "h-8 px-2.5 shadow-sm",
                         hasInsufficientBalance
                           ? "bg-red-500 text-white hover:bg-red-600"
                           : "bg-emerald-600 text-white hover:bg-emerald-700"
                       )}
                     >
-                      <Plus className="h-4 w-4 mr-1" />
-                      {translateNav('Top-up')}
+                      <Plus className="h-4 w-4" />
                     </Button>
                   </div>
                 )}
