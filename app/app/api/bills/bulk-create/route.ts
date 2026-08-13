@@ -117,15 +117,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user has a free account or sufficient balance
-    const isFreeAccount = userWithAccount.customProcessingFee === 0 || userWithAccount.isFreeAccount || userWithAccount.role === 'superadmin' || userWithAccount.role === 'admin' || userWithAccount.role === 'railway_official';
+    // Check if user has a free account or sufficient balance. accounts_official is in
+    // the list because payment-validation treats it as free — this route's own copy of
+    // the free roles had drifted and charged them.
+    const isFreeAccount = userWithAccount.customProcessingFee === 0 || userWithAccount.isFreeAccount || userWithAccount.role === 'superadmin' || userWithAccount.role === 'admin' || userWithAccount.role === 'railway_official' || userWithAccount.role === 'accounts_official';
     const billingSettings = await getBillingSettings();
     // Per-bill fee matches single-bill pricing: AI-extracted bills use the AI rate,
     // manually entered bills use the manual rate.
     const aiBillCost = billingSettings.aiBillCost || 499;
     const manualBillCost = billingSettings.billCost || 199;
     const feeForBill = (bill: BillInput) => isFreeAccount ? 0 : (bill.isAiUploaded ? aiBillCost : manualBillCost);
-    const totalProcessingFee = bills.reduce((sum, bill) => sum + feeForBill(bill), 0);
+
+    // The free trial covers the first bills of a batch, exactly as it covers a single
+    // bill — this route never consulted it, so a trial user's very first bills cost
+    // full price here and nothing on the ordinary form. The claim is a conditional
+    // update, so two concurrent batches cannot both spend the same trial; if the claim
+    // loses the race, every bill in the batch is simply charged.
+    let trialCount = 0;
+    if (!isFreeAccount) {
+      const trialLimit = billingSettings.freeTrialBills || 1;
+      const wanted = Math.min(bills.length, Math.max(0, trialLimit - (userWithAccount.freeTrialUsed || 0)));
+      if (wanted > 0) {
+        const claimed = await prisma.user.updateMany({
+          where: { id: user.id, freeTrialUsed: { lte: trialLimit - wanted } },
+          data: { freeTrialUsed: { increment: wanted } },
+        });
+        if (claimed.count === 1) trialCount = wanted;
+      }
+    }
+    const totalProcessingFee = bills.reduce((sum, bill, index) => sum + (index < trialCount ? 0 : feeForBill(bill)), 0);
     
     if (!isFreeAccount) {
       const currentBalance = userWithAccount.customerAccount?.creditBalance || 0;
@@ -596,17 +616,23 @@ export async function POST(request: NextRequest) {
         return balanceAfter;
       });
 
-      // Create bill transaction records for each bill
-      for (const bill of createdBills) {
+      // Create bill transaction records for each bill. The first trialCount bills are
+      // the trial's — free, and marked 'trial' so the watermark rule sees them; the
+      // rows here previously never set discountType, so no bulk bill could ever be
+      // recognised as a trial bill.
+      for (let index = 0; index < createdBills.length; index += 1) {
+        const bill = createdBills[index];
+        const isTrialBill = index < trialCount;
         await prisma.billTransaction.create({
           data: {
             billId: bill.id,
             userId: user.id,
-            amount: bill.processingFee || 0,
+            amount: isTrialBill ? 0 : (bill.processingFee || 0),
             originalAmount: bill.processingFee || 0,
-            discount: 0,
+            discount: isTrialBill ? (bill.processingFee || 0) : 0,
+            discountType: isTrialBill ? 'trial' : null,
             status: 'paid',
-            isFree: false
+            isFree: isTrialBill
           }
         });
       }

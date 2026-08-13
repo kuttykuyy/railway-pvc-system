@@ -878,6 +878,22 @@ async function createBillFromConversation(conversation: any) {
       },
     });
 
+    // Same rule as the Telegram path: a 'trial' transaction row, because the watermark
+    // keys on it — a bill with no row at all reads as fully paid to every report route.
+    if (conversation.userId) {
+      await prisma.billTransaction.create({
+        data: {
+          billId: bill.id,
+          userId: conversation.userId,
+          amount: 0,
+          discount: 0,
+          discountType: 'trial',
+          status: 'success',
+          isFree: true,
+        },
+      }).catch((err: any) => console.error('whatsapp bill transaction failed:', err));
+    }
+
     await sendWhatsAppTextMessage(
       phone,
       `✅ *Bill Created Successfully!*\n\n` +

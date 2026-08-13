@@ -11,6 +11,10 @@ export enum TelegramStep {
   IDLE = 'IDLE',
   AWAITING_COMMAND = 'AWAITING_COMMAND',
   AWAITING_PHONE = 'AWAITING_PHONE', // Link phone to account
+  // The code sent to that phone's WhatsApp. A phone number alone proved nothing:
+  // anyone knowing a customer's number could bind their own chat to that account and
+  // read its contracts and bills.
+  AWAITING_LINK_OTP = 'AWAITING_LINK_OTP',
   // Guided PDF → PVC flow: agreement → zone → fuel basis → bill.
   AWAITING_AGREEMENT_PDF = 'AWAITING_AGREEMENT_PDF',
   AWAITING_ZONE = 'AWAITING_ZONE',
@@ -45,6 +49,8 @@ export enum TelegramStep {
 export interface TelegramConversationData {
   // Account linking
   phone?: string; // phone used to link account
+  /** The phone awaiting its WhatsApp code — linking happens only after the code matches. */
+  pendingLinkPhone?: string;
   // Contract creation
   agreementNo?: string;
   contractorName?: string;
@@ -216,14 +222,15 @@ export async function mutateTelegramConversationData(
 }
 
 /**
- * Link a Telegram conversation to a user by phone number
+ * The account a phone number belongs to, without linking anything.
+ *
+ * Split out of linkTelegramToUser so the OTP flow can check the number exists before
+ * sending a code — and so nothing can link a conversation as a side effect of a lookup.
  */
-export async function linkTelegramToUser(conversationId: string, phone: string) {
-  // Normalise phone
+export async function findUserByPhone(phone: string) {
   let cleaned = phone.replace(/\D/g, '');
   if (!cleaned.startsWith('91') && cleaned.length === 10) cleaned = '91' + cleaned;
-
-  const user = await prisma.user.findFirst({
+  return prisma.user.findFirst({
     where: {
       OR: [
         { phone: cleaned },
@@ -232,6 +239,16 @@ export async function linkTelegramToUser(conversationId: string, phone: string) 
       ],
     },
   });
+}
+
+/**
+ * Link a Telegram conversation to a user by phone number.
+ *
+ * Call ONLY after the number has been proven — the caller must have verified the
+ * WhatsApp code sent to it. Possession of the number alone is not proof of anything.
+ */
+export async function linkTelegramToUser(conversationId: string, phone: string) {
+  const user = await findUserByPhone(phone);
 
   if (user) {
     await prisma.telegramConversation.update({

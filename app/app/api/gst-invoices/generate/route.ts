@@ -161,10 +161,13 @@ export async function POST(request: NextRequest) {
         
         // Public PDF URL protected by a signed, invoice-scoped token so the link is
         // shareable via WhatsApp but the bare invoice id alone cannot fetch the PII.
+        // 30 days, not 365: the link is a bearer token for a document carrying GSTIN
+        // and customer PII, with no revocation. A month covers "download it later";
+        // after that the invoice is still on the user's own invoices page behind login.
         const invoiceToken = jwt.sign(
           { invoiceId: gstInvoice.id },
           getNextAuthSecret(),
-          { expiresIn: '365d' }
+          { expiresIn: '30d' }
         );
         const pdfUrl = `https://irpvc.in/api/public/gst-invoice-pdf/${gstInvoice.id}?token=${encodeURIComponent(invoiceToken)}`;
         const pdfFileName = `GST_Invoice_${gstInvoice.invoiceNumber}.pdf`;

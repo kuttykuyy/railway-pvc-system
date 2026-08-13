@@ -9,6 +9,7 @@ import {
   resetTelegramConversation,
   getTelegramConversationData,
   linkTelegramToUser,
+  findUserByPhone,
   TelegramStep,
 } from './telegram-conversation';
 import { sendTelegramMessage, replyKeyboard, getPublicSiteUrl } from './telegram-api';
@@ -78,6 +79,8 @@ export async function handleTelegramMessage(chatId: string, text: string) {
         return handleCommand(conversation, lower, chatId);
       case TelegramStep.AWAITING_PHONE:
         return handlePhoneLinking(conversation, msg, chatId);
+      case TelegramStep.AWAITING_LINK_OTP:
+        return handleLinkOtp(conversation, msg, chatId);
       case TelegramStep.AWAITING_TENDER_DATE:
         return handleTenderDateReply(conversation, msg, chatId);
       case TelegramStep.AWAITING_ZONE:
@@ -214,7 +217,7 @@ async function handlePhoneLinking(conversation: any, msg: string, chatId: string
     return sendTelegramMessage(chatId, '❌ Invalid phone number. Please enter a 10-digit number (e.g., 9876543210).');
   }
 
-  const user = await linkTelegramToUser(conversation.id, phone);
+  const user = await findUserByPhone(phone);
   if (!user) {
     // First-time user: spell out every step, otherwise "sign up first" is a dead end
     // (they also have to save this number on their profile and add credits).
@@ -231,6 +234,64 @@ async function handlePhoneLinking(conversation: any, msg: string, chatId: string
         (waiting ? ` — I've kept your bill, so no need to upload it again.` : `.`) +
         `\n\n<i>The PVC amount above is free and needs no account.</i>`,
     );
+  }
+
+  // The number exists — now prove it belongs to whoever is typing. A code goes to the
+  // number's own WhatsApp; without this, anyone knowing a customer's phone number could
+  // bind their chat to that account and read its contracts and bills.
+  const { randomInt } = await import('crypto');
+  const { sendOtpWhatsApp } = await import('./whatsapp-mydreams');
+  const otp = randomInt(100000, 999999).toString();
+  await prisma.phoneOtp.create({
+    data: { phone, otp, expiresAt: new Date(Date.now() + 10 * 60 * 1000) },
+  });
+  const sent = await sendOtpWhatsApp(phone, otp);
+  if (!sent.success) {
+    // Fail closed: no code delivered means no link, never a link without proof.
+    return sendTelegramMessage(
+      chatId,
+      '❌ I could not send a verification code to that number\'s WhatsApp. Check the number and try again in a few minutes.',
+    );
+  }
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_LINK_OTP, { pendingLinkPhone: phone });
+  return sendTelegramMessage(
+    chatId,
+    `🔐 A 6-digit code has been sent to the WhatsApp of <b>${phone}</b>.\n\nEnter it here to link your account.`,
+  );
+}
+
+/** The WhatsApp code, checked; only a match links the account. */
+async function handleLinkOtp(conversation: any, msg: string, chatId: string) {
+  const code = msg.trim();
+  if (!/^\d{6}$/.test(code)) {
+    return sendTelegramMessage(chatId, '❌ Please enter the 6-digit code sent to your WhatsApp, or type "cancel".');
+  }
+  const data = getTelegramConversationData(conversation);
+  const phone = data.pendingLinkPhone;
+  if (!phone) {
+    await resetTelegramConversation(conversation.id);
+    return sendTelegramMessage(chatId, '❌ The linking session expired. Type /link to start again.');
+  }
+
+  const record = await prisma.phoneOtp.findFirst({
+    where: { phone, verified: false, expiresAt: { gt: new Date() } },
+    orderBy: { createdAt: 'desc' },
+  });
+  // Attempts are counted against the record so the code cannot be brute-forced from
+  // chat: five wrong answers kill it, and a fresh /link mints a fresh code.
+  if (!record || record.attempts >= 5) {
+    return sendTelegramMessage(chatId, '❌ The code has expired. Type /link to get a new one.');
+  }
+  if (record.otp !== code) {
+    await prisma.phoneOtp.update({ where: { id: record.id }, data: { attempts: { increment: 1 } } });
+    return sendTelegramMessage(chatId, '❌ That code is not right. Check your WhatsApp and try again.');
+  }
+  await prisma.phoneOtp.update({ where: { id: record.id }, data: { verified: true } });
+
+  const user = await linkTelegramToUser(conversation.id, phone);
+  if (!user) {
+    await resetTelegramConversation(conversation.id);
+    return sendTelegramMessage(chatId, '❌ Something went wrong linking the account. Type /link to try again.');
   }
 
   // Refresh conversation with linked user
@@ -788,6 +849,25 @@ async function createBillFromTelegram(conversation: any, chatId: string) {
         selectedSteelComponent: steelTypes.length > 0 ? 'Steel TMT Bars' : null,
       },
     });
+
+    // A transaction row marked 'trial', because the watermark rule keys on it. This
+    // path created bills with NO transaction row at all, which every report route
+    // reads as fully paid — a chat was the way to a clean statement without a rupee.
+    // Marked trial, the report carries the watermark until the owner tops up, the
+    // same bar every web trial bill clears.
+    if (conversation.userId) {
+      await prisma.billTransaction.create({
+        data: {
+          billId: bill.id,
+          userId: conversation.userId,
+          amount: 0,
+          discount: 0,
+          discountType: 'trial',
+          status: 'success',
+          isFree: true,
+        },
+      }).catch((err: any) => console.error('telegram bill transaction failed:', err));
+    }
 
     await sendTelegramMessage(
       chatId,
