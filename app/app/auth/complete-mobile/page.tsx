@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,27 @@ export default function CompleteMobilePage() {
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Self-heal a stale session. The middleware sends people here on what the session
+  // token says, and the token can lag the database: someone who just saved their number
+  // still carries "no phone" and gets bounced back to this form, empty, on every page —
+  // a loop with no way out. Ask the database directly; if the number is already there,
+  // refresh the session and continue rather than asking for it again.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/user/complete-mobile');
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.hasPhone) {
+          await update().catch(() => {});
+          window.location.href = '/welcome';
+        }
+      } catch {
+        // The form below still works; this is only the shortcut past it.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,11 +60,14 @@ export default function CompleteMobilePage() {
         setError(data.error || 'Could not save your mobile number.');
         return;
       }
-      // Refresh the session token so it now records that the user has a phone,
-      // then continue into the app.
-      await update();
-      router.push('/contracts');
-      router.refresh();
+      // Refresh the session token so it now records that the user has a phone. The
+      // refresh must not be able to strand them: the number IS saved, so even if the
+      // refresh fails the mount check above will let them through on the next load.
+      await update().catch(() => {});
+      // A hard navigation, not a client-side push: the middleware must see the fresh
+      // cookie, and this is the first-run path — new users belong on the two uploads,
+      // not an empty contracts table.
+      window.location.href = '/welcome';
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {

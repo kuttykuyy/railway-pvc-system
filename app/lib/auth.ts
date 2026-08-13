@@ -136,13 +136,23 @@ export const authOptions: NextAuthOptions = {
         }
       }
       
+      // Whether the user's database row exists yet. For a FIRST-time Google sign-in it
+      // does not — the adapter creates it after this callback — so any write keyed on
+      // the user here fails: customer-account provisioning hit a foreign key and the
+      // login-time stamp hit "record not found", on every new Google account since
+      // June. Both were caught and logged, so sign-in worked, but the noise buried
+      // real errors. The writes below now wait for a row to write to; the next
+      // sign-in, or the jwt callback's own reads, cover a brand-new account.
+      let dbRowExists = account?.provider !== 'google';
+
       // For OAuth providers, ensure user has proper role and email is verified
       if (account?.provider === 'google') {
         try {
           const existingUser = await prisma.user.findUnique({
             where: { email: user.email! }
           });
-          
+          dbRowExists = !!existingUser;
+
           if (existingUser) {
             const updates: any = {};
             
@@ -169,7 +179,7 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
-      if (user.id) {
+      if (user.id && dbRowExists) {
         try {
           await ensureCustomerAccount(user.id);
         } catch (error) {
@@ -180,7 +190,7 @@ export const authOptions: NextAuthOptions = {
       // Record the login time — the column existed but nothing ever wrote it, so
       // retention ("who came back?") was unmeasurable. Best-effort: a stats write
       // must never block a sign-in.
-      if (user.email) {
+      if (user.email && dbRowExists) {
         prisma.user.update({
           where: { email: user.email },
           data: { lastLoginAt: new Date() },

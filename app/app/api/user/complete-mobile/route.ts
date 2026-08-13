@@ -11,6 +11,28 @@ export const dynamic = 'force-dynamic';
  * — e.g. Google sign-in accounts, which never provide a phone number. Enforced by
  * middleware, which blocks phone-less users until this succeeds.
  */
+/**
+ * Whether the signed-in user already has a phone, straight from the database.
+ *
+ * The middleware gates on the session token, which can lag the truth: a user who just
+ * saved a number can carry a token still saying they have none, and every page then
+ * bounces them back to the mobile form with an empty box — a loop with no way out. The
+ * page asks here on load, and when the answer is "already saved" it refreshes the
+ * session and moves on. This path is the one API the phone-gate exempts, which is
+ * exactly why the check lives here and not on the profile route.
+ */
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+  const dbUser = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { phone: true },
+  });
+  return NextResponse.json({ hasPhone: !!(dbUser?.phone && dbUser.phone.trim()) });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
