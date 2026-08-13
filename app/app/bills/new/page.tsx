@@ -1382,7 +1382,9 @@ function NewBillPageContent() {
           hides it while nothing needs a human. Toasts render above it, so the
           analyzer's own progress and error messages stay visible throughout. */}
       {instantStage && (
-        <div className="fixed inset-0 z-40 bg-white/97 backdrop-blur-sm flex items-center justify-center p-6">
+        // Solid, and above the app chrome: bg-white/97 was not a real utility class, so
+        // the cover rendered transparent and the whole form showed through as noise.
+        <div className="fixed inset-0 z-[60] bg-white dark:bg-slate-950 flex items-center justify-center p-6">
           <div className="max-w-md w-full text-center space-y-5">
             {instantStage === 'upload' && (
               <>
