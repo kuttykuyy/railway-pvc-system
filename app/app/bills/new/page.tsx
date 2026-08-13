@@ -13,7 +13,8 @@ import { StatusMessage } from '@/components/ui/status-message';
 import { Badge } from '@/components/ui/badge';
 // Removed payment modal import
 import { 
-  FileText, 
+  FileText,
+  Receipt, 
   Save, 
   Calculator, 
   Calendar, 
@@ -145,6 +146,22 @@ function NewBillPageContent() {
   const { t, language } = useLanguage();
   const preselectedContractId = searchParams?.get('contractId');
 
+  /**
+   * Instant mode (?instant=1): the new-user path. One file picker, then a full-screen
+   * cover while the bill is read, saved and its report opened — the form underneath is
+   * the same one, running as normal, so every mapping, check and billing rule is
+   * inherited rather than rebuilt. The cover comes off the moment anything needs a
+   * human: a failed read, an unmatched contract, a pending cement cost. Nothing is
+   * duplicated, so this mode cannot drift from what the form itself would have done.
+   */
+  const instantMode = searchParams?.get('instant') === '1';
+  const [instantStage, setInstantStage] = useState<'upload' | 'reading' | 'saving' | null>(
+    instantMode ? 'upload' : null,
+  );
+  const [instantExtractedAt, setInstantExtractedAt] = useState(0);
+  const instantSubmittedRef = useRef(false);
+  const analyzerPickerRef = useRef<(() => void) | null>(null);
+
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [classificationGroups, setClassificationGroups] = useState<ClassificationGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<ClassificationGroup | null>(null);
@@ -222,7 +239,11 @@ function NewBillPageContent() {
   // Horizontal tabs for the bill form sections.
   const [activeBillTab, setActiveBillTab] = useState('basic');
   // How the user wants to create the bill: pick first, then show the form.
-  const [billMode, setBillMode] = useState<'choose' | 'manual' | 'ai'>('choose');
+  // Instant mode goes straight to the PDF path — the choose screen is one of the
+  // screens it exists to remove.
+  const [billMode, setBillMode] = useState<'choose' | 'manual' | 'ai'>(
+    searchParams?.get('instant') === '1' ? 'ai' : 'choose',
+  );
 
   // Insufficient credit dialog state
   const [showInsufficientCredit, setShowInsufficientCredit] = useState(false);
@@ -764,6 +785,10 @@ function NewBillPageContent() {
       setOpenAccordion(prev => Array.from(new Set([...prev, 'basic'])));
       toast('Bill details extracted. Classification mapping needs review.');
     }
+
+    // Signals the instant-mode effect that extraction has landed. The effect reads the
+    // states set above, so it must run on a later render, not from here.
+    setInstantExtractedAt(Date.now());
   };
 
   const handleClassificationEntriesChange = (entries: ClassificationEntry[]) => {
@@ -1083,6 +1108,40 @@ function NewBillPageContent() {
     await handleSubmit();
   };
 
+  // If the save ends without navigating away — insufficient credit, a validation
+  // refusal, a server error — the cover lifts so the form can say what went wrong.
+  // Success never reaches this: it redirects first.
+  useEffect(() => {
+    if (instantStage === 'saving' && !isSaving && instantSubmittedRef.current) {
+      setInstantStage(null);
+    }
+  }, [instantStage, isSaving]);
+
+  // Instant mode: save the moment the extraction lands complete — and hand over to the
+  // human the moment it lands incomplete. The confirm dialog is skipped on purpose: it
+  // exists to let a person check what they typed, and here nothing was typed.
+  useEffect(() => {
+    if (!instantMode || instantStage !== 'reading' || !instantExtractedAt) return;
+    if (instantSubmittedRef.current) return;
+
+    const ready = Boolean(
+      formData.contractId && formData.billNo && formData.zone && formData.dateOfMeasurement,
+    ) && classificationEntries.length > 0 && !cementCostPending;
+
+    if (!ready) {
+      // Something needs a person — an unmatched contract, a missing date, a cement cost
+      // waiting to be applied. Lift the cover and let the ordinary form say what.
+      setInstantStage(null);
+      toast('The bill is read — one detail below needs your eye before the report.', { icon: '👀', duration: 7000 });
+      return;
+    }
+
+    instantSubmittedRef.current = true;
+    setInstantStage('saving');
+    handleSubmit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instantMode, instantStage, instantExtractedAt, formData.contractId, formData.billNo, formData.zone, formData.dateOfMeasurement, classificationEntries.length, cementCostPending]);
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setShowConfirmDialog(true);
@@ -1238,6 +1297,19 @@ function NewBillPageContent() {
           toast.success(`Bill ${responseData.billNo} created successfully!`);
         }
         
+        // Instant mode ends on the report: start the download, then land on the bill —
+        // the promise was two uploads and a PDF, not a list screen.
+        if (instantMode && responseData.id) {
+          const link = document.createElement('a');
+          link.href = `/api/bills/${responseData.id}/pdf-report`;
+          link.download = '';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          router.push(`/bills/${responseData.id}`);
+          return;
+        }
+
         // Navigate to bills page after successful creation
         router.push('/bills');
         return;
@@ -1306,6 +1378,70 @@ function NewBillPageContent() {
 
   return (
     <div className="space-y-6">
+      {/* The instant-mode cover. The full form keeps running underneath — this only
+          hides it while nothing needs a human. Toasts render above it, so the
+          analyzer's own progress and error messages stay visible throughout. */}
+      {instantStage && (
+        <div className="fixed inset-0 z-40 bg-white/97 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="max-w-md w-full text-center space-y-5">
+            {instantStage === 'upload' && (
+              <>
+                <Receipt className="h-12 w-12 mx-auto text-emerald-600" />
+                <h2 className="text-2xl font-bold">Upload your signed bill</h2>
+                <p className="text-sm text-muted-foreground">
+                  The PDF from IREPS, with the item pages. It is read, checked against its own
+                  total, and your report is prepared — nothing to fill in.
+                </p>
+                <Button
+                  size="lg"
+                  className="w-full"
+                  onClick={() => {
+                    analyzerPickerRef.current?.();
+                    setInstantStage('reading');
+                  }}
+                >
+                  <FileText className="h-5 w-5 mr-2" />
+                  Choose the bill PDF
+                </Button>
+                <button
+                  type="button"
+                  className="text-sm text-muted-foreground hover:underline"
+                  onClick={() => setInstantStage(null)}
+                >
+                  Type it in instead
+                </button>
+              </>
+            )}
+            {instantStage === 'reading' && (
+              <>
+                <LoadingSpinner />
+                <h2 className="text-xl font-bold">Reading your bill…</h2>
+                <p className="text-sm text-muted-foreground">
+                  Every item is read off the PDF and the totals are checked against the bill&apos;s own
+                  figures. A long bill can take a minute or two.
+                </p>
+                <button
+                  type="button"
+                  className="text-sm text-muted-foreground hover:underline"
+                  onClick={() => setInstantStage(null)}
+                >
+                  Show the details / type it in instead
+                </button>
+              </>
+            )}
+            {instantStage === 'saving' && (
+              <>
+                <LoadingSpinner />
+                <h2 className="text-xl font-bold">Preparing your report…</h2>
+                <p className="text-sm text-muted-foreground">
+                  The bill is saved and the PVC report is on its way. The download starts by itself.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-4">
         <BackButton href="/bills" label={t('form.bill.back')} variant="outline" />
         <div>
@@ -1583,6 +1719,7 @@ function NewBillPageContent() {
                     title="Direct PDF Bill Extraction"
                     contractId={formData.contractId}
                     onApplyBillDetails={applyExtractedBillDetails}
+                    openFilePickerRef={analyzerPickerRef}
                   />
                 )}
 
