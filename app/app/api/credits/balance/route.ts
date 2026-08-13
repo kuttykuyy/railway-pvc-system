@@ -43,12 +43,15 @@ export async function GET(request: NextRequest) {
     const isFree = user.isFreeAccount || isSuperadmin || isAdmin || isRailwayOfficial || user.customProcessingFee === 0;
     
     const billCost = isFree ? 0 : baseCost; // ₹0 cost if user is free/admin/superadmin/official
-    const freeTrialLimit = 0;
-    
-    // Calculate free trial info
-    const freeTrialUsed = 0;
-    const freeTrialRemaining = 0;
-    const isTrialActive = false;
+
+    // The trial as it actually stands — the same rule /api/user/profile applies. These
+    // were hardcoded to zero, so the header told a brand-new user "₹0.00 · Low balance ·
+    // Top-up" in red while the bill page below said their first bill was free. The
+    // header must not contradict the page it sits above.
+    const freeTrialLimit = isFree ? 0 : (billingSettings.freeTrialBills || 1);
+    const freeTrialUsed = user.freeTrialUsed || 0;
+    const freeTrialRemaining = Math.max(0, freeTrialLimit - freeTrialUsed);
+    const isTrialActive = freeTrialRemaining > 0;
 
     // Get current account balance
     let currentBalance = 0;

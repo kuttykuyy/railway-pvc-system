@@ -362,23 +362,16 @@ export default function Navigation() {
                           </>
                         )}
                       </div>
-                      {/* Insufficient Balance Warning Badge */}
+                      {/* One quiet signal, not three. The icon marks the state; the
+                          amount is already red; a separate pill and a pulsing button
+                          made the header shout at anyone with an empty wallet —
+                          including people whose next bill costs nothing. */}
                       {hasInsufficientBalance && (
                         <div className="ml-1">
-                          <AlertCircle className="h-4 w-4 text-red-500 animate-pulse" />
+                          <AlertCircle className="h-4 w-4 text-red-500" />
                         </div>
                       )}
                     </div>
-
-                    {/* Insufficient Balance Warning Tooltip */}
-                    {hasInsufficientBalance && (
-                      <div className="hidden xl:flex items-center px-2 py-1 bg-red-50 border border-red-200 rounded-md">
-                        <AlertCircle className="h-3 w-3 text-red-500 mr-1.5" />
-                        <span className="text-xs text-red-600 font-medium whitespace-nowrap">
-                          Low balance
-                        </span>
-                      </div>
-                    )}
 
                     {/* Top-up Button */}
                     <Button
@@ -387,7 +380,7 @@ export default function Navigation() {
                       className={cn(
                         "shadow-sm",
                         hasInsufficientBalance
-                          ? "bg-red-500 text-white hover:bg-red-600 animate-pulse"
+                          ? "bg-red-500 text-white hover:bg-red-600"
                           : "bg-emerald-600 text-white hover:bg-emerald-700"
                       )}
                     >
@@ -539,7 +532,7 @@ export default function Navigation() {
                             </span>
                           )}
                           {hasInsufficientBalance && (
-                            <AlertCircle className="h-4 w-4 text-red-500 animate-pulse" />
+                            <AlertCircle className="h-4 w-4 text-red-500" />
                           )}
                         </div>
                       </div>
@@ -559,7 +552,7 @@ export default function Navigation() {
                         className={cn(
                           "w-full shadow-sm",
                           hasInsufficientBalance
-                            ? "bg-red-500 text-white hover:bg-red-600 animate-pulse"
+                            ? "bg-red-500 text-white hover:bg-red-600"
                             : "bg-emerald-600 text-white hover:bg-emerald-700"
                         )}
                       >
