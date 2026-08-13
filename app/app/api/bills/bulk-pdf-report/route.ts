@@ -138,10 +138,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Whose bills these are is checked BEFORE anything is fetched. This route took a
+    // list of ids and served the reports with no ownership check at all — the session
+    // was only read further down, for the letterhead — so any signed-in user could
+    // request any other user's bills by id. Ids the requester cannot access are
+    // dropped, the same rule the bills list applies.
+    const authSession = await getServerSession(authOptions);
+    if (!authSession?.user?.email) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    const requester = await prisma.user.findUnique({
+      where: { email: authSession.user.email },
+      select: { id: true, role: true },
+    });
+    if (!requester) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    const { getUserAccessibleBills } = await import('@/lib/permissions');
+    const accessibleBillIds = await getUserAccessibleBills(requester.id);
+    const permittedBillIds = accessibleBillIds === null
+      ? billIds // unrestricted (admin)
+      : billIds.filter((id: string) => accessibleBillIds.includes(id));
+    if (permittedBillIds.length === 0) {
+      return NextResponse.json({ error: 'You do not have access to these bills.' }, { status: 403 });
+    }
+
     // Get all selected bills with detailed information
     const bills = await prisma.bill.findMany({
-      where: { 
-        id: { in: billIds }
+      where: {
+        id: { in: permittedBillIds }
       },
       include: {
         contract: {
@@ -153,6 +178,7 @@ export async function POST(request: NextRequest) {
         },
         pvcCalculation: true,
         workClassification: true,
+        billTransaction: true,
         classificationEntries: {
           include: {
             classification: true,
@@ -165,6 +191,30 @@ export async function POST(request: NextRequest) {
         { createdAt: 'asc' }
       ]
     });
+
+    // The trial watermark applies here exactly as it does on the single-bill report —
+    // this route was the way around it: put the free-trial bill in a "batch" of one and
+    // download it clean. Same rule as pdf-report: a trial-discounted bill is watermarked
+    // until its owner has topped up at least once; admins are exempt.
+    const isAdminRequester = requester.role === 'admin' || requester.role === 'superadmin';
+    let bulkNeedsWatermark = false;
+    if (!isAdminRequester) {
+      const trialOwnerIds = [...new Set(
+        bills
+          .filter((b: any) => b.billTransaction?.discountType === 'trial')
+          .map((b: any) => b.contract?.userId)
+          .filter(Boolean),
+      )] as string[];
+      if (trialOwnerIds.length > 0) {
+        const ownersWithTopup = await prisma.creditTransaction.findMany({
+          where: { userId: { in: trialOwnerIds }, type: 'add' },
+          select: { userId: true },
+          distinct: ['userId'],
+        });
+        const topupOwners = new Set(ownersWithTopup.map(t => t.userId));
+        bulkNeedsWatermark = trialOwnerIds.some(id => !topupOwners.has(id));
+      }
+    }
 
     if (bills.length === 0) {
       return NextResponse.json(
@@ -2982,7 +3032,10 @@ export async function POST(request: NextRequest) {
           })
         : initialPdfBytes;
 
-      const pdfBuffer = Buffer.from(finalPdfBytes);
+      const stampedFinal = bulkNeedsWatermark
+        ? await (await import('@/lib/pdf/utils/watermark')).applyTrialWatermark(finalPdfBytes)
+        : finalPdfBytes;
+      const pdfBuffer = Buffer.from(stampedFinal);
 
       return new Response(pdfBuffer, {
         headers: {
@@ -2994,7 +3047,10 @@ export async function POST(request: NextRequest) {
       });
     } else {
       // If no bills, return without labour index
-      const pdfBuffer = Buffer.from(initialPdfBytes);
+      const stampedInitial = bulkNeedsWatermark
+        ? await (await import('@/lib/pdf/utils/watermark')).applyTrialWatermark(initialPdfBytes)
+        : initialPdfBytes;
+      const pdfBuffer = Buffer.from(stampedInitial);
       return new Response(pdfBuffer, {
         headers: {
           'Content-Type': 'application/pdf',

@@ -83,6 +83,30 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       console.error('pre-2022 report: could not embed index documents:', err);
     }
 
+    // The trial watermark, by the same rule as every other report: a trial-discounted
+    // bill is stamped until its owner has topped up at least once. Without this, the
+    // pre-2022 statement was the clean copy a trial account could walk away with — the
+    // exact hole the watermark exists to close.
+    // Deliberately NOT wrapped in its own try/catch: if this check cannot run, the
+    // request fails (the outer handler 500s) rather than shipping an unstamped copy.
+    // An annex that fails to embed is cosmetic; enforcement that fails open is a hole.
+    const stamp = await prisma.bill.findUnique({
+      where: { id },
+      select: {
+        billTransaction: { select: { discountType: true } },
+        contract: { select: { userId: true } },
+      },
+    });
+    if (stamp?.billTransaction?.discountType === 'trial' && stamp.contract?.userId) {
+      const topups = await prisma.creditTransaction.count({
+        where: { userId: stamp.contract.userId, type: 'add' },
+      });
+      if (topups === 0) {
+        const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
+        finalBytes = await applyTrialWatermark(finalBytes);
+      }
+    }
+
     const safeBillNo = bill.billNo.replace(/[^A-Za-z0-9-]+/g, '_');
     return new NextResponse(finalBytes, {
       headers: {
