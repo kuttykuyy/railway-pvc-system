@@ -1316,7 +1316,10 @@ function NewBillPageContent() {
         // the promise was two uploads and a PDF, not a list screen.
         if (instantMode && responseData.id) {
           const link = document.createElement('a');
-          link.href = `/api/bills/${responseData.id}/pdf-report`;
+          // format named explicitly: the route's DEFAULT is the old "detailed" layout,
+          // kept for legacy links, and leaving it off handed every instant-flow user
+          // that old report instead of the IR standard one the bill page serves.
+          link.href = `/api/bills/${responseData.id}/pdf-report?format=ir_standard`;
           link.download = '';
           document.body.appendChild(link);
           link.click();
