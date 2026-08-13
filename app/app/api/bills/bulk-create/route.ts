@@ -573,6 +573,11 @@ export async function POST(request: NextRequest) {
           select: { creditBalance: true }
         });
         const balanceBefore = account?.creditBalance ?? 0;
+        // The pre-check earlier is outside any transaction, so concurrent batches could
+        // both pass it and drive the wallet negative. Checked again here, where it holds.
+        if (totalProcessingFee > 0 && balanceBefore < totalProcessingFee) {
+          throw new Error(`INSUFFICIENT_BALANCE: needs ${totalProcessingFee}, has ${balanceBefore}`);
+        }
         const balanceAfter = balanceBefore - totalProcessingFee;
         await tx.customerAccount.update({
           where: { userId: user.id },

@@ -417,6 +417,15 @@ export async function POST(request: NextRequest) {
     
     if (!paymentResult.success) {
       console.error('\\u274c Failed to process payment:', paymentResult.message);
+      // Same rule as the web route: a bill that could not be charged is not kept.
+      // Logging-and-continuing left an unpaid bill with no transaction row, which the
+      // watermark checks read as fully paid.
+      await prisma.bill.delete({ where: { id: bill.id } }).catch((err) =>
+        console.error('Could not remove unpaid bill:', err));
+      return NextResponse.json(
+        { success: false, error: 'Payment could not be completed', reason: paymentResult.message },
+        { status: 402 },
+      );
     } else {
       logger.log('\\u2705 Payment processed successfully');
     }

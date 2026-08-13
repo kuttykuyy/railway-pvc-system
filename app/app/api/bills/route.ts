@@ -846,7 +846,20 @@ export async function POST(request: NextRequest) {
     
     if (!paymentResult.success) {
       console.error('❌ Failed to create bill transaction:', paymentResult.message);
-      // Still return the bill even if transaction fails
+      // The bill must not outlive a refused charge. "Still return the bill" was the
+      // policy here, and it is how a lost trial-claim race or an insufficient balance
+      // produced a kept bill with NO transaction row — which every watermark check
+      // reads as fully paid. A bill that could not be charged is deleted, and the
+      // caller is told to try again.
+      await prisma.bill.delete({ where: { id: bill.id } }).catch((err) =>
+        console.error('Could not remove unpaid bill:', err));
+      return NextResponse.json(
+        {
+          error: 'Payment could not be completed',
+          reason: paymentResult.message || 'The charge for this bill did not go through. No bill was created — please try again.',
+        },
+        { status: 402 },
+      );
     } else {
       logger.log('✅ Bill transaction created successfully');
     }

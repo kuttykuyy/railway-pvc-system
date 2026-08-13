@@ -379,6 +379,13 @@ export async function processPaymentForBill(
           select: { creditBalance: true }
         });
         const balanceBefore = account?.creditBalance ?? 0;
+        // The only balance check used to be the non-transactional read in
+        // validateBillProcessing, so N concurrent creations against a one-bill balance
+        // produced N bills and a negative wallet. Re-checked here, inside the
+        // transaction, where it actually holds. (try-bill/claim already did this.)
+        if (chargedAmount > 0 && balanceBefore < chargedAmount) {
+          throw new Error(`INSUFFICIENT_BALANCE: needs ${chargedAmount}, has ${balanceBefore}`);
+        }
         const balanceAfter = balanceBefore - chargedAmount;
         await tx.customerAccount.update({
           where: { userId },
