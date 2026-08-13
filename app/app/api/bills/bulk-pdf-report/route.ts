@@ -3018,7 +3018,31 @@ export async function POST(request: NextRequest) {
         return measurementDate > latest ? measurementDate : latest;
       }, new Date(firstBill.dateOfMeasurement));
 
-      const bulkComponentTypes = anyBillHasSteel(bills) ? undefined : NON_STEEL_COMPONENT_TYPES;
+      // The JPC sheets are a paid annex (Rs 500 once per bill, charged on the single
+      // report). A batch must not be the free way around that: steel sheets go in only
+      // when every steel bill in the batch has paid — or its owner is on a free
+      // account, the same exemption the single route applies. Admins are exempt.
+      let bulkJpcAllowed = isAdminRequester;
+      if (!bulkJpcAllowed) {
+        const steelBills = bills.filter((b: any) => (b.steelAmount || 0) > 0 || (Array.isArray(b.steelTypes) && (b.steelTypes as any[]).length > 0));
+        const unpaid = steelBills.filter((b: any) => !b.jpcDocsPurchasedAt);
+        if (unpaid.length === 0) {
+          bulkJpcAllowed = true;
+        } else {
+          const ownerIds = [...new Set(unpaid.map((b: any) => b.contract?.userId).filter(Boolean))] as string[];
+          const owners = await prisma.user.findMany({
+            where: { id: { in: ownerIds } },
+            select: { id: true, role: true, isFreeAccount: true, customProcessingFee: true },
+          });
+          const freeOwner = (id: string) => {
+            const o = owners.find(u => u.id === id);
+            return !!o && (o.isFreeAccount || o.customProcessingFee === 0
+              || ['admin', 'superadmin', 'railway_official', 'accounts_official'].includes(o.role || ''));
+          };
+          bulkJpcAllowed = unpaid.every((b: any) => freeOwner(b.contract?.userId));
+        }
+      }
+      const bulkComponentTypes = anyBillHasSteel(bills) && bulkJpcAllowed ? undefined : NON_STEEL_COMPONENT_TYPES;
       // Same rule as the IR-format path above: the shared sheet is marked only when
       // every bill in the batch reads the same city.
       const bulkJpcCities = new Set(bills.map((b: any) => getSteelCityForZone(b.zone)));

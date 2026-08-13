@@ -219,6 +219,83 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           }
         }
 
+        // ===== JPC SHEETS: paid annex =====
+        // The JPC steel sheets attached to a steel bill's report come from a paid
+        // subscription, so attaching them costs Rs 500 from credits — ONCE per bill,
+        // recorded on the bill; every later download is free. The report itself is
+        // never blocked: when the charge cannot be made (not the owner, or balance too
+        // low), the report goes out with every annex EXCEPT the JPC pages.
+        let jpcDocsAllowed = true;
+        {
+          const jpcBill = await prisma.bill.findUnique({
+            where: { id: billId },
+            select: {
+              steelAmount: true, steelTypes: true, jpcDocsPurchasedAt: true,
+              billNo: true,
+              contract: { select: { userId: true, user: { select: { role: true, isFreeAccount: true, customProcessingFee: true } } } },
+            },
+          });
+          const hasSteel = !!jpcBill && ((jpcBill.steelAmount || 0) > 0 || (Array.isArray(jpcBill.steelTypes) && (jpcBill.steelTypes as any[]).length > 0));
+          if (jpcBill && hasSteel && includeIndexDocs && !isAdminRequester) {
+            const { getBillingSettings } = await import('@/lib/admin-settings');
+            const billing = await getBillingSettings();
+            const owner = jpcBill.contract?.user;
+            const ownerIsFree = !billing.paymentEnabled || !owner
+              || owner.isFreeAccount || owner.customProcessingFee === 0
+              || ['admin', 'superadmin', 'railway_official', 'accounts_official'].includes(owner.role || '');
+            if (!ownerIsFree && !jpcBill.jpcDocsPurchasedAt && billing.jpcDocumentCost > 0) {
+              // Only the owner's own download can spend the owner's credits.
+              const requesterEmail = session?.user?.email || null;
+              const requesterUser = requesterEmail
+                ? await prisma.user.findUnique({ where: { email: requesterEmail }, select: { id: true } })
+                : null;
+              const isOwnerDownloading = !!requesterUser && requesterUser.id === jpcBill.contract?.userId;
+              if (!isOwnerDownloading) {
+                jpcDocsAllowed = false;
+              } else {
+                const cost = billing.jpcDocumentCost;
+                try {
+                  await prisma.$transaction(async (tx) => {
+                    const account = await tx.customerAccount.findUnique({
+                      where: { userId: requesterUser.id },
+                      select: { creditBalance: true },
+                    });
+                    const balanceBefore = account?.creditBalance ?? 0;
+                    if (balanceBefore < cost) throw new Error('INSUFFICIENT_BALANCE');
+                    await tx.customerAccount.update({
+                      where: { userId: requesterUser.id },
+                      data: { creditBalance: { decrement: cost } },
+                    });
+                    await tx.creditTransaction.create({
+                      data: {
+                        userId: requesterUser.id,
+                        amount: -cost,
+                        type: 'bill_usage',
+                        reason: `JPC index documents: ${jpcBill.billNo}`,
+                        balanceBefore,
+                        balanceAfter: balanceBefore - cost,
+                      },
+                    });
+                    // The claim doubles as the race guard: a second concurrent download
+                    // finds the stamp set and does not charge again.
+                    const stamped = await tx.bill.updateMany({
+                      where: { id: billId, jpcDocsPurchasedAt: null },
+                      data: { jpcDocsPurchasedAt: new Date() },
+                    });
+                    if (stamped.count === 0) throw new Error('ALREADY_PURCHASED');
+                  });
+                } catch (err: any) {
+                  if (String(err?.message).includes('ALREADY_PURCHASED')) {
+                    // The other download paid; this one rides along.
+                  } else {
+                    jpcDocsAllowed = false;
+                  }
+                }
+              }
+            }
+          }
+        }
+
         // Check cache before running heavy PDF compiling.
         // The watermark-waiver state is part of the key so a post-top-up download
         // regenerates a clean PDF instead of serving a stale watermarked one.
@@ -227,7 +304,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // button — downloading again is the regenerate — so a stale hit reads as the
         // fix not having worked.
         const build = process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || 'dev';
-        const cacheKey = `pdf-report:${build}:${billId}:${templateId || 'default'}:${pdfFormat}:${includeIndexDocs ? 'docs' : 'nodocs'}:${isAdminRequester ? 'admin' : 'standard'}:${trialWatermarkWaived ? 'wmoff' : 'wmon'}:${searchParams.get('abstract') === '1' ? 'abs' : 'noabs'}`;
+        const cacheKey = `pdf-report:${build}:${billId}:${templateId || 'default'}:${pdfFormat}:${includeIndexDocs ? 'docs' : 'nodocs'}:${isAdminRequester ? 'admin' : 'standard'}:${trialWatermarkWaived ? 'wmoff' : 'wmon'}:${searchParams.get('abstract') === '1' ? 'abs' : 'noabs'}:${jpcDocsAllowed ? 'jpc' : 'nojpc'}`;
         const cachedPdf = advancedCache.get(cacheKey);
         if (cachedPdf) {
           console.log(`[PDF Cache] Hit for: ${cacheKey}`);
@@ -773,7 +850,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       let irFinalBytes: Uint8Array = irPdfBytes;
       if (includeIndexDocs && templateSettings.sections?.componentIndexDocuments !== false) {
         try {
-          const irComponentTypes = billHasSteel(bill) ? undefined : NON_STEEL_COMPONENT_TYPES;
+          const irComponentTypes = billHasSteel(bill) && jpcDocsAllowed ? undefined : NON_STEEL_COMPONENT_TYPES;
           irFinalBytes = await embedComponentIndicesRange(new Uint8Array(irPdfBytes), {
             startDate: new Date(bill.contract.baseMonth),
             endDate: new Date(bill.dateOfMeasurement),
@@ -4438,7 +4515,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Count documents before embedding
         const initialPageCount = PDFDocument.load(pdfWithFuelAverage).then(doc => doc.getPageCount());
         
-        const detailedComponentTypes = billHasSteel(bill) ? undefined : NON_STEEL_COMPONENT_TYPES;
+        const detailedComponentTypes = billHasSteel(bill) && jpcDocsAllowed ? undefined : NON_STEEL_COMPONENT_TYPES;
         finalPdfBytes = await embedComponentIndicesRange(pdfWithFuelAverage, {
           startDate: componentIndexStartDate,
           endDate: componentIndexEndDate,

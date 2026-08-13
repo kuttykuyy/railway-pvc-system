@@ -101,6 +101,12 @@ const PENDING: PendingColumn[] = [
     why: "For pre-2022 contracts: which of Clause 46A.6's six work types applies. The tender fixes one for the whole work, and the percentages differ a great deal between them.",
   },
   {
+    table: 'bills',
+    column: 'jpcDocsPurchasedAt',
+    ddlType: 'TIMESTAMP(3)',
+    why: 'When the charge for attaching the JPC steel sheets to this bill\'s report was paid. The sheets come from a paid subscription; the charge is once per bill.',
+  },
+  {
     table: 'bill_classification_entries',
     column: 'billPageNumber',
     ddlType: 'INTEGER',

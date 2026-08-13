@@ -114,6 +114,9 @@ export async function getBillingSettings() {
     lowCreditThreshold:             Number(parse('LOW_CREDIT_THRESHOLD', 50)),
     provisionalIndicesCheckEnabled: Boolean(parse('PROVISIONAL_INDICES_CHECK_ENABLED', true)),
     aiBillCost:                     Number(parse('AI_BILL_PROCESSING_COST', 499)),
+    // The JPC steel sheets attached to a report come from a paid subscription; the
+    // charge for attaching them is once per bill, not per download.
+    jpcDocumentCost:                Number(parse('JPC_DOCUMENT_COST', 500)),
   };
 }
 
