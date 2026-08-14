@@ -31,33 +31,37 @@ export async function GET(request: NextRequest) {
       where.year = parseInt(year);
     }
 
+    // remarks is deliberately NOT selected: for database-stored documents it holds the
+    // whole PDF as base64 — a 16 MB sheet is 21 MB of text, times four registrations —
+    // and pulling every blob out of Postgres just to strip it made this page take an
+    // age to load. The human-readable remark text is cut out IN the database instead.
     const documents = await prisma.labourIndexDocument.findMany({
       where,
-      include: {
-        user: {
-          select: {
-            name: true,
-            email: true,
-          },
-        },
+      select: {
+        id: true, componentType: true, year: true, months: true, fileName: true,
+        cloudStoragePath: true, isProvisional: true, createdAt: true, updatedAt: true,
+        uploadedBy: true,
+        user: { select: { name: true, email: true } },
       },
       orderBy: [
         { createdAt: 'desc' },
       ],
     });
 
-    // Strip out base64 string from remarks to keep UI clean, extracting the text remarks if present
-    const cleanedDocuments = documents.map(doc => {
-      let remarks = doc.remarks;
-      if (doc.remarks?.startsWith('base64:')) {
-        const parts = doc.remarks.substring(7).split('|');
-        remarks = parts[1] || null;
-      }
-      return {
-        ...doc,
-        remarks
-      };
-    });
+    const ids = documents.map(d => d.id);
+    const remarkRows = ids.length
+      ? await prisma.$queryRaw<Array<{ id: string; remarks: string | null }>>`
+          SELECT id,
+                 CASE WHEN remarks LIKE 'base64:%'
+                      THEN NULLIF(split_part(remarks, '|', 2), '')
+                      ELSE remarks END AS remarks
+          FROM "public"."labour_index_documents" WHERE id = ANY(${ids})`
+      : [];
+    const remarkById = new Map(remarkRows.map(r => [r.id, r.remarks]));
+    const cleanedDocuments = documents.map(doc => ({
+      ...doc,
+      remarks: remarkById.get(doc.id) ?? null,
+    }));
 
     return NextResponse.json({ documents: cleanedDocuments });
   } catch (error) {

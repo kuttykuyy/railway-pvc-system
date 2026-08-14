@@ -140,7 +140,7 @@ export async function PUT(request: NextRequest) {
   const bytes = Buffer.from(await request.arrayBuffer());
   if (bytes.length === 0) return NextResponse.json({ error: 'Empty part' }, { status: 400 });
   const encoded = bytes.toString('base64');
-  const updated = await prisma.$executeRaw`UPDATE "labour_index_documents" SET remarks = remarks || ${encoded} WHERE id = ${uploadId} AND "cloudStoragePath" = ${'staging://' + key}`;
+  const updated = await prisma.$executeRaw`UPDATE "public"."labour_index_documents" SET remarks = remarks || ${encoded} WHERE id = ${uploadId} AND "cloudStoragePath" = ${'staging://' + key}`;
   if (Number(updated) === 0) {
     return NextResponse.json({ error: 'Upload session not found' }, { status: 404 });
   }

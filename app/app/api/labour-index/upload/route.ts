@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
         .filter(Boolean),
     )] as string[];
     for (const stagedId of stagingIds) {
-      await prisma.$executeRaw`UPDATE "labour_index_documents" SET remarks = (SELECT remarks FROM "labour_index_documents" WHERE id = ${stagedId}) WHERE remarks = ${'FROM_STAGING:' + stagedId}`;
+      await prisma.$executeRaw`UPDATE "public"."labour_index_documents" SET remarks = (SELECT remarks FROM "public"."labour_index_documents" WHERE id = ${stagedId}) WHERE remarks = ${'FROM_STAGING:' + stagedId}`;
       await prisma.labourIndexDocument.deleteMany({ where: { id: stagedId } });
     }
 
