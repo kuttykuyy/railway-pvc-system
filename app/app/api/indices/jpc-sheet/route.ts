@@ -35,13 +35,23 @@ const JPC_TYPES: ComponentType[] = [
 async function jpcViewAccess(email: string) {
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, role: true, isFreeAccount: true, customProcessingFee: true, jpcViewUntil: true },
+    select: { id: true, role: true, isFreeAccount: true, customProcessingFee: true },
   });
   if (!user) return { allowed: false, userId: null as string | null };
   const freeRole = user.isFreeAccount || user.customProcessingFee === 0
     || ['admin', 'superadmin', 'railway_official', 'accounts_official'].includes(user.role || '');
   if (freeRole) return { allowed: true, userId: user.id };
-  if (user.jpcViewUntil && user.jpcViewUntil > new Date()) return { allowed: true, userId: user.id };
+  // Raw, not a schema field: declaring the column before the database had it made
+  // Prisma select it on EVERY user read — including the login lookup — and locked the
+  // whole app out. Until the pending change is applied this read fails and simply
+  // means "not unlocked yet".
+  try {
+    const rows = await prisma.$queryRaw<Array<{ jpcViewUntil: Date | null }>>`SELECT "jpcViewUntil" FROM "User" WHERE id = ${user.id}`;
+    const until = rows[0]?.jpcViewUntil;
+    if (until && new Date(until) > new Date()) return { allowed: true, userId: user.id };
+  } catch {
+    // Column not applied yet — treated as locked.
+  }
   const recentAttach = await prisma.creditTransaction.findFirst({
     where: {
       userId: user.id,
@@ -166,9 +176,21 @@ export async function POST(request: NextRequest) {
     const cost = billing.jpcViewMonthlyCost;
     const buyer = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: { id: true, jpcViewUntil: true },
+      select: { id: true },
     });
     if (!buyer) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    // The column must exist before money moves — otherwise the charge would land and
+    // the unlock would not.
+    let currentUntil: Date | null = null;
+    try {
+      const rows = await prisma.$queryRaw<Array<{ jpcViewUntil: Date | null }>>`SELECT "jpcViewUntil" FROM "User" WHERE id = ${buyer.id}`;
+      currentUntil = rows[0]?.jpcViewUntil ?? null;
+    } catch {
+      return NextResponse.json(
+        { error: 'Viewing unlock is not ready yet — the admin must apply Pending DB Changes first.' },
+        { status: 503 },
+      );
+    }
     try {
       await prisma.$transaction(async (tx) => {
         const account = await tx.customerAccount.findUnique({
@@ -191,11 +213,9 @@ export async function POST(request: NextRequest) {
             balanceAfter: balanceBefore - cost,
           },
         });
-        const base = buyer.jpcViewUntil && buyer.jpcViewUntil > new Date() ? buyer.jpcViewUntil : new Date();
-        await tx.user.update({
-          where: { id: buyer.id },
-          data: { jpcViewUntil: new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000) },
-        });
+        const base = currentUntil && new Date(currentUntil) > new Date() ? new Date(currentUntil) : new Date();
+        const newUntil = new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000);
+        await tx.$executeRaw`UPDATE "User" SET "jpcViewUntil" = ${newUntil} WHERE id = ${buyer.id}`;
       });
     } catch (err: any) {
       if (String(err?.message).includes('INSUFFICIENT_BALANCE')) {

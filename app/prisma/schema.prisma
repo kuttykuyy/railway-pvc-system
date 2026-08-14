@@ -47,10 +47,6 @@ model User {
   updatedAt             DateTime               @updatedAt
   address               String?
   companyName           String?
-  /// JPC sheet viewing paid until this moment (Rs 249 from credits buys 30 days).
-  /// Null or past = locked, unless the account is free-role or bought a JPC attach
-  /// in the last 30 days.
-  jpcViewUntil          DateTime?
   freeTrialUsed         Int                    @default(0)
   gstin                 String?
   isTrialActive         Boolean                @default(false)
