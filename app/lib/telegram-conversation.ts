@@ -51,6 +51,8 @@ export interface TelegramConversationData {
   phone?: string; // phone used to link account
   /** The phone awaiting its WhatsApp code — linking happens only after the code matches. */
   pendingLinkPhone?: string;
+  /** When the account link was verified. Links expire 90 days after this. */
+  linkedAt?: string;
   // Contract creation
   agreementNo?: string;
   contractorName?: string;
@@ -122,6 +124,32 @@ export async function getOrCreateTelegramConversation(chatId: string) {
     where: { chatId },
     include: { user: true },
   });
+
+  // The account LINK expires too: 90 days after verification, the chat must prove the
+  // phone again. A linked chat reads that account's contracts and bills, and phones
+  // change hands; the flow's 24-hour reset never touched the link. Chats linked before
+  // this rule carry no linkedAt — they are stamped on first sight rather than all
+  // being thrown out by a deploy.
+  if (conversation?.userId) {
+    const data = (conversation.conversationData as TelegramConversationData) || {};
+    if (!data.linkedAt) {
+      conversation = await prisma.telegramConversation.update({
+        where: { id: conversation.id },
+        data: { conversationData: { ...data, linkedAt: new Date().toISOString() } as any },
+        include: { user: true },
+      });
+    } else if (Date.now() - new Date(data.linkedAt).getTime() > 90 * 24 * 60 * 60 * 1000) {
+      conversation = await prisma.telegramConversation.update({
+        where: { id: conversation.id },
+        data: {
+          userId: null,
+          currentStep: TelegramStep.IDLE,
+          conversationData: { ...data, linkedAt: undefined } as any,
+        },
+        include: { user: true },
+      });
+    }
+  }
 
   if (conversation && conversation.lastMessageAt < twentyFourHoursAgo) {
     conversation = await prisma.telegramConversation.update({
@@ -251,9 +279,16 @@ export async function linkTelegramToUser(conversationId: string, phone: string) 
   const user = await findUserByPhone(phone);
 
   if (user) {
+    // linkedAt starts the 90-day clock; it is only ever written here, after the
+    // WhatsApp code proved the number.
+    const current = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
+    const data = (current?.conversationData as TelegramConversationData) || {};
     await prisma.telegramConversation.update({
       where: { id: conversationId },
-      data: { userId: user.id },
+      data: {
+        userId: user.id,
+        conversationData: { ...data, linkedAt: new Date().toISOString() } as any,
+      },
     });
     return user;
   }
