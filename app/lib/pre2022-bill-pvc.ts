@@ -91,26 +91,59 @@ interface BillLike {
   contract: ContractForPre2022 & { dateOfOpening: Date };
 }
 
-/** Cement and steel as the classification entries carry them, split by 46A.9 category. */
+/**
+ * Cement and steel as the classification entries carry them, split by 46A.9 category.
+ *
+ * Two passes. The B/C classes are the first authority — the GCC-2022 pipeline's own
+ * marking of dedicated steel and cement. When a bill carries NONE (its rows were saved
+ * by an older path that classed everything under one flat code), the entries' own
+ * evidence stands in: rows the extraction tagged with steel types are the steel, and a
+ * row whose text says it supplies cement is the cement. The bill upload is ONE flow for
+ * both clauses — this is what lets the old clause read what the new pipeline saved,
+ * instead of needing a separate upload of the same PDF.
+ */
 function suppliesFromEntries(entries: NonNullable<BillLike['classificationEntries']>) {
-  const totals = { cement: 0, tmt: 0, angles: 0, plates: 0, other: 0 };
+  const totals = { cement: 0, tmt: 0, angles: 0, plates: 0, other: 0, inferred: false };
+  const addSteel = (value: number, entry: { steelTypes?: unknown }) => {
+    const types = Array.isArray(entry.steelTypes) && entry.steelTypes.length
+      ? (entry.steelTypes as string[])
+      : ['TMT'];
+    const share = value / types.length;
+    for (const type of types) {
+      if (type === 'TMT') totals.tmt += share;
+      else if (type === 'ANGLE_CHANNEL') totals.angles += share;
+      else if (type === 'PLATES') totals.plates += share;
+      else totals.other += share;
+    }
+  };
+
+  const hasDedicatedCodes = entries.some(e =>
+    /[BC]$/i.test(String(e.subClassification?.code || e.classification?.code || '')));
+
+  if (hasDedicatedCodes) {
+    for (const entry of entries) {
+      const code = String(entry.subClassification?.code || entry.classification?.code || '');
+      const value = Number(entry.amount) || 0;
+      if (value <= 0) continue;
+      if (/C$/i.test(code)) totals.cement += value;
+      else if (/B$/i.test(code)) addSteel(value, entry);
+    }
+    return totals;
+  }
+
+  // No dedicated classes anywhere — the older flat classing. Steel by the extraction's
+  // own tags; cement only when the row's text plainly says SUPPLY of cement, so a
+  // "cement concrete" work item can never be mistaken for a bag of cement.
   for (const entry of entries) {
-    const code = String(entry.subClassification?.code || entry.classification?.code || '');
     const value = Number(entry.amount) || 0;
     if (value <= 0) continue;
-    if (/C$/i.test(code)) {
+    const text = String((entry as any).description || '') + ' ' + String((entry as any).scheduleItem || '');
+    if (Array.isArray(entry.steelTypes) && entry.steelTypes.length > 0) {
+      addSteel(value, entry);
+      totals.inferred = true;
+    } else if (/suppl\w*\s+(and\s+using\s+)?cement|cement\s+suppl/i.test(text) || /\(cement\)/i.test(text)) {
       totals.cement += value;
-    } else if (/B$/i.test(code)) {
-      const types = Array.isArray(entry.steelTypes) && entry.steelTypes.length
-        ? (entry.steelTypes as string[])
-        : ['TMT'];
-      const share = value / types.length;
-      for (const type of types) {
-        if (type === 'TMT') totals.tmt += share;
-        else if (type === 'ANGLE_CHANNEL') totals.angles += share;
-        else if (type === 'PLATES') totals.plates += share;
-        else totals.other += share;
-      }
+      totals.inferred = true;
     }
   }
   return totals;
@@ -238,6 +271,13 @@ export async function pricePre2022Bill(bill: BillLike): Promise<Pre2022BillPrici
   if (outsidePvc > 0) {
     notes.push(`Rs ${outsidePvc.toFixed(2)} of railway-supplied material and extra items was left out of the varying amount.`);
   }
+  if (fromEntries.inferred && (result.cementValue > 0 || result.steelValue > 0)) {
+    notes.push(
+      'The cement and steel values were read from the bill items themselves (steel from the rows tagged '
+      + "with steel types, cement from rows that supply cement), because this bill's rows carry no "
+      + 'dedicated steel/cement classes. Check the two figures against the bill before submitting.'
+    );
+  }
   // When nothing was separated, the statement says what it looked at — the difference
   // between "this bill has no cement or steel" and "the rows are there but classed
   // wrong" is invisible from a silent W-equals-gross, and only the second is fixable.
@@ -300,6 +340,7 @@ export async function pricePre2022BillById(billId: string): Promise<Pre2022BillP
           amount: true,
           steelTypes: true,
           description: true,
+          scheduleItem: true,
           subClassification: { select: { code: true } },
           classification: { select: { code: true } },
         },

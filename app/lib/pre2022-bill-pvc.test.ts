@@ -140,6 +140,49 @@ describe('cement and steel carried in classification entries', () => {
   });
 });
 
+describe('a bill classed under one flat code, as the older path saved them', () => {
+  // No B/C classes anywhere — the shape found in production: everything classed '7'.
+  // Steel comes from the extraction's own tags, cement from the row that supplies it.
+  const flatEntries = [
+    { amount: 2316702.05, steelTypes: ['TMT'], classification: { code: '7' }, description: 'Steel reinforcement for R.C.C. work Thermo-Mechanically Treated bars' },
+    { amount: 2330888.69, classification: { code: '7' }, description: 'Supply and using Cement at Worksite Ordinary Portland Cement 53 grade' },
+    { amount: 600170.02, classification: { code: '7' }, description: 'Providing and laying in position cement concrete of specified grade' },
+  ];
+
+  it('still separates steel and cement, and says the split was inferred', async () => {
+    const priced = await pricePre2022Bill(billOn(new Date(Date.UTC(2023, 4, 15)), {
+      billAmount: 7493336.22,
+      classificationEntries: flatEntries,
+    }));
+    expect(priced.result.steelValue).toBeCloseTo(2316702.05, 2);
+    expect(priced.result.cementValue).toBeCloseTo(2330888.69, 2);
+    expect(priced.notes.some(n => /read from the bill items/i.test(n))).toBe(true);
+  });
+
+  it('never mistakes a cement-concrete work item for cement supply', async () => {
+    const priced = await pricePre2022Bill(billOn(new Date(Date.UTC(2023, 4, 15)), {
+      billAmount: 7493336.22,
+      classificationEntries: flatEntries,
+    }));
+    // The concrete item (600170.02) must stay inside W, not join the cement.
+    expect(priced.result.cementValue).toBeCloseTo(2330888.69, 2);
+  });
+
+  it('trusts B/C classes alone when the bill has them', async () => {
+    const priced = await pricePre2022Bill(billOn(new Date(Date.UTC(2023, 4, 15)), {
+      billAmount: 7493336.22,
+      classificationEntries: [
+        { amount: 100000, subClassification: { code: '1C' } },
+        // Tagged with a steel type but NOT classed B — with dedicated codes present,
+        // the tags are not consulted, so this stays in W.
+        { amount: 50000, steelTypes: ['TMT'], subClassification: { code: '1A' } },
+      ],
+    }));
+    expect(priced.result.cementValue).toBe(100000);
+    expect(priced.result.steelValue).toBe(0);
+  });
+});
+
 describe('the four steel categories', () => {
   it('averages the three named ones for other sections, as Cl.46A.9(4) says', async () => {
     const priced = await pricePre2022Bill(billOn(new Date(Date.UTC(2023, 4, 15)), { steelOtherSectionsAmount: 30_000 }));
