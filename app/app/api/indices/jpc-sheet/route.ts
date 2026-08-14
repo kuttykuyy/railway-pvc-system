@@ -245,6 +245,18 @@ export async function POST(request: NextRequest) {
   }
 
   // Minutes, not hours: long enough to read, short enough that a shared link dies.
-  const url = await createRestSignedDownloadUrl(getBucketConfig().bucketName, doc.cloudStoragePath, 600);
-  return NextResponse.json({ url });
+  // Signing can fail for reasons that are the DOCUMENT's problem, not the server's —
+  // the storage project this file lived in was deleted, taking the file with it. An
+  // unhandled throw here sent the browser an empty 500 and the viewer showed
+  // "Unexpected end of JSON input"; the entry's actual state is said instead.
+  try {
+    const url = await createRestSignedDownloadUrl(getBucketConfig().bucketName, doc.cloudStoragePath, 600);
+    return NextResponse.json({ url });
+  } catch (err: any) {
+    console.error('jpc-sheet: could not sign download:', err?.message || err);
+    return NextResponse.json(
+      { error: "This sheet's file is gone — it lived in cloud storage that no longer exists. Delete this entry in Component Index Documents and upload the sheet again; new uploads are stored safely in the database." },
+      { status: 502 },
+    );
+  }
 }

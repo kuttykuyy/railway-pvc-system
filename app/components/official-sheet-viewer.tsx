@@ -217,7 +217,8 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: sheet.id }),
       });
-      const urlData = await urlRes.json();
+      // An empty or non-JSON reply (a crashed function) must not mask the real error.
+      const urlData = await urlRes.json().catch(() => ({ error: `The server returned ${urlRes.status} with no detail.` }));
       if (urlRes.status === 402 && urlData.needsUnlock) {
         setUnlockCost(urlData.cost || 249);
         return;
