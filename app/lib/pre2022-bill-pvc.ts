@@ -238,6 +238,29 @@ export async function pricePre2022Bill(bill: BillLike): Promise<Pre2022BillPrici
   if (outsidePvc > 0) {
     notes.push(`Rs ${outsidePvc.toFixed(2)} of railway-supplied material and extra items was left out of the varying amount.`);
   }
+  // When nothing was separated, the statement says what it looked at — the difference
+  // between "this bill has no cement or steel" and "the rows are there but classed
+  // wrong" is invisible from a silent W-equals-gross, and only the second is fixable.
+  if (result.cementValue === 0 && result.steelValue === 0) {
+    const entryList = bill.classificationEntries || [];
+    const codesSeen = [...new Set(
+      entryList.map(e => String(e.subClassification?.code || e.classification?.code || '').trim()).filter(Boolean),
+    )];
+    if (entryList.length > 0) {
+      notes.push(
+        'No cement or steel was separated from W. The dedicated fields on the bill are empty, and none of '
+        + `its classification rows carries a dedicated steel (…B) or cement (…C) class — classes on this bill: `
+        + `${codesSeen.length ? codesSeen.join(', ') : '(none recorded)'}. If the bill has cement or steel supply items, `
+        + 'reclassify those rows to the …B / …C class and download this statement again.'
+      );
+    } else {
+      notes.push(
+        'No cement or steel was separated from W: the bill has no classification rows and its dedicated '
+        + 'cement/steel fields are empty. If the bill supplied cement or steel, enter the amounts in the '
+        + "bill's dedicated fields and download this statement again."
+      );
+    }
+  }
 
   return {
     quarter,
