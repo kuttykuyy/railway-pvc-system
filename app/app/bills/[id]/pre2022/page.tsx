@@ -143,7 +143,13 @@ export default function Pre2022BillPage() {
   return (
     <div className="p-4 sm:p-6 space-y-4 w-full">
       <div className="flex items-start gap-3">
-        <BackButton href={`/bills/${billId}`} label="Bill" variant="outline" />
+        {/* Back to the contract, not the bill: the amber links on the contract page are
+            how these statements are reached, so that page is "back" as the user means it. */}
+        <BackButton
+          href={pricing.contractId ? `/contracts/${pricing.contractId}` : `/bills/${billId}`}
+          label="Contract"
+          variant="outline"
+        />
         <div>
           <h1 className="text-xl font-semibold">Price Variation — older GCC</h1>
           <p className="text-sm text-muted-foreground">
