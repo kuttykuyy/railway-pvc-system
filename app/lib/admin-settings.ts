@@ -117,6 +117,8 @@ export async function getBillingSettings() {
     // The JPC steel sheets attached to a report come from a paid subscription; the
     // charge for attaching them is once per bill, not per download.
     jpcDocumentCost:                Number(parse('JPC_DOCUMENT_COST', 500)),
+    // Viewing the official JPC sheets on screen: a flat month, not a meter.
+    jpcViewMonthlyCost:             Number(parse('JPC_VIEW_MONTHLY_COST', 249)),
   };
 }
 

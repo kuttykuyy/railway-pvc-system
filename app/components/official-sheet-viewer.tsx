@@ -152,6 +152,9 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
   const [sheets, setSheets] = useState<SheetOption[]>([]);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [pdf, setPdf] = useState<any>(null);
+  // 402 from the sheet API: viewing is paid. Holds the price to show on the unlock panel.
+  const [unlockCost, setUnlockCost] = useState<number | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
   const [docMonths, setDocMonths] = useState<number[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(initialMonth);
   /** Position inside the current view: within the month slice, or absolute when free. */
@@ -215,7 +218,12 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
         body: JSON.stringify({ id: sheet.id }),
       });
       const urlData = await urlRes.json();
+      if (urlRes.status === 402 && urlData.needsUnlock) {
+        setUnlockCost(urlData.cost || 249);
+        return;
+      }
       if (!urlRes.ok) throw new Error(urlData.error || 'Could not fetch the sheet');
+      setUnlockCost(null);
 
       const pdfjs = (await import('pdfjs-dist')) as any;
       // A plain file on our own origin, copied from the installed package at build time
@@ -447,7 +455,42 @@ export function OfficialSheetViewer({ year, initialMonth }: { year: number; init
             </div>
           )}
 
-          {!isLoading && sheets.length === 0 && (
+          {!isLoading && unlockCost !== null && !pdf && (
+            <div className="py-10 text-center space-y-3 max-w-md mx-auto">
+              <p className="text-base font-semibold">Viewing the official JPC sheets is a paid feature</p>
+              <p className="text-sm text-gray-600">
+                ₹{unlockCost} from your credits unlocks 30 days of viewing — every sheet, every city.
+                It is included free for a month whenever you buy the ₹500 report attachment.
+              </p>
+              <Button
+                disabled={unlocking}
+                onClick={async () => {
+                  setUnlocking(true);
+                  try {
+                    const res = await fetch('/api/indices/jpc-sheet', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ unlock: true }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                      toast.error(data.error || 'Could not unlock viewing.');
+                      return;
+                    }
+                    toast.success('Unlocked — 30 days of JPC sheet viewing.');
+                    setUnlockCost(null);
+                    if (sheets.length > 0) await loadSheet(sheets[0]);
+                  } finally {
+                    setUnlocking(false);
+                  }
+                }}
+              >
+                {unlocking ? 'Unlocking…' : `Unlock for ₹${unlockCost} — 30 days`}
+              </Button>
+            </div>
+          )}
+
+          {!isLoading && unlockCost === null && sheets.length === 0 && (
             <div className="py-8 text-center space-y-2">
               <p className="text-sm text-gray-600">
                 No JPC sheet has been uploaded for {year} yet.

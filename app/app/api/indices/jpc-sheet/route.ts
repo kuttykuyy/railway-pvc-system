@@ -27,10 +27,53 @@ const JPC_TYPES: ComponentType[] = [
   ComponentType.OTHER_SECTIONS,
 ];
 
+/**
+ * Whether this account may read the official sheets: free-role accounts, a paid
+ * viewing month (jpcViewUntil in the future), or a JPC report-attach purchase in the
+ * last 30 days — a paying customer is not asked to pay twice in the same month.
+ */
+async function jpcViewAccess(email: string) {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, role: true, isFreeAccount: true, customProcessingFee: true, jpcViewUntil: true },
+  });
+  if (!user) return { allowed: false, userId: null as string | null };
+  const freeRole = user.isFreeAccount || user.customProcessingFee === 0
+    || ['admin', 'superadmin', 'railway_official', 'accounts_official'].includes(user.role || '');
+  if (freeRole) return { allowed: true, userId: user.id };
+  if (user.jpcViewUntil && user.jpcViewUntil > new Date()) return { allowed: true, userId: user.id };
+  const recentAttach = await prisma.creditTransaction.findFirst({
+    where: {
+      userId: user.id,
+      reason: { startsWith: 'JPC index documents' },
+      createdAt: { gt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+    },
+    select: { id: true },
+  });
+  return { allowed: !!recentAttach, userId: user.id };
+}
+
+async function paywallResponse() {
+  const { getBillingSettings } = await import('@/lib/admin-settings');
+  const billing = await getBillingSettings();
+  return NextResponse.json(
+    {
+      error: 'Viewing the official JPC sheets is a paid feature.',
+      needsUnlock: true,
+      cost: billing.jpcViewMonthlyCost,
+      days: 30,
+    },
+    { status: 402 },
+  );
+}
+
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!(await jpcViewAccess(session.user.email)).allowed) {
+    return paywallResponse();
   }
 
   const { searchParams } = new URL(request.url);
@@ -112,8 +155,64 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = await request.json().catch(() => ({}));
+  const { id, unlock } = await request.json().catch(() => ({}));
+
+  // ?unlock: Rs 249 from credits buys 30 days of viewing, stacked on any time left.
+  // The stamp is written inside the same transaction as the charge, so a double-click
+  // cannot pay twice for the same month.
+  if (unlock === true) {
+    const { getBillingSettings } = await import('@/lib/admin-settings');
+    const billing = await getBillingSettings();
+    const cost = billing.jpcViewMonthlyCost;
+    const buyer = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true, jpcViewUntil: true },
+    });
+    if (!buyer) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    try {
+      await prisma.$transaction(async (tx) => {
+        const account = await tx.customerAccount.findUnique({
+          where: { userId: buyer.id },
+          select: { creditBalance: true },
+        });
+        const balanceBefore = account?.creditBalance ?? 0;
+        if (balanceBefore < cost) throw new Error('INSUFFICIENT_BALANCE');
+        await tx.customerAccount.update({
+          where: { userId: buyer.id },
+          data: { creditBalance: { decrement: cost } },
+        });
+        await tx.creditTransaction.create({
+          data: {
+            userId: buyer.id,
+            amount: -cost,
+            type: 'bill_usage',
+            reason: 'JPC sheet viewing (30 days)',
+            balanceBefore,
+            balanceAfter: balanceBefore - cost,
+          },
+        });
+        const base = buyer.jpcViewUntil && buyer.jpcViewUntil > new Date() ? buyer.jpcViewUntil : new Date();
+        await tx.user.update({
+          where: { id: buyer.id },
+          data: { jpcViewUntil: new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000) },
+        });
+      });
+    } catch (err: any) {
+      if (String(err?.message).includes('INSUFFICIENT_BALANCE')) {
+        return NextResponse.json(
+          { error: `You need Rs ${cost} in credits to unlock viewing. Top up and try again.` },
+          { status: 402 },
+        );
+      }
+      throw err;
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+  if (!(await jpcViewAccess(session.user.email)).allowed) {
+    return paywallResponse();
+  }
 
   const doc = await prisma.labourIndexDocument.findFirst({
     where: { id, componentType: { in: JPC_TYPES } },

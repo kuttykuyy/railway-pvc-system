@@ -107,6 +107,12 @@ const PENDING: PendingColumn[] = [
     why: 'When the charge for attaching the JPC steel sheets to this bill\'s report was paid. The sheets come from a paid subscription; the charge is once per bill.',
   },
   {
+    table: 'User',
+    column: 'jpcViewUntil',
+    ddlType: 'TIMESTAMP(3)',
+    why: 'JPC sheet viewing paid until this moment - Rs 249 from credits buys 30 days of reading the official sheets on screen.',
+  },
+  {
     table: 'bill_classification_entries',
     column: 'billPageNumber',
     ddlType: 'INTEGER',
