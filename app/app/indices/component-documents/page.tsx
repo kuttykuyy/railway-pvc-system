@@ -738,165 +738,33 @@ export default function ComponentDocumentsPage() {
       let s3Available = false;
       // Which door the URL opens. Supabase's REST door takes a whole file in one browser
       // PUT; only a true S3 door supports the multipart route.
-      let urlKind: 'rest' | 's3' = 's3';
-
-      const presignedToastId = toast.loading("Checking storage configuration...");
-      try {
-        const checkRes = await fetch("/api/labour-index/presigned-url", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fileName: selectedFile.name,
-            // Signed and sent as the same fixed type. The upload is signed before the
-            // file is compressed, and the signature covers the content type, so taking it
-            // from the original here and from the rebuilt file at upload time would let
-            // the two drift apart and be refused.
-            fileType: UPLOAD_CONTENT_TYPE,
-            componentTypes: selectedComponentTypes,
-            year: parseInt(uploadYear),
-            months: selectedMonths,
-          }),
-        });
-
-        const checkData = await checkRes.json().catch(() => ({}));
-        if (checkRes.ok && checkData.s3Available) {
-          presignedUrl = checkData.presignedUrl;
-          cloudStoragePath = checkData.cloudStoragePath;
-          if (checkData.urlKind === 'rest') urlKind = 'rest';
-          s3Available = true;
-        } else {
-          // Say why. A failing check used to be swallowed — no else branch, no message —
-          // so a 400 or a 500 here was indistinguishable from having no storage at all,
-          // and the only symptom was a sheet compressed until the digits blurred.
-          const reason = checkData.error || checkData.message || `storage check returned ${checkRes.status}`;
-          console.warn('Cloud storage unavailable:', reason);
-          toast.error(`Cloud storage not used: ${reason}`, { duration: 8000 });
-        }
-      } catch (err: any) {
-        console.warn("Failed to check/generate presigned URL, using DB storage fallback:", err);
-        toast.error(`Could not reach cloud storage: ${err?.message || 'request failed'}`, { duration: 8000 });
-      } finally {
-        toast.dismiss(presignedToastId);
-      }
-
-      // Step 2: compress ONLY when the file must travel through our own server.
-      //
-      // Compression exists for exactly one reason: Vercel caps a request body at 4.5 MB,
-      // and the database fallback posts the file to our API. A direct-to-storage upload
-      // never touches that cap — so compressing there was quality thrown away for
-      // nothing, and these are photocopier scans where the lost pixels are the ones that
-      // keep a 6 apart from an 8. Full quality now goes straight up whenever storage is
-      // reachable, whatever the size.
-      if (selectedFile.size > LIMIT_BYTES) {
-        if (s3Available) {
-          const originalMB = (selectedFile.size / (1024 * 1024)).toFixed(2);
-          toast.success(`Uploading at full quality (${originalMB} MB) — cloud storage takes the original.`);
-        } else {
-          const toastId = toast.loading("Cloud storage is off — squeezing the PDF to fit the 4.5 MB request limit...");
-          try {
-            const optimization = await optimizeAndCompressPdf(selectedFile, s3Available, (msg) => {
-              toast.loading(msg, { id: toastId });
-            });
-
-            if (optimization.success && optimization.file.size <= LIMIT_BYTES) {
-              fileToUpload = optimization.file;
-              const originalMB = (optimization.originalSize / (1024 * 1024)).toFixed(2);
-              const compressedMB = (optimization.compressedSize / (1024 * 1024)).toFixed(2);
-              toast.dismiss(toastId);
-              toast.success(`PDF compressed from ${originalMB} MB to ${compressedMB} MB to fit database storage`);
-            } else {
-              const finalMB = (optimization.compressedSize / (1024 * 1024)).toFixed(2);
-              toast.dismiss(toastId);
-              toast.error(
-                `Cloud storage is off, so the file must fit Vercel's 4.5 MB request limit — it is ${finalMB} MB even after squeezing. Fix cloud storage (Test storage now), or compress the PDF below 3.3 MB first.`,
-                { duration: 10000 }
-              );
-              setIsUploading(false);
-              return;
-            }
-          } catch (compressErr) {
-            console.error("Compression failed:", compressErr);
-            toast.dismiss(toastId);
-            toast.error("Compression failed, and cloud storage is off — the raw file is too large for database storage.");
-            setIsUploading(false);
-            return;
-          }
-        }
-      }
-
-      // Step 3: Upload the file
-      if (s3Available && presignedUrl) {
-        const uploadToastId = toast.loading("Uploading document to cloud storage...");
+      // Documents live in the database by policy — no storage probe, no compression.
+      // A file over the request-body limit goes up in 3 MB parts through the chunked
+      // route, exact bytes; a small one posts directly. The presigned/compress dance
+      // this replaces kept running after storage was retired: the probe 410ed against
+      // the dead project and the fallback squeezed a 16 MB sheet to 2.86 MB — quality
+      // thrown away for a limit the chunked path does not have.
+      if (fileToUpload.size > LIMIT_BYTES) {
+        const uploadToastId = toast.loading("Uploading in parts — full quality, into the database...");
         try {
-          if (urlKind === 's3' && fileToUpload.size > MULTIPART_THRESHOLD) {
-            // Multipart is an S3-door route only. Supabase's REST door takes the whole
-            // file in one PUT — and unlike its S3 door, it actually admits browsers.
-            cloudStoragePath = await uploadInParts(
-              fileToUpload,
-              {
-                componentTypes: selectedComponentTypes,
-                year: parseInt(uploadYear),
-                months: selectedMonths,
-              },
-              (msg) => toast.loading(msg, { id: uploadToastId }),
-            );
-          } else {
-            // One transfer, with a second attempt to cover a passing drop. All REST-door
-            // uploads land here, whatever their size, plus small S3 ones.
-            const attemptUpload = async () => {
-              const res = await fetch(presignedUrl, {
-                method: "PUT",
-                headers: {
-                  "Content-Type": UPLOAD_CONTENT_TYPE,
-                },
-                body: fileToUpload,
-              });
-              if (!res.ok) {
-                const errText = await res.text();
-                throw new Error(`Storage refused the file: ${res.status} ${res.statusText} ${errText.substring(0, 200)}`);
-              }
-              return res;
-            };
-
-            try {
-              await attemptUpload();
-            } catch (firstErr: any) {
-              // Only worth repeating when the transfer itself failed. A refusal is a
-              // decision, and asking twice gets the same answer.
-              const droppedMidway = /failed to fetch|networkerror|load failed/i.test(String(firstErr?.message || ''));
-              if (!droppedMidway) throw firstErr;
-              toast.loading("Connection dropped — trying once more...", { id: uploadToastId });
-              await attemptUpload();
-            }
-          }
-
-          toast.dismiss(uploadToastId);
-          toast.success("Document uploaded to cloud storage at full quality");
-        } catch (s3Err: any) {
-          console.error("S3 Direct upload failed, falling back to database upload:", s3Err);
-          toast.dismiss(uploadToastId);
-          // The actual reason, not just that it failed. A refusal by storage and a
-          // transfer that died on the way there need different fixes, and "upload failed"
-          // sends you looking at the file instead of at either.
-          //
-          // This deliberately does not blame CORS. Supabase allows uploads from this site,
-          // on error responses too — that was checked — so a failed transfer here means
-          // the connection gave out, which naming it CORS only hides.
-          const detail = String(s3Err?.message || s3Err || '');
-          const droppedMidway = /failed to fetch|networkerror|load failed/i.test(detail);
-          toast.error(
-            droppedMidway
-              ? 'The connection to storage kept giving out, even sending the sheet in 5 MB pieces with retries. Please try again — a steadier connection will get it through.'
-              : `Storage refused the file: ${detail.slice(0, 200)}`,
-            { duration: 12000 },
+          cloudStoragePath = await uploadInParts(
+            fileToUpload,
+            {
+              componentTypes: selectedComponentTypes,
+              year: parseInt(uploadYear),
+              months: selectedMonths,
+            },
+            (msg) => toast.loading(msg, { id: uploadToastId }),
           );
-          s3Available = false;
-
-          if (fileToUpload.size > LIMIT_BYTES) {
-            toast.error("File is too large for database fallback. Please reduce file size.");
-            setIsUploading(false);
-            return;
-          }
+          s3Available = true; // registers by path; the bytes are already staged
+          toast.dismiss(uploadToastId);
+          const mb = (fileToUpload.size / (1024 * 1024)).toFixed(2);
+          toast.success(`Uploaded at full quality (${mb} MB) — stored in the database.`);
+        } catch (err: any) {
+          toast.dismiss(uploadToastId);
+          toast.error(`Upload failed: ${String(err?.message || err).slice(0, 200)}. Nothing was kept — try again.`, { duration: 10000 });
+          setIsUploading(false);
+          return;
         }
       }
 
