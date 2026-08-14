@@ -219,6 +219,65 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           }
         }
 
+        // ===== WHICH CLAUSE GOVERNS =====
+        // A pre-2022 contract is priced by a different clause, and this route used to
+        // serve its GCC-2022 report anyway — right layout, wrong money, with only a red
+        // note to say so. The download button now hands over the statement for the
+        // clause that actually governs, so the wrong-rules figure can no longer leave
+        // the app through the main door.
+        {
+          const clauseCheck = await prisma.bill.findUnique({
+            where: { id: billId },
+            select: {
+              billNo: true,
+              dateOfMeasurement: true,
+              contract: {
+                select: {
+                  agreementNo: true, contractorName: true, workDescription: true,
+                  dateOfOpening: true, userId: true,
+                  pvcClauseVersion: true, pre2022WorkType: true,
+                },
+              },
+            },
+          });
+          if (clauseCheck?.contract) {
+            const { resolvePre2022Setup } = await import('@/lib/pre2022-contract');
+            const setup = resolvePre2022Setup(clauseCheck.contract as any);
+            if (setup.isPre2022) {
+              const { pricePre2022BillById } = await import('@/lib/pre2022-bill-pvc');
+              const { generatePre2022Report } = await import('@/lib/pdf/generators/pre2022-report');
+              const pricing = await pricePre2022BillById(billId);
+              let pre2022Bytes: Uint8Array = new Uint8Array(generatePre2022Report({
+                pricing,
+                billNo: clauseCheck.billNo,
+                agreementNo: clauseCheck.contract.agreementNo,
+                contractorName: clauseCheck.contract.contractorName,
+                workDescription: clauseCheck.contract.workDescription,
+                dateOfOpening: clauseCheck.contract.dateOfOpening,
+                dateOfMeasurement: clauseCheck.dateOfMeasurement,
+              }));
+              // Same trial watermark rule as every other report.
+              if (!isAdminRequester && !trialWatermarkWaived) {
+                const stamp = await prisma.bill.findUnique({
+                  where: { id: billId },
+                  select: { billTransaction: { select: { discountType: true } } },
+                });
+                if (stamp?.billTransaction?.discountType === 'trial') {
+                  const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
+                  pre2022Bytes = await applyTrialWatermark(pre2022Bytes);
+                }
+              }
+              const safeBillNo = clauseCheck.billNo.replace(/[^A-Za-z0-9-]+/g, '_');
+              return new NextResponse(new Uint8Array(pre2022Bytes), {
+                headers: {
+                  'Content-Type': 'application/pdf',
+                  'Content-Disposition': `attachment; filename="PVC_pre2022_${safeBillNo}.pdf"`,
+                },
+              });
+            }
+          }
+        }
+
         // ===== JPC SHEETS: paid annex =====
         // The JPC steel sheets attached to a steel bill's report come from a paid
         // subscription, so attaching them costs Rs 500 from credits — ONCE per bill,
