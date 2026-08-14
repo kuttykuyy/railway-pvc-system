@@ -957,7 +957,7 @@ export default function ComponentDocumentsPage() {
   };
 
   const handleDelete = async (documentId: string) => {
-    if (!confirm("Are you sure you want to permanently delete this document?")) {
+    if (!confirm("Delete this document? If the same file is registered under other component types (a JPC sheet under four steel types), all of its registrations are deleted together.")) {
       return;
     }
 
