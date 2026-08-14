@@ -65,13 +65,23 @@ export async function DELETE(request: NextRequest) {
       // Continue with database deletion even if S3 deletion fails
     }
 
-    // Delete from database
-    await prisma.labourIndexDocument.delete({
-      where: { id: documentId },
+    // Delete every registration of the same physical file. A JPC sheet is one PDF
+    // registered under four steel types, and deleting one row while the siblings kept
+    // showing the "same" sheet under other tabs left half-deleted families. Siblings
+    // are matched on the underlying KEY, not the exact address: the partial storage
+    // migration left mixed families where some registrations moved to db:// while the
+    // rest kept the cloud address.
+    const baseKey = document.cloudStoragePath.replace(/^(db|staging):\/\//, '');
+    const removed = await prisma.labourIndexDocument.deleteMany({
+      where: {
+        cloudStoragePath: { in: [baseKey, `db://${baseKey}`, `staging://${baseKey}`] },
+      },
     });
 
     return NextResponse.json({
-      message: "Document deleted successfully",
+      message: removed.count > 1
+        ? `Deleted this sheet and its ${removed.count - 1} other registration(s) — they were the same file.`
+        : "Document deleted successfully",
     });
   } catch (error) {
     console.error("Error deleting component index document:", error);
