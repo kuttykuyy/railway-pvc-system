@@ -3025,7 +3025,16 @@ export async function POST(request: NextRequest) {
       let bulkJpcAllowed = isAdminRequester;
       if (!bulkJpcAllowed) {
         const steelBills = bills.filter((b: any) => (b.steelAmount || 0) > 0 || (Array.isArray(b.steelTypes) && (b.steelTypes as any[]).length > 0));
-        const unpaid = steelBills.filter((b: any) => !b.jpcDocsPurchasedAt);
+        let paidIds = new Set<string>();
+        let jpcColumnReady = true;
+        try {
+          const ids = steelBills.map((x: any) => x.id);
+          const rows = ids.length
+            ? await prisma.$queryRaw<Array<{ id: string }>>`SELECT id FROM "bills" WHERE id = ANY(${ids}) AND "jpcDocsPurchasedAt" IS NOT NULL`
+            : [];
+          paidIds = new Set(rows.map(r => r.id));
+        } catch { jpcColumnReady = false; }
+        const unpaid = jpcColumnReady ? steelBills.filter((b: any) => !paidIds.has(b.id)) : [];
         if (unpaid.length === 0) {
           bulkJpcAllowed = true;
         } else {

@@ -289,7 +289,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           const jpcBill = await prisma.bill.findUnique({
             where: { id: billId },
             select: {
-              steelAmount: true, steelTypes: true, jpcDocsPurchasedAt: true,
+              steelAmount: true, steelTypes: true,
               billNo: true,
               contract: { select: { userId: true, user: { select: { role: true, isFreeAccount: true, customProcessingFee: true } } } },
             },
@@ -302,7 +302,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             const ownerIsFree = !billing.paymentEnabled || !owner
               || owner.isFreeAccount || owner.customProcessingFee === 0
               || ['admin', 'superadmin', 'railway_official', 'accounts_official'].includes(owner.role || '');
-            if (!ownerIsFree && !jpcBill.jpcDocsPurchasedAt && billing.jpcDocumentCost > 0) {
+            // Raw, tolerant read: the column ships through Pending DB Changes, and a
+            // schema field for an unapplied column takes every bill read down with it.
+            let jpcPaidAt: Date | null = null;
+            let jpcColumnReady = true;
+            try {
+              const rows = await prisma.$queryRaw<Array<{ jpcDocsPurchasedAt: Date | null }>>`SELECT "jpcDocsPurchasedAt" FROM "bills" WHERE id = ${billId}`;
+              jpcPaidAt = rows[0]?.jpcDocsPurchasedAt ?? null;
+            } catch { jpcColumnReady = false; }
+            if (!jpcColumnReady) {
+              // Cannot record a purchase yet, so nothing is charged and the sheets ride
+              // free until the admin applies the column — free beats charging blind.
+            } else if (!ownerIsFree && !jpcPaidAt && billing.jpcDocumentCost > 0) {
               // Only the owner's own download can spend the owner's credits.
               const requesterEmail = session?.user?.email || null;
               const requesterUser = requesterEmail
@@ -337,11 +348,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                     });
                     // The claim doubles as the race guard: a second concurrent download
                     // finds the stamp set and does not charge again.
-                    const stamped = await tx.bill.updateMany({
-                      where: { id: billId, jpcDocsPurchasedAt: null },
-                      data: { jpcDocsPurchasedAt: new Date() },
-                    });
-                    if (stamped.count === 0) throw new Error('ALREADY_PURCHASED');
+                    const stamped = await tx.$executeRaw`UPDATE "bills" SET "jpcDocsPurchasedAt" = ${new Date()} WHERE id = ${billId} AND "jpcDocsPurchasedAt" IS NULL`;
+                    if (Number(stamped) === 0) throw new Error('ALREADY_PURCHASED');
                   });
                 } catch (err: any) {
                   if (String(err?.message).includes('ALREADY_PURCHASED')) {

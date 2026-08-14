@@ -469,9 +469,6 @@ model Bill {
   updatedAt                DateTime                  @updatedAt
   isChargeable             Boolean                   @default(true)
   processingFee            Float                     @default(1000)
-  /// When the charge for attaching the JPC steel sheets to this bill's report was
-  /// paid. Null = not paid; reports then carry every annex except the JPC pages.
-  jpcDocsPurchasedAt       DateTime?
   cementAmount             Float?                    @default(0)
   steelAmount              Float?                    @default(0)
   selectedSteelComponent   String?                   @default("Steel TMT Bars")
