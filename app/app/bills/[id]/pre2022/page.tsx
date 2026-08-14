@@ -18,6 +18,7 @@ import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { BackButton } from '@/components/ui/back-button';
 import { AlertTriangle, RefreshCw, Info, Download } from 'lucide-react';
 
 interface Component {
@@ -141,11 +142,14 @@ export default function Pre2022BillPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4 w-full">
-      <div>
-        <h1 className="text-xl font-semibold">Price Variation — older GCC</h1>
-        <p className="text-sm text-muted-foreground">
-          {pricing.agreementNo} {pricing.billNo ? `· Bill ${pricing.billNo}` : ''}
-        </p>
+      <div className="flex items-start gap-3">
+        <BackButton href={`/bills/${billId}`} label="Bill" variant="outline" />
+        <div>
+          <h1 className="text-xl font-semibold">Price Variation — older GCC</h1>
+          <p className="text-sm text-muted-foreground">
+            {pricing.agreementNo} {pricing.billNo ? `· Bill ${pricing.billNo}` : ''}
+          </p>
+        </div>
       </div>
 
       {/* Which clause, said on the face of the page rather than assumed. */}
