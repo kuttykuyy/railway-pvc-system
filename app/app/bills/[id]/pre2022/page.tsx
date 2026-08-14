@@ -140,7 +140,7 @@ export default function Pre2022BillPage() {
   if (!pricing) return null;
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 max-w-5xl">
+    <div className="p-4 sm:p-6 space-y-4 w-full">
       <div>
         <h1 className="text-xl font-semibold">Price Variation — older GCC</h1>
         <p className="text-sm text-muted-foreground">
