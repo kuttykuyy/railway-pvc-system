@@ -3030,7 +3030,9 @@ export async function POST(request: NextRequest) {
         try {
           const ids = steelBills.map((x: any) => x.id);
           const rows = ids.length
-            ? await prisma.$queryRaw<Array<{ id: string }>>`SELECT id FROM "public"."bills" WHERE id = ANY(${ids}) AND "jpcDocsPurchasedAt" IS NOT NULL`
+            ? await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+                `SELECT id FROM ${await (await import('@/lib/db-schema')).schemaQualified('bills')} WHERE id = ANY($1) AND "jpcDocsPurchasedAt" IS NOT NULL`, ids,
+              )
             : [];
           paidIds = new Set(rows.map(r => r.id));
         } catch { jpcColumnReady = false; }

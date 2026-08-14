@@ -307,7 +307,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             let jpcPaidAt: Date | null = null;
             let jpcColumnReady = true;
             try {
-              const rows = await prisma.$queryRaw<Array<{ jpcDocsPurchasedAt: Date | null }>>`SELECT "jpcDocsPurchasedAt" FROM "public"."bills" WHERE id = ${billId}`;
+              const billsTable = await (await import('@/lib/db-schema')).schemaQualified('bills');
+              const rows = await prisma.$queryRawUnsafe<Array<{ jpcDocsPurchasedAt: Date | null }>>(
+                `SELECT "jpcDocsPurchasedAt" FROM ${billsTable} WHERE id = $1`, billId,
+              );
               jpcPaidAt = rows[0]?.jpcDocsPurchasedAt ?? null;
             } catch { jpcColumnReady = false; }
             if (!jpcColumnReady) {
@@ -348,7 +351,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                     });
                     // The claim doubles as the race guard: a second concurrent download
                     // finds the stamp set and does not charge again.
-                    const stamped = await tx.$executeRaw`UPDATE "public"."bills" SET "jpcDocsPurchasedAt" = ${new Date()} WHERE id = ${billId} AND "jpcDocsPurchasedAt" IS NULL`;
+                    const billsTableTx = await (await import('@/lib/db-schema')).schemaQualified('bills');
+                    const stamped = await tx.$executeRawUnsafe(
+                      `UPDATE ${billsTableTx} SET "jpcDocsPurchasedAt" = $1 WHERE id = $2 AND "jpcDocsPurchasedAt" IS NULL`, new Date(), billId,
+                    );
                     if (Number(stamped) === 0) throw new Error('ALREADY_PURCHASED');
                   });
                 } catch (err: any) {

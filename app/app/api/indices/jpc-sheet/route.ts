@@ -46,7 +46,11 @@ async function jpcViewAccess(email: string) {
   // whole app out. Until the pending change is applied this read fails and simply
   // means "not unlocked yet".
   try {
-    const rows = await prisma.$queryRaw<Array<{ jpcViewUntil: Date | null }>>`SELECT "jpcViewUntil" FROM "public"."User" WHERE id = ${user.id}`;
+    const { schemaQualified } = await import('@/lib/db-schema');
+    const userTable = await schemaQualified('User');
+    const rows = await prisma.$queryRawUnsafe<Array<{ jpcViewUntil: Date | null }>>(
+      `SELECT "jpcViewUntil" FROM ${userTable} WHERE id = $1`, user.id,
+    );
     const until = rows[0]?.jpcViewUntil;
     if (until && new Date(until) > new Date()) return { allowed: true, userId: user.id };
   } catch {
@@ -183,7 +187,11 @@ export async function POST(request: NextRequest) {
     // the unlock would not.
     let currentUntil: Date | null = null;
     try {
-      const rows = await prisma.$queryRaw<Array<{ jpcViewUntil: Date | null }>>`SELECT "jpcViewUntil" FROM "public"."User" WHERE id = ${buyer.id}`;
+      const { schemaQualified } = await import('@/lib/db-schema');
+      const userTable = await schemaQualified('User');
+      const rows = await prisma.$queryRawUnsafe<Array<{ jpcViewUntil: Date | null }>>(
+        `SELECT "jpcViewUntil" FROM ${userTable} WHERE id = $1`, buyer.id,
+      );
       currentUntil = rows[0]?.jpcViewUntil ?? null;
     } catch {
       return NextResponse.json(
@@ -215,7 +223,10 @@ export async function POST(request: NextRequest) {
         });
         const base = currentUntil && new Date(currentUntil) > new Date() ? new Date(currentUntil) : new Date();
         const newUntil = new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000);
-        await tx.$executeRaw`UPDATE "public"."User" SET "jpcViewUntil" = ${newUntil} WHERE id = ${buyer.id}`;
+        const userTableTx = await (await import('@/lib/db-schema')).schemaQualified('User');
+        await tx.$executeRawUnsafe(
+          `UPDATE ${userTableTx} SET "jpcViewUntil" = $1 WHERE id = $2`, newUntil, buyer.id,
+        );
       });
     } catch (err: any) {
       if (String(err?.message).includes('INSUFFICIENT_BALANCE')) {

@@ -49,13 +49,17 @@ export async function GET(request: NextRequest) {
     });
 
     const ids = documents.map(d => d.id);
+    const { schemaQualified } = await import('@/lib/db-schema');
+    const docsTable = await schemaQualified('labour_index_documents');
     const remarkRows = ids.length
-      ? await prisma.$queryRaw<Array<{ id: string; remarks: string | null }>>`
-          SELECT id,
+      ? await prisma.$queryRawUnsafe<Array<{ id: string; remarks: string | null }>>(
+          `SELECT id,
                  CASE WHEN remarks LIKE 'base64:%'
                       THEN NULLIF(split_part(remarks, '|', 2), '')
                       ELSE remarks END AS remarks
-          FROM "public"."labour_index_documents" WHERE id = ANY(${ids})`
+          FROM ${docsTable} WHERE id = ANY($1)`,
+          ids,
+        )
       : [];
     const remarkById = new Map(remarkRows.map(r => [r.id, r.remarks]));
     const cleanedDocuments = documents.map(doc => ({
