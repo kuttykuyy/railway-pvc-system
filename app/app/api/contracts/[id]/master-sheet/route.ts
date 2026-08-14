@@ -7,7 +7,8 @@ import { resolvePre2022Setup } from '@/lib/pre2022-contract';
 import { getQuarterlyAverages } from '@/lib/db-utils';
 import { getQuarterMonths } from '@/lib/pvc-calculations';
 import { getSteelCityForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
-import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -51,7 +52,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!contract) return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
 
     const setup = resolvePre2022Setup(contract as any);
-    const wb = XLSX.utils.book_new();
     const rupee = (n: number) => Math.round(n * 100) / 100;
 
     // ---- Sheet 1: the master grid --------------------------------------------------
@@ -138,18 +138,38 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ...[7, 8, 9, 10, 11, 12, 13, 14].map(i => rupee(rows.reduce((s, r) => s + (Number(r[i]) || 0), 0))),
       '',
     ];
-    const master = XLSX.utils.aoa_to_sheet([
-      ...head, columns, ...rows, totalRow, [],
-      ['INDEX VALUES USED (base, each quarter month, average)'],
-      ['Bill No', 'Quarter', 'Series', 'Base', 'M1', 'M2', 'M3', 'Quarter Avg'],
-      ...indexRows,
-    ]);
-    master['!cols'] = columns.map((_, i) => ({ wch: i === 0 ? 26 : 14 }));
-    XLSX.utils.book_append_sheet(wb, master, 'PVC Master');
-
-    // ---- Sheet 2: the JPC steel working, size by size, fortnight by fortnight ------
+    // ---- Render as PDF: A3 landscape, the grid layout the hand workings use ------
+    const pdf = new jsPDF({ unit: 'mm', format: 'a3', orientation: 'landscape' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13);
+    pdf.text(head[0][0] as string, pageW / 2, 12, { align: 'center' });
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5);
+    pdf.text(`${head[1][0]}    ${head[1][2]}`, pageW / 2, 18, { align: 'center' });
+    pdf.text(String(head[2][0]).slice(0, 180), pageW / 2, 23, { align: 'center' });
+    pdf.text(`${head[3][0]}    ${head[3][2]}`, pageW / 2, 28, { align: 'center' });
+    const money = (v: any) => typeof v === 'number' ? v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : String(v ?? '');
+    autoTable(pdf, {
+      startY: 32, margin: { left: 8, right: 8 }, theme: 'grid',
+      styles: { fontSize: 6.5, cellPadding: 1 },
+      headStyles: { fillColor: [230, 230, 230], textColor: 20, fontStyle: 'bold' },
+      head: [columns],
+      body: [...rows.map(r => r.map((v, i) => i >= 3 ? money(v) : String(v ?? ''))),
+             totalRow.map((v, i) => i >= 3 ? money(v) : String(v ?? ''))],
+      columnStyles: Object.fromEntries(columns.map((_, i) => [i, i >= 3 ? { halign: 'right' } : {}])),
+    });
+    let y = (pdf as any).lastAutoTable.finalY + 8;
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10);
+    pdf.text('Index values used (base, each quarter month, average)', 8, y);
+    autoTable(pdf, {
+      startY: y + 2, margin: { left: 8, right: 8 }, theme: 'grid',
+      styles: { fontSize: 6.5, cellPadding: 1 },
+      headStyles: { fillColor: [230, 230, 230], textColor: 20, fontStyle: 'bold' },
+      head: [['Bill No', 'Quarter', 'Series', 'Base', 'M1', 'M2', 'M3', 'Quarter Avg']],
+      body: indexRows.map(r => r.map(v => typeof v === 'number' ? String(rupee(v)) : String(v ?? ''))),
+    });
+    // ---- The JPC steel working: size by size, fortnight by fortnight ---------------
     const jpcRows: any[][] = [
-      ['JPC STEEL WORKING — fortnight prices per size, monthly and quarterly averages'],
+      [],
       ['Bill No', 'Month', 'City', 'Category', 'Item', 'Fortnight 1', 'Fortnight 2', 'Month Avg'],
     ];
     for (const need of jpcNeeds) {
@@ -174,18 +194,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         jpcRows.push([need.billNo, 'QUARTER AVG', need.city, category, '',
           '', '', rupee(values.reduce((s, v) => s + v, 0) / values.length)]);
       }
-      jpcRows.push([]);
     }
-    const jpcSheet = XLSX.utils.aoa_to_sheet(jpcRows);
-    jpcSheet['!cols'] = [{ wch: 24 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 26 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
-    XLSX.utils.book_append_sheet(wb, jpcSheet, 'JPC Working');
 
-    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    pdf.addPage();
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11);
+    pdf.text('JPC steel working — fortnight prices per size, monthly and quarterly averages', 8, 12);
+    autoTable(pdf, {
+      startY: 16, margin: { left: 8, right: 8 }, theme: 'grid',
+      styles: { fontSize: 6.5, cellPadding: 1 },
+      headStyles: { fillColor: [230, 230, 230], textColor: 20, fontStyle: 'bold' },
+      head: [jpcRows[1]],
+      body: jpcRows.slice(2).filter(r => r.length).map(r => r.map((v: any) => typeof v === 'number' ? money(v) : String(v ?? ''))),
+    });
+    const buffer = Buffer.from(pdf.output('arraybuffer'));
     const safeNo = contract.agreementNo.replace(/[^A-Za-z0-9-]+/g, '_');
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="PVC_Master_${safeNo}.xlsx"`,
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="PVC_Master_${safeNo}.pdf"`,
       },
     });
   } catch (error: any) {
