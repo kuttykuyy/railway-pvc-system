@@ -12,7 +12,10 @@ interface ProvidersProps {
 
 export function Providers({ children }: ProvidersProps) {
   return (
-    <SessionProvider>
+    // refetchOnWindowFocus off: the default re-validates the session every time the
+    // tab regains focus, and pages showing loading states while that settles read as
+    // the whole page reloading whenever you switch back.
+    <SessionProvider refetchOnWindowFocus={false}>
       <LanguageProvider>
         {children}
         <Toaster 
