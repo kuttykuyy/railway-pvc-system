@@ -40,6 +40,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
+    // Database storage by POLICY, not by accident of configuration. The sheets lived
+    // in a Supabase bucket; the project was paused for quota, then deleted, and the
+    // files went with it — twice bitten. Answering "no S3" here routes the client down
+    // its existing database path: compress to fit, then store the bytes in the row,
+    // where a paused or deleted storage project can never take them again.
+    return NextResponse.json({
+      s3Available: false,
+      message: "Documents are stored in the database by policy.",
+    });
+
+    // eslint-disable-next-line no-unreachable
     if (!isS3Configured()) {
       return NextResponse.json({
         s3Available: false,
