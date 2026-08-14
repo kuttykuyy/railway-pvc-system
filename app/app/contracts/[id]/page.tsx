@@ -13,6 +13,7 @@ import { BackButton } from '@/components/ui/back-button';
 import { ShareContractDialog } from '@/components/contracts/share-contract-dialog';
 import { BillCard } from '@/components/bill-card';
 import { resolvePre2022Setup } from '@/lib/pre2022-contract';
+import { DeleteBillButton } from '@/components/bills/delete-bill-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -130,7 +131,10 @@ export default async function ContractDetailPage({ params }: Props) {
           { label: 'Contractor', value: contract.contractorName, icon: User, color: 'text-emerald-600' },
           { label: 'Base Month', value: format(new Date(contract.baseMonth), 'MMM yyyy'), icon: Calendar, color: 'text-green-600' },
           { label: 'Total Bills', value: `₹${totalBillAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, icon: FileText, color: 'text-emerald-600' },
-          { label: 'Total PVC', value: `₹${totalPvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, icon: Calculator, color: 'text-orange-600' },
+          // On a pre-2022 contract the stored totals are GCC-2022 figures — the wrong
+          // clause — and a number on a headline card gets quoted. The statements carry
+          // the right figures.
+          { label: 'Total PVC', value: pre2022.isPre2022 ? 'see statements' : `₹${totalPvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, icon: Calculator, color: 'text-orange-600' },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-white border border-gray-200 rounded-lg px-4 py-3">
             <div className="flex items-center gap-2 mb-1">
@@ -315,14 +319,22 @@ export default async function ContractDetailPage({ params }: Props) {
                         ₹{bill.billAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        {bill.pvcCalculation ? (
+                        {pre2022.isPre2022 ? (
+                          // The stored figure is the WRONG clause for this contract; a
+                          // green number in this column gets copied onto submissions.
+                          <Link href={`/bills/${bill.id}/pre2022`} className="text-amber-700 text-xs font-medium hover:underline">
+                            old-GCC statement
+                          </Link>
+                        ) : bill.pvcCalculation ? (
                           <span className={`font-semibold ${bill.pvcCalculation.totalPvc >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                             ₹{bill.pvcCalculation.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </span>
                         ) : <span className="text-gray-300">—</span>}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        {bill.pvcCalculation ? (
+                        {pre2022.isPre2022 ? (
+                          <span className="text-gray-300">—</span>
+                        ) : bill.pvcCalculation ? (
                           <span className="text-gray-700 font-medium">
                             ₹{bill.pvcCalculation.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </span>
@@ -333,6 +345,7 @@ export default async function ContractDetailPage({ params }: Props) {
                           className="p-1.5 rounded text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors inline-flex">
                           <Eye className="h-4 w-4" />
                         </Link>
+                        <DeleteBillButton billId={bill.id} billNo={bill.billNo} />
                       </td>
                     </tr>
                   ))}
