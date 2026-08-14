@@ -95,6 +95,51 @@ describe('what goes into the varying amount', () => {
   });
 });
 
+describe('cement and steel carried in classification entries', () => {
+  // An uploaded bill leaves the dedicated fields empty and carries the same money in
+  // entries whose codes end in C (cement) and B (steel) — the GCC-2022 convention.
+  const entries = [
+    { amount: 2330888.69, subClassification: { code: '5C' } },
+    { amount: 2316702.05, steelTypes: ['TMT'], subClassification: { code: '5B' } },
+    { amount: 500000, subClassification: { code: '5A' } },
+  ];
+
+  it('separates them even when the dedicated fields are empty', async () => {
+    const priced = await pricePre2022Bill(billOn(new Date(Date.UTC(2023, 4, 15)), {
+      billAmount: 7493336.22,
+      classificationEntries: entries,
+    }));
+    expect(priced.result.cementValue).toBeCloseTo(2330888.69, 2);
+    expect(priced.result.steelValue).toBeCloseTo(2316702.05, 2);
+    expect(priced.result.varyingAmount).toBeCloseTo(7493336.22 - 2330888.69 - 2316702.05, 2);
+    const names = priced.result.components.map(c => c.name);
+    expect(names).toContain('Cement supplied');
+    expect(names.some(n => n.startsWith('Steel supplied'))).toBe(true);
+  });
+
+  it('lets a hand-typed dedicated field win over the entries', async () => {
+    const priced = await pricePre2022Bill(billOn(new Date(Date.UTC(2023, 4, 15)), {
+      billAmount: 7493336.22,
+      cementAmount: 100000,
+      classificationEntries: entries,
+    }));
+    expect(priced.result.cementValue).toBe(100000);
+    // Steel still comes from its entry — the override is per component, not all-or-nothing.
+    expect(priced.result.steelValue).toBeCloseTo(2316702.05, 2);
+  });
+
+  it('splits a multi-type steel entry across the 46A.9 categories', async () => {
+    const priced = await pricePre2022Bill(billOn(new Date(Date.UTC(2023, 4, 15)), {
+      classificationEntries: [
+        { amount: 90000, steelTypes: ['TMT', 'ANGLE_CHANNEL', 'PLATES'], subClassification: { code: '5B' } },
+      ],
+    }));
+    const steelRows = priced.result.components.filter(c => c.name.startsWith('Steel supplied'));
+    expect(steelRows).toHaveLength(3);
+    steelRows.forEach(row => expect(row.appliedTo).toBeCloseTo(30000, 6));
+  });
+});
+
 describe('the four steel categories', () => {
   it('averages the three named ones for other sections, as Cl.46A.9(4) says', async () => {
     const priced = await pricePre2022Bill(billOn(new Date(Date.UTC(2023, 4, 15)), { steelOtherSectionsAmount: 30_000 }));

@@ -74,7 +74,46 @@ interface BillLike {
   steelAngleChannelAmount?: number | null;
   steelPlatesAmount?: number | null;
   steelOtherSectionsAmount?: number | null;
+  /**
+   * An uploaded bill carries its cement and steel INSIDE these entries — rows whose
+   * sub-classification code ends in C (dedicated cement) or B (dedicated steel) — and
+   * deliberately leaves the bill's own dedicated fields empty; that is the GCC-2022
+   * pipeline's convention. Without reading them, an uploaded bill priced under the old
+   * clause showed no cement or steel separated at all: W stayed gross and Section C
+   * was missing.
+   */
+  classificationEntries?: Array<{
+    amount: number;
+    steelTypes?: unknown;
+    subClassification?: { code: string } | null;
+    classification?: { code: string } | null;
+  }> | null;
   contract: ContractForPre2022 & { dateOfOpening: Date };
+}
+
+/** Cement and steel as the classification entries carry them, split by 46A.9 category. */
+function suppliesFromEntries(entries: NonNullable<BillLike['classificationEntries']>) {
+  const totals = { cement: 0, tmt: 0, angles: 0, plates: 0, other: 0 };
+  for (const entry of entries) {
+    const code = String(entry.subClassification?.code || entry.classification?.code || '');
+    const value = Number(entry.amount) || 0;
+    if (value <= 0) continue;
+    if (/C$/i.test(code)) {
+      totals.cement += value;
+    } else if (/B$/i.test(code)) {
+      const types = Array.isArray(entry.steelTypes) && entry.steelTypes.length
+        ? (entry.steelTypes as string[])
+        : ['TMT'];
+      const share = value / types.length;
+      for (const type of types) {
+        if (type === 'TMT') totals.tmt += share;
+        else if (type === 'ANGLE_CHANNEL') totals.angles += share;
+        else if (type === 'PLATES') totals.plates += share;
+        else totals.other += share;
+      }
+    }
+  }
+  return totals;
 }
 
 /**
@@ -111,11 +150,14 @@ export async function pricePre2022Bill(bill: BillLike): Promise<Pre2022BillPrici
 
   const quarterMonths = pre2022QuarterMonths(quarter, opening);
 
-  const cementValue = bill.cementAmount ?? 0;
-  const steelBars = bill.steelTmtBarsAmount ?? 0;
-  const steelAngles = bill.steelAngleChannelAmount ?? 0;
-  const steelPlates = bill.steelPlatesAmount ?? 0;
-  const steelOther = bill.steelOtherSectionsAmount ?? 0;
+  // The bill's own dedicated fields win when set (a hand-typed bill); an uploaded bill
+  // leaves them empty and carries the same money in its classification entries.
+  const fromEntries = suppliesFromEntries(bill.classificationEntries || []);
+  const cementValue = (bill.cementAmount || 0) > 0 ? bill.cementAmount! : fromEntries.cement;
+  const steelBars = (bill.steelTmtBarsAmount || 0) > 0 ? bill.steelTmtBarsAmount! : fromEntries.tmt;
+  const steelAngles = (bill.steelAngleChannelAmount || 0) > 0 ? bill.steelAngleChannelAmount! : fromEntries.angles;
+  const steelPlates = (bill.steelPlatesAmount || 0) > 0 ? bill.steelPlatesAmount! : fromEntries.plates;
+  const steelOther = (bill.steelOtherSectionsAmount || 0) > 0 ? bill.steelOtherSectionsAmount! : fromEntries.other;
 
   // Only fetch what this bill actually needs, so a missing index for a category the
   // contract never supplied cannot stop an otherwise sound bill from being priced.
@@ -218,7 +260,17 @@ export async function pricePre2022Bill(bill: BillLike): Promise<Pre2022BillPrici
 export async function pricePre2022BillById(billId: string): Promise<Pre2022BillPricing> {
   const bill = await prisma.bill.findUnique({
     where: { id: billId },
-    include: { contract: true },
+    include: {
+      contract: true,
+      classificationEntries: {
+        select: {
+          amount: true,
+          steelTypes: true,
+          subClassification: { select: { code: true } },
+          classification: { select: { code: true } },
+        },
+      },
+    },
   });
   if (!bill) throw new Pre2022PricingError('Bill not found');
   return pricePre2022Bill(bill as unknown as BillLike);
