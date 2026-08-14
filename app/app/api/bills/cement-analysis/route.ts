@@ -1819,19 +1819,52 @@ export async function POST(request: NextRequest) {
         // Collected whole on failure — the PDF, the exact error, who hit it — and the
         // admin pinged. "Please send this PDF to support" asked the user to do the
         // collecting, and nobody ever did.
-        let parsed;
+        let parsed: any = null;
+        let aiRescued = false;
         try {
           parsed = await parseIrepsBillPdfDirect(directBuffer);
         } catch (parseErr: any) {
+          const directError = String(parseErr?.message || parseErr);
           const { recordParseFailure } = await import('@/lib/parse-failure');
-          await recordParseFailure({
-            userEmail: user?.email || null,
-            fileName: file.name || null,
-            error: String(parseErr?.message || parseErr),
-            pdfBuffer: directBuffer,
-          });
-          throw parseErr;
+          // The AI reader gets one automatic try — FREE, because the exact reader's
+          // gap is our fault, not the user's. Its answer is accepted only when its own
+          // reconciliation holds: item total equal to the bill's printed total, the
+          // same bar the exact reader is held to. Anything less falls through to the
+          // original error, and either way the PDF lands in the failure queue — a
+          // rescue is still a reader gap to fix.
+          try {
+            const aiDetails = await extractBillDetailsWithAi(file, request.nextUrl.origin, contractId);
+            if (!aiDetails.amountsReconciled) {
+              throw new Error(
+                `the AI reader's item total (Rs ${Number(aiDetails.itemAmountTotal || 0).toFixed(2)}) `
+                + 'did not match the bill\'s own total either',
+              );
+            }
+            aiDetails.warnings = [
+              ...(aiDetails.warnings || []),
+              'Read by AI: the exact reader could not read this PDF, so the AI reader was used — at no '
+              + "charge — and its item total matches the bill's own printed total. Check the items below "
+              + 'before creating the bill.',
+            ];
+            await recordParseFailure({
+              userEmail: user?.email || null,
+              fileName: file.name || null,
+              error: 'RESCUED BY AI (user unaffected) — the exact reader failed with:\n' + directError,
+              pdfBuffer: directBuffer,
+            });
+            billDetails = aiDetails;
+            aiRescued = true;
+          } catch (aiErr: any) {
+            await recordParseFailure({
+              userEmail: user?.email || null,
+              fileName: file.name || null,
+              error: directError + '\n\nAI retry also failed: ' + String(aiErr?.message || aiErr),
+              pdfBuffer: directBuffer,
+            });
+            throw parseErr;
+          }
         }
+        if (!aiRescued) {
         let contractDescription = '';
         if (contractId) {
           const contract = await prisma.contract.findUnique({
@@ -1859,6 +1892,7 @@ export async function POST(request: NextRequest) {
         aiEnhancement = aiReview.enhancement;
         if (aiReview.warning) {
           billDetails.warnings = [...(billDetails.warnings || []), aiReview.warning];
+        }
         }
       } else if (stage === 'deterministic' || stage === 'hybrid') {
         // Legacy modes remain available for old clients.
