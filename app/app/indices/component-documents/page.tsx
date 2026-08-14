@@ -92,7 +92,11 @@ interface UploadedDocument {
 const UPLOAD_CONTENT_TYPE = 'application/pdf';
 
 /** Storage's minimum part size for every part but the last. */
-const PART_BYTES = 5 * 1024 * 1024;
+// 3 MB, and divisible by 3: parts now land on our own origin (database storage), so
+// each must fit a serverless request body, and each part is base64-encoded server-side
+// — a length divisible by 3 means no mid-stream padding, so the parts concatenate into
+// one valid base64 stream.
+const PART_BYTES = 3 * 1024 * 1024;
 /** Above this, one unbroken transfer is a bet the connection has kept losing. */
 const MULTIPART_THRESHOLD = PART_BYTES;
 

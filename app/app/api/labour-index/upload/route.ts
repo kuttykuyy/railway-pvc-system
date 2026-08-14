@@ -131,7 +131,19 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      cloudStoragePath = cloudStoragePathParam;
+      // A chunked upload staged its bytes in the database; registration adopts them.
+      // The SQL copy keeps the 20 MB payload inside Postgres instead of hauling it
+      // through this function once per component type.
+      const staged = await prisma.labourIndexDocument.findFirst({
+        where: { cloudStoragePath: `staging://${cloudStoragePathParam}` },
+        select: { id: true },
+      });
+      if (staged) {
+        cloudStoragePath = `db://${cloudStoragePathParam}`;
+        remarksValue = 'FROM_STAGING:' + staged.id;
+      } else {
+        cloudStoragePath = cloudStoragePathParam;
+      }
       fileName = cloudStoragePathParam.split("/").pop() || `${folderName}-${year}-${months.join("-")}.pdf`;
     } else if (file) {
       // Check if file is PDF
@@ -181,6 +193,19 @@ export async function POST(request: NextRequest) {
         },
       });
       createdDocs.push(newDoc);
+    }
+
+    // Rows registered from a staged chunked upload carry a FROM_STAGING marker; the
+    // bytes are copied onto them in SQL — the 20 MB payload never leaves Postgres —
+    // and the staging row is deleted once every registration holds its own copy.
+    const stagingIds = [...new Set(
+      createdDocs
+        .map((d: any) => (typeof d.remarks === 'string' && d.remarks.startsWith('FROM_STAGING:') ? d.remarks.slice('FROM_STAGING:'.length) : null))
+        .filter(Boolean),
+    )] as string[];
+    for (const stagedId of stagingIds) {
+      await prisma.$executeRaw`UPDATE "labour_index_documents" SET remarks = (SELECT remarks FROM "labour_index_documents" WHERE id = ${stagedId}) WHERE remarks = ${'FROM_STAGING:' + stagedId}`;
+      await prisma.labourIndexDocument.deleteMany({ where: { id: stagedId } });
     }
 
     return NextResponse.json({

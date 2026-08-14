@@ -40,49 +40,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    // Database storage by POLICY, not by accident of configuration. The sheets lived
-    // in a Supabase bucket; the project was paused for quota, then deleted, and the
-    // files went with it — twice bitten. Answering "no S3" here routes the client down
-    // its existing database path: compress to fit, then store the bytes in the row,
-    // where a paused or deleted storage project can never take them again.
-    return NextResponse.json({
-      s3Available: false,
-      message: "Documents are stored in the database by policy.",
-    });
-
-    // eslint-disable-next-line no-unreachable
-    if (!isS3Configured()) {
-      return NextResponse.json({
-        s3Available: false,
-        message: "S3 is not configured. Falling back to database storage.",
-      });
-    }
-
+    // Database-backed, uncompressed, same four actions the S3 protocol used — the
+    // client is unchanged except its part size. 'sign-part' returns a URL on OUR
+    // origin; the PUT handler below base64-appends each raw part onto a staging row,
+    // and 'complete' seals it. Files arrive exact: no compression, ever.
     const body = await request.json();
     const action = body.action as string;
 
-    // Every action after 'create' takes a key from the client; none may reach outside
-    // the folder 'create' mints keys in. Defense in depth beside the uploadId secrecy.
-    if (body.key && !String(body.key).startsWith('component-indices/')) {
-      return NextResponse.json({ error: 'key must be a component-indices path' }, { status: 400 });
-    }
-
     if (action === "create") {
-      const { fileType, year, months } = body;
+      const { year, months } = body;
       const componentTypes = (body.componentTypes as string[]) || [];
-      if (!fileType || componentTypes.length === 0 || !year || !months?.length) {
+      if (componentTypes.length === 0 || !year || !months?.length) {
         return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
       }
-      // The same key shape single-shot uploads use, so nothing downstream can tell the
-      // two apart.
       const folderName = componentTypes.length === 1 ? componentTypes[0].toLowerCase() : "multi";
-      const timestamp = Date.now();
       const monthsStr = [...months].sort((a: number, b: number) => a - b).join("-");
-      const generatedFileName = `${folderName}-${year}-${monthsStr}-${timestamp}.pdf`;
+      const generatedFileName = `${folderName}-${year}-${monthsStr}-${Date.now()}.pdf`;
       const key = `component-indices/${folderName}/${generatedFileName}`;
-
-      const uploadId = await createMultipartUpload(key, fileType);
-      return NextResponse.json({ s3Available: true, uploadId, key, fileName: generatedFileName });
+      const staged = await prisma.labourIndexDocument.create({
+        data: {
+          componentType: componentTypes[0] as any,
+          year: Number(year),
+          months: months.map(Number),
+          fileName: generatedFileName,
+          cloudStoragePath: `staging://${key}`,
+          uploadedBy: user.id,
+          remarks: 'base64:',
+        },
+      });
+      return NextResponse.json({ s3Available: true, uploadId: staged.id, key, fileName: generatedFileName });
     }
 
     if (action === "sign-part") {
@@ -90,8 +76,9 @@ export async function POST(request: NextRequest) {
       if (!key || !uploadId || !partNumber) {
         return NextResponse.json({ error: "Missing key, uploadId, or partNumber" }, { status: 400 });
       }
-      const url = await getPartPresignedUrl(key, uploadId, Number(partNumber));
-      return NextResponse.json({ url });
+      return NextResponse.json({
+        url: `/api/labour-index/multipart?uploadId=${encodeURIComponent(uploadId)}&key=${encodeURIComponent(key)}&part=${partNumber}`,
+      });
     }
 
     if (action === "complete") {
@@ -99,13 +86,24 @@ export async function POST(request: NextRequest) {
       if (!key || !uploadId || !expectedParts) {
         return NextResponse.json({ error: "Missing key, uploadId, or expectedParts" }, { status: 400 });
       }
-      await completeMultipartUpload(key, uploadId, Number(expectedParts));
+      const staged = await prisma.labourIndexDocument.findFirst({
+        where: { id: uploadId, cloudStoragePath: `staging://${key}` },
+        select: { id: true, remarks: true },
+      });
+      if (!staged || !staged.remarks || staged.remarks.length <= 'base64:'.length) {
+        return NextResponse.json({ error: 'No parts arrived for this upload.' }, { status: 400 });
+      }
+      // Sealed but still staged: the register step copies the bytes onto the real rows.
       return NextResponse.json({ ok: true, key });
     }
 
     if (action === "abort") {
       const { key, uploadId } = body;
-      if (key && uploadId) await abortMultipartUpload(key, uploadId);
+      if (key && uploadId) {
+        await prisma.labourIndexDocument.deleteMany({
+          where: { id: uploadId, cloudStoragePath: `staging://${key}` },
+        });
+      }
       return NextResponse.json({ ok: true });
     }
 
@@ -117,4 +115,34 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * One raw part of a staged upload. The client PUTs each slice here; it is base64
+ * encoded and appended to the staging row. Parts are 3 MB and divisible by 3, so the
+ * appended encodings concatenate into one valid base64 stream — no reassembly step.
+ */
+export async function PUT(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const user = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true, role: true } });
+  if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+  }
+  const { searchParams } = new URL(request.url);
+  const uploadId = searchParams.get('uploadId');
+  const key = searchParams.get('key');
+  if (!uploadId || !key || !key.startsWith('component-indices/')) {
+    return NextResponse.json({ error: 'uploadId and key are required' }, { status: 400 });
+  }
+  const bytes = Buffer.from(await request.arrayBuffer());
+  if (bytes.length === 0) return NextResponse.json({ error: 'Empty part' }, { status: 400 });
+  const encoded = bytes.toString('base64');
+  const updated = await prisma.$executeRaw`UPDATE "labour_index_documents" SET remarks = remarks || ${encoded} WHERE id = ${uploadId} AND "cloudStoragePath" = ${'staging://' + key}`;
+  if (Number(updated) === 0) {
+    return NextResponse.json({ error: 'Upload session not found' }, { status: 404 });
+  }
+  return NextResponse.json({ ok: true });
 }
