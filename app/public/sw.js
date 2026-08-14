@@ -21,7 +21,12 @@ self.addEventListener('install', (event) => {
         console.log('[SW] Caching offline essentials');
         return cache.addAll(urlsToCache);
       })
-      .then(() => self.skipWaiting())
+      // NO skipWaiting here. A new version activating itself fires controllerchange,
+      // and the app reloads on that — so with frequent deploys, every return to the
+      // tab found a new version and hard-reloaded the page mid-work. The new version
+      // now WAITS: the "New version available" banner offers the update, and the
+      // SKIP_WAITING message below — sent by its button — is the only thing that
+      // activates it. The reload becomes something the user chose.
   );
 });
 
