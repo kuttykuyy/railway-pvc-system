@@ -130,6 +130,19 @@ type ExtraCheck = { kind: 'table' | 'index' | 'constraint'; name: string };
 
 const PENDING_EXTRAS: Array<{ label: string; sql: string; why: string; check: ExtraCheck }> = [
   {
+    label: 'parse_failures',
+    sql: `CREATE TABLE IF NOT EXISTS "parse_failures" (
+        "id" BIGSERIAL PRIMARY KEY,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "userEmail" TEXT,
+        "fileName" TEXT,
+        "error" TEXT NOT NULL,
+        "pdfBase64" TEXT
+      )`,
+    why: 'Every PDF the reader could not read, kept with its exact error — the support queue and the regression corpus in one table.',
+    check: { kind: 'table', name: 'parse_failures' },
+  },
+  {
     label: 'dsr_items',
     sql: `CREATE TABLE IF NOT EXISTS "dsr_items" (
         "edition" TEXT NOT NULL,

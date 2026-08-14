@@ -1815,7 +1815,23 @@ export async function POST(request: NextRequest) {
       }
 
       if (stage === 'direct') {
-        const parsed = await parseIrepsBillPdfDirect(Buffer.from(await file.arrayBuffer()));
+        const directBuffer = Buffer.from(await file.arrayBuffer());
+        // Collected whole on failure — the PDF, the exact error, who hit it — and the
+        // admin pinged. "Please send this PDF to support" asked the user to do the
+        // collecting, and nobody ever did.
+        let parsed;
+        try {
+          parsed = await parseIrepsBillPdfDirect(directBuffer);
+        } catch (parseErr: any) {
+          const { recordParseFailure } = await import('@/lib/parse-failure');
+          await recordParseFailure({
+            userEmail: user?.email || null,
+            fileName: file.name || null,
+            error: String(parseErr?.message || parseErr),
+            pdfBuffer: directBuffer,
+          });
+          throw parseErr;
+        }
         let contractDescription = '';
         if (contractId) {
           const contract = await prisma.contract.findUnique({
