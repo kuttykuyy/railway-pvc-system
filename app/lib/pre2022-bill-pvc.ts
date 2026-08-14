@@ -247,11 +247,21 @@ export async function pricePre2022Bill(bill: BillLike): Promise<Pre2022BillPrici
       entryList.map(e => String(e.subClassification?.code || e.classification?.code || '').trim()).filter(Boolean),
     )];
     if (entryList.length > 0) {
+      // Row by row, because "classes: 7" alone could not say WHICH rows carry the
+      // cement and the steel or what they are classed as — and that is the exact
+      // information needed to fix them.
+      const rowLines = entryList.slice(0, 15).map(e => {
+        const code = String(e.subClassification?.code || e.classification?.code || '?');
+        const desc = String((e as any).description || '').replace(/\s+/g, ' ').slice(0, 48);
+        const amt = (Number(e.amount) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+        return `[${code}] ${desc || '(no description)'} — Rs ${amt}`;
+      });
       notes.push(
         'No cement or steel was separated from W. The dedicated fields on the bill are empty, and none of '
         + `its classification rows carries a dedicated steel (…B) or cement (…C) class — classes on this bill: `
         + `${codesSeen.length ? codesSeen.join(', ') : '(none recorded)'}. If the bill has cement or steel supply items, `
-        + 'reclassify those rows to the …B / …C class and download this statement again.'
+        + 'reclassify those rows to the …B / …C class and download this statement again. '
+        + `Rows as recorded: ${rowLines.join('; ')}${entryList.length > 15 ? `; … and ${entryList.length - 15} more` : ''}.`
       );
     } else {
       notes.push(
@@ -289,6 +299,7 @@ export async function pricePre2022BillById(billId: string): Promise<Pre2022BillP
         select: {
           amount: true,
           steelTypes: true,
+          description: true,
           subClassification: { select: { code: true } },
           classification: { select: { code: true } },
         },
