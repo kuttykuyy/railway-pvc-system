@@ -330,6 +330,24 @@ export async function POST(request: NextRequest) {
       zohoInvoiceNumber = zohoResult.invoiceNumber;
       zohoInvoiceId = zohoResult.invoiceId;
       logger.log(`[${requestId}] ✅ Zoho Books invoice created: ${zohoInvoiceNumber}`);
+      // Keep the number of record with the payment. Zoho is the invoice of record and
+      // the app's copy must carry its number; without this, issuing that copy later
+      // depends on Zoho being reachable at that moment. Stored in the existing notes
+      // JSON, so no column is added.
+      try {
+        await prisma.razorpayTransaction.update({
+          where: { id: transaction.id },
+          data: {
+            notes: {
+              ...((transaction.notes as any) || {}),
+              zohoInvoiceNumber: zohoResult.invoiceNumber,
+              zohoInvoiceId: zohoResult.invoiceId,
+            },
+          },
+        });
+      } catch (noteError: any) {
+        console.error(`[${requestId}] ⚠️ Could not record the Zoho invoice number:`, noteError?.message);
+      }
     } catch (zohoError: any) {
       console.error(`[${requestId}] ⚠️ Zoho Books invoice creation failed:`, zohoError.message);
       // Don't fail payment if Zoho fails

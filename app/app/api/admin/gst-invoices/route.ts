@@ -263,7 +263,31 @@ export async function POST(request: NextRequest) {
     }
 
     const { createGstInvoice } = await import('@/lib/gst-invoice');
+    // Zoho Books is the invoice of record; this row mirrors it. Without Zoho's number
+    // a backfill would start a second series for a supply Zoho has already invoiced.
+    // Recorded on the payment when Zoho issued it; asking Zoho again is the fallback.
+    let numberOfRecord = ((transaction as any)?.notes?.zohoInvoiceNumber as string) || undefined;
+    if (!numberOfRecord) {
+      try {
+        const { findZohoInvoiceByReference } = await import('@/lib/zoho-books');
+        const zoho = await findZohoInvoiceByReference(transaction.razorpayOrderId);
+        numberOfRecord = zoho?.invoiceNumber;
+      } catch (zohoError: any) {
+        logger.log('[Admin GST Invoices] Could not reach Zoho for the invoice number:', zohoError?.message);
+      }
+    }
+    if (!numberOfRecord) {
+      return NextResponse.json(
+        {
+          error: 'No Zoho invoice exists for this payment yet, and Zoho is the invoice of '
+            + 'record. Create it in Zoho Books first, then generate here.',
+        },
+        { status: 409 },
+      );
+    }
+
     const invoice = await createGstInvoice({
+      invoiceNumber: numberOfRecord,
       userId: customer.id,
       razorpayTransactionId: transaction.id,
       customerName: customer.name || customer.email || 'Customer',

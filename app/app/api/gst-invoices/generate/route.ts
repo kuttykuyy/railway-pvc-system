@@ -112,8 +112,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Zoho Books is the invoice of record. Take ITS number rather than minting one,
+    // or the same payment ends up invoiced twice under two unrelated series — the
+    // customer holding one number while the return is filed under the other.
+    // Recorded on the payment when Zoho issued it; asking Zoho again is the fallback.
+    let numberOfRecord = ((transaction as any)?.notes?.zohoInvoiceNumber as string) || undefined;
+    if (!numberOfRecord) {
+      try {
+        const { findZohoInvoiceByReference } = await import('@/lib/zoho-books');
+        const zoho = await findZohoInvoiceByReference(transaction.razorpayOrderId);
+        numberOfRecord = zoho?.invoiceNumber;
+      } catch (zohoError: any) {
+        logger.log('[GST Invoice] Could not reach Zoho for the invoice number:', zohoError?.message);
+      }
+    }
+    if (!numberOfRecord) {
+      // Better no document than a second series: the customer would be holding a
+      // number that appears in no return.
+      return NextResponse.json(
+        {
+          error: 'Your invoice is still being issued. Please try again in a few minutes — '
+            + 'if it keeps failing, contact support and it will be sent to you.',
+        },
+        { status: 503 },
+      );
+    }
+
     // Generate GST invoice
     const gstInvoice = await createGstInvoice({
+      invoiceNumber: numberOfRecord,
       userId: user.id,
       razorpayTransactionId: transaction.id,
       customerName: customerName.trim(),

@@ -123,6 +123,17 @@ export interface CreateGstInvoiceParams {
   customerAddress?: string;
   creditAmount: number;
   isInterstate?: boolean;
+  /**
+   * The number this invoice must carry. Zoho Books is the invoice of record, so its
+   * number is passed in and used verbatim — the app row is a mirror of that document,
+   * not a second one.
+   *
+   * The same supply used to be invoiced twice, under two unrelated series: Zoho's at
+   * payment, and the app's own when the customer filled the billing dialog. The
+   * customer held one number while the return was filed under the other, so their
+   * input credit could never reconcile.
+   */
+  invoiceNumber?: string;
   /** How the collected money relates to the tax. Defaults to the old behaviour. */
   basis?: GstBasis;
   /**
@@ -149,6 +160,7 @@ export const createGstInvoice = async (
     isInterstate = false,
     basis = 'exclusive',
     invoiceDate: suppliedDate,
+    invoiceNumber: ofRecord,
   } = params;
 
   const gstCalc = calculateGst(creditAmount, isInterstate, basis);
@@ -160,7 +172,10 @@ export const createGstInvoice = async (
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       const invoice = await prisma.$transaction(async (tx) => {
-        const invoiceNumber = await nextInvoiceNumber(tx, invoiceDate);
+        // Zoho's number when there is one — this row then mirrors that document
+        // rather than starting a rival series. The internal sequence remains only
+        // for records that never went to Zoho at all.
+        const invoiceNumber = ofRecord ?? await nextInvoiceNumber(tx, invoiceDate);
         return tx.gstInvoice.create({
           data: {
             userId,
