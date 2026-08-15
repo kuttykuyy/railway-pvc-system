@@ -36,7 +36,10 @@ const nextConfig = {
       // no console error in production, just "Failed to fetch" — which spent a long day
       // being misread as credentials, bucket names, checksums, and CORS in turn.
       "connect-src 'self' https://*.supabase.co https://*.storage.supabase.co https://*.razorpay.com https://*.google.com https://*.googlesyndication.com https://*.googleadservices.com https://*.googletagservices.com https://*.doubleclick.net https://*.google-analytics.com https://*.googletagmanager.com https://*.adtrafficquality.google https://pagead2.googlesyndication.com",
-      "frame-src https://*.razorpay.com https://*.google.com https://*.doubleclick.net https://*.googlesyndication.com https://*.googleadservices.com",
+      // adtrafficquality.google is AdSense's invalid-traffic check. It was already
+      // allowed to load and to call home (script-src, connect-src) but not to open its
+      // frame, so every page logged two CSP violations and the check never ran.
+      "frame-src https://*.razorpay.com https://*.google.com https://*.doubleclick.net https://*.googlesyndication.com https://*.googleadservices.com https://*.adtrafficquality.google",
       "object-src 'none'",
       "base-uri 'self'",
       "frame-ancestors 'none'",
