@@ -493,9 +493,10 @@ export async function recalculateBillPvc(billId: string) {
   await recalculateCumulativePvcForContract(bill.contractId);
   
   // Invalidate cached PDFs for this bill as the values have changed
-  // pdf-report:<build>:<billId>:… — the build id must be skipped or nothing matches,
-  // which is how a recalculated bill kept handing out its old PDF.
-  advancedCache.invalidateByPattern(new RegExp("^pdf-report:[^:]*:" + billId + ":"));
+  // By the tag the cached reports are stored under. The key-shaped pattern this used
+  // stopped matching when a build id was added to the key, which is how a recalculated
+  // bill kept handing out its old PDF.
+  advancedCache.invalidateByTag(`bill:${billId}`);
   
   // Return updated bill
   const updatedBill = await prisma.bill.findUnique({

@@ -121,18 +121,19 @@ export async function DELETE(
     await recalculateCumulativePvcForContract(bill.contractId);
 
     // Clear the deleted bill and every remaining bill PDF for this contract.
-    // The key carries the build id between the prefix and the bill id
-    // (pdf-report:<build>:<billId>:…), so a pattern anchored straight to the bill id
-    // matched nothing — deleting a bill left every other bill's cached report showing
-    // the old cumulative PVC, and the deleted bill's own PDF was still servable.
-    const pdfCachePattern = (billId: string) => new RegExp("^pdf-report:[^:]*:" + billId + ":");
-    advancedCache.invalidateByPattern(pdfCachePattern(id));
+    // By TAG, not by a pattern over the key: cached reports are stored tagged
+    // `bill:<id>`, while the key format has changed under these call sites before —
+    // a build id was added between the prefix and the bill id, and every pattern
+    // anchored to the old shape silently matched nothing, leaving deleted bills
+    // servable and survivors showing their pre-deletion cumulative PVC. A tag cannot
+    // drift out of step with the key.
+    advancedCache.invalidateByTag(`bill:${id}`);
     const remainingBills = await prisma.bill.findMany({
       where: { contractId: bill.contractId },
       select: { id: true },
     });
     for (const remainingBill of remainingBills) {
-      advancedCache.invalidateByPattern(pdfCachePattern(remainingBill.id));
+      advancedCache.invalidateByTag(`bill:${remainingBill.id}`);
     }
 
     return NextResponse.json({ message: 'Bill deleted successfully' });
@@ -686,10 +687,10 @@ export async function PUT(
     console.log(`   Total PVC: ₹${totalPvc.toFixed(2)}`);
     console.log(`✅ ===== NEW BILL API: UPDATE COMPLETE =====\n`);
     
-    // Invalidate cached PDFs for this bill. The build id sits between the prefix and
-    // the bill id in the key, so the old anchored pattern never matched and an edited
-    // bill kept serving its pre-edit report.
-    advancedCache.invalidateByPattern(new RegExp("^pdf-report:[^:]*:" + id + ":"));
+    // Invalidate cached PDFs for this bill, by the tag they are stored under — the
+    // key-shaped pattern this used never matched, so an edited bill kept handing out
+    // its pre-edit report.
+    advancedCache.invalidateByTag(`bill:${id}`);
 
     return NextResponse.json(updatedBill);
     
