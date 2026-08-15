@@ -199,7 +199,8 @@ export default function ClassificationsPage() {
                           className="text-emerald-600 hover:underline">Add one</button>
                       </div>
                     ) : (
-                      <table className="w-full text-sm">
+                      <div className="overflow-x-auto">
+                      <table className="w-full min-w-[560px] text-sm">
                         <thead className="bg-gray-50 border-b border-gray-100">
                           <tr>
                             <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500">Code</th>
@@ -255,6 +256,7 @@ export default function ClassificationsPage() {
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     )}
                   </div>
                 )}

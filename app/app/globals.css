@@ -79,6 +79,22 @@
     /* Larger base font size for better readability */
     font-size: 16px;
   }
+
+  /* iOS Safari zooms the whole page in whenever a focused field's text is smaller
+     than 16px — and it does not zoom back out afterwards. Every form in this app did
+     that on an iPhone: tap a field, the page jumps and magnifies, and the rest of the
+     form is then half off-screen. The shared Input is text-sm (14px) and is used in
+     over two hundred places, so the size is set once here rather than on each.
+     Phone widths only, so the desktop layout is untouched. !important because a
+     utility class on the element itself would otherwise win.
+     (A .mobile-input class was written for this long ago and never used anywhere.) */
+  @media (max-width: 640px) {
+    input:not([type='checkbox']):not([type='radio']):not([type='range']),
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
   
   /* Increase line height for better readability */
   body {

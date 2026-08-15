@@ -205,8 +205,11 @@ function BillsDialog({ contract }: { contract: Contract }) {
           </div>
         ) : (
           <>
-            <div className="overflow-hidden rounded-xl border border-slate-200">
-              <table className="w-full text-sm">
+            {/* overflow-x-auto, not overflow-hidden: seven columns of bill numbers and
+                amounts cannot fit a phone, and hidden CLIPPED them — the PVC and
+                cumulative columns simply vanished with no way to reach them. */}
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full min-w-[680px] text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
                     {['Bill no', 'Quarter', 'Bill amount', 'PVC', 'Cumulative', 'Measured', ''].map((h) => (
