@@ -413,9 +413,18 @@ export async function POST(request: NextRequest) {
       normalizedContractNo &&
       normalizedContractNo === normalizeAgreementNo(contract.loaNo)
     );
+    // The FIRST bill only — the name of this step. Once bills exist, PVC numbers have
+    // been issued as PVC/<agreementNo>/001…, and renaming the contract would leave the
+    // next one inconsistent with every one already submitted. It also protects a
+    // contract whose loaNo merely repeats its real agreement number: indistinguishable
+    // from a stand-in, and production holds two such contracts, one with nine bills.
+    const contractHasBills = isLoaStandIn
+      ? (await prisma.bill.count({ where: { contractId } })) > 0
+      : false;
     if (
       billAgreementNo &&
       isLoaStandIn &&
+      !contractHasBills &&
       normalizeAgreementNo(billAgreementNo) !== normalizedContractNo
     ) {
       try {

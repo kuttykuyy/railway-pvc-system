@@ -73,6 +73,20 @@ export async function fillAgreementNumberFromBill(
     return { applied: false, reason: 'The bill prints the same number the contract holds.' };
   }
 
+  // Only the FIRST bill may name the contract. Once bills exist, PVC numbers have been
+  // issued against the current identifier (PVC/<agreementNo>/001…), and renaming the
+  // contract now would leave the next one inconsistent with every one already
+  // submitted. This also protects a contract whose loaNo simply repeats its real
+  // agreement number — which looks identical to a stand-in, and two such contracts
+  // exist in production, one with nine bills against it.
+  const billsAlready = await prisma.bill.count({ where: { contractId } });
+  if (billsAlready > 0) {
+    return {
+      applied: false,
+      reason: 'This contract already has bills, so its agreement number is left as it stands.',
+    };
+  }
+
   // Stored normalized, exactly as the contract-create route stores one, so the two
   // paths can never disagree about what the same number looks like.
   const stored = normalizeAgreementNo(printed) || printed;
