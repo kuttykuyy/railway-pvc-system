@@ -1,9 +1,17 @@
 
 import { MetadataRoute } from 'next';
 
+/**
+ * The site is served from www.irpvc.in — the bare domain 307-redirects to it. The
+ * sitemap advertised the bare domain, so every URL in it redirected, which is what
+ * Search Console reports as "Page with redirect", and it left Google holding two
+ * addresses for one page with nothing to say which is canonical.
+ */
+export const SITE_ORIGIN = 'https://www.irpvc.in';
+
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://irpvc.in';
-  
+  const baseUrl = SITE_ORIGIN;
+
   // Public pages (accessible without login)
   const publicPages = [
     { route: '', priority: 1.0, changeFrequency: 'daily' as const },
@@ -16,8 +24,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { route: '/auth/signup', priority: 0.8, changeFrequency: 'monthly' as const },
   ];
 
-  // Protected pages (require login - lower priority for SEO)
-  const protectedPages = [
+  // Pages behind the login are deliberately NOT listed. A sitemap is a list of pages
+  // that can be indexed, and every one of these answers a crawler with a redirect to
+  // the sign-in page — which is the other half of what Search Console is reporting.
+  // Listing them cannot help ranking either: Google never sees their content.
+  const loginOnlyPagesNotListed = [
     { route: '/dashboard', priority: 0.7, changeFrequency: 'daily' as const },
     { route: '/contracts', priority: 0.7, changeFrequency: 'daily' as const },
     { route: '/bills', priority: 0.7, changeFrequency: 'daily' as const },
@@ -29,7 +40,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { route: '/help', priority: 0.7, changeFrequency: 'monthly' as const },
   ];
 
-  const allPages = [...publicPages, ...protectedPages];
+  void loginOnlyPagesNotListed; // kept as documentation of what is excluded, and why
+  const allPages = publicPages;
 
   const sitemap: MetadataRoute.Sitemap = allPages.map((page) => ({
     url: `${baseUrl}${page.route}`,

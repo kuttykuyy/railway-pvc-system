@@ -21,7 +21,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://irpvc.in'),
+  // www: the bare domain 307-redirects here, so canonical and Open Graph URLs built
+  // from this base must name the address that actually serves the page.
+  metadataBase: new URL('https://www.irpvc.in'),
+  // Every page declares itself canonical at its own path, which is what settles
+  // Search Console's "Duplicate without user-selected canonical": Google had two
+  // addresses for one page and nothing from us saying which to keep.
+  alternates: { canonical: './' },
   title: {
     default: 'IR-PVC - Indian Railway Price Variation Clause Calculator | irpvc.in',
     template: '%s | IR-PVC'
