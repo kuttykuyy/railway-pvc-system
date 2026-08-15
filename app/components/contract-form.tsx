@@ -236,28 +236,6 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
   /** Set once the agreement PDF fills the form, so the record remembers its origin. */
   const [filledFromPdf, setFilledFromPdf] = useState(false);
 
-  // Trim the PDF to its first pages IN THE BROWSER before uploading. Every field we
-  // need is on the opening pages, and the host rejects request bodies over ~4.5 MB
-  // (the 413 a full agreement hits), so we must shrink it client-side, not on the server.
-  const trimPdfForUpload = async (file: File): Promise<Blob> => {
-    try {
-      const { PDFDocument } = await import('pdf-lib');
-      const src = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
-      const total = src.getPageCount();
-      for (const keep of [12, 6, 3]) {
-        if (total <= keep && file.size <= 4 * 1024 * 1024) return file;
-        const out = await PDFDocument.create();
-        const pages = await out.copyPages(src, Array.from({ length: Math.min(keep, total) }, (_, i) => i));
-        pages.forEach((p) => out.addPage(p));
-        const bytes = await out.save();
-        if (bytes.byteLength <= 4 * 1024 * 1024) return new Blob([bytes], { type: 'application/pdf' });
-      }
-    } catch {
-      // fall through to original
-    }
-    return file;
-  };
-
   const handleAgreementUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (e.target) e.target.value = ''; // allow re-selecting the same file
@@ -269,10 +247,22 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     setExtractingAgreement(true);
     const toastId = toast.loading('Reading the agreement…');
     try {
-      const uploadBlob = await trimPdfForUpload(file);
+      // Trim to the opening pages in the BROWSER: the host refuses request bodies over
+      // ~4.5 MB, so a scanned agreement was rejected with a bare 413 before any of our
+      // code ran. Shared with the onboarding upload so both behave identically.
+      const { trimAgreementForUpload, tooLargeMessage } = await import('@/lib/pdf/trim-agreement-client');
+      const prepared = await trimAgreementForUpload(file);
+      if (prepared.stillTooLarge) {
+        toast.error(tooLargeMessage(prepared), { id: toastId, duration: 8000 });
+        return;
+      }
       const body = new FormData();
-      body.append('file', uploadBlob, file.name);
+      body.append('file', prepared.file, file.name);
       const res = await fetch('/api/contracts/extract-agreement', { method: 'POST', body });
+      if (res.status === 413) {
+        toast.error(tooLargeMessage(prepared), { id: toastId, duration: 8000 });
+        return;
+      }
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.data) {
         toast.error(json.error || 'Could not read the agreement.', { id: toastId });

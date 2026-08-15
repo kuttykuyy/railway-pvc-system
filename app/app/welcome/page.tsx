@@ -86,9 +86,22 @@ export default function WelcomePage() {
     }
     setAgreement({ step: 'reading' });
     try {
+      // Trim to the opening pages before sending. A scanned agreement is easily over
+      // the ~4.5 MB the platform accepts, and the upload was refused outright with a
+      // bare 413 before any of our code ran. These are the same pages the server keeps.
+      const { trimAgreementForUpload, tooLargeMessage } = await import('@/lib/pdf/trim-agreement-client');
+      const prepared = await trimAgreementForUpload(file);
+      if (prepared.stillTooLarge) {
+        setAgreement({ step: 'failed', message: tooLargeMessage(prepared) });
+        return;
+      }
       const body = new FormData();
-      body.append('file', file, file.name);
+      body.append('file', prepared.file, prepared.file.name);
       const extractRes = await fetch('/api/contracts/extract-agreement', { method: 'POST', body });
+      if (extractRes.status === 413) {
+        setAgreement({ step: 'failed', message: tooLargeMessage(prepared) });
+        return;
+      }
       const extracted = await extractRes.json().catch(() => ({}));
       if (!extractRes.ok || !extracted.data) {
         setAgreement({ step: 'failed', message: extracted.error || 'The agreement could not be read.' });
