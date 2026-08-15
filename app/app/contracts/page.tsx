@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 
 import { CreatedViaBadge } from '@/components/ui/created-via-badge';
+import { FirstBillFreeTag } from '@/components/billing/first-bill-free-tag';
 import { PostingDetailsNotice } from '@/components/posting-details-notice';
 import { PromoBanner } from '@/components/promo-banner';
 import { Button } from '@/components/ui/button';
@@ -198,6 +199,7 @@ function BillsDialog({ contract }: { contract: Contract }) {
             <Button asChild size="sm" className="mt-4">
               <Link href={`/bills/new?contractId=${contract.id}`}>
                 <Plus className="mr-1.5 h-4 w-4" /> Create first bill
+                <FirstBillFreeTag className="ml-1.5 bg-white/20 text-white" />
               </Link>
             </Button>
           </div>

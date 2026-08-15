@@ -14,6 +14,7 @@ import { ShareContractDialog } from '@/components/contracts/share-contract-dialo
 import { BillCard } from '@/components/bill-card';
 import { resolvePre2022Setup } from '@/lib/pre2022-contract';
 import { DeleteBillButton } from '@/components/bills/delete-bill-button';
+import { FirstBillFreeTag } from '@/components/billing/first-bill-free-tag';
 
 export const dynamic = 'force-dynamic';
 
@@ -282,10 +283,13 @@ export default async function ContractDetailPage({ params }: Props) {
             <h2 className="font-semibold text-gray-900">Bills</h2>
             <p className="text-xs text-gray-400 mt-0.5">Running account bills with PVC calculations</p>
           </div>
-          <Link href={`/bills/new?contractId=${contract.id}`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
-            <Plus className="h-4 w-4" /> Add Bill
-          </Link>
+          <span className="inline-flex items-center gap-2">
+            <FirstBillFreeTag />
+            <Link href={`/bills/new?contractId=${contract.id}`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+              <Plus className="h-4 w-4" /> Add Bill
+            </Link>
+          </span>
         </div>
 
         {contract.bills.length === 0 ? (
@@ -295,7 +299,7 @@ export default async function ContractDetailPage({ params }: Props) {
             <p className="text-sm mt-1 mx-auto max-w-none">Add your first running account bill to start PVC calculations.</p>
             <Link href={`/bills/new?contractId=${contract.id}`}
               className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
-              <Plus className="h-4 w-4" /> Add First Bill
+              <Plus className="h-4 w-4" /> Add First Bill <FirstBillFreeTag className="bg-white/20 text-white" />
             </Link>
           </div>
         ) : (
