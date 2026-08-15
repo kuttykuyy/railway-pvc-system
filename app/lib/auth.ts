@@ -22,6 +22,46 @@ export function getNextAuthSecret(): string {
   return secret;
 }
 
+/**
+ * The signed-in user's role, remembered briefly.
+ *
+ * The role is re-read from the database rather than trusted from the token, so that
+ * changing someone's role takes effect without waiting for them to sign in again.
+ * But the session callback runs on EVERY session read — every page load, every
+ * useSession() — and in production each serverless function is allowed a single
+ * database connection. Those reads therefore queue behind one another and can sit
+ * there until the 20-second pool timeout: that wait is what "login is stuck" looks
+ * like, and it lands on sign-in and sign-out alike because both read the session.
+ *
+ * Remembering the answer for a minute keeps the point of the lookup — a role change
+ * still lands within a minute, no sign-out needed — while removing nearly all of the
+ * queries. A failed lookup falls back to the token's role rather than none at all.
+ */
+const ROLE_CACHE_TTL_MS = 60_000;
+const ROLE_CACHE_MAX = 500;
+const roleCache = new Map<string, { role: string; readAt: number }>();
+
+async function roleForEmail(email: string, fallbackRole: string): Promise<string> {
+  const cached = roleCache.get(email);
+  if (cached && Date.now() - cached.readAt < ROLE_CACHE_TTL_MS) {
+    return cached.role;
+  }
+  try {
+    const dbUser = await prisma.user.findUnique({
+      where: { email },
+      select: { role: true },
+    });
+    const role = dbUser?.role || fallbackRole;
+    // Plain bound: this lives per function instance and is only ever a small map.
+    if (roleCache.size >= ROLE_CACHE_MAX) roleCache.clear();
+    roleCache.set(email, { role, readAt: Date.now() });
+    return role;
+  } catch (error) {
+    console.error('Session role lookup failed; keeping the role from the token:', error);
+    return fallbackRole;
+  }
+}
+
 async function ensureCustomerAccount(userId: string): Promise<void> {
   await prisma.customerAccount.upsert({
     where: { userId },
@@ -230,6 +270,9 @@ export const authOptions: NextAuthOptions = {
             token.role = dbUser.role || 'contractor';
             token.name = dbUser.name;
             token.hasPhone = !!(dbUser.phone && String(dbUser.phone).trim());
+            // A deliberate refresh should not then be overruled by a remembered
+            // role: drop the cached answer so this one is used immediately.
+            roleCache.set(token.email as string, { role: token.role as string, readAt: Date.now() });
           }
         }
         
@@ -245,22 +288,20 @@ export const authOptions: NextAuthOptions = {
         if (token && session.user) {
           // Add id and role to the session user object
           (session.user as any).id = token.id as string;
-
-          // Always pull latest role from DB so admin changes take effect immediately
-          if (token.email) {
-            const dbUser = await prisma.user.findUnique({
-              where: { email: token.email as string },
-              select: { role: true },
-            });
-            (session.user as any).role = dbUser?.role || token.role as string;
-          } else {
-            (session.user as any).role = token.role as string;
-          }
+          (session.user as any).role = token.email
+            ? await roleForEmail(token.email as string, token.role as string)
+            : (token.role as string);
         }
         return session;
       } catch (error) {
         console.error('Session callback error:', error);
-        // Return the session as-is, but it will be invalid without token data
+        // Keep the user signed in with the role their token already carries, rather
+        // than handing back a session with no role at all — which reads to every
+        // screen as "not an admin" and hides half the app over a database hiccup.
+        if (token && session.user) {
+          (session.user as any).id = token.id as string;
+          (session.user as any).role = token.role as string;
+        }
         return session;
       }
     },
