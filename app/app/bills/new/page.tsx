@@ -157,9 +157,18 @@ function NewBillPageContent() {
    * human: a failed read, an unmatched contract, a pending cement cost. Nothing is
    * duplicated, so this mode cannot drift from what the form itself would have done.
    */
-  const instantMode = searchParams?.get('instant') === '1';
+  const instantParam = searchParams?.get('instant') === '1';
+  /**
+   * A first-timer gets the instant path whichever button brought them here. Only the
+   * welcome page ever passed ?instant=1, while eleven other links — "Add Bill" on a
+   * contract, the + in the header — went to the full four-step form, so someone making
+   * their very first bill was handed the whole form instead of a report. Turned on by
+   * the unused free bill, which is true only until that first bill exists.
+   */
+  const [autoInstant, setAutoInstant] = useState(false);
+  const instantMode = instantParam || autoInstant;
   const [instantStage, setInstantStage] = useState<'upload' | 'reading' | 'saving' | null>(
-    instantMode ? 'upload' : null,
+    instantParam ? 'upload' : null,
   );
   const [instantExtractedAt, setInstantExtractedAt] = useState(0);
   const instantSubmittedRef = useRef(false);
@@ -311,8 +320,20 @@ function NewBillPageContent() {
   useEffect(() => {
     fetch('/api/user/profile')
       .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data) setHasFreeTrial(!!data.hasFreeTrial); })
+      .then((data) => {
+        if (!data) return;
+        setHasFreeTrial(!!data.hasFreeTrial);
+        // Nobody has touched the form yet and this is their first bill — take them
+        // down the upload-and-done path rather than opening four steps of form. The
+        // cover carries its own way out, so this leads nowhere they cannot leave.
+        if (data.hasFreeTrial && !instantParam) {
+          setAutoInstant(true);
+          setInstantStage((stage) => stage ?? 'upload');
+        }
+      })
       .catch(() => {});
+    // instantParam comes from the URL and never changes for a given page view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
