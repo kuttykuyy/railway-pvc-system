@@ -16,8 +16,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { tableSchema } from '@/lib/db-schema';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * The schema the app's tables live in, asked of the database (not assumed). Every
+ * check and every DDL statement below must name it: the pooled connection's search
+ * path is roulette (unqualified DDL failed 42P01 in production on 14 Aug 2026), and a
+ * stale "public"."User" leftover means an unqualified existence check can find a
+ * column in the WRONG schema and skip an ALTER the app actually needs.
+ */
+async function appSchema(): Promise<string> {
+  return tableSchema('contracts');
+}
 
 interface PendingColumn {
   table: string;
@@ -128,10 +140,12 @@ const PENDING: PendingColumn[] = [
  */
 type ExtraCheck = { kind: 'table' | 'index' | 'constraint'; name: string };
 
-const PENDING_EXTRAS: Array<{ label: string; sql: string; why: string; check: ExtraCheck }> = [
+// sql takes the resolved schema so every statement names where it acts — an
+// unqualified CREATE lands wherever the pooled search path points that instant.
+const PENDING_EXTRAS: Array<{ label: string; sql: (s: string) => string; why: string; check: ExtraCheck }> = [
   {
     label: 'parse_failures',
-    sql: `CREATE TABLE IF NOT EXISTS "parse_failures" (
+    sql: (s) => `CREATE TABLE IF NOT EXISTS "${s}"."parse_failures" (
         "id" BIGSERIAL PRIMARY KEY,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "userEmail" TEXT,
@@ -144,7 +158,7 @@ const PENDING_EXTRAS: Array<{ label: string; sql: string; why: string; check: Ex
   },
   {
     label: 'dsr_items',
-    sql: `CREATE TABLE IF NOT EXISTS "dsr_items" (
+    sql: (s) => `CREATE TABLE IF NOT EXISTS "${s}"."dsr_items" (
         "edition" TEXT NOT NULL,
         "code" TEXT NOT NULL,
         "subHead" TEXT NOT NULL,
@@ -160,23 +174,23 @@ const PENDING_EXTRAS: Array<{ label: string; sql: string; why: string; check: Ex
   },
   {
     label: 'dsr_items_code_idx',
-    sql: 'CREATE INDEX IF NOT EXISTS "dsr_items_code_idx" ON "dsr_items" ("code")',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "dsr_items_code_idx" ON "${s}"."dsr_items" ("code")`,
     why: 'Bills cite a code without saying which edition it came from.',
     check: { kind: 'index', name: 'dsr_items_code_idx' },
   },
   {
     label: 'bills_status_approvedAt_idx',
-    sql: 'CREATE INDEX IF NOT EXISTS "bills_status_approvedAt_idx" ON "bills" ("status", "approvedAt")',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "bills_status_approvedAt_idx" ON "${s}"."bills" ("status", "approvedAt")`,
     why: 'The accounts inbox lists proposals awaiting vetting, oldest first.',
     check: { kind: 'index', name: 'bills_status_approvedAt_idx' },
   },
   {
     label: 'bills_passedBy_fkey',
-    sql: `DO $$
+    sql: (s) => `DO $$
       BEGIN
-        ALTER TABLE "bills"
+        ALTER TABLE "${s}"."bills"
           ADD CONSTRAINT "bills_passedBy_fkey"
-          FOREIGN KEY ("passedBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+          FOREIGN KEY ("passedBy") REFERENCES "${s}"."User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
       EXCEPTION
         WHEN duplicate_object THEN NULL;
         WHEN undefined_column THEN NULL;
@@ -200,19 +214,23 @@ async function requireAdmin() {
 }
 
 async function columnExists(table: string, column: string): Promise<boolean> {
+  // Scoped to the app's schema: a stale "public"."User" also answers to the bare
+  // table name, and a column found THERE must not mark this one as applied.
+  const s = await appSchema();
   const rows = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
     `SELECT column_name FROM information_schema.columns
-     WHERE table_name = '${table}' AND column_name = '${column}'`,
+     WHERE table_schema = '${s}' AND table_name = '${table}' AND column_name = '${column}'`,
   );
   return rows.length > 0;
 }
 
 async function extraExists(check: ExtraCheck): Promise<boolean> {
+  const s = await appSchema();
   const sql = check.kind === 'table'
-    ? `SELECT 1 FROM information_schema.tables WHERE table_name = '${check.name}'`
+    ? `SELECT 1 FROM information_schema.tables WHERE table_schema = '${s}' AND table_name = '${check.name}'`
     : check.kind === 'index'
-      ? `SELECT 1 FROM pg_indexes WHERE indexname = '${check.name}'`
-      : `SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = '${check.name}'`;
+      ? `SELECT 1 FROM pg_indexes WHERE schemaname = '${s}' AND indexname = '${check.name}'`
+      : `SELECT 1 FROM information_schema.table_constraints WHERE table_schema = '${s}' AND constraint_name = '${check.name}'`;
   const rows = await prisma.$queryRawUnsafe<Array<unknown>>(sql);
   return rows.length > 0;
 }
@@ -271,10 +289,11 @@ export async function POST() {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   try {
     const applied: string[] = [];
+    const s = await appSchema();
     for (const c of PENDING) {
       if (await columnExists(c.table, c.column)) continue;
       await prisma.$executeRawUnsafe(
-        `ALTER TABLE "${c.table}" ADD COLUMN IF NOT EXISTS "${c.column}" ${c.ddlType}`,
+        `ALTER TABLE "${s}"."${c.table}" ADD COLUMN IF NOT EXISTS "${c.column}" ${c.ddlType}`,
       );
       applied.push(`${c.table}.${c.column}`);
     }
@@ -284,7 +303,7 @@ export async function POST() {
     const extrasFailed: string[] = [];
     for (const extra of PENDING_EXTRAS) {
       try {
-        await prisma.$executeRawUnsafe(extra.sql);
+        await prisma.$executeRawUnsafe(extra.sql(s));
       } catch (err: any) {
         console.error(`pending schema extra "${extra.label}" failed:`, err?.message || err);
         extrasFailed.push(extra.label);
