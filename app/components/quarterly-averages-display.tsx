@@ -10,17 +10,29 @@ import { Loader2 } from 'lucide-react';
 interface QuarterlyAverageData {
   quarter: string;
   quarterMonths: string[];
+  clause: 'pre-2022' | 'gcc-2022';
+  billNos: string[];
+  billAmount: number;
+  classificationCodes: string[];
+  mixedClassifications: boolean;
+  totalPvc: number | null;
   components: {
     indexName: string;
     baseValue: number;
     averageValue: number | null;
-    componentPercentage: number;
+    componentPercentage: number | null;
+    storedPvc: number | null;
     monthlyValues: {
       month: string;
       value: number;
     }[];
   }[];
 }
+
+const money = (value: number | null | undefined) =>
+  value === null || value === undefined
+    ? '—'
+    : value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 interface QuarterlyAveragesDisplayProps {
   contractId: string;
@@ -132,9 +144,18 @@ export function QuarterlyAveragesDisplay({ contractId }: QuarterlyAveragesDispla
             </CardTitle>
             <p className="text-sm text-gray-600">
               Months Considered: {quarterData.quarterMonths.join(', ')}
+              {quarterData.clause === 'pre-2022' && ' · priced under the pre-2022 clause'}
             </p>
           </CardHeader>
           <CardContent>
+            {quarterData.mixedClassifications && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-blue-800 text-sm">
+                This quarter&apos;s bills use more than one classification
+                ({quarterData.classificationCodes.join(', ')}), so no single component
+                percentage applies. The PVC shown is the amount calculated for these
+                bills, which accounts for each classification separately.
+              </div>
+            )}
             {isIncomplete && (
               <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-sm">
                 <strong>Note:</strong> This quarter is incomplete. A minimum of 3 months of data is required to calculate quarterly averages. 
@@ -161,7 +182,9 @@ export function QuarterlyAveragesDisplay({ contractId }: QuarterlyAveragesDispla
                       </tr>
                       <tr className="bg-gray-100">
                         <th rowSpan={3} className="border border-gray-300 p-2 text-center font-semibold text-sm">
-                          ( 1st R Bill considered in this quarter)
+                          {quarterData.billNos.length
+                            ? `Bill${quarterData.billNos.length > 1 ? 's' : ''}: ${quarterData.billNos.join(', ')}`
+                            : 'Bills in this quarter'}
                         </th>
                         <th colSpan={5 + sortedMonths.length} className="border border-gray-300 p-2 text-center font-semibold">
                           Final Indices considered for this Quarter
@@ -195,6 +218,7 @@ export function QuarterlyAveragesDisplay({ contractId }: QuarterlyAveragesDispla
                       <tr className="bg-gray-50">
                         <th colSpan={5 + sortedMonths.length} className="border border-gray-300 p-2 text-left font-semibold text-xs">
                           FORMULA FOR PVC CALCULATION = {'{ ( Amount x (Avg. Index - Base Index) x Component ) / Base Index }'}
+                          {' '}— the PVC column shows the amount calculated for this quarter&apos;s bills.
                         </th>
                       </tr>
                     </thead>
@@ -204,52 +228,47 @@ export function QuarterlyAveragesDisplay({ contractId }: QuarterlyAveragesDispla
                         const valueMap = new Map(
                           component.monthlyValues.map(mv => [mv.month, mv.value])
                         );
-                        
+                        const label = component.indexName === 'Labour' ? 'Labour'
+                          : component.indexName === 'RBI Plant Machinery' ? 'Plant Machinery & Spares'
+                          : component.indexName.startsWith('MPNG Fuel') || component.indexName === 'WPI Fuel & Power'
+                            ? `Fuel & Lubricants (${component.indexName})`
+                          : component.indexName === 'RBI Other Materials' ? 'Other Materials'
+                          : component.indexName;
+
                         return (
                           <tr key={component.indexName} className="hover:bg-gray-50">
                             <td className="border border-gray-300 p-2 text-sm font-medium">
-                              {component.indexName === 'Labour' && 'Labour'}
-                              {component.indexName === 'RBI Plant Machinery' && 'Plant Machinery & Spares'}
-                              {component.indexName === 'MPNG Fuel' && 'Fuel & Lubricants'}
-                              {component.indexName === 'RBI Other Materials' && 'Other Materials'}
+                              {label}
                             </td>
                             <td className="border border-gray-300 p-2 text-center text-sm">
-                              1,49,38,881.76 x {`{(`}
+                              {money(quarterData.billAmount)}
                             </td>
                             <td className="border border-gray-300 p-2 text-center text-sm">
-                              {component.averageValue ? component.averageValue.toFixed(1) : 'N/A'} -
+                              {component.averageValue ? component.averageValue.toFixed(2) : 'N/A'}
                             </td>
                             <td className="border border-gray-300 p-2 text-center text-sm">
-                              {component.baseValue.toFixed(1)} {`/`} {component.baseValue.toFixed(1)} ) x
+                              {component.baseValue.toFixed(2)}
                             </td>
                             <td className="border border-gray-300 p-2 text-center text-sm">
-                              {component.componentPercentage}% =
+                              {component.componentPercentage === null ? '—' : `${component.componentPercentage}%`}
                             </td>
                             {sortedMonths.map(month => (
                               <td key={month} className="border border-gray-300 p-1 text-center text-xs">
-                                {valueMap.get(month)?.toFixed(1) || 'N/A'}
+                                {valueMap.get(month)?.toFixed(2) || 'N/A'}
                               </td>
                             ))}
                             <td className="border border-gray-300 p-2 text-center text-sm font-semibold">
-                              {/* Calculate PVC amount */}
-                              {component.averageValue && component.baseValue ? 
-                                (1493881.76 * (component.averageValue - component.baseValue) / component.baseValue * component.componentPercentage / 100).toFixed(2) : 
-                                'N/A'
-                              }
+                              {money(component.storedPvc)}
                             </td>
                           </tr>
                         );
                       })}
                       <tr className="bg-emerald-50 font-bold">
                         <td colSpan={4 + sortedMonths.length} className="border border-gray-300 p-2 text-right text-sm">
-                          Total for Q7 =
+                          Total for {quarterData.quarter} =
                         </td>
                         <td className="border border-gray-300 p-2 text-center text-sm">
-                          {/* Calculate total PVC amount */}
-                          {quarterData.components
-                            .filter(c => c.averageValue)
-                            .reduce((sum, c) => sum + (1493881.76 * (c.averageValue! - c.baseValue) / c.baseValue * c.componentPercentage / 100), 0)
-                            .toFixed(2)}
+                          {money(quarterData.totalPvc)}
                         </td>
                       </tr>
                     </tbody>

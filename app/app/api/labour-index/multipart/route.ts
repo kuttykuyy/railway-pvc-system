@@ -53,6 +53,23 @@ export async function POST(request: NextRequest) {
       if (componentTypes.length === 0 || !year || !months?.length) {
         return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
       }
+      // Sweep abandoned staging rows before starting another. A closed tab or a crash
+      // leaves one behind holding up to ~27 MB of base64 with nothing to finish it,
+      // and nothing else ever removes them — on a database-only storage policy that
+      // is dead weight that only grows. A day is far longer than any real upload.
+      try {
+        const aDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const swept = await prisma.labourIndexDocument.deleteMany({
+          where: {
+            cloudStoragePath: { startsWith: 'staging://' },
+            createdAt: { lt: aDayAgo },
+          },
+        });
+        if (swept.count > 0) console.info(`[multipart] removed ${swept.count} abandoned staged upload(s)`);
+      } catch (e) {
+        console.error('Could not sweep abandoned staged uploads:', e);
+      }
+
       const folderName = componentTypes.length === 1 ? componentTypes[0].toLowerCase() : "multi";
       const monthsStr = [...months].sort((a: number, b: number) => a - b).join("-");
       const generatedFileName = `${folderName}-${year}-${monthsStr}-${Date.now()}.pdf`;

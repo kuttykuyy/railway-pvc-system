@@ -9,6 +9,11 @@ import { advancedCache } from '@/lib/advanced-cache';
 
 export const dynamic = "force-dynamic";
 
+// Cached report keys are pdf-report:<build>:<billId>:… — a pattern anchored straight
+// to the bill id matched nothing, so deleted bills kept serving PDFs and the survivors
+// kept showing their pre-deletion cumulative PVC.
+const pdfCachePattern = (billId: string) => new RegExp("^pdf-report:[^:]*:" + billId + ":");
+
 // POST /api/bills/bulk-delete - Delete multiple bills
 export async function POST(request: NextRequest) {
   try {
@@ -88,11 +93,11 @@ export async function POST(request: NextRequest) {
         select: { id: true },
       });
       for (const remainingBill of remainingBills) {
-        advancedCache.invalidateByPattern(new RegExp("^pdf-report:" + remainingBill.id + ":.*"));
+        advancedCache.invalidateByPattern(pdfCachePattern(remainingBill.id));
       }
     }
     for (const deletedBill of billsToDelete) {
-      advancedCache.invalidateByPattern(new RegExp("^pdf-report:" + deletedBill.id + ":.*"));
+      advancedCache.invalidateByPattern(pdfCachePattern(deletedBill.id));
     }
 
     return NextResponse.json({

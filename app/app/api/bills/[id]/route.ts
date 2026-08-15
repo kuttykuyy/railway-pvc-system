@@ -71,13 +71,45 @@ export async function DELETE(
       );
     }
 
-    // Delete InvoiceItem linked to this bill's BillTransaction (no cascade defined)
+    // Delete InvoiceItem linked to this bill's BillTransaction (no cascade defined).
+    // The line was removed without touching its invoice's totals, so every invoice
+    // that had ever billed a since-deleted bill overstated what was owed. The parent
+    // invoice is corrected by the same amount, in one transaction with the removal.
     const billTx = await prisma.billTransaction.findUnique({
       where: { billId: id },
       select: { id: true },
     });
     if (billTx) {
-      await prisma.invoiceItem.deleteMany({ where: { billTransactionId: billTx.id } });
+      const items = await prisma.invoiceItem.findMany({
+        where: { billTransactionId: billTx.id },
+        select: { id: true, invoiceId: true, totalPrice: true },
+      });
+      if (items.length > 0) {
+        const removedByInvoice = new Map<string, number>();
+        for (const item of items) {
+          removedByInvoice.set(item.invoiceId, (removedByInvoice.get(item.invoiceId) || 0) + (item.totalPrice || 0));
+        }
+        await prisma.$transaction(async (tx) => {
+          await tx.invoiceItem.deleteMany({ where: { billTransactionId: billTx.id } });
+          for (const [invoiceId, removed] of removedByInvoice) {
+            const invoice = await tx.invoice.findUnique({
+              where: { id: invoiceId },
+              select: { subtotal: true, taxAmount: true, paidAmount: true },
+            });
+            if (!invoice) continue;
+            const subtotal = Math.max(0, (invoice.subtotal || 0) - removed);
+            const totalAmount = subtotal + (invoice.taxAmount || 0);
+            await tx.invoice.update({
+              where: { id: invoiceId },
+              data: {
+                subtotal,
+                totalAmount,
+                outstandingAmount: Math.max(0, totalAmount - (invoice.paidAmount || 0)),
+              },
+            });
+          }
+        });
+      }
     }
 
     // Delete the bill — cascades handle PvcCalculation, BillTransaction, BillClassificationEntry, etc.
@@ -89,13 +121,18 @@ export async function DELETE(
     await recalculateCumulativePvcForContract(bill.contractId);
 
     // Clear the deleted bill and every remaining bill PDF for this contract.
-    advancedCache.invalidateByPattern(new RegExp("^pdf-report:" + id + ":.*"));
+    // The key carries the build id between the prefix and the bill id
+    // (pdf-report:<build>:<billId>:…), so a pattern anchored straight to the bill id
+    // matched nothing — deleting a bill left every other bill's cached report showing
+    // the old cumulative PVC, and the deleted bill's own PDF was still servable.
+    const pdfCachePattern = (billId: string) => new RegExp("^pdf-report:[^:]*:" + billId + ":");
+    advancedCache.invalidateByPattern(pdfCachePattern(id));
     const remainingBills = await prisma.bill.findMany({
       where: { contractId: bill.contractId },
       select: { id: true },
     });
     for (const remainingBill of remainingBills) {
-      advancedCache.invalidateByPattern(new RegExp("^pdf-report:" + remainingBill.id + ":.*"));
+      advancedCache.invalidateByPattern(pdfCachePattern(remainingBill.id));
     }
 
     return NextResponse.json({ message: 'Bill deleted successfully' });
@@ -649,8 +686,10 @@ export async function PUT(
     console.log(`   Total PVC: ₹${totalPvc.toFixed(2)}`);
     console.log(`✅ ===== NEW BILL API: UPDATE COMPLETE =====\n`);
     
-    // Invalidate cached PDFs for this bill
-    advancedCache.invalidateByPattern(new RegExp("^pdf-report:" + id + ":.*"));
+    // Invalidate cached PDFs for this bill. The build id sits between the prefix and
+    // the bill id in the key, so the old anchored pattern never matched and an edited
+    // bill kept serving its pre-edit report.
+    advancedCache.invalidateByPattern(new RegExp("^pdf-report:[^:]*:" + id + ":"));
 
     return NextResponse.json(updatedBill);
     
