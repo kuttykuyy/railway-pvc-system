@@ -289,6 +289,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // the sheets afterwards can hand the money back rather than leave a paid report
         // without the pages it was paid for.
         let jpcChargedNow: { userId: string; cost: number } | null = null;
+        // Set when a report goes out WITHOUT pages it was supposed to carry. Such a
+        // PDF must never be cached: the charge for it was refunded and the stamp
+        // cleared, so the next download charges again — and would be handed this same
+        // incomplete file from the cache.
+        let deliveryIncomplete = false;
         {
           const jpcBill = await prisma.bill.findUnique({
             where: { id: billId },
@@ -406,6 +411,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // missing the very pages that money bought — permanently, since the stamp
         // reads as "already purchased".
         const refundJpcChargeIfMade = async (why: string) => {
+          deliveryIncomplete = true;
           if (!jpcChargedNow) return;
           const { userId, cost } = jpcChargedNow;
           jpcChargedNow = null;
@@ -449,16 +455,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // fix not having worked.
         const build = process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || 'dev';
         const cacheKey = `pdf-report:${build}:${billId}:${templateId || 'default'}:${pdfFormat}:${includeIndexDocs ? 'docs' : 'nodocs'}:${isAdminRequester ? 'admin' : 'standard'}:${trialWatermarkWaived ? 'wmoff' : 'wmon'}:${searchParams.get('abstract') === '1' ? 'abs' : 'noabs'}:${jpcDocsAllowed ? 'jpc' : 'nojpc'}`;
-        const cachedPdf = advancedCache.get(cacheKey);
+        const cachedPdf = advancedCache.get<any>(cacheKey);
         if (cachedPdf) {
           console.log(`[PDF Cache] Hit for: ${cacheKey}`);
-          return new Response(Buffer.from(cachedPdf as any), {
-            headers: {
-              'Content-Type': 'application/pdf',
-              'Content-Disposition': `attachment; filename="PVC_Report_${billId}.pdf"`,
-              'X-RateLimit-Remaining': rateLimit.remaining.toString(),
-            }
-          });
+          // Entries keep the finished bytes together with the filename the fresh
+          // response would have used. A hit used to rename the download to
+          // PVC_Report_<internal id>.pdf — not the name the user asked for, and with
+          // IR statements now cached too, not even the right report's name. (A plain
+          // Buffer is a pre-envelope entry; the build id is in the key, so this only
+          // ever matters within one deployment.)
+          const envelope = !Buffer.isBuffer(cachedPdf) && cachedPdf?.body ? cachedPdf : null;
+          const body = envelope ? envelope.body : cachedPdf;
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="${envelope?.filename || `PVC_Report_${billId}.pdf`}"`,
+            'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+          };
+          if (envelope?.abstractStatus) headers['X-Abstract-Status'] = envelope.abstractStatus;
+          return new Response(Buffer.from(body), { headers });
         }
         
     // Get session to fetch user branding settings and template (optional for public access)
@@ -1037,11 +1051,27 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         irFinalBytes = await applyTrialWatermark(irFinalBytes);
       }
 
+      // Cache the finished statement, as the detailed format already did — this branch
+      // never cached, so the IR report (the one the free and instant downloads use)
+      // was rebuilt from scratch on every single download. Every input that changes
+      // the bytes is already part of the key: format, template, docs, admin, watermark,
+      // abstract and JPC state. Skipped when the report is knowingly incomplete, so a
+      // missing annex can never be served to a later download that pays for it.
+      const irFilename = `IR_PVC_Statement_${bill.billNo.replace(/[^a-zA-Z0-9]/g, '_')}_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf`;
+      if (!deliveryIncomplete && !abstractStatus.startsWith('unavailable')) {
+        advancedCache.set(
+          cacheKey,
+          { body: Buffer.from(irFinalBytes), filename: irFilename, abstractStatus },
+          600000,
+          ['bills', `bill:${billId}`],
+        );
+      }
+
       return new Response(Buffer.from(irFinalBytes), {
         headers: {
           'Content-Type': 'application/pdf',
           'X-Abstract-Status': abstractStatus,
-          'Content-Disposition': `attachment; filename="IR_PVC_Statement_${bill.billNo.replace(/[^a-zA-Z0-9]/g, '_')}_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf"`,
+          'Content-Disposition': `attachment; filename="${irFilename}"`,
         },
       });
     }
@@ -4702,14 +4732,26 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const pdfBuffer = Buffer.from(finalPdfBytes);
+    const detailedFilename = `PVC_Report_${bill.billNo.replace(/[^a-zA-Z0-9]/g, '_')}_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf`;
 
-    // Save to advanced cache for 10 minutes, tagged with 'bills' and specific bill ID
-    advancedCache.set(cacheKey, pdfBuffer, 600000, ['bills', `bill:${billId}`]);
+    // Save to advanced cache for 10 minutes, tagged with 'bills' and specific bill ID.
+    // The filename travels with the bytes so a cache hit downloads under the same name
+    // a fresh build would have given it. Never cached when the report went out missing
+    // pages it was meant to carry: that charge was refunded and the stamp cleared, so
+    // the next download pays again — and must not be handed this incomplete file.
+    if (!deliveryIncomplete) {
+      advancedCache.set(
+        cacheKey,
+        { body: pdfBuffer, filename: detailedFilename },
+        600000,
+        ['bills', `bill:${billId}`],
+      );
+    }
 
     return new Response(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="PVC_Report_${bill.billNo.replace(/[^a-zA-Z0-9]/g, '_')}_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf"`,
+        'Content-Disposition': `attachment; filename="${detailedFilename}"`,
         'X-RateLimit-Remaining': rateLimit.remaining.toString(),
       }
     });
