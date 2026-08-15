@@ -317,10 +317,20 @@ export async function POST(request: NextRequest) {
     // The single-bill route deletes on failed charge; this route now does the same.
     let creditInfo = { cost: 0, remainingBalance: 0 };
     try {
+    // Which clause counts the quarters — the old one starts them the month after the
+    // OPENING month, not the month after the base month. Resolved once for the batch.
+    const { resolvePre2022Setup } = await import('@/lib/pre2022-contract');
+    const { pre2022QuarterFromDate } = await import('@/lib/pvc-pre2022');
+    const clauseSetup = resolvePre2022Setup(contract as any);
+    const quarterFor = (date: Date) =>
+      clauseSetup.isPre2022 && contract.dateOfOpening
+        ? pre2022QuarterFromDate(date, new Date(contract.dateOfOpening))
+        : getQuarterFromDate(date, baseMonth);
+
     for (let i = 0; i < bills.length; i++) {
       const billInput = bills[i];
       const measurementDate = new Date(billInput.dateOfMeasurement);
-      const quarter = getQuarterFromDate(measurementDate, baseMonth);
+      const quarter = quarterFor(measurementDate);
 
       // Validate declared amount above, then preserve it for the bill total.
       const classificationTotal = billInput.classificationEntries.reduce(

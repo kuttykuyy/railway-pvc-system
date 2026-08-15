@@ -384,6 +384,10 @@ export async function POST(request: NextRequest) {
         contractorName: true,
         contractorPhone: true,
         workDescription: true,
+        // Needed to label the quarter under the right clause (see STEP 6).
+        dateOfOpening: true,
+        pvcClauseVersion: true,
+        pre2022WorkType: true,
       }
     });
     
@@ -552,8 +556,21 @@ export async function POST(request: NextRequest) {
       logger.log(`✅ 17B Extension: Using original completion date (${quarterDateForCalculation.toDateString()}) for quarter calculation`);
     }
     
-    const quarter = getQuarterFromDate(quarterDateForCalculation, contract.baseMonth);
-    logger.log(`📊 Calculated Quarter: ${quarter}`);
+    // The two clauses count quarters from different months: GCC-2022 from the month
+    // after the base month, the older clause from the month after the OPENING month.
+    // Every bill was labelled by the 2022 rule, so on an old-clause contract the stored
+    // label could sit one quarter away from the one its statement is actually priced
+    // in — the same bill reading Q2 on the contract page and Q1 on its statement.
+    const { resolvePre2022Setup } = await import('@/lib/pre2022-contract');
+    const clauseSetup = resolvePre2022Setup(contract as any);
+    let quarter: string;
+    if (clauseSetup.isPre2022 && contract.dateOfOpening) {
+      const { pre2022QuarterFromDate } = await import('@/lib/pvc-pre2022');
+      quarter = pre2022QuarterFromDate(quarterDateForCalculation, new Date(contract.dateOfOpening));
+    } else {
+      quarter = getQuarterFromDate(quarterDateForCalculation, contract.baseMonth);
+    }
+    logger.log(`📊 Calculated Quarter: ${quarter} (${clauseSetup.isPre2022 ? 'pre-2022 clause' : 'GCC-2022'})`);
     
     // ===== STEP 7: Generate PVC Number =====
     // To prevent duplicate pvcNumbers when intermediate bills are deleted,

@@ -285,17 +285,52 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // never blocked: when the charge cannot be made (not the owner, or balance too
         // low), the report goes out with every annex EXCEPT the JPC pages.
         let jpcDocsAllowed = true;
+        // Set when THIS request actually spent the Rs 500, so that a failure to attach
+        // the sheets afterwards can hand the money back rather than leave a paid report
+        // without the pages it was paid for.
+        let jpcChargedNow: { userId: string; cost: number } | null = null;
         {
           const jpcBill = await prisma.bill.findUnique({
             where: { id: billId },
             select: {
-              steelAmount: true, steelTypes: true,
               billNo: true,
+              pvcCalculation: true,
+              classificationEntries: {
+                select: { steelTypes: true, subClassification: { select: { code: true } } },
+              },
               contract: { select: { userId: true, user: { select: { role: true, isFreeAccount: true, customProcessingFee: true } } } },
             },
           });
-          const hasSteel = !!jpcBill && ((jpcBill.steelAmount || 0) > 0 || (Array.isArray(jpcBill.steelTypes) && (jpcBill.steelTypes as any[]).length > 0));
-          if (jpcBill && hasSteel && includeIndexDocs && !isAdminRequester) {
+          // Exactly the test the embedding below uses. The old gate read the legacy
+          // steelAmount column — which no current create path writes — and the
+          // bill-level steelTypes, so a bill carrying dedicated steel amounts with no
+          // steelTypes was charged nothing and still received the whole JPC annex.
+          const hasSteel = billHasSteel(jpcBill);
+
+          // Only the owner's own download may spend the owner's credits; needed here
+          // (before charging) to read that owner's report template.
+          const requesterEmail = session?.user?.email || null;
+          const requesterUser = requesterEmail
+            ? await prisma.user.findUnique({ where: { email: requesterEmail }, select: { id: true } })
+            : null;
+
+          // The template decides whether the report carries index documents at all, and
+          // it is only loaded further down this route — so it is asked here, before any
+          // money moves. Charging Rs 500 for an annex the template then hides is
+          // charging for nothing, and the once-per-bill stamp made it permanent.
+          let templateShowsDocs = true;
+          if (requesterUser) {
+            const tpl = templateId
+              ? await prisma.reportTemplate.findFirst({
+                  where: { id: templateId, userId: requesterUser.id }, select: { sections: true },
+                })
+              : await prisma.reportTemplate.findFirst({
+                  where: { userId: requesterUser.id, isDefault: true }, select: { sections: true },
+                });
+            if (tpl && (tpl.sections as any)?.componentIndexDocuments === false) templateShowsDocs = false;
+          }
+
+          if (jpcBill && hasSteel && includeIndexDocs && templateShowsDocs && !isAdminRequester) {
             const { getBillingSettings } = await import('@/lib/admin-settings');
             const billing = await getBillingSettings();
             const owner = jpcBill.contract?.user;
@@ -317,11 +352,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
               // Cannot record a purchase yet, so nothing is charged and the sheets ride
               // free until the admin applies the column — free beats charging blind.
             } else if (!ownerIsFree && !jpcPaidAt && billing.jpcDocumentCost > 0) {
-              // Only the owner's own download can spend the owner's credits.
-              const requesterEmail = session?.user?.email || null;
-              const requesterUser = requesterEmail
-                ? await prisma.user.findUnique({ where: { email: requesterEmail }, select: { id: true } })
-                : null;
               const isOwnerDownloading = !!requesterUser && requesterUser.id === jpcBill.contract?.userId;
               if (!isOwnerDownloading) {
                 jpcDocsAllowed = false;
@@ -357,6 +387,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                     );
                     if (Number(stamped) === 0) throw new Error('ALREADY_PURCHASED');
                   });
+                  jpcChargedNow = { userId: requesterUser!.id, cost };
                 } catch (err: any) {
                   if (String(err?.message).includes('ALREADY_PURCHASED')) {
                     // The other download paid; this one rides along.
@@ -368,6 +399,46 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             }
           }
         }
+
+        // Hands back a charge made by THIS request when the sheets could not be
+        // attached after all, and clears the stamp so a later download tries again.
+        // Without it, an embedding failure left the user Rs 500 poorer with a report
+        // missing the very pages that money bought — permanently, since the stamp
+        // reads as "already purchased".
+        const refundJpcChargeIfMade = async (why: string) => {
+          if (!jpcChargedNow) return;
+          const { userId, cost } = jpcChargedNow;
+          jpcChargedNow = null;
+          try {
+            await prisma.$transaction(async (tx) => {
+              const account = await tx.customerAccount.findUnique({
+                where: { userId }, select: { creditBalance: true },
+              });
+              const balanceBefore = account?.creditBalance ?? 0;
+              await tx.customerAccount.update({
+                where: { userId }, data: { creditBalance: { increment: cost } },
+              });
+              await tx.creditTransaction.create({
+                data: {
+                  userId,
+                  amount: cost,
+                  type: 'refund',
+                  reason: `JPC index documents refunded — ${why}`,
+                  balanceBefore,
+                  balanceAfter: balanceBefore + cost,
+                  billId,
+                },
+              });
+              const billsTableTx = await (await import('@/lib/db-schema')).schemaQualified('bills');
+              await tx.$executeRawUnsafe(
+                `UPDATE ${billsTableTx} SET "jpcDocsPurchasedAt" = NULL WHERE id = $1`, billId,
+              );
+            });
+            console.warn(`[jpc] refunded Rs ${cost} for bill ${billId}: ${why}`);
+          } catch (e) {
+            console.error('Could not refund JPC charge:', e);
+          }
+        };
 
         // Check cache before running heavy PDF compiling.
         // The watermark-waiver state is part of the key so a post-top-up download
@@ -937,6 +1008,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           });
         } catch (err) {
           console.error('IR PDF: error embedding index documents:', err);
+          await refundJpcChargeIfMade('the sheets could not be attached to the report');
         }
       }
 
@@ -4617,6 +4689,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         console.error('✗ Error embedding component index documents:', error);
         // Continue with PDF that has fuel average (if added) if embedding fails
         finalPdfBytes = pdfWithFuelAverage;
+        await refundJpcChargeIfMade('the sheets could not be attached to the report');
       }
     } else {
       console.log('Component index documents disabled in template settings');
