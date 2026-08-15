@@ -154,6 +154,26 @@ export const RAILWAY_ZONE_STEEL_CITY_MAP: Record<string, RailwayZoneInfo> = {
   },
 };
 
+export type FuelPriceType = 'four_city_avg' | 'zone_city';
+
+/**
+ * The fuel basis a new bill starts on.
+ *
+ * The basis is settled by the agreement — some railways direct the PPAC four-city
+ * average, others the zone city's own diesel rate — so this is only where an
+ * unanswered bill begins; a bill carries forward whatever the previous one used, and
+ * the choice stays on the form.
+ *
+ * Zone city, by decision: it is what these contracts overwhelmingly specify, and every
+ * one of the eighteen zones maps to Chennai, Delhi, Kolkata or Mumbai — all four of
+ * which carry the full index history (May 2017 onward), so no zone can land on a
+ * missing series.
+ *
+ * Defined once because the literal had been repeated across a dozen routes and forms,
+ * which is how two of them come to disagree.
+ */
+export const DEFAULT_FUEL_PRICE_TYPE: FuelPriceType = 'zone_city';
+
 // Get all railway zones as options for dropdowns
 export function getRailwayZoneOptions(): { value: string; label: string; steelCity: string }[] {
   return Object.values(RAILWAY_ZONE_STEEL_CITY_MAP).map(zone => ({

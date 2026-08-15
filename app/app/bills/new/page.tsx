@@ -36,7 +36,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { STEEL_COMPONENT_OPTIONS } from '@/lib/types';
-import { getRailwayZoneOptions, getSteelCityForZone } from '@/lib/zone-steel-city-mapping';
+import { getRailwayZoneOptions, getSteelCityForZone, DEFAULT_FUEL_PRICE_TYPE } from '@/lib/zone-steel-city-mapping';
 import { parseAgreementNumber } from '@/lib/railway-division-helper';
 import { ProvisionalDateNotification } from '@/components/ui/provisional-date-notification';
 import { BackButton } from '@/components/ui/back-button';
@@ -227,7 +227,9 @@ function NewBillPageContent() {
     dateOfMeasurement: '',
     workClassification: '', // Will be set to default classification when loaded
     zone: '', // Railway zone (PVC Number will be auto-generated)
-    fuelPriceType: 'four_city_avg', // 'four_city_avg' or 'zone_city'
+    // `as string` keeps the field's type wide: the Select hands back a plain string,
+    // and the constant alone would narrow the whole form state to the union.
+    fuelPriceType: DEFAULT_FUEL_PRICE_TYPE as string, // 'four_city_avg' or 'zone_city'
     isFinalPvc: false, // Is this final PVC
     dateOfCompletion: '', // Date of completion (only for final PVC)
   });

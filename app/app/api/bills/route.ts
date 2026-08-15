@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getQuarterFromDate, calculateClassificationBasedPvcWithComponents, calculateDedicatedCementPvc, calculateDedicatedSteelPvc, calculateWeightedComponents } from '@/lib/pvc-calculations';
 import { getQuarterlyAverages } from '@/lib/db-utils';
-import { getSteelIndexNamesForZone, getSteelCityForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
+import { getSteelIndexNamesForZone, getSteelCityForZone, getFuelIndexNameForBill, DEFAULT_FUEL_PRICE_TYPE } from '@/lib/zone-steel-city-mapping';
 import { validateApiAccess, validateBillProcessing } from '@/lib/payment-validation';
 import { calculateExtensionCompliantPvc } from '@/lib/extension-compliance';
 import { getBillingSettings } from '@/lib/admin-settings';
@@ -242,7 +242,7 @@ export async function POST(request: NextRequest) {
       calculationMethod = 'auto',
       workClassification,
       zone,
-      fuelPriceType = 'four_city_avg',
+      fuelPriceType = DEFAULT_FUEL_PRICE_TYPE,
       isFinalPvc = false,
       nonScheduleItems = [],
       classificationEntries = [],
@@ -647,7 +647,7 @@ export async function POST(request: NextRequest) {
         dateOfMeasurement: measurementDate,
         quarter,
         zone: effectiveZone || null,
-        fuelPriceType: fuelPriceType || 'four_city_avg',
+        fuelPriceType: fuelPriceType || DEFAULT_FUEL_PRICE_TYPE,
         pvcNumber: autoPvcNumber,
         isFinalPvc: isFinalPvc || false,
         dateOfCompletion: dateOfCompletion ? new Date(dateOfCompletion) : null,

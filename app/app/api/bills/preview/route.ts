@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getQuarterFromDate } from '@/lib/pvc-calculations';
 import { getQuarterlyAverages } from '@/lib/db-utils';
-import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
+import { getSteelIndexNamesForZone, getFuelIndexNameForBill, DEFAULT_FUEL_PRICE_TYPE } from '@/lib/zone-steel-city-mapping';
 import { extractSteelTypesFromEntries } from '@/lib/steel-type-handler';
 import { isBillUsingProvisionalIndices, relevantIndexNamesForBill } from '@/lib/index-status';
 import { getBillingSettings } from '@/lib/admin-settings';
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       billAmount,
       dateOfMeasurement,
       zone,
-      fuelPriceType = 'four_city_avg',
+      fuelPriceType = DEFAULT_FUEL_PRICE_TYPE,
       calculationMethod = 'auto',
       classificationEntries = [],
       isAiUploaded,

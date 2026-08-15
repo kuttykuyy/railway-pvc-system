@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getQuarterFromDate, calculateDedicatedCementPvc, calculateDedicatedSteelPvc } from '@/lib/pvc-calculations';
 import { getQuarterlyAverages } from '@/lib/db-utils';
-import { getSteelIndexNamesForZone, getSteelCityForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
+import { getSteelIndexNamesForZone, getSteelCityForZone, getFuelIndexNameForBill, DEFAULT_FUEL_PRICE_TYPE } from '@/lib/zone-steel-city-mapping';
 import { validateApiAccess } from '@/lib/payment-validation';
 import { checkUserContractAccess } from '@/lib/permissions';
 import { areFinalIndicesAvailableForBill } from '@/lib/index-status';
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       contractId,
       billNo,
       zone,
-      fuelPriceType = 'four_city_avg',
+      fuelPriceType = DEFAULT_FUEL_PRICE_TYPE,
       dateOfMeasurement,
       cementAmount = 0,
       steelTmtBarsAmount = 0,
