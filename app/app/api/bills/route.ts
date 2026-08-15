@@ -882,7 +882,11 @@ export async function POST(request: NextRequest) {
       finalBillAmount,
       totalPvc,
       contract.agreementNo,
-      isAiUploaded
+      isAiUploaded,
+      // When this route decided the bill is paid (including the "agreement already
+      // claimed a trial → charge instead" downgrade), the charge must happen — not a
+      // second, doomed attempt at the trial.
+      !isBillFree
     );
     
     if (!paymentResult.success) {

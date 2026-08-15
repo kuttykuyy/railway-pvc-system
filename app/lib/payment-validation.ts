@@ -145,7 +145,15 @@ export async function processPaymentForBill(
   paidAmount?: number,
   totalPvc?: number,
   agreementNo?: string,
-  isAiUploaded?: boolean
+  isAiUploaded?: boolean,
+  /**
+   * The caller already decided this bill is PAID — do not re-derive a free trial.
+   * Without this, the "agreement already claimed a trial → charge instead" downgrade
+   * could never succeed: this function saw trial remaining, tried the claim, hit the
+   * existing trialClaimedAgreement row, and failed the whole payment — so a user with
+   * plenty of credits was refused forever on any already-claimed agreement.
+   */
+  forceCharge?: boolean
 ): Promise<{ success: boolean; message: string; transaction?: any }> {
   try {
 
@@ -189,8 +197,10 @@ export async function processPaymentForBill(
     } else if (user.customProcessingFee === 0) {
       isFree = true;
       freeReason = 'custom_zero_fee';
-    } else {
-      // Free trial: 1 free bill per new user (freeTrialLimit from admin settings)
+    } else if (!forceCharge) {
+      // Free trial: 1 free bill per new user (freeTrialLimit from admin settings).
+      // Skipped entirely when the caller downgraded this bill to paid — the trial
+      // claim would only re-fail on the agreement that caused the downgrade.
       if (user.freeTrialUsed < freeTrialLimit) {
         isFree = true;
         freeReason = 'trial';

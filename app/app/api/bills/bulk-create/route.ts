@@ -128,41 +128,8 @@ export async function POST(request: NextRequest) {
     const manualBillCost = billingSettings.billCost || 199;
     const feeForBill = (bill: BillInput) => isFreeAccount ? 0 : (bill.isAiUploaded ? aiBillCost : manualBillCost);
 
-    // The free trial covers the first bills of a batch, exactly as it covers a single
-    // bill — this route never consulted it, so a trial user's very first bills cost
-    // full price here and nothing on the ordinary form. The claim is a conditional
-    // update, so two concurrent batches cannot both spend the same trial; if the claim
-    // loses the race, every bill in the batch is simply charged.
-    let trialCount = 0;
-    if (!isFreeAccount) {
-      const trialLimit = billingSettings.freeTrialBills || 1;
-      const wanted = Math.min(bills.length, Math.max(0, trialLimit - (userWithAccount.freeTrialUsed || 0)));
-      if (wanted > 0) {
-        const claimed = await prisma.user.updateMany({
-          where: { id: user.id, freeTrialUsed: { lte: trialLimit - wanted } },
-          data: { freeTrialUsed: { increment: wanted } },
-        });
-        if (claimed.count === 1) trialCount = wanted;
-      }
-    }
-    const totalProcessingFee = bills.reduce((sum, bill, index) => sum + (index < trialCount ? 0 : feeForBill(bill)), 0);
-    
-    if (!isFreeAccount) {
-      const currentBalance = userWithAccount.customerAccount?.creditBalance || 0;
-      
-      if (currentBalance < totalProcessingFee) {
-        return NextResponse.json(
-          { 
-            error: 'Insufficient credit balance',
-            details: `You need ${totalProcessingFee} credits to create ${bills.length} bills, but your balance is ${currentBalance} credits.`,
-            required: totalProcessingFee,
-            available: currentBalance,
-            shortfall: totalProcessingFee - currentBalance
-          },
-          { status: 402 } // Payment Required
-        );
-      }
-    }
+    // (The free-trial claim happens AFTER validation, below — claiming here burned the
+    // trial on any batch that was then rejected with nothing created.)
 
     // STEP 1: Validate all bills upfront before creating any
     const validationErrors: string[] = [];
@@ -244,6 +211,77 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // STEP 1B: Claim the free trial — after validation, so a rejected batch costs
+    // nothing, and with the same agreement-number dedup the single-bill path enforces
+    // (this route never consulted trialClaimedAgreement, so one agreement could farm a
+    // fresh trial from any number of accounts through a batch of one).
+    const { normalizeAgreementNo } = await import('@/lib/railway-division-helper');
+    const normalizedAgreementNo = normalizeAgreementNo(contract.agreementNo || '');
+    let trialCount = 0;
+    let trialAgreementClaimed = false;
+    if (!isFreeAccount) {
+      const trialLimit = billingSettings.freeTrialBills || 1;
+      const wanted = Math.min(bills.length, Math.max(0, trialLimit - (userWithAccount.freeTrialUsed || 0)));
+      if (wanted > 0) {
+        try {
+          await prisma.$transaction(async (tx) => {
+            const claimed = await tx.user.updateMany({
+              where: { id: user.id, freeTrialUsed: { lte: trialLimit - wanted } },
+              data: { freeTrialUsed: { increment: wanted } },
+            });
+            if (claimed.count === 0) throw new Error('TRIAL_EXHAUSTED');
+            if (normalizedAgreementNo) {
+              // Hard create: P2002 means this agreement already claimed a trial
+              // (any account) — the whole transaction rolls back and the batch pays.
+              await tx.trialClaimedAgreement.create({
+                data: { normalizedAgreementNo, claimedByUserId: user.id },
+              });
+            }
+          });
+          trialCount = wanted;
+          trialAgreementClaimed = Boolean(normalizedAgreementNo);
+        } catch {
+          trialCount = 0; // exhausted, raced, or agreement already claimed — charge instead
+        }
+      }
+    }
+
+    // Undo the claim when the batch dies after it was made — without this, a failed
+    // batch consumed the trial (and pinned the agreement) while delivering nothing.
+    const releaseTrialClaim = async () => {
+      if (trialCount <= 0) return;
+      await prisma.user.updateMany({
+        where: { id: user.id },
+        data: { freeTrialUsed: { decrement: trialCount } },
+      }).catch((e) => console.error('Could not return trial claim:', e));
+      if (trialAgreementClaimed && normalizedAgreementNo) {
+        await prisma.trialClaimedAgreement.deleteMany({
+          where: { normalizedAgreementNo, claimedByUserId: user.id },
+        }).catch((e) => console.error('Could not release trial agreement claim:', e));
+      }
+      trialCount = 0;
+      trialAgreementClaimed = false;
+    };
+
+    const totalProcessingFee = bills.reduce((sum, bill, index) => sum + (index < trialCount ? 0 : feeForBill(bill)), 0);
+
+    if (!isFreeAccount) {
+      const currentBalance = userWithAccount.customerAccount?.creditBalance || 0;
+      if (currentBalance < totalProcessingFee) {
+        await releaseTrialClaim();
+        return NextResponse.json(
+          {
+            error: 'Insufficient credit balance',
+            details: `You need ${totalProcessingFee} credits to create ${bills.length} bills, but your balance is ${currentBalance} credits.`,
+            required: totalProcessingFee,
+            available: currentBalance,
+            shortfall: totalProcessingFee - currentBalance
+          },
+          { status: 402 } // Payment Required
+        );
+      }
+    }
+
     // STEP 2: Generate unique batch ID and name for this bulk creation
     const batchId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const billNumbers = bills.map(b => b.billNo).join(', ');
@@ -272,6 +310,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Everything from here to the charge is one unit: if any bill mid-loop throws, or
+    // the charge itself fails (the in-transaction balance re-check can refuse what the
+    // advisory pre-check let through), the bills created so far must not survive — a
+    // bill with no billTransaction row reads as fully paid to every watermark check.
+    // The single-bill route deletes on failed charge; this route now does the same.
+    let creditInfo = { cost: 0, remainingBalance: 0 };
+    try {
     for (let i = 0; i < bills.length; i++) {
       const billInput = bills[i];
       const measurementDate = new Date(billInput.dateOfMeasurement);
@@ -559,8 +604,6 @@ export async function POST(request: NextRequest) {
     await recalculateCumulativePvcForContract(contractId);
 
     // Deduct processing fee and create transaction records
-    let creditInfo = { cost: 0, remainingBalance: 0 };
-    
     if (isFreeAccount) {
       // Free account - no charge
       creditInfo = { cost: 0, remainingBalance: -1 }; // -1 indicates free account
@@ -641,6 +684,16 @@ export async function POST(request: NextRequest) {
         cost: totalProcessingFee,
         remainingBalance
       };
+    }
+    } catch (batchError) {
+      if (createdBills.length > 0) {
+        await prisma.bill.deleteMany({
+          where: { id: { in: createdBills.map((b) => b.id) } },
+        }).catch((e) => console.error('Could not remove bills of failed batch:', e));
+        await recalculateCumulativePvcForContract(contractId).catch(() => {});
+      }
+      await releaseTrialClaim();
+      throw batchError;
     }
 
     return NextResponse.json({

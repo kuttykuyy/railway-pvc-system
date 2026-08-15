@@ -224,9 +224,15 @@ export async function POST(request: NextRequest) {
         const base = currentUntil && new Date(currentUntil) > new Date() ? new Date(currentUntil) : new Date();
         const newUntil = new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000);
         const userTableTx = await (await import('@/lib/db-schema')).schemaQualified('User');
-        await tx.$executeRawUnsafe(
-          `UPDATE ${userTableTx} SET "jpcViewUntil" = $1 WHERE id = $2`, newUntil, buyer.id,
+        // Conditional on the expiry still being what was read before the transaction:
+        // two concurrent unlocks (a double-click) both read the same starting point, and
+        // an unconditional write would let BOTH charge Rs 249 for one 30-day extension.
+        // The loser matches nothing, throws, and its charge rolls back with it.
+        const updated = await tx.$executeRawUnsafe(
+          `UPDATE ${userTableTx} SET "jpcViewUntil" = $1 WHERE id = $2 AND "jpcViewUntil" IS NOT DISTINCT FROM $3`,
+          newUntil, buyer.id, currentUntil,
         );
+        if (updated === 0) throw new Error('CONCURRENT_UNLOCK');
       });
     } catch (err: any) {
       if (String(err?.message).includes('INSUFFICIENT_BALANCE')) {
@@ -234,6 +240,10 @@ export async function POST(request: NextRequest) {
           { error: `You need Rs ${cost} in credits to unlock viewing. Top up and try again.` },
           { status: 402 },
         );
+      }
+      if (String(err?.message).includes('CONCURRENT_UNLOCK')) {
+        // The other click's purchase landed; this one was rolled back, nothing charged.
+        return NextResponse.json({ ok: true, note: 'Already unlocked just now — not charged twice.' });
       }
       throw err;
     }
