@@ -48,33 +48,37 @@ export async function GET(request: NextRequest) {
       select: { userId: true },
     });
 
-    // Monthly breakdown
-    const monthlyData = (await prisma.$queryRaw`
-      SELECT 
+    // Monthly breakdown — raw SQL names its schema (search path is pooled roulette)
+    const { schemaQualified } = await import('@/lib/db-schema');
+    const pvcChecksT = await schemaQualified('pvc_checks');
+    const monthlyData = (await prisma.$queryRawUnsafe(
+      `SELECT
         DATE_TRUNC('month', "createdAt") as month,
         COUNT(*) as total_checks,
         COUNT(DISTINCT "userId") as unique_users,
         SUM("amount") as total_revenue
-      FROM "pvc_checks"
-      WHERE "createdAt" >= ${startDate}
+      FROM ${pvcChecksT}
+      WHERE "createdAt" >= $1
       GROUP BY DATE_TRUNC('month', "createdAt")
-      ORDER BY month DESC
-    `) as any[];
+      ORDER BY month DESC`,
+      startDate,
+    )) as any[];
 
     // Weekly breakdown (last 12 weeks)
     const weeklyStartDate = new Date();
     weeklyStartDate.setDate(weeklyStartDate.getDate() - 84); // 12 weeks
-    const weeklyData = (await prisma.$queryRaw`
-      SELECT 
+    const weeklyData = (await prisma.$queryRawUnsafe(
+      `SELECT
         DATE_TRUNC('week', "createdAt") as week,
         COUNT(*) as total_checks,
         COUNT(DISTINCT "userId") as unique_users,
         SUM("amount") as total_revenue
-      FROM "pvc_checks"
-      WHERE "createdAt" >= ${weeklyStartDate}
+      FROM ${pvcChecksT}
+      WHERE "createdAt" >= $1
       GROUP BY DATE_TRUNC('week', "createdAt")
-      ORDER BY week DESC
-    `) as any[];
+      ORDER BY week DESC`,
+      weeklyStartDate,
+    )) as any[];
 
     // Top contracts by usage
     const topContracts = await prisma.pvcCheck.groupBy({

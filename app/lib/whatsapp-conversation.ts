@@ -127,9 +127,22 @@ export async function linkConversationToUser(conversationId: string) {
     throw new Error('Conversation not found');
   }
 
-  // Find user by phone number
+  // Find user by phone number, in every format profiles actually store it —
+  // '919876543210', '+919876543210', and the bare 10 digits. The exact-only match
+  // meant a user whose profile keeps '+91…' linked fine on Telegram but was told
+  // "not registered" here forever.
+  const cleaned = String(conversation.phoneNumber || '').replace(/[^\d]/g, '');
+  const last10 = cleaned.length > 10 ? cleaned.slice(-10) : cleaned;
+  const candidates = Array.from(new Set([
+    conversation.phoneNumber,
+    cleaned,
+    `+${cleaned}`,
+    last10,
+    `+91${last10}`,
+    `91${last10}`,
+  ].filter(Boolean)));
   const user = await prisma.user.findFirst({
-    where: { phone: conversation.phoneNumber },
+    where: { phone: { in: candidates } },
   });
 
   if (user) {

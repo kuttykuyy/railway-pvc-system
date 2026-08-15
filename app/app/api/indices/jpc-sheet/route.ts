@@ -100,7 +100,9 @@ export async function GET(request: NextRequest) {
     const doc = await prisma.labourIndexDocument.findFirst({
       where: { id: streamId, componentType: { in: JPC_TYPES } },
     });
-    if (!doc || !doc.remarks?.startsWith("base64:")) {
+    // staging:// = an unfinished chunked upload; its remarks already begin 'base64:'
+    // from the very first part, so without this check partial bytes streamed as a PDF.
+    if (!doc || !doc.remarks?.startsWith("base64:") || doc.cloudStoragePath.startsWith("staging://")) {
       return new NextResponse("Not found", { status: 404 });
     }
     const bytes = Buffer.from(doc.remarks.substring(7).split("|")[0], "base64");
@@ -122,7 +124,7 @@ export async function GET(request: NextRequest) {
   }
 
   const docs = await prisma.labourIndexDocument.findMany({
-    where: { componentType: { in: JPC_TYPES }, year },
+    where: { componentType: { in: JPC_TYPES }, year, cloudStoragePath: { not: { startsWith: 'staging://' } } },
     orderBy: { createdAt: "desc" },
     select: { id: true, fileName: true, componentType: true, months: true, cloudStoragePath: true },
   });
@@ -260,6 +262,15 @@ export async function POST(request: NextRequest) {
     select: { cloudStoragePath: true },
   });
   if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // A staging row is an upload that never finished — its bytes are a truncated
+  // prefix, not a document. Serving them rendered as a corrupt PDF for a paying user.
+  if (doc.cloudStoragePath.startsWith("staging://")) {
+    return NextResponse.json(
+      { error: "This upload never finished. Delete the entry and upload the sheet again." },
+      { status: 409 },
+    );
+  }
 
   if (doc.cloudStoragePath.startsWith("db://")) {
     return NextResponse.json({ url: `/api/indices/jpc-sheet?stream=${id}` });

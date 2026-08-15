@@ -30,6 +30,10 @@ export async function GET(request: NextRequest) {
     if (year) {
       where.year = parseInt(year);
     }
+    // Half-uploaded chunked files park under staging:// until 'complete' seals them.
+    // Without this filter an abandoned upload showed up as a real document — and its
+    // partial bytes could be streamed to a paying viewer as a "PDF".
+    where.cloudStoragePath = { not: { startsWith: 'staging://' } };
 
     // remarks is deliberately NOT selected: for database-stored documents it holds the
     // whole PDF as base64 — a 16 MB sheet is 21 MB of text, times four registrations —

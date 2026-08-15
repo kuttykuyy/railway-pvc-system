@@ -44,16 +44,27 @@ async function requireAdmin() {
   return { ok: true as const };
 }
 
+// The schema the app's tables live in — dsr_items must be created and written THERE,
+// where the Prisma model reads it. Unqualified, the existence check matched a stale
+// copy in any schema and the writes went wherever the pooled search path pointed, so
+// imported rates could be invisible to the rate-book lookup.
+async function appSchema(): Promise<string> {
+  const { tableSchema } = await import('@/lib/db-schema');
+  return tableSchema('contracts');
+}
+
 async function tableExists(): Promise<boolean> {
+  const s = await appSchema();
   const rows = await prisma.$queryRawUnsafe<Array<{ table_name: string }>>(
-    `SELECT table_name FROM information_schema.tables WHERE table_name = 'dsr_items'`,
+    `SELECT table_name FROM information_schema.tables WHERE table_schema = '${s}' AND table_name = 'dsr_items'`,
   );
   return rows.length > 0;
 }
 
 async function countByEdition(): Promise<Array<{ edition: string; count: number }>> {
+  const s = await appSchema();
   const rows = await prisma.$queryRawUnsafe<Array<{ edition: string; count: bigint }>>(
-    `SELECT "edition", COUNT(*) AS count FROM "dsr_items" GROUP BY "edition" ORDER BY "edition"`,
+    `SELECT "edition", COUNT(*) AS count FROM "${s}"."dsr_items" GROUP BY "edition" ORDER BY "edition"`,
   );
   return rows.map(row => ({ edition: row.edition, count: Number(row.count) }));
 }
@@ -80,9 +91,10 @@ export async function POST() {
   // deploy landing between the two left this endpoint waiting on a button that had
   // nothing to say. The statement is additive and safe to run twice, and this route is
   // already admin-only, so the importer owns the table it writes to.
+  const s = await appSchema();
   if (!await tableExists()) {
     try {
-      await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "dsr_items" (
+      await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "${s}"."dsr_items" (
         "edition" TEXT NOT NULL,
         "code" TEXT NOT NULL,
         "subHead" TEXT NOT NULL,
@@ -93,7 +105,7 @@ export async function POST() {
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT "dsr_items_pkey" PRIMARY KEY ("edition", "code")
       )`);
-      await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "dsr_items_code_idx" ON "dsr_items" ("code")');
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "dsr_items_code_idx" ON "${s}"."dsr_items" ("code")`);
     } catch (error: any) {
       console.error('could not create dsr_items:', error);
       return NextResponse.json(
@@ -118,7 +130,7 @@ export async function POST() {
         }).join(', ');
         const params = batch.flatMap(item => [book.edition, item.c, item.s, item.n, item.d, item.u, item.r]);
         await prisma.$executeRawUnsafe(
-          `INSERT INTO "dsr_items" ("edition","code","subHead","subHeadName","description","unit","rate")
+          `INSERT INTO "${s}"."dsr_items" ("edition","code","subHead","subHeadName","description","unit","rate")
            VALUES ${values}
            ON CONFLICT ("edition","code") DO UPDATE SET
              "subHead" = EXCLUDED."subHead",

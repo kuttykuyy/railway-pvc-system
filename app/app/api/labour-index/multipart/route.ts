@@ -93,6 +93,21 @@ export async function POST(request: NextRequest) {
       if (!staged || !staged.remarks || staged.remarks.length <= 'base64:'.length) {
         return NextResponse.json({ error: 'No parts arrived for this upload.' }, { status: 400 });
       }
+      // Actually verify — the doc comment always promised this and the code never did
+      // it: every part except the last is exactly PART_ENCODED_CHARS, so the sealed
+      // length must sit in the (expectedParts-1)..expectedParts window and decode
+      // cleanly (multiple of 4). A duplicated or missing part fails here, at seal
+      // time, instead of surfacing as a corrupt PDF for a paying viewer.
+      const payloadLen = staged.remarks.length - 'base64:'.length;
+      const parts = Number(expectedParts);
+      const minLen = (parts - 1) * PART_ENCODED_CHARS;
+      const maxLen = parts * PART_ENCODED_CHARS;
+      if (payloadLen % 4 !== 0 || payloadLen <= minLen || payloadLen > maxLen) {
+        return NextResponse.json(
+          { error: `Upload is incomplete or corrupted (${payloadLen} chars for ${parts} parts). Abort and upload again.` },
+          { status: 409 },
+        );
+      }
       // Sealed but still staged: the register step copies the bytes onto the real rows.
       return NextResponse.json({ ok: true, key });
     }
@@ -121,7 +136,16 @@ export async function POST(request: NextRequest) {
  * One raw part of a staged upload. The client PUTs each slice here; it is base64
  * encoded and appended to the staging row. Parts are 3 MB and divisible by 3, so the
  * appended encodings concatenate into one valid base64 stream — no reassembly step.
+ *
+ * The append is conditional on the row holding exactly the parts BEFORE this one, so
+ * it is idempotent: a client retry after a response was lost in transit (the server
+ * had committed, the browser saw a network error) matches nothing, is recognised as
+ * already-applied, and answers ok instead of appending the same 3 MB twice.
  */
+// Mirrors PART_BYTES (3 MB) in app/indices/component-documents/page.tsx: base64 of a
+// full part is 3145728 / 3 * 4 characters. Change the two together.
+const PART_ENCODED_CHARS = (3 * 1024 * 1024 / 3) * 4;
+
 export async function PUT(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -134,20 +158,42 @@ export async function PUT(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const uploadId = searchParams.get('uploadId');
   const key = searchParams.get('key');
+  const part = parseInt(searchParams.get('part') || '', 10);
   if (!uploadId || !key || !key.startsWith('component-indices/')) {
     return NextResponse.json({ error: 'uploadId and key are required' }, { status: 400 });
+  }
+  if (!Number.isFinite(part) || part < 1) {
+    return NextResponse.json({ error: 'part number is required' }, { status: 400 });
   }
   const bytes = Buffer.from(await request.arrayBuffer());
   if (bytes.length === 0) return NextResponse.json({ error: 'Empty part' }, { status: 400 });
   const encoded = bytes.toString('base64');
   const { schemaQualified } = await import('@/lib/db-schema');
   const docsTable = await schemaQualified('labour_index_documents');
+  // Part N may append only onto exactly parts 1..N-1 (each full part encodes to a
+  // fixed length — the client uploads sequentially, so only the last part is short).
+  const expectedLen = 'base64:'.length + (part - 1) * PART_ENCODED_CHARS;
   const updated = await prisma.$executeRawUnsafe(
-    `UPDATE ${docsTable} SET remarks = remarks || $1 WHERE id = $2 AND "cloudStoragePath" = $3`,
-    encoded, uploadId, 'staging://' + key,
+    `UPDATE ${docsTable} SET remarks = remarks || $1 WHERE id = $2 AND "cloudStoragePath" = $3 AND length(remarks) = $4`,
+    encoded, uploadId, 'staging://' + key, expectedLen,
   );
   if (Number(updated) === 0) {
-    return NextResponse.json({ error: 'Upload session not found' }, { status: 404 });
+    const row = await prisma.$queryRawUnsafe<Array<{ len: number }>>(
+      `SELECT length(remarks) AS len FROM ${docsTable} WHERE id = $1 AND "cloudStoragePath" = $2`,
+      uploadId, 'staging://' + key,
+    );
+    if (!row.length) {
+      return NextResponse.json({ error: 'Upload session not found' }, { status: 404 });
+    }
+    // The retry case: this exact part already landed (the earlier response was lost
+    // on the wire). Appending again is what used to corrupt the sealed PDF.
+    if (Number(row[0].len) === expectedLen + encoded.length) {
+      return NextResponse.json({ ok: true, alreadyApplied: true });
+    }
+    return NextResponse.json(
+      { error: `Part ${part} arrived out of order. Abort and upload again.` },
+      { status: 409 },
+    );
   }
   return NextResponse.json({ ok: true });
 }

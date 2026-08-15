@@ -152,11 +152,21 @@ export async function getOrCreateTelegramConversation(chatId: string) {
   }
 
   if (conversation && conversation.lastMessageAt < twentyFourHoursAgo) {
+    // The idle reset clears the FLOW, not the facts. Wiping everything erased
+    // linkedAt — so the next message's grandfather branch re-stamped the link as
+    // fresh and the 90-day expiry could never fire — and destroyed pending paid
+    // reports whose Razorpay links were still payable: the user paid days later and
+    // /paid found nothing waiting. Those survive the reset; only the step state goes.
+    const staleData = (conversation.conversationData as TelegramConversationData) || {};
+    const kept: Record<string, unknown> = {};
+    for (const key of ['linkedAt', 'docPendingReports', 'docPendingReport', 'docBundlePayments', 'dailyUsage'] as const) {
+      if ((staleData as any)[key] !== undefined) kept[key] = (staleData as any)[key];
+    }
     conversation = await prisma.telegramConversation.update({
       where: { id: conversation.id },
       data: {
         currentStep: TelegramStep.IDLE,
-        conversationData: {},
+        conversationData: kept as any,
         lastMessageAt: new Date(),
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
@@ -296,11 +306,20 @@ export async function linkTelegramToUser(conversationId: string, phone: string) 
 }
 
 export async function resetTelegramConversation(conversationId: string) {
+  // /cancel abandons the FLOW; the facts survive. Wiping everything let /cancel
+  // erase the link stamp, still-payable pending reports, and the daily PDF counter
+  // (a guest could reset their rate limit by typing /cancel between uploads).
+  const current = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
+  const data = (current?.conversationData as TelegramConversationData) || {};
+  const kept: Record<string, unknown> = {};
+  for (const key of ['linkedAt', 'docPendingReports', 'docPendingReport', 'docBundlePayments', 'dailyUsage'] as const) {
+    if ((data as any)[key] !== undefined) kept[key] = (data as any)[key];
+  }
   return await prisma.telegramConversation.update({
     where: { id: conversationId },
     data: {
       currentStep: TelegramStep.IDLE,
-      conversationData: {},
+      conversationData: kept as any,
       lastMessageAt: new Date(),
     },
     include: { user: true },

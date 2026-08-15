@@ -122,40 +122,50 @@ export async function GET() {
       }
     });
 
-    // 4. Monthly Trends (Last 6 months)
+    // 4. Monthly Trends (Last 6 months). Raw SQL must name its schema — the pooled
+    // connection's search path is roulette, and these unqualified names failed 42P01
+    // intermittently in production.
+    const { schemaQualified } = await import('@/lib/db-schema');
+    const [billsT, billTxT, contractsT] = await Promise.all([
+      schemaQualified('bills'),
+      schemaQualified('bill_transactions'),
+      schemaQualified('contracts'),
+    ]);
     const monthlyBills = isAdmin
-      ? await prisma.$queryRaw<Array<{
+      ? await prisma.$queryRawUnsafe<Array<{
           month: string;
           count: bigint;
           revenue: number | null;
-        }>>`
-          SELECT 
+        }>>(
+          `SELECT
             TO_CHAR(b."createdAt", 'YYYY-MM') as month,
             COUNT(b.id) as count,
             COALESCE(SUM(bt.amount), 0) as revenue
-          FROM "bills" b
-          LEFT JOIN "bill_transactions" bt ON bt."billId" = b.id AND bt.status = 'paid'
-          WHERE b."createdAt" >= ${sixMonthsAgo}
+          FROM ${billsT} b
+          LEFT JOIN ${billTxT} bt ON bt."billId" = b.id AND bt.status = 'paid'
+          WHERE b."createdAt" >= $1
           GROUP BY TO_CHAR(b."createdAt", 'YYYY-MM')
-          ORDER BY month ASC
-        `
-      : await prisma.$queryRaw<Array<{
+          ORDER BY month ASC`,
+          sixMonthsAgo,
+        )
+      : await prisma.$queryRawUnsafe<Array<{
           month: string;
           count: bigint;
           revenue: number | null;
-        }>>`
-          SELECT 
+        }>>(
+          `SELECT
             TO_CHAR(b."createdAt", 'YYYY-MM') as month,
             COUNT(b.id) as count,
             COALESCE(SUM(bt.amount), 0) as revenue
-          FROM "bills" b
-          LEFT JOIN "bill_transactions" bt ON bt."billId" = b.id AND bt.status = 'paid'
-          INNER JOIN "contracts" c ON b."contractId" = c.id
-          WHERE c."userId" = ${userId}
-            AND b."createdAt" >= ${sixMonthsAgo}
+          FROM ${billsT} b
+          LEFT JOIN ${billTxT} bt ON bt."billId" = b.id AND bt.status = 'paid'
+          INNER JOIN ${contractsT} c ON b."contractId" = c.id
+          WHERE c."userId" = $1
+            AND b."createdAt" >= $2
           GROUP BY TO_CHAR(b."createdAt", 'YYYY-MM')
-          ORDER BY month ASC
-        `;
+          ORDER BY month ASC`,
+          userId, sixMonthsAgo,
+        );
 
     // 5. Contract Value Analytics
     const contractValues = await prisma.contract.aggregate({

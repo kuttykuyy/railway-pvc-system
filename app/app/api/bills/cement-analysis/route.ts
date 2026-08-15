@@ -1865,6 +1865,17 @@ export async function POST(request: NextRequest) {
           }
         }
         if (!aiRescued) {
+        // Same two steps the shared extractBillDetailsDirect applies (this inline
+        // branch had drifted from it): the LOA stand-in contract adopts the bill's
+        // real agreement number, and the "Work as per agreement" placeholder is
+        // blanked so classification runs on the bill's own Name of Work instead.
+        let agreementFill: Awaited<ReturnType<typeof fillAgreementNumberFromBill>> | undefined;
+        if (contractId) {
+          agreementFill = await fillAgreementNumberFromBill(contractId, parsed.agreementNo, parsed.loaNo);
+          if (agreementFill.applied) {
+            console.info('[cement-analysis] agreement number taken from the bill', agreementFill);
+          }
+        }
         let contractDescription = '';
         if (contractId) {
           const contract = await prisma.contract.findUnique({
@@ -1873,10 +1884,13 @@ export async function POST(request: NextRequest) {
           });
           contractDescription = contract?.workDescription || '';
         }
+        if (/^work as per agreement$/i.test(contractDescription.trim())) contractDescription = '';
         const workDescription = contractDescription || parsed.workDescription;
         billDetails = {
           ...parsed,
           workDescription,
+          billWorkDescription: parsed.workDescription,
+          agreementNumberFill: agreementFill,
           classificationGroupCode: inferMainClassification(workDescription).code,
           items: await (async () => {
             const normalized = parsed.items.map(normalizeExtractedItem);
