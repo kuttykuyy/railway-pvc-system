@@ -8,6 +8,8 @@
  * GET                     — dry run: exactly who would be written to, and the rendered
  *                           text for the first of them. Sends nothing.
  * GET ?send=SEND-NOW      — sends, once, and reports the result for each address.
+ * GET ?only=<email>       — restrict to one address, for retrying a single failure
+ *                           without writing to anyone who already received it.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -97,8 +99,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
   }
 
-  const list = await recipients();
+  const only = (request.nextUrl.searchParams.get('only') || '').trim().toLowerCase();
+  const all = await recipients();
+  const list = only ? all.filter(r => r.email === only) : all;
   const send = request.nextUrl.searchParams.get('send') === 'SEND-NOW';
+
+  if (only && list.length === 0) {
+    return NextResponse.json(
+      { error: `No pending recipient matches "${only}".`, known: all.map(r => r.email) },
+      { status: 404 },
+    );
+  }
 
   if (!send) {
     return NextResponse.json({
@@ -115,7 +126,13 @@ export async function GET(request: NextRequest) {
   const resend = new Resend(apiKey);
 
   const results: Array<{ email: string; sent: boolean; error?: string }> = [];
+  let first = true;
   for (const r of list) {
+    // Resend allows 10 sends a second, and an unpaced loop hit that ceiling on the
+    // eleventh address — the message simply did not go. A fifth of a second between
+    // sends keeps it well under, and eleven emails are in no hurry.
+    if (!first) await new Promise(resolve => setTimeout(resolve, 200));
+    first = false;
     const { subject, text, html } = renderEmail(r);
     try {
       const { error } = await resend.emails.send({
