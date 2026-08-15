@@ -427,19 +427,40 @@ export async function POST(request: NextRequest) {
       !contractHasBills &&
       normalizeAgreementNo(billAgreementNo) !== normalizedContractNo
     ) {
-      try {
-        // Store it the same way manual creation does, so lookups and the trial-claim
-        // dedup see one spelling of the number.
-        const adoptedNo = normalizeAgreementNo(billAgreementNo) || billAgreementNo;
-        await prisma.contract.update({
-          where: { id: contract.id },
-          data: { agreementNo: adoptedNo },
-        });
-        logger.log(`🔗 Contract ${contract.id}: agreement number ${adoptedNo} taken from the bill (was LOA stand-in ${contract.agreementNo})`);
-        contract.agreementNo = adoptedNo;
-      } catch (e: any) {
-        // P2002 = another contract already holds this number; keep the stand-in.
-        logger.log(`⚠️ Could not adopt agreement number ${billAgreementNo} from the bill: ${e?.code || e?.message}`);
+      // Store it the same way manual creation does, so lookups and the trial-claim
+      // dedup see one spelling of the number.
+      const adoptedNo = normalizeAgreementNo(billAgreementNo) || billAgreementNo;
+      // Ask FIRST whether the number is free, rather than letting the unique index
+      // refuse the write. Both end with the stand-in kept, but the failed write is
+      // logged by the driver before this code can catch it, so a perfectly handled
+      // situation showed up in production as a prisma:error — noise that makes a real
+      // error harder to see. (Seen for real: a second account uploading a bill for an
+      // agreement another account already holds.) The shared helper always checked
+      // first; this copy did not.
+      const numberTaken = await prisma.contract.findFirst({
+        where: {
+          OR: [
+            { agreementNo: { equals: adoptedNo, mode: 'insensitive' } },
+            { agreementNo: { equals: billAgreementNo.trim(), mode: 'insensitive' } },
+          ],
+          NOT: { id: contract.id },
+        },
+        select: { id: true },
+      });
+      if (numberTaken) {
+        logger.log(`⚠️ Agreement number ${adoptedNo} already belongs to another contract — keeping the LOA stand-in on ${contract.id}.`);
+      } else {
+        try {
+          await prisma.contract.update({
+            where: { id: contract.id },
+            data: { agreementNo: adoptedNo },
+          });
+          logger.log(`🔗 Contract ${contract.id}: agreement number ${adoptedNo} taken from the bill (was LOA stand-in ${contract.agreementNo})`);
+          contract.agreementNo = adoptedNo;
+        } catch (e: any) {
+          // Still guarded: two bills racing could both pass the check above.
+          logger.log(`⚠️ Could not adopt agreement number ${billAgreementNo} from the bill: ${e?.code || e?.message}`);
+        }
       }
     }
 
