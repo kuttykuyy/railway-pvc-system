@@ -767,11 +767,21 @@ function NewBillPageContent() {
     //
     // Runs after the contract match so a zone carried forward from a previous bill still
     // wins, and only fills an empty field — a zone chosen by hand is never overwritten.
-    if (extractedAgreementNo) {
-      const parsedFromBill = parseAgreementNumber(extractedAgreementNo);
-      const zoneFromBill = parsedFromBill?.zone;
-      if (zoneFromBill && getRailwayZoneOptions().some(option => option.value === zoneFromBill)) {
-        setFormData(prev => (prev.zone ? prev : { ...prev, zone: zoneFromBill }));
+    // Tried in order: the agreement number the bill prints, then the bill's OWN number,
+    // then the contract's. The bill number carries the zone just as plainly
+    // ("SR/TPJ/Civil/2025/0067/B7"), and the AI reader returns an empty agreement
+    // number whenever it cannot find one on the page — which left the zone unset even
+    // though the answer was sitting in the bill number all along.
+    const zoneCandidates = [
+      extractedAgreementNo,
+      String(billDetails?.billNo || '').trim(),
+      selectedContract?.agreementNo || '',
+    ].filter(Boolean);
+    for (const candidate of zoneCandidates) {
+      const zone = parseAgreementNumber(candidate)?.zone;
+      if (zone && getRailwayZoneOptions().some(option => option.value === zone)) {
+        setFormData(prev => (prev.zone ? prev : { ...prev, zone }));
+        break;
       }
     }
 
