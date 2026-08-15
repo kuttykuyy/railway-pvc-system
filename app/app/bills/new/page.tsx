@@ -736,6 +736,24 @@ function NewBillPageContent() {
       }
     }
 
+    // Railway zone from the BILL's own agreement number.
+    //
+    // The zone is normally read off the contract's identifier, but a contract created
+    // from an LOA is named after the LOA — "TRICHCHIRAPPALLI DIVISION-ENGG/..." — which
+    // carries no zone code, so that fill finds nothing and the very first bill was left
+    // with the zone (and with it the fuel basis and steel city) unset. The bill itself
+    // prints the real number, "SR/TPJ/Civil/2025/0067/B7", which names the zone plainly.
+    //
+    // Runs after the contract match so a zone carried forward from a previous bill still
+    // wins, and only fills an empty field — a zone chosen by hand is never overwritten.
+    if (extractedAgreementNo) {
+      const parsedFromBill = parseAgreementNumber(extractedAgreementNo);
+      const zoneFromBill = parsedFromBill?.zone;
+      if (zoneFromBill && getRailwayZoneOptions().some(option => option.value === zoneFromBill)) {
+        setFormData(prev => (prev.zone ? prev : { ...prev, zone: zoneFromBill }));
+      }
+    }
+
     let mappedEntries = buildClassificationEntriesFromExtractedBill(data);
 
     // Entries are rebuilt from the extracted items every time the analyzer changes
