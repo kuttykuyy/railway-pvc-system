@@ -134,6 +134,24 @@ export interface CreateGstInvoiceParams {
    * input credit could never reconcile.
    */
   invoiceNumber?: string;
+  /**
+   * Zoho's own figures. Given these, they are used exactly as they stand instead of
+   * being recalculated — the copy must say what the record says, down to the paisa.
+   *
+   * It matters most for the inter-state split: Zoho decides that from the customer's
+   * GSTIN, while this app assumed intra-state for everyone. Recalculating handed an
+   * out-of-state customer a page showing CGST + SGST for a supply the books had
+   * recorded as IGST.
+   */
+  figures?: {
+    subtotal: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+    totalGst: number;
+    totalAmount: number;
+    isInterstate: boolean;
+  };
   /** How the collected money relates to the tax. Defaults to the old behaviour. */
   basis?: GstBasis;
   /**
@@ -161,9 +179,14 @@ export const createGstInvoice = async (
     basis = 'exclusive',
     invoiceDate: suppliedDate,
     invoiceNumber: ofRecord,
+    figures,
   } = params;
 
-  const gstCalc = calculateGst(creditAmount, isInterstate, basis);
+  // Zoho's figures when it has them; our own arithmetic only when it does not.
+  const gstCalc: GstCalculation = figures
+    ? { ...figures }
+    : calculateGst(creditAmount, isInterstate, basis);
+  const interstate = figures ? figures.isInterstate : isInterstate;
   const invoiceDate = suppliedDate ?? new Date();
 
   // The number is drawn and the invoice written in ONE transaction, so two payments
@@ -194,7 +217,7 @@ export const createGstInvoice = async (
             totalGst: gstCalc.totalGst,
             totalAmount: gstCalc.totalAmount,
             description: `Credit Top-up - ₹${creditAmount.toFixed(2)}`,
-            isInterstate,
+            isInterstate: interstate,
             status: 'generated',
           },
         });

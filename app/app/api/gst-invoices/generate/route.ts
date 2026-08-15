@@ -116,15 +116,21 @@ export async function POST(request: NextRequest) {
     // or the same payment ends up invoiced twice under two unrelated series — the
     // customer holding one number while the return is filed under the other.
     // Recorded on the payment when Zoho issued it; asking Zoho again is the fallback.
+    // Zoho is asked first and wins when it answers, since it also carries the amounts
+    // and the tax split. The number noted at payment time is the fallback for when
+    // Zoho cannot be reached — enough to issue the copy, though then the amounts come
+    // from our own arithmetic.
     let numberOfRecord = ((transaction as any)?.notes?.zohoInvoiceNumber as string) || undefined;
-    if (!numberOfRecord) {
-      try {
-        const { findZohoInvoiceByReference } = await import('@/lib/zoho-books');
-        const zoho = await findZohoInvoiceByReference(transaction.razorpayOrderId);
-        numberOfRecord = zoho?.invoiceNumber;
-      } catch (zohoError: any) {
-        logger.log('[GST Invoice] Could not reach Zoho for the invoice number:', zohoError?.message);
+    let figuresOfRecord: any;
+    try {
+      const { findZohoInvoiceByReference } = await import('@/lib/zoho-books');
+      const zoho = await findZohoInvoiceByReference(transaction.razorpayOrderId);
+      if (zoho) {
+        numberOfRecord = zoho.invoiceNumber;
+        figuresOfRecord = zoho.figures;
       }
+    } catch (zohoError: any) {
+      logger.log('[GST Invoice] Could not reach Zoho for the invoice of record:', zohoError?.message);
     }
     if (!numberOfRecord) {
       // Better no document than a second series: the customer would be holding a
@@ -141,6 +147,7 @@ export async function POST(request: NextRequest) {
     // Generate GST invoice
     const gstInvoice = await createGstInvoice({
       invoiceNumber: numberOfRecord,
+      figures: figuresOfRecord,
       userId: user.id,
       razorpayTransactionId: transaction.id,
       customerName: customerName.trim(),

@@ -118,6 +118,54 @@ export interface ZohoInvoiceResult {
   invoiceId: string;
   invoiceNumber: string;
   status: string;
+  /** Zoho's own figures, so the app's copy can show them rather than recompute. */
+  figures?: ZohoInvoiceFigures;
+}
+
+/**
+ * What Zoho decided this invoice is — taxable value, the tax split, and where the
+ * supply was made.
+ *
+ * Zoho works the inter-state question out from the customer's GSTIN, while the app's
+ * own calculation assumed intra-state for everyone. Both documents describe one
+ * supply, so the copy must show what the record shows: an out-of-state customer whose
+ * ledger entry is IGST should not be handed a page saying CGST + SGST.
+ */
+export interface ZohoInvoiceFigures {
+  subtotal: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  totalGst: number;
+  totalAmount: number;
+  isInterstate: boolean;
+  placeOfSupply: string | null;
+}
+
+/** Read the figures off a Zoho invoice payload. */
+export function figuresFromZohoInvoice(invoice: any): ZohoInvoiceFigures {
+  const num = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  let cgst = 0;
+  let sgst = 0;
+  let igst = 0;
+  for (const tax of (invoice?.taxes || []) as Array<{ tax_name?: string; tax_amount?: any }>) {
+    const name = String(tax?.tax_name || '').toUpperCase();
+    const amount = num(tax?.tax_amount);
+    if (name.includes('IGST')) igst += amount;
+    else if (name.includes('CGST')) cgst += amount;
+    else if (name.includes('SGST') || name.includes('UTGST')) sgst += amount;
+  }
+  const totalGst = num(invoice?.tax_total) || cgst + sgst + igst;
+  return {
+    subtotal: num(invoice?.sub_total),
+    cgst,
+    sgst,
+    igst,
+    totalGst,
+    totalAmount: num(invoice?.total),
+    isInterstate: igst > 0,
+    placeOfSupply: invoice?.place_of_supply || null,
+  };
 }
 
 // Create a sales invoice in Zoho Books
@@ -178,6 +226,7 @@ export async function createZohoInvoice(params: {
     invoiceId: data.invoice.invoice_id,
     invoiceNumber: data.invoice.invoice_number,
     status: data.invoice.status,
+    figures: figuresFromZohoInvoice(data.invoice),
   };
 }
 
@@ -274,7 +323,9 @@ export async function syncGstinToZoho(params: {
  * number every invoice here is created with (the Razorpay order id), since the Zoho
  * invoice id itself was never stored.
  */
-export async function findZohoInvoiceByReference(razorpayOrderId: string): Promise<{ invoiceId: string; invoiceNumber: string } | null> {
+export async function findZohoInvoiceByReference(
+  razorpayOrderId: string,
+): Promise<{ invoiceId: string; invoiceNumber: string; figures?: ZohoInvoiceFigures } | null> {
   const token = await getAccessToken();
   const res = await fetch(
     `${ZOHO_API_BASE}/invoices?organization_id=${ORG_ID}&reference_number=${encodeURIComponent(razorpayOrderId)}`,
@@ -282,7 +333,23 @@ export async function findZohoInvoiceByReference(razorpayOrderId: string): Promi
   );
   const data = await res.json();
   const invoice = data.invoices?.[0];
-  return invoice ? { invoiceId: invoice.invoice_id, invoiceNumber: invoice.invoice_number } : null;
+  if (!invoice) return null;
+
+  // The list view carries totals but not the per-tax split, so fetch the invoice
+  // itself for the CGST/SGST/IGST breakdown the copy has to show.
+  let figures: ZohoInvoiceFigures | undefined;
+  try {
+    const one = await fetch(
+      `${ZOHO_API_BASE}/invoices/${invoice.invoice_id}?organization_id=${ORG_ID}`,
+      { headers: { Authorization: `Zoho-oauthtoken ${token}` } },
+    );
+    const full = await one.json();
+    if (full?.invoice) figures = figuresFromZohoInvoice(full.invoice);
+  } catch {
+    // The number alone is still enough to issue the copy; the app falls back to its
+    // own calculation for the amounts.
+  }
+  return { invoiceId: invoice.invoice_id, invoiceNumber: invoice.invoice_number, figures };
 }
 
 /**
