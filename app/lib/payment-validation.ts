@@ -92,13 +92,17 @@ export async function validateBillProcessing(
       };
     }
 
-    // For paid contractor bills, use a fixed per-bill charge with no discounts.
+    // For paid contractor bills, use a fixed per-bill charge with no discounts —
+    // unless the admin set this user a custom fee, which only the ₹0 case ever
+    // honoured before: a ₹50 custom fee still charged the standard rate.
     const { getBillingSettings } = await import('./admin-settings');
     const billingSettings = await getBillingSettings();
-    const fullCost = isAiUploaded 
-      ? (billingSettings.aiBillCost || 499) 
+    const fullCost = isAiUploaded
+      ? (billingSettings.aiBillCost || 499)
       : (billingSettings.billCost || 199);
-    const billCost = fullCost;
+    const billCost = user.customProcessingFee !== null && user.customProcessingFee > 0
+      ? user.customProcessingFee
+      : fullCost;
 
     // Check if user has sufficient balance in their customer account
     const currentBalance = user.customerAccount?.creditBalance || 0;
@@ -170,9 +174,13 @@ export async function processPaymentForBill(
     // Calculate pricing — fetch settings ONCE up front
     const { getBillingSettings } = await import('./admin-settings');
     const billingSettings = await getBillingSettings();
-    const baseAmount = isAiUploaded 
-      ? (billingSettings.aiBillCost || 499) 
+    const standardAmount = isAiUploaded
+      ? (billingSettings.aiBillCost || 499)
       : (billingSettings.billCost || 199);
+    // A positive custom fee is the user's real rate (₹0 is handled as free below).
+    const baseAmount = user.customProcessingFee !== null && user.customProcessingFee > 0
+      ? user.customProcessingFee
+      : standardAmount;
     const freeTrialLimit = billingSettings.freeTrialBills || 1;
 
     const finalAmount = baseAmount;

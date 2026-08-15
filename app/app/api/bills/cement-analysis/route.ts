@@ -20,7 +20,6 @@ import { composeJustification, repairAiJustification, officialGroupName } from '
 import { fillAgreementNumberFromBill } from '@/lib/agreement-number-from-bill';
 import { inferScheduleSubHead, CONTEXT as DSR_CONTEXT } from '@/lib/dsr-subhead-classification';
 import { recordAiUsage } from '@/lib/ai-usage';
-import { parseIrepsBillMarkdown } from '@/lib/ireps-bill-parser';
 import { parseIrepsBillPdfDirect } from '@/lib/ireps-direct-pdf-parser';
 
 export const dynamic = 'force-dynamic';
