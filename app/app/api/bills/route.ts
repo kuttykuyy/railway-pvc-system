@@ -249,6 +249,7 @@ export async function POST(request: NextRequest) {
       isAiUploaded,
       railwaySuppliedMaterialValue = 0,
       extraItemsOutsidePvc = 0,
+      extractedAgreementNo = '',
     } = body;
 
     // GCC-2022 Cl.46A: W (the PVC base) is the gross value of work done EXCLUDING the
@@ -374,6 +375,7 @@ export async function POST(request: NextRequest) {
       select: {
         id: true,
         agreementNo: true,
+        loaNo: true,
         baseMonth: true,
         isExtended: true,
         extensionType: true,
@@ -387,6 +389,36 @@ export async function POST(request: NextRequest) {
     
     if (!contract) {
       return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
+    }
+
+    // ===== STEP 4A2: Fill in the real agreement number from the bill =====
+    // A contract created from an LOA carries the LOA number as a stand-in, because the
+    // LOA usually has no agreement number. The bill PDF prints the real one — the first
+    // bill hands it to the contract. Only a stand-in is ever replaced (agreementNo equals
+    // the contract's own loaNo), so a hand-typed real number can never be overwritten by
+    // a stray bill. On a clash with another contract the stand-in simply stays.
+    const billAgreementNo = String(extractedAgreementNo || '').trim();
+    if (
+      billAgreementNo &&
+      contract.loaNo &&
+      contract.agreementNo.trim().toUpperCase() === contract.loaNo.trim().toUpperCase() &&
+      billAgreementNo.toUpperCase() !== contract.agreementNo.trim().toUpperCase()
+    ) {
+      try {
+        // Store it the same way manual creation does, so lookups and the trial-claim
+        // dedup see one spelling of the number.
+        const { normalizeAgreementNo } = await import('@/lib/railway-division-helper');
+        const adoptedNo = normalizeAgreementNo(billAgreementNo) || billAgreementNo;
+        await prisma.contract.update({
+          where: { id: contract.id },
+          data: { agreementNo: adoptedNo },
+        });
+        logger.log(`🔗 Contract ${contract.id}: agreement number ${adoptedNo} taken from the bill (was LOA stand-in ${contract.agreementNo})`);
+        contract.agreementNo = adoptedNo;
+      } catch (e: any) {
+        // P2002 = another contract already holds this number; keep the stand-in.
+        logger.log(`⚠️ Could not adopt agreement number ${billAgreementNo} from the bill: ${e?.code || e?.message}`);
+      }
     }
 
     const classificationPolicy = await resolveBillClassificationPolicy(

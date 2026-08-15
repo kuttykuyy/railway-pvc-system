@@ -211,26 +211,27 @@ export default function WelcomePage() {
           {agreement.step === 'confirm' && (
             <div className="border border-emerald-300 bg-emerald-50 rounded-md p-3 space-y-2">
               <p className="text-sm font-medium">
-                One thing to type: the agreement number
+                The agreement number — type it if you know it
               </p>
               <p className="text-xs text-muted-foreground">
-                It is on the front page of the agreement (like SCR/GNT/Civil/2022/0012). Your bills
-                carry the same number — it is how they find this contract.
+                It looks like SCR/GNT/Civil/2022/0012. The LOA usually does not carry it —
+                if you don&apos;t have it yet, just skip: your first bill PDF prints it, and
+                we&apos;ll take it from there automatically.
               </p>
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   value={agreement.agreementNo}
                   onChange={e => setAgreement({ ...agreement, agreementNo: e.target.value })}
-                  placeholder="e.g. SR/MDU/Civil/2024/0037"
+                  placeholder="e.g. SR/MDU/Civil/2024/0037 — or leave blank"
                   className="flex-1 border rounded-md px-3 py-2 text-sm font-mono"
                   autoFocus
                 />
                 <Button
                   onClick={() => saveContract(agreement.extracted, agreement.agreementNo.trim())}
-                  disabled={!agreement.agreementNo.trim()}
+                  disabled={!agreement.agreementNo.trim() && !String(agreement.extracted?.loaNo || '').trim()}
                 >
-                  Save contract
+                  {agreement.agreementNo.trim() ? 'Save contract' : 'Save — number comes from the bill'}
                 </Button>
               </div>
             </div>

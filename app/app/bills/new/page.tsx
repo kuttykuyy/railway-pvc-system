@@ -225,6 +225,9 @@ function NewBillPageContent() {
   const [classificationEntries, setClassificationEntries] = useState<ClassificationEntry[]>([]);
   const manualClassificationOverridesRef = useRef<Map<string, ClassificationEntry>>(new Map());
   const extractedBillIdentityRef = useRef('');
+  // The agreement number as printed on the uploaded bill PDF. Sent with the save so a
+  // contract created from an LOA (which has no agreement number) can adopt the real one.
+  const extractedAgreementNoRef = useRef('');
   
   // Sub-classifications state - array of { code, name, amount }
   const [subClassifications, setSubClassifications] = useState<Array<{ code: string; name: string; amount: string }>>([]);
@@ -695,6 +698,7 @@ function NewBillPageContent() {
     // Auto-select the contract from the extracted Agreement No. when none is chosen yet.
     // Selecting it also carries forward the railway zone from that contract's latest bill.
     const extractedAgreementNo = (billDetails?.agreementNo || '').trim();
+    if (extractedAgreementNo) extractedAgreementNoRef.current = extractedAgreementNo;
     if (extractedAgreementNo && !formData.contractId) {
       const normalize = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const target = normalize(extractedAgreementNo);
@@ -702,7 +706,11 @@ function NewBillPageContent() {
         || contracts.find(contract => {
           const code = normalize(contract.agreementNo);
           return code.length > 0 && (code.includes(target) || target.includes(code));
-        });
+        })
+        // A contract created from an LOA still carries the LOA number, so the bill's
+        // agreement number matches nothing. With only one contract there is nothing
+        // else it could belong to — select it; saving adopts the real number onto it.
+        || (contracts.length === 1 ? contracts[0] : undefined);
       if (matchedContract) {
         setFormData(prev => ({ ...prev, contractId: matchedContract.id }));
         await fetchPreviousBills(matchedContract.id);
@@ -1296,6 +1304,7 @@ function NewBillPageContent() {
           paymentMethod: 'free',
           paymentReference: null,
           isAiUploaded,
+          extractedAgreementNo: extractedAgreementNoRef.current || undefined,
         }),
       });
 
