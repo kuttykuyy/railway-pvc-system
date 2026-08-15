@@ -500,3 +500,17 @@ export function validateEmailFormat(email: string): boolean {
   return regex.test(email.trim());
 }
 
+
+/**
+ * A diesel rate, as rupees per litre.
+ *
+ * The fuel-price import refused only NaN, so zero, negative and mistyped figures went
+ * straight into the table. One bad row is not one bad record: the fuel component of
+ * every bill priced from a quarter containing it is wrong, silently and for good. The
+ * ceiling is deliberately loose — it exists to catch a decimal point in the wrong
+ * place (9000 for 90.00), not to second-guess the market.
+ */
+export function isPlausibleDieselPrice(value: unknown): boolean {
+  const n = typeof value === 'string' ? parseFloat(value) : Number(value);
+  return Number.isFinite(n) && n > 0 && n <= 500;
+}

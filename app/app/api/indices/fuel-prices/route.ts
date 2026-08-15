@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateAdminAccess } from "@/lib/role-auth";
+import { isPlausibleDieselPrice } from "@/lib/validation";
 
 // GET - Fetch daily fuel prices for a date range
 export async function GET(request: NextRequest) {
@@ -75,8 +76,21 @@ export async function POST(request: NextRequest) {
       const chennai = parseFloat(price.chennai);
       const kolkata = parseFloat(price.kolkata);
 
-      if (isNaN(delhi) || isNaN(mumbai) || isNaN(chennai) || isNaN(kolkata)) {
-        errors.push(`Row ${i + 1}: Invalid price values`);
+      // A diesel price has to be a positive, plausible rupees-per-litre figure.
+      // NaN was already refused; zero, negative and fat-fingered values were not, and
+      // a single bad row here is not one bad record — every bill priced from a quarter
+      // containing it carries the error, silently and for good.
+      const cities: Array<[string, number]> = [
+        ['Delhi', delhi], ['Mumbai', mumbai], ['Chennai', chennai], ['Kolkata', kolkata],
+      ];
+      const badCity = cities.find(([, v]) => !isPlausibleDieselPrice(v));
+      if (badCity) {
+        const [city, value] = badCity;
+        errors.push(
+          Number.isFinite(value)
+            ? `Row ${i + 1}: ${city} diesel price of ${value} is not a believable rate per litre`
+            : `Row ${i + 1}: Invalid price values`,
+        );
         continue;
       }
 
