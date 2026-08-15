@@ -635,9 +635,16 @@ export async function POST(request: NextRequest) {
     logger.log(`✅ Steel types to be stored in bill: [${extractedSteelTypes.join(', ') || 'None'}]`);
     logger.log('🔍 ===== STEEL TYPES EXTRACTED =====\n');
     
-    // ===== STEP 9: Create Bill Record with Steel Types =====
-    const bill = await prisma.bill.create({
-      data: {
+    // ===== STEP 9: Assemble the Bill Record (written later, with everything else) =====
+    // Nothing is written until STEP 17, where the bill, its classification entries and
+    // its PVC calculation are inserted together in one transaction. They used to be
+    // three separate writes ~250 lines apart, with the index lookups and the whole
+    // calculation in between: a function timeout anywhere in that stretch left a bill
+    // row with no calculation and no charge — visible to its owner, showing no
+    // numbers, never billed — and the duplicate check then refused to let them create
+    // it again. The heavy work stays OUTSIDE the transaction so it cannot be held open
+    // (Prisma closes an interactive transaction after five seconds).
+    const billData = {
         contractId,
         billNo: normalizedBillNo,
         // The same fact that priced this bill, kept rather than discarded.
@@ -661,28 +668,11 @@ export async function POST(request: NextRequest) {
         isChargeable: !isBillFree,
         processingFee: isBillFree ? 0 : calculatedBillCost,
         subClassifications: []
-      }
-    });
+    };
 
-    // Stored separately and best-effort: the railwaySuppliedMaterialValue column is
-    // added by a migration, and until that migration is deployed the column may not
-    // exist yet. Writing it inline would make bill creation fail outright, so record
-    // it after the bill exists and never let it break the save. (The PVC itself is
-    // already correct either way — pvcBaseFactor is applied above.)
-    if (railwaySupplied > 0) {
-      try {
-        await prisma.bill.update({
-          where: { id: bill.id },
-          data: { railwaySuppliedMaterialValue: railwaySupplied },
-        });
-      } catch (err) {
-        console.error('Could not store railwaySuppliedMaterialValue (migration pending?):', err);
-      }
-    }
-    
-    logger.log(`✅ Bill created with ID: ${bill.id}`);
-    logger.log(`   Steel types stored: [${(bill.steelTypes as string[])?.join(', ') || 'None'}]`);
-    
+    logger.log(`📝 Bill record assembled for ${normalizedBillNo}`);
+    logger.log(`   Steel types to store: [${extractedSteelTypes.join(', ') || 'None'}]`);
+
     // ===== STEP 10: Get Quarterly Averages (Needed for Entry PVC Calculations) =====
     // Use zone-based steel city prices instead of default Chennai rates
     const steelIndexNames = getSteelIndexNamesForZone(effectiveZone);
@@ -697,7 +687,9 @@ export async function POST(request: NextRequest) {
 
     const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, calculationMethod);
     
-    // ===== STEP 11: Create Classification Entries with PVC Calculations =====
+    // ===== STEP 11: Work Out Each Classification Entry's PVC =====
+    // Computed here, written in STEP 17 alongside the bill.
+    const entryRowsToCreate: any[] = [];
     let totalClassificationPvc = 0;
     let totalClassificationLabour = 0;
     let totalClassificationPlant = 0;
@@ -760,10 +752,9 @@ export async function POST(request: NextRequest) {
             }
           );
           
-          // Create entry with PVC breakdown
-          await prisma.billClassificationEntry.create({
-            data: {
-              billId: bill.id,
+          // Collected now, written with the bill in STEP 17. billId is added there,
+          // since the bill row does not exist until the transaction runs.
+          entryRowsToCreate.push({
               subClassificationId: entry.subClassificationId || null,
               classificationId: entry.classificationId || null,
               amount: parseFloat(entry.amount),
@@ -782,10 +773,9 @@ export async function POST(request: NextRequest) {
               cementPvc: entryPvc.cementPvc,
               steelPvc: entryPvc.steelPvc,
               explosivesPvc: entryPvc.explosivesPvc,
-              totalPvc: entryPvc.totalPvc
-            }
+              totalPvc: entryPvc.totalPvc,
           });
-          
+
           if (hasSteelComponent && entrySteelTypes.length > 0) {
             logger.log(`   ✅ Entry with steel PVC: ₹${entryPvc.steelPvc.toFixed(2)} → Steel types: [${entrySteelTypes.join(', ')}]`);
           }
@@ -877,11 +867,12 @@ export async function POST(request: NextRequest) {
     });
     const previousPvcTotal = previousPvcCalculations.length > 0 ? previousPvcCalculations[0].cumulativePvc : 0;
     
-    // ===== STEP 17: Create PVC Calculation Record =====
-    await prisma.pvcCalculation.create({
-      data: {
+    // ===== STEP 17: Write the bill, its entries and its calculation — together =====
+    // One transaction: all three exist or none does. Only writes are inside it; every
+    // index lookup and calculation already happened above, so it opens and closes in
+    // milliseconds and cannot hit Prisma's five-second interactive-transaction limit.
+    const pvcCalculationData = {
         contractId,
-        billId: bill.id,
         labourPvc: extensionCompliantResult.labourPvc,
         plantMachineryPvc: extensionCompliantResult.plantMachineryPvc,
         fuelPowerPvc: extensionCompliantResult.fuelPowerPvc,
@@ -911,8 +902,52 @@ export async function POST(request: NextRequest) {
         // Sticky flag: remember that this bill's numbers were computed with provisional/
         // borrowed indices, so the list can keep offering "Regenerate" until it is recalculated.
         usedProvisionalIndices: indicesCheck.isProvisional === true
+    };
+
+    let bill;
+    try {
+      bill = await prisma.$transaction(async (tx) => {
+        const created = await tx.bill.create({ data: billData });
+        if (entryRowsToCreate.length > 0) {
+          // One statement rather than one per entry: a bill can carry dozens, and each
+          // round trip would spend the transaction's budget.
+          await tx.billClassificationEntry.createMany({
+            data: entryRowsToCreate.map((row) => ({ ...row, billId: created.id })),
+          });
+        }
+        await tx.pvcCalculation.create({ data: { ...pvcCalculationData, billId: created.id } });
+        return created;
+      }, {
+        // Generous against a slow database, still far below the function's own limit.
+        maxWait: 10_000,
+        timeout: 20_000,
+      });
+    } catch (writeError: any) {
+      // The unique index on (contractId, billNo) — the duplicate check ~250 lines above
+      // is check-then-act with several awaits in between, so two requests can both pass
+      // it. This is the database refusing the second one.
+      if (writeError?.code === 'P2002') {
+        return NextResponse.json(
+          { error: `Bill number ${normalizedBillNo} already exists for this contract` },
+          { status: 409 },
+        );
       }
-    });
+      throw writeError;
+    }
+
+    if (railwaySupplied > 0) {
+      // Best-effort and deliberately outside the transaction: this column arrives via
+      // Pending DB Changes, and on a database that has not had it applied the write
+      // fails — which inside the transaction would discard a perfectly good bill. The
+      // PVC is already correct either way, since pvcBaseFactor was applied above.
+      await prisma.bill.update({
+        where: { id: bill.id },
+        data: { railwaySuppliedMaterialValue: railwaySupplied },
+      }).catch((err) =>
+        console.error('Could not store railwaySuppliedMaterialValue (migration pending?):', err));
+    }
+
+    logger.log(`✅ Bill ${bill.id} written with ${entryRowsToCreate.length} entries and its PVC calculation`);
 
     // ===== STEP 17B: Re-run cumulative totals in measurement order =====
     // The previousPvcTotal above came from the latest calculation BY CREATION TIME.

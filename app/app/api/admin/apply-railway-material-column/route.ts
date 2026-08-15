@@ -185,6 +185,16 @@ const PENDING_EXTRAS: Array<{ label: string; sql: (s: string) => string; why: st
     check: { kind: 'index', name: 'bills_status_approvedAt_idx' },
   },
   {
+    label: 'bills_contract_billno_unique',
+    sql: (s) => `CREATE UNIQUE INDEX IF NOT EXISTS "bills_contractId_billNo_key"
+      ON "${s}"."bills" ("contractId", LOWER("billNo"))`,
+    why: 'One bill number per contract, enforced by the database. The route checks for a '
+      + 'duplicate and then creates the bill a few hundred lines later, with several '
+      + 'queries in between — two requests can both pass that check. On LOWER(billNo) '
+      + 'because the check itself is case-insensitive.',
+    check: { kind: 'index', name: 'bills_contractId_billNo_key' },
+  },
+  {
     label: 'bills_passedBy_fkey',
     sql: (s) => `DO $$
       BEGIN
