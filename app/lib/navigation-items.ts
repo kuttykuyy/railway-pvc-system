@@ -87,9 +87,6 @@ export const ADMIN_ITEMS: NavItem[] = [
   { name: 'Cement Coefficients', href: '/admin/dsr-cement-coefficients', icon: Package, adminOnly: true, section: 'Rates & Indices' },
   { name: 'Work Classifications', href: '/classifications', icon: Tags, adminOnly: true, section: 'Rates & Indices' },
   { name: 'Extension Categories', href: '/admin/extension-subcategories', icon: FileBarChart, adminOnly: true, section: 'Rates & Indices' },
-  // Not the same screen as "Price Indices Management": this is the only place an index,
-  // or a range of its monthly values, can be DELETED. /indices cannot do that at all.
-  { name: 'Delete Index Data', href: '/admin/price-indices', icon: Database, adminOnly: true, section: 'Rates & Indices' },
 
   // ── Checks & Audits ───────────────────────────────────────────────────────────
   { name: 'Parse Failures', href: '/admin/parse-failures', icon: AlertCircle, adminOnly: true, section: 'Checks & Audits' },
@@ -101,8 +98,7 @@ export const ADMIN_ITEMS: NavItem[] = [
   { name: 'WhatsApp Logs', href: '/admin/whatsapp-logs', icon: MessageSquare, adminOnly: true, section: 'Integrations' },
   { name: 'Telegram Usage', href: '/admin/telegram', icon: Send, adminOnly: true, section: 'Integrations' },
   { name: 'API Keys', href: '/admin/api-keys', icon: ShieldCheck, adminOnly: true, section: 'Integrations' },
-  { name: 'API Guide', href: '/admin/api-docs', icon: BookOpen, adminOnly: true, section: 'Integrations' },
-  { name: 'API Endpoints', href: '/docs/external-api', icon: FileText, adminOnly: true, section: 'Integrations' },
+  { name: 'API Documentation', href: '/docs/external-api', icon: FileText, adminOnly: true, section: 'Integrations' },
 
   // ── System ────────────────────────────────────────────────────────────────────
   { name: 'Report Templates', href: '/report-templates', icon: Layers, adminOnly: true, section: 'System' },
