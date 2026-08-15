@@ -74,12 +74,18 @@ export function calculatePvcComponentWithSteps(
     };
   }
   
-  // CORE CALCULATION LOGIC: Use 2-decimal rounded indices
-  // Step 1: Index Difference = Average Index - Base Index (using rounded indices)
-  const step1Result = avgIndexRounded - baseIndexRounded;
-  
-  // Step 2: Variation Ratio = Index Difference ÷ Base Index (UNROUNDED - full precision result)
-  const variationRatio = step1Result / baseIndexRounded;
+  // CORE CALCULATION LOGIC — MUST equal calculatePvcComponent above to the paisa.
+  // The stored calculation rounds the DIFFERENCE to 2 dp and divides by the UNROUNDED
+  // base; this function used to round each index first and divide by the rounded base,
+  // so the PDF and the stored figure disagreed whenever an index carried more than two
+  // decimals (every quarter average does — it is a mean of three months). An accounts
+  // office cross-checking the report against the app then saw two different numbers.
+  // The rounded indices are kept for DISPLAY in the step strings only.
+  // Step 1: Index Difference = round2(Average Index - Base Index)
+  const step1Result = Math.round((averageIndex - baseIndex) * 100) / 100;
+
+  // Step 2: Variation Ratio = Index Difference ÷ Base Index (unrounded base, as stored)
+  const variationRatio = step1Result / baseIndex;
   
   // Step 3: Component Amount = Bill Amount × Variation Ratio (full precision)
   const componentAmount = billAmount * variationRatio;

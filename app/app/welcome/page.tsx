@@ -53,7 +53,10 @@ export default function WelcomePage() {
         const contracts = await contractsRes.json().catch(() => null);
         const bills = await billsRes.json().catch(() => null);
         const contractList = Array.isArray(contracts) ? contracts : contracts?.contracts || [];
-        const billList = Array.isArray(bills) ? bills : bills?.bills || [];
+        // GET /api/bills answers { data, pagination } — reading a nonexistent `bills`
+      // key made hasBill permanently false, so returning users were shown first-run
+      // onboarding forever instead of being sent to their bills.
+      const billList = Array.isArray(bills) ? bills : bills?.data || [];
         setHasContract(contractList.length > 0);
         setHasBill(billList.length > 0);
       } catch {

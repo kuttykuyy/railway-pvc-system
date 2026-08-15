@@ -64,6 +64,8 @@ import { applyCementSplit, type CementBreakdownItem } from '@/lib/cement-split';
 interface Contract {
   id: string;
   agreementNo: string;
+  /** LOA number; equal to agreementNo (normalized) when the contract still awaits its real number. */
+  loaNo?: string | null;
   contractorName: string;
   workDescription: string;
   workClassification?: string;
@@ -228,6 +230,9 @@ function NewBillPageContent() {
   // The agreement number as printed on the uploaded bill PDF. Sent with the save so a
   // contract created from an LOA (which has no agreement number) can adopt the real one.
   const extractedAgreementNoRef = useRef('');
+  // Live mirror of formData.contractId for async callbacks: extraction takes minutes,
+  // and its closure holds a stale formData snapshot from when the upload started.
+  const selectedContractIdRef = useRef('');
   
   // Sub-classifications state - array of { code, name, amount }
   const [subClassifications, setSubClassifications] = useState<Array<{ code: string; name: string; amount: string }>>([]);
@@ -298,6 +303,10 @@ function NewBillPageContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedContract?.agreementNo, formData.zone]);
+
+  useEffect(() => {
+    selectedContractIdRef.current = formData.contractId || '';
+  }, [formData.contractId]);
 
   useEffect(() => {
     fetch('/api/user/profile')
@@ -697,9 +706,12 @@ function NewBillPageContent() {
 
     // Auto-select the contract from the extracted Agreement No. when none is chosen yet.
     // Selecting it also carries forward the railway zone from that contract's latest bill.
+    // The guard reads a ref, not formData: this callback runs minutes after the upload
+    // began, and the closed-over formData is the snapshot from back then — a contract
+    // the user picked DURING extraction would be silently overwritten otherwise.
     const extractedAgreementNo = (billDetails?.agreementNo || '').trim();
     if (extractedAgreementNo) extractedAgreementNoRef.current = extractedAgreementNo;
-    if (extractedAgreementNo && !formData.contractId) {
+    if (extractedAgreementNo && !selectedContractIdRef.current) {
       const normalize = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const target = normalize(extractedAgreementNo);
       const matchedContract = contracts.find(contract => normalize(contract.agreementNo) === target)
@@ -708,11 +720,17 @@ function NewBillPageContent() {
           return code.length > 0 && (code.includes(target) || target.includes(code));
         })
         // A contract created from an LOA still carries the LOA number, so the bill's
-        // agreement number matches nothing. With only one contract there is nothing
-        // else it could belong to — select it; saving adopts the real number onto it.
-        || (contracts.length === 1 ? contracts[0] : undefined);
+        // agreement number matches nothing. Only such a stand-in contract may be
+        // auto-selected as the sole candidate — a contract with a REAL number that
+        // simply differs from the bill's means this bill belongs to some other
+        // agreement, and attaching it silently would price it off the wrong base month.
+        || (contracts.length === 1
+              && contracts[0].loaNo
+              && normalize(contracts[0].agreementNo) === normalize(contracts[0].loaNo)
+            ? contracts[0]
+            : undefined);
       if (matchedContract) {
-        setFormData(prev => ({ ...prev, contractId: matchedContract.id }));
+        setFormData(prev => (prev.contractId ? prev : { ...prev, contractId: matchedContract.id }));
         await fetchPreviousBills(matchedContract.id);
         toast.success(`Matched contract ${matchedContract.agreementNo} from the bill`, { icon: '🔗' });
       }
@@ -1171,6 +1189,9 @@ function NewBillPageContent() {
   };
 
   const handleSubmit = async () => {
+    // The confirm dialog's button has no disabled state, so a double-click fired this
+    // twice — two POSTs, a duplicate bill, and past the trial a double charge.
+    if (isSaving) return;
     if (cementCostPending) {
       toast.error('Apply the derived cement cost (enter the rate settings and apply) before creating the bill.');
       return;

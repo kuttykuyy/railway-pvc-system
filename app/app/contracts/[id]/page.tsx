@@ -15,6 +15,9 @@ import { BillCard } from '@/components/bill-card';
 import { resolvePre2022Setup } from '@/lib/pre2022-contract';
 import { DeleteBillButton } from '@/components/bills/delete-bill-button';
 import { FirstBillFreeTag } from '@/components/billing/first-bill-free-tag';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { checkUserContractAccess } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +34,20 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default async function ContractDetailPage({ params }: Props) {
   const { id } = await params;
+
+  // The page read the contract straight from the database with no ownership check —
+  // any signed-in user with a contract id (a stale share link is enough) saw another
+  // contractor's full contract, bills, and PVC figures. Same rule as the bills API.
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) notFound();
+  const viewer = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { id: true },
+  });
+  if (!viewer) notFound();
+  const access = await checkUserContractAccess(viewer.id, id);
+  if (!access?.canView) notFound();
+
   const contract = await prisma.contract.findUnique({
     where: { id: id },
     include: {

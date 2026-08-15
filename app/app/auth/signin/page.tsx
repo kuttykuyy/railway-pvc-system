@@ -72,9 +72,15 @@ function SignInForm() {
       }
     }
     
-    // Clear the parameters from URL
+    // Clear the display parameters from the URL — but keep callbackUrl: resetting to
+    // the bare pathname also erased the requested destination, so any error or
+    // "registered" banner arriving together with callbackUrl sent the user to the
+    // default /contracts instead of where they were headed (e.g. /welcome).
     if (urlError || urlMessage || urlEmail || registered) {
-      const newUrl = window.location.pathname;
+      const keepCallback = searchParams.get('callbackUrl');
+      const newUrl = keepCallback
+        ? `${window.location.pathname}?callbackUrl=${encodeURIComponent(keepCallback)}`
+        : window.location.pathname;
       window.history.replaceState({}, '', newUrl);
     }
   }, [searchParams]);
@@ -84,9 +90,10 @@ function SignInForm() {
       setLoading(true);
       setError('');
       
-      // Use static callback URL as required
+      // Honour a requested destination (e.g. /welcome after email verification) —
+      // hardcoding /contracts made Google sign-ins skip onboarding.
       await signIn('google', {
-        callbackUrl: '/contracts',
+        callbackUrl: safeCallbackUrl(searchParams.get('callbackUrl')),
         redirect: true,
       });
     } catch (error) {

@@ -264,12 +264,12 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
     if (typeof raw === 'number') return isFinite(raw) ? raw : null;
     const text = String(raw).trim().toLowerCase();
     if (!text) return null;
-    if (/ats*par/.test(text)) return 0;
-    const digits = text.match(/-?d+(?:.d+)?/);
+    if (/\bat\s*par\b/.test(text)) return 0;
+    const digits = text.match(/-?\d+(?:\.\d+)?/);
     if (!digits) return null;
     let value = parseFloat(digits[0]);
     if (!isFinite(value)) return null;
-    const saysBelow = /below|less|discount|rebate|minus|(s*-s*)|(^|[^d])-/.test(text);
+    const saysBelow = /below|less|discount|rebate|minus|\(\s*-\s*\)|(^|[^\d.])-/.test(text);
     if (saysBelow) value = -Math.abs(value);
     return value;
   };

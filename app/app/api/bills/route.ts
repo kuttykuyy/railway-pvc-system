@@ -860,7 +860,17 @@ export async function POST(request: NextRequest) {
         usedProvisionalIndices: indicesCheck.isProvisional === true
       }
     });
-    
+
+    // ===== STEP 17B: Re-run cumulative totals in measurement order =====
+    // The previousPvcTotal above came from the latest calculation BY CREATION TIME.
+    // Back-entering an earlier bill (Bill 2 typed after Bill 3) made Bill 2's
+    // cumulative include Bill 3's PVC — non-monotonic columns on the master sheet.
+    // The update and bulk-create paths already recompute in dateOfMeasurement order;
+    // create now does the same.
+    const { recalculateCumulativePvcForContract } = await import('@/lib/recalculateCumulativePvc');
+    await recalculateCumulativePvcForContract(contractId).catch((e) =>
+      console.error('Cumulative PVC recalculation failed:', e));
+
     // ===== STEP 18: Create Bill Transaction =====
     logger.log('\n💳 ===== CREATING BILL TRANSACTION =====');
     const { processPaymentForBill } = await import('@/lib/payment-validation');
@@ -898,6 +908,7 @@ export async function POST(request: NextRequest) {
       // caller is told to try again.
       await prisma.bill.delete({ where: { id: bill.id } }).catch((err) =>
         console.error('Could not remove unpaid bill:', err));
+      await recalculateCumulativePvcForContract(contractId).catch(() => {});
       return NextResponse.json(
         {
           error: 'Payment could not be completed',
