@@ -486,10 +486,16 @@ export async function POST(request: NextRequest) {
       user.customProcessingFee !== 0;
     if (isActualTrialBill) {
       const { normalizeAgreementNo } = await import('@/lib/railway-division-helper');
-      const normalizedNo = normalizeAgreementNo(contract.agreementNo);
-      if (normalizedNo) {
-        const alreadyClaimed = await prisma.trialClaimedAgreement.findUnique({
-          where: { normalizedAgreementNo: normalizedNo }
+      // Both names the agreement answers to: its own number and the LOA number it
+      // stood on beforehand. Checking only the current one meant an agreement whose
+      // LOA identifier had already taken a free bill still passed here, and was
+      // refused later at claim time — after the bill had been built.
+      const claimNames = [contract.agreementNo, contract.loaNo]
+        .map(value => normalizeAgreementNo(String(value || '')))
+        .filter(Boolean) as string[];
+      if (claimNames.length > 0) {
+        const alreadyClaimed = await prisma.trialClaimedAgreement.findFirst({
+          where: { normalizedAgreementNo: { in: claimNames } }
         });
         if (alreadyClaimed) {
           // Agreement has already claimed a free trial.

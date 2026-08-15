@@ -216,7 +216,14 @@ export async function POST(request: NextRequest) {
     // (this route never consulted trialClaimedAgreement, so one agreement could farm a
     // fresh trial from any number of accounts through a batch of one).
     const { normalizeAgreementNo } = await import('@/lib/railway-division-helper');
-    const normalizedAgreementNo = normalizeAgreementNo(contract.agreementNo || '');
+    // Both names the agreement answers to — its own number and the LOA number a
+    // contract stands on until its first bill. Claiming one and not the other let the
+    // same agreement take a second free bill under its other name.
+    const trialNames = Array.from(new Set(
+      [contract.agreementNo, contract.loaNo]
+        .map(value => normalizeAgreementNo(String(value || '')))
+        .filter(Boolean) as string[],
+    ));
     let trialCount = 0;
     let trialAgreementClaimed = false;
     if (!isFreeAccount) {
@@ -230,7 +237,7 @@ export async function POST(request: NextRequest) {
               data: { freeTrialUsed: { increment: wanted } },
             });
             if (claimed.count === 0) throw new Error('TRIAL_EXHAUSTED');
-            if (normalizedAgreementNo) {
+            for (const normalizedAgreementNo of trialNames) {
               // Hard create: P2002 means this agreement already claimed a trial
               // (any account) — the whole transaction rolls back and the batch pays.
               await tx.trialClaimedAgreement.create({
@@ -239,7 +246,7 @@ export async function POST(request: NextRequest) {
             }
           });
           trialCount = wanted;
-          trialAgreementClaimed = Boolean(normalizedAgreementNo);
+          trialAgreementClaimed = trialNames.length > 0;
         } catch {
           trialCount = 0; // exhausted, raced, or agreement already claimed — charge instead
         }
@@ -254,9 +261,9 @@ export async function POST(request: NextRequest) {
         where: { id: user.id },
         data: { freeTrialUsed: { decrement: trialCount } },
       }).catch((e) => console.error('Could not return trial claim:', e));
-      if (trialAgreementClaimed && normalizedAgreementNo) {
+      if (trialAgreementClaimed && trialNames.length > 0) {
         await prisma.trialClaimedAgreement.deleteMany({
-          where: { normalizedAgreementNo, claimedByUserId: user.id },
+          where: { normalizedAgreementNo: { in: trialNames }, claimedByUserId: user.id },
         }).catch((e) => console.error('Could not release trial agreement claim:', e));
       }
       trialCount = 0;

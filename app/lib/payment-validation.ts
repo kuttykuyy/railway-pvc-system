@@ -134,6 +134,42 @@ export async function validateBillProcessing(
 }
 
 /**
+ * Every name an agreement answers to, normalized and de-duplicated.
+ *
+ * A contract created from an LOA stands on its LOA number until its first bill hands
+ * it the real agreement number, so one physical agreement can present two identifiers
+ * over its life. The one-free-bill-per-agreement rule keys on the identifier, so
+ * claiming only the current one left the other free to claim a second trial from
+ * another account. Both are claimed, and both are checked.
+ *
+ * The bill's contract is the source; the caller's agreementNo is kept as a fallback
+ * for callers that pass one before the bill can be read back.
+ */
+export async function trialIdentifiersForBill(
+  billId: string,
+  agreementNo?: string,
+): Promise<string[]> {
+  const names = new Set<string>();
+  const add = (value?: string | null) => {
+    const normalized = normalizeAgreementNo(String(value || ''));
+    if (normalized) names.add(normalized);
+  };
+
+  add(agreementNo);
+  try {
+    const bill = await prisma.bill.findUnique({
+      where: { id: billId },
+      select: { contract: { select: { agreementNo: true, loaNo: true } } },
+    });
+    add(bill?.contract?.agreementNo);
+    add(bill?.contract?.loaNo);
+  } catch {
+    // The caller's agreementNo still stands on its own.
+  }
+  return [...names];
+}
+
+/**
  * Process payment and create bill transaction
  */
 export async function processPaymentForBill(
@@ -224,6 +260,7 @@ export async function processPaymentForBill(
         // hard create on the agreement number blocks the same agreement from claiming a
         // trial across multiple accounts. If either fails, the trial is not available.
         let claimed = false;
+        const identifiers = await trialIdentifiersForBill(billId, agreementNo);
         try {
           await prisma.$transaction(async (tx) => {
             const res = await tx.user.updateMany({
@@ -232,15 +269,20 @@ export async function processPaymentForBill(
             });
             if (res.count === 0) throw new Error('TRIAL_EXHAUSTED');
 
-            if (agreementNo) {
-              const normalized = normalizeAgreementNo(agreementNo);
-              if (normalized) {
-                // Hard create (not upsert): a second account reusing the same agreement
-                // number hits the unique constraint (P2002) and is denied the free trial.
-                await tx.trialClaimedAgreement.create({
-                  data: { normalizedAgreementNo: normalized, claimedByUserId: userId },
-                });
-              }
+            // EVERY name this agreement answers to, not just the one the contract
+            // happens to carry today. A contract set up from an LOA stands on its LOA
+            // number until its first bill supplies the real agreement number, so the
+            // same physical agreement can present two identifiers — and claiming only
+            // one let it collect a second free bill under the other, from another
+            // account. Claiming all of them closes that: whichever name is presented,
+            // the row is already there.
+            for (const normalized of identifiers) {
+              // Hard create (not upsert): a second account reusing any of this
+              // agreement's names hits the unique constraint (P2002), the whole
+              // transaction rolls back, and the free trial is denied.
+              await tx.trialClaimedAgreement.create({
+                data: { normalizedAgreementNo: normalized, claimedByUserId: userId },
+              });
             }
 
             const u = await tx.user.findUnique({ where: { id: userId }, select: { freeTrialUsed: true } });
