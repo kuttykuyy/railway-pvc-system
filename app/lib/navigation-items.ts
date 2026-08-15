@@ -25,7 +25,24 @@ export interface NavItem {
   railwayOfficialOnly?: boolean;
   /** The accounts / audit office. */
   accountsOfficialOnly?: boolean;
+  /**
+   * Which heading this sits under inside its menu. Admin had grown to two dozen
+   * entries in one unbroken list, in no order, which is a scroll rather than a menu.
+   * Items sharing a section render together under its name; the order below is the
+   * order shown.
+   */
+  section?: string;
 }
+
+/** Admin section headings, in the order they appear. */
+export const ADMIN_SECTIONS = [
+  'Money & Billing',
+  'People & Access',
+  'Rates & Indices',
+  'Checks & Audits',
+  'Integrations',
+  'System',
+] as const;
 
 /** The everyday screens: contracts, bills, and the two department queues. */
 export const WORK_ITEMS: NavItem[] = [
@@ -49,30 +66,48 @@ export const REFERENCE_ITEMS: NavItem[] = [
 
 /** Everything behind the admin gate (app/admin/layout.tsx enforces it server-side). */
 export const ADMIN_ITEMS: NavItem[] = [
-  { name: 'PVC Check Analytics', href: '/admin/analytics', icon: TrendingUp, adminOnly: true },
-  { name: 'Report Templates', href: '/report-templates', icon: Layers, adminOnly: true },
-  { name: 'Work Classifications', href: '/classifications', icon: Tags, adminOnly: true },
-  { name: 'Extension Categories', href: '/admin/extension-subcategories', icon: FileBarChart, adminOnly: true },
-  { name: 'Price Indices Management', href: '/indices', icon: LineChart, adminOnly: true },
-  { name: 'Schedules of Rates', href: '/admin/rate-books', icon: BookOpen, adminOnly: true },
-  { name: 'Cement Coefficients', href: '/admin/dsr-cement-coefficients', icon: Package, adminOnly: true },
-  { name: 'Component Index Documents', href: '/indices/component-documents', icon: FileText, adminOnly: true },
-  { name: 'GST Invoices', href: '/admin/gst-invoices', icon: Receipt, adminOnly: true },
-  { name: 'User Management', href: '/admin/users', icon: User, adminOnly: true },
-  { name: 'Role & Permissions', href: '/admin/user-permissions', icon: ShieldCheck, adminOnly: true },
-  { name: 'Railway Official Limits', href: '/admin/railway-official-settings', icon: ShieldCheck, adminOnly: true },
-  { name: 'Credit Statements', href: '/admin/credit-statements', icon: Wallet, adminOnly: true },
-  { name: 'WhatsApp Logs', href: '/admin/whatsapp-logs', icon: MessageSquare, adminOnly: true },
-  { name: 'Telegram Usage', href: '/admin/telegram', icon: Send, adminOnly: true },
-  { name: 'Steel City Audit', href: '/admin/steel-city-audit', icon: AlertCircle, adminOnly: true },
-  { name: 'JPC Cross-check', href: '/admin/jpc-cross-check', icon: ShieldCheck, adminOnly: true },
-  { name: 'Classification %', href: '/admin/classification-audit', icon: Tags, adminOnly: true },
-  { name: 'Parse Failures', href: '/admin/parse-failures', icon: AlertCircle, adminOnly: true },
-  { name: 'Pending DB Changes', href: '/admin/pending-db-change', icon: Database, adminOnly: true },
-  { name: 'Storage', href: '/admin/storage', icon: HardDrive, adminOnly: true },
-  { name: 'Demo Accounts', href: '/admin/demo-accounts', icon: User, adminOnly: true },
-  { name: 'Review Rewards', href: '/admin/review-rewards', icon: Star, adminOnly: true },
-  { name: 'AI Usage & Credit', href: '/admin/ai-usage', icon: Sparkles, adminOnly: true },
+  // ── Money & Billing ───────────────────────────────────────────────────────────
+  { name: 'Payment Settings', href: '/admin/payment-settings', icon: CreditCard, adminOnly: true, section: 'Money & Billing' },
+  { name: 'GST Invoices', href: '/admin/gst-invoices', icon: Receipt, adminOnly: true, section: 'Money & Billing' },
+  { name: 'Credit Statements', href: '/admin/credit-statements', icon: Wallet, adminOnly: true, section: 'Money & Billing' },
+  { name: 'AI Usage & Credit', href: '/admin/ai-usage', icon: Sparkles, adminOnly: true, section: 'Money & Billing' },
+  { name: 'Review Rewards', href: '/admin/review-rewards', icon: Star, adminOnly: true, section: 'Money & Billing' },
+  { name: 'PVC Check Analytics', href: '/admin/analytics', icon: TrendingUp, adminOnly: true, section: 'Money & Billing' },
+
+  // ── People & Access ───────────────────────────────────────────────────────────
+  { name: 'User Management', href: '/admin/users', icon: User, adminOnly: true, section: 'People & Access' },
+  { name: 'Role & Permissions', href: '/admin/user-permissions', icon: ShieldCheck, adminOnly: true, section: 'People & Access' },
+  { name: 'Railway Official Limits', href: '/admin/railway-official-settings', icon: ShieldCheck, adminOnly: true, section: 'People & Access' },
+  { name: 'Demo Accounts', href: '/admin/demo-accounts', icon: User, adminOnly: true, section: 'People & Access' },
+
+  // ── Rates & Indices ───────────────────────────────────────────────────────────
+  { name: 'Price Indices Management', href: '/indices', icon: LineChart, adminOnly: true, section: 'Rates & Indices' },
+  { name: 'Component Index Documents', href: '/indices/component-documents', icon: FileText, adminOnly: true, section: 'Rates & Indices' },
+  { name: 'Schedules of Rates', href: '/admin/rate-books', icon: BookOpen, adminOnly: true, section: 'Rates & Indices' },
+  { name: 'Cement Coefficients', href: '/admin/dsr-cement-coefficients', icon: Package, adminOnly: true, section: 'Rates & Indices' },
+  { name: 'Work Classifications', href: '/classifications', icon: Tags, adminOnly: true, section: 'Rates & Indices' },
+  { name: 'Extension Categories', href: '/admin/extension-subcategories', icon: FileBarChart, adminOnly: true, section: 'Rates & Indices' },
+  // Not the same screen as "Price Indices Management": this is the only place an index,
+  // or a range of its monthly values, can be DELETED. /indices cannot do that at all.
+  { name: 'Delete Index Data', href: '/admin/price-indices', icon: Database, adminOnly: true, section: 'Rates & Indices' },
+
+  // ── Checks & Audits ───────────────────────────────────────────────────────────
+  { name: 'Parse Failures', href: '/admin/parse-failures', icon: AlertCircle, adminOnly: true, section: 'Checks & Audits' },
+  { name: 'Steel City Audit', href: '/admin/steel-city-audit', icon: AlertCircle, adminOnly: true, section: 'Checks & Audits' },
+  { name: 'JPC Cross-check', href: '/admin/jpc-cross-check', icon: ShieldCheck, adminOnly: true, section: 'Checks & Audits' },
+  { name: 'Classification %', href: '/admin/classification-audit', icon: Tags, adminOnly: true, section: 'Checks & Audits' },
+
+  // ── Integrations ──────────────────────────────────────────────────────────────
+  { name: 'WhatsApp Logs', href: '/admin/whatsapp-logs', icon: MessageSquare, adminOnly: true, section: 'Integrations' },
+  { name: 'Telegram Usage', href: '/admin/telegram', icon: Send, adminOnly: true, section: 'Integrations' },
+  { name: 'API Keys', href: '/admin/api-keys', icon: ShieldCheck, adminOnly: true, section: 'Integrations' },
+  { name: 'API Guide', href: '/admin/api-docs', icon: BookOpen, adminOnly: true, section: 'Integrations' },
+  { name: 'API Endpoints', href: '/docs/external-api', icon: FileText, adminOnly: true, section: 'Integrations' },
+
+  // ── System ────────────────────────────────────────────────────────────────────
+  { name: 'Report Templates', href: '/report-templates', icon: Layers, adminOnly: true, section: 'System' },
+  { name: 'Pending DB Changes', href: '/admin/pending-db-change', icon: Database, adminOnly: true, section: 'System' },
+  { name: 'Storage', href: '/admin/storage', icon: HardDrive, adminOnly: true, section: 'System' },
 ];
 
 /**

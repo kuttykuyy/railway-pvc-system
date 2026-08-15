@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, Fragment } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
@@ -312,12 +312,27 @@ export default function Navigation() {
                           <ChevronDown className="h-3 w-3" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-48 bg-white/95 backdrop-blur-sm">
-                        {group.items.map((item) => {
+                      <DropdownMenuContent align="start" className="w-56 max-h-[80vh] overflow-y-auto bg-white/95 backdrop-blur-sm">
+                        {group.items.map((item, index) => {
                           const isActive = pathname === item.href;
                           const ItemIcon = item.icon;
+                          // A heading each time the section changes. Admin had grown to
+                          // two dozen entries in one unbroken list — findable only by
+                          // reading all of it.
+                          const section = (item as any).section as string | undefined;
+                          const prevSection = (group.items[index - 1] as any)?.section as string | undefined;
+                          const startsSection = !!section && section !== prevSection;
                           return (
-                            <DropdownMenuItem key={item.name} asChild>
+                            <Fragment key={item.name}>
+                            {startsSection && (
+                              <div className={cn(
+                                "px-2 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400",
+                                index > 0 && "border-t border-slate-100 mt-1",
+                              )}>
+                                {section}
+                              </div>
+                            )}
+                            <DropdownMenuItem asChild>
                               <Link 
                                 href={item.href}
                                 className={cn(
@@ -329,6 +344,7 @@ export default function Navigation() {
                                 <span>{translateNav(item.name)}</span>
                               </Link>
                             </DropdownMenuItem>
+                            </Fragment>
                           );
                         })}
                       </DropdownMenuContent>
@@ -583,12 +599,20 @@ export default function Navigation() {
                         </div>
                         
                         {/* Group Items */}
-                        {group.items.map((item) => {
+                        {group.items.map((item, index) => {
                           const isActive = pathname === item.href;
                           const ItemIcon = item.icon;
+                          const section = (item as any).section as string | undefined;
+                          const prevSection = (group.items[index - 1] as any)?.section as string | undefined;
+                          const startsSection = !!section && section !== prevSection;
                           return (
+                            <Fragment key={item.name}>
+                            {startsSection && (
+                              <div className="px-2 pt-2 pb-0.5 ml-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                {section}
+                              </div>
+                            )}
                             <Button
-                              key={item.name}
                               asChild
                               variant={isActive ? "secondary" : "ghost"}
                               size="sm"
@@ -603,6 +627,7 @@ export default function Navigation() {
                                 <span>{item.name}</span>
                               </Link>
                             </Button>
+                            </Fragment>
                           );
                         })}
                       </div>
