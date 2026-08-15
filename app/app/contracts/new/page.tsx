@@ -20,7 +20,7 @@ export default function NewContractPage({
           <div>
             <p className="font-semibold text-emerald-900">Welcome! Let&apos;s set up your first contract.</p>
             <p className="mt-1 text-sm text-emerald-800/80">
-              The fast way: <strong>upload your railway agreement PDF below</strong> and AI fills the form
+              The fast way: <strong>upload your LOA PDF below</strong> (Letter of Acceptance) and AI fills the form
               for you — free. Once the contract is saved, you can create PVC bills against it.
             </p>
           </div>

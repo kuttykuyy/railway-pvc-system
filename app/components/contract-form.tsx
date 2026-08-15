@@ -512,10 +512,10 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
         <div className="rounded-xl border border-dashed border-emerald-300 bg-emerald-50/60 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="flex-1">
             <p className="text-sm font-semibold text-emerald-900 flex items-center gap-1.5">
-              <Sparkles className="h-4 w-4" /> Fill from agreement (AI)
+              <Sparkles className="h-4 w-4" /> Fill from LOA (AI)
             </p>
             <p className="text-xs text-emerald-700/80 mt-0.5">
-              Upload the railway agreement PDF and we'll fill this form for you — free. You review everything before saving.
+              Upload the LOA (Letter of Acceptance) PDF and we'll fill this form for you — free. The agreement works too. You review everything before saving.
             </p>
           </div>
           <input
@@ -535,7 +535,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
             {extractingAgreement ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Reading…</>
             ) : (
-              <><FileText className="mr-2 h-4 w-4" /> Upload Agreement PDF</>
+              <><FileText className="mr-2 h-4 w-4" /> Upload LOA PDF</>
             )}
           </Button>
         </div>

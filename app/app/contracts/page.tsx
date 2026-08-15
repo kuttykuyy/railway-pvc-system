@@ -631,16 +631,16 @@ export default function ContractsPage() {
                   most new users stall on, and the AI upload removes almost all of it. */}
               <div className="w-full rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-left">
                 <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-900">
-                  <FileText className="h-4 w-4" /> Fastest way — upload your agreement
+                  <FileText className="h-4 w-4" /> Fastest way — upload your LOA
                 </p>
                 <p className="mt-1 text-xs text-emerald-700/80">
-                  Upload the railway agreement PDF and we&apos;ll fill in the agreement number, contractor,
+                  Upload the LOA (Letter of Acceptance) PDF and we&apos;ll fill in the agreement number, contractor,
                   dates and values for you — free. You just review and save.
                 </p>
               </div>
               <Button asChild className="w-full sm:w-auto">
                 <Link href="/contracts/new">
-                  <FileText className="mr-2 h-4 w-4" /> Upload agreement &amp; auto-fill
+                  <FileText className="mr-2 h-4 w-4" /> Upload LOA &amp; auto-fill
                 </Link>
               </Button>
               <Link href="/contracts/new" className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700">

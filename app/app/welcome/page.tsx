@@ -174,7 +174,7 @@ export default function WelcomePage() {
       <div className="space-y-2">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Get your PVC report in two uploads</h1>
         <p className="text-muted-foreground">
-          Upload the agreement, upload the bill, and the finished report is yours. Your first bills are free.
+          Upload the LOA, upload the bill, and the finished report is yours. Your first bills are free.
         </p>
       </div>
 
@@ -187,7 +187,7 @@ export default function WelcomePage() {
                 {agreementDone
                   ? <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                   : <span className="h-6 w-6 rounded-full bg-emerald-600 text-white text-xs grid place-items-center font-bold">1</span>}
-                <h2 className="font-semibold">Upload the LOA or agreement</h2>
+                <h2 className="font-semibold">Upload the LOA (Letter of Acceptance)</h2>
               </div>
               <p className="text-sm text-muted-foreground">
                 {agreement.step === 'done'

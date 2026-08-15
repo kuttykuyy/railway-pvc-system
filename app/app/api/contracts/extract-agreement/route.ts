@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
     if (file.type !== 'application/pdf') {
-      return NextResponse.json({ error: 'Please upload the agreement as a PDF.' }, { status: 400 });
+      return NextResponse.json({ error: 'Please upload the LOA (or agreement) as a PDF.' }, { status: 400 });
     }
     if (file.size > 100 * 1024 * 1024) {
       return NextResponse.json({ error: 'File too large. Maximum size is 100MB.' }, { status: 400 });
