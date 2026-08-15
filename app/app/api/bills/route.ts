@@ -398,16 +398,25 @@ export async function POST(request: NextRequest) {
     // the contract's own loaNo), so a hand-typed real number can never be overwritten by
     // a stray bill. On a clash with another contract the stand-in simply stays.
     const billAgreementNo = String(extractedAgreementNo || '').trim();
+    // The contract's agreementNo is stored NORMALIZED (uppercase, spaces/dots stripped)
+    // while loaNo is stored as read — so the stand-in test must normalize both sides,
+    // or an LOA number containing a space or dot never equals its own stand-in and the
+    // real number is never adopted.
+    const { normalizeAgreementNo } = await import('@/lib/railway-division-helper');
+    const normalizedContractNo = normalizeAgreementNo(contract.agreementNo);
+    const isLoaStandIn = Boolean(
+      contract.loaNo &&
+      normalizedContractNo &&
+      normalizedContractNo === normalizeAgreementNo(contract.loaNo)
+    );
     if (
       billAgreementNo &&
-      contract.loaNo &&
-      contract.agreementNo.trim().toUpperCase() === contract.loaNo.trim().toUpperCase() &&
-      billAgreementNo.toUpperCase() !== contract.agreementNo.trim().toUpperCase()
+      isLoaStandIn &&
+      normalizeAgreementNo(billAgreementNo) !== normalizedContractNo
     ) {
       try {
         // Store it the same way manual creation does, so lookups and the trial-claim
         // dedup see one spelling of the number.
-        const { normalizeAgreementNo } = await import('@/lib/railway-division-helper');
         const adoptedNo = normalizeAgreementNo(billAgreementNo) || billAgreementNo;
         await prisma.contract.update({
           where: { id: contract.id },
