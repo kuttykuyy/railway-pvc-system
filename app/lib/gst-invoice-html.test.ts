@@ -45,4 +45,44 @@ describe('generateGstInvoiceHtml (shared module)', () => {
     expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(html).not.toContain('<img src=x onerror=alert(1)>');
   });
+
+  // Both are mandatory particulars of a tax invoice and were absent from the document.
+  it('always states that tax is not payable on reverse charge', () => {
+    const html = generateGstInvoiceHtml(baseInvoice, {});
+    expect(html).toContain('Reverse Charge:');
+    expect(html).toContain('tax is payable by the supplier');
+  });
+
+  it("takes the place of supply from the customer's GSTIN", () => {
+    const html = generateGstInvoiceHtml(
+      { ...baseInvoice, customerGstin: '27AAAAA0000A1Z5', isInterstate: true, igst: 180, cgst: 0, sgst: 0 },
+      {},
+    );
+    expect(html).toContain('Place of Supply:');
+    expect(html).toContain('Maharashtra (27)');
+  });
+
+  it("falls back to the supplier's own state when the supply stayed in-state", () => {
+    // No GSTIN and CGST+SGST charged: the supply did not leave Tamil Nadu.
+    const html = generateGstInvoiceHtml(baseInvoice, {});
+    expect(html).toContain('Tamil Nadu (33)');
+  });
+
+  it('claims no place of supply when it cannot be established', () => {
+    // IGST but no GSTIN — the state was known elsewhere and is not recorded here, so
+    // printing a guess would be worse than printing nothing.
+    const html = generateGstInvoiceHtml(
+      { ...baseInvoice, customerGstin: '', isInterstate: true, igst: 180, cgst: 0, sgst: 0 },
+      {},
+    );
+    expect(html).not.toContain('Place of Supply:');
+  });
+
+  it('prefers a place of supply recorded on the invoice itself', () => {
+    const html = generateGstInvoiceHtml(
+      { ...baseInvoice, placeOfSupply: 'Karnataka (29)' },
+      {},
+    );
+    expect(html).toContain('Karnataka (29)');
+  });
 });

@@ -18,6 +18,42 @@ export function generateGstInvoiceHtml(invoiceRaw: any, user: any): string {
     invoiceNumber: esc(invoiceRaw.invoiceNumber),
     razorpayTransactionId: esc(invoiceRaw.razorpayTransactionId),
   };
+
+  /**
+   * Place of supply — a mandatory particular that was missing from the document.
+   *
+   * Taken from the customer's GSTIN when there is one (its first two digits are the
+   * state code), otherwise from the tax that was actually charged: CGST+SGST means the
+   * supply stayed in the supplier's own state. IGST without a GSTIN means the state was
+   * known some other way and is not recorded here, so nothing is claimed rather than
+   * something wrong being printed.
+   */
+  const SUPPLIER_STATE = { code: '33', name: 'Tamil Nadu' };
+  const STATE_NAMES: Record<string, string> = {
+    '01': 'Jammu and Kashmir', '02': 'Himachal Pradesh', '03': 'Punjab', '04': 'Chandigarh',
+    '05': 'Uttarakhand', '06': 'Haryana', '07': 'Delhi', '08': 'Rajasthan', '09': 'Uttar Pradesh',
+    '10': 'Bihar', '11': 'Sikkim', '12': 'Arunachal Pradesh', '13': 'Nagaland', '14': 'Manipur',
+    '15': 'Mizoram', '16': 'Tripura', '17': 'Meghalaya', '18': 'Assam', '19': 'West Bengal',
+    '20': 'Jharkhand', '21': 'Odisha', '22': 'Chhattisgarh', '23': 'Madhya Pradesh',
+    '24': 'Gujarat', '26': 'Dadra and Nagar Haveli and Daman and Diu', '27': 'Maharashtra',
+    '29': 'Karnataka', '30': 'Goa', '31': 'Lakshadweep', '32': 'Kerala', '33': 'Tamil Nadu',
+    '34': 'Puducherry', '35': 'Andaman and Nicobar Islands', '36': 'Telangana',
+    '37': 'Andhra Pradesh', '38': 'Ladakh',
+  };
+  const gstinRaw = String(invoiceRaw.customerGstin ?? '').trim();
+  const gstinStateCode = gstinRaw.length >= 2 ? gstinRaw.substring(0, 2) : '';
+  const placeOfSupply = (() => {
+    // Stored on the invoice if it was ever recorded there (Zoho supplies one).
+    const stored = String(invoiceRaw.placeOfSupply ?? '').trim();
+    if (stored) return esc(stored);
+    if (gstinStateCode && STATE_NAMES[gstinStateCode]) {
+      return `${esc(STATE_NAMES[gstinStateCode])} (${esc(gstinStateCode)})`;
+    }
+    if (!invoiceRaw.isInterstate) {
+      return `${SUPPLIER_STATE.name} (${SUPPLIER_STATE.code})`;
+    }
+    return '';
+  })();
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString('en-IN', {
       day: '2-digit',
@@ -373,6 +409,8 @@ export function generateGstInvoiceHtml(invoiceRaw: any, user: any): string {
         <p><strong>Invoice No:</strong> ${invoice.invoiceNumber}</p>
         <p><strong>Date:</strong> ${formatDate(invoice.invoiceDate)}</p>
         <p><strong>Payment Method:</strong> Razorpay</p>
+        ${placeOfSupply ? `<p><strong>Place of Supply:</strong> ${placeOfSupply}</p>` : ''}
+        <p><strong>Reverse Charge:</strong> No — tax is payable by the supplier</p>
         <p><strong>Transaction ID:</strong><br>${invoice.razorpayTransactionId.substring(0, 25)}...</p>
       </div>
     </div>
