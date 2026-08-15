@@ -123,6 +123,13 @@ export async function POST(request: NextRequest) {
       customerAddress: customerAddress?.trim() || undefined,
       creditAmount: transaction.creditAmount,
       isInterstate: false, // Default to intrastate (Tamil Nadu)
+      // The tax basis the payment was actually taken on, and the date the money
+      // arrived. Reading them from the payment rather than assuming keeps the invoice
+      // in step with the receipt — assuming is how three invoices came to claim ₹180
+      // of tax on a ₹1,000 payment that held ₹152.54, and how seven came to be dated
+      // the day a catch-up script ran instead of the day of supply.
+      basis: (transaction as any)?.notes?.gstOption === 'include' ? 'inclusive' : 'exclusive',
+      invoiceDate: transaction.completedAt ?? transaction.createdAt ?? undefined,
     });
 
     logger.log(`[GST Invoice] Generated: ${gstInvoice.invoiceNumber} for transaction ${transaction.id}`);

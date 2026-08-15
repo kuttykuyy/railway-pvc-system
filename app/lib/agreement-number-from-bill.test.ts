@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const contract = { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() };
-vi.mock('./db', () => ({ prisma: { contract } }));
+// Only the FIRST bill may name a contract, so the code counts existing bills.
+const bill = { count: vi.fn() };
+vi.mock('./db', () => ({ prisma: { contract, bill } }));
 
 const { fillAgreementNumberFromBill } = await import('./agreement-number-from-bill');
 
@@ -13,6 +15,8 @@ describe('fillAgreementNumberFromBill', () => {
     contract.findUnique.mockReset();
     contract.findFirst.mockReset().mockResolvedValue(null);
     contract.update.mockReset().mockResolvedValue({});
+    // No bills yet — the case where adopting the number is allowed.
+    bill.count.mockReset().mockResolvedValue(0);
   });
 
   it('takes the number from the bill while the contract stands on its LOA number', async () => {
@@ -87,5 +91,15 @@ describe('fillAgreementNumberFromBill', () => {
     contract.findFirst.mockResolvedValue({ id: 'c2' });
     const result = await fillAgreementNumberFromBill('c1', 'SR/TPJ/Civil/2025/0067');
     expect(result.conflict).toBe(true);
+  });
+
+  it('leaves a contract that already has bills alone, even while it stands on its LOA number', async () => {
+    // Renaming it now would break step with the PVC numbers already issued against
+    // the old identifier — production holds such a contract with nine bills on it.
+    contract.findUnique.mockResolvedValue(provisional);
+    bill.count.mockResolvedValue(9);
+    const result = await fillAgreementNumberFromBill('c1', 'SR/TPJ/Civil/2025/0067');
+    expect(result.applied).toBe(false);
+    expect(contract.update).not.toHaveBeenCalled();
   });
 });

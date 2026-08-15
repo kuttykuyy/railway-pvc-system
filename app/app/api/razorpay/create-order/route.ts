@@ -60,8 +60,11 @@ export async function POST(request: NextRequest) {
 
     const { creditAmount, totalAmount, gstAmount, gstOption = 'include' } = body;
 
-    // Validate gstOption
-    if (gstOption && !['include', 'exclude', 'without'].includes(gstOption)) {
+    // Validate gstOption. 'without' is deliberately NOT accepted: it set the tax to
+    // zero on a taxable supply, and the value arrives in the request body, so any
+    // caller could post it and pay 18% less while still receiving the credits. The
+    // supplier would still owe that tax. The dialog never sent it.
+    if (gstOption && !['include', 'exclude'].includes(gstOption)) {
       logger.warn(`[${requestId}] Invalid gstOption:`, gstOption);
       return NextResponse.json(
         { 
@@ -180,8 +183,10 @@ export async function POST(request: NextRequest) {
     // credit grant. Invariant: amount charged (serverTotalAmount) >= credits granted at
     // redemption (which uses totalAmount for 'include', creditAmount otherwise).
     const serverGst = calculateGst(creditAmount, false);
-    const serverGstAmount = gstOption === 'without' ? 0 : serverGst.totalGst;
-    const serverTotalAmount = gstOption === 'without' ? creditAmount : serverGst.totalAmount;
+    // Tax is not optional on a taxable supply — it is always charged and always
+    // remitted, whatever the request asked for.
+    const serverGstAmount = serverGst.totalGst;
+    const serverTotalAmount = serverGst.totalAmount;
     if (typeof totalAmount === 'number' && Math.abs(totalAmount - serverTotalAmount) > 1) {
       logger.warn(`[${requestId}] Client totalAmount ₹${totalAmount} != server ₹${serverTotalAmount}; charging server value.`);
     }
