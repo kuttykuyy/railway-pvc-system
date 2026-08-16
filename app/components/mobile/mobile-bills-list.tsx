@@ -284,7 +284,13 @@ export default function MobileBillsList() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => router.push(`/reports/full/${bill.id}`)}
+                    /* This pointed at /reports/full, which needs a single
+                       workClassificationId on the bill. Only the Telegram and WhatsApp
+                       paths ever set one — bills made on the website carry
+                       classificationEntries instead — so on the phone, View on a bill
+                       made on the website always ended in an error page. Desktop has
+                       always sent View here, to the bill itself, and it works. */
+                    onClick={() => router.push(`/bills/${bill.id}`)}
                     className="flex-1 h-9"
                   >
                     <Eye className="h-4 w-4 mr-1" />
