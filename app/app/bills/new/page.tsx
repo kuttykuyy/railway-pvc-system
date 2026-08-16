@@ -330,6 +330,12 @@ function NewBillPageContent() {
         // cover carries its own way out, so this leads nowhere they cannot leave.
         if (data.hasFreeTrial && !instantParam) {
           setAutoInstant(true);
+          // The file chooser belongs to the PDF analyzer, and the analyzer is only
+          // rendered in 'ai' mode. Without this the cover appeared over a form still
+          // in 'choose' mode, so "Choose the bill PDF" had nothing to open and left
+          // the user watching "Reading your bill…" for a file they were never asked
+          // for. ?instant=1 set this from the start; the automatic path did not.
+          setBillMode((mode) => (mode === 'choose' ? 'ai' : mode));
           setInstantStage((stage) => stage ?? 'upload');
         }
       })
@@ -1497,7 +1503,18 @@ function NewBillPageContent() {
                   size="lg"
                   className="w-full"
                   onClick={() => {
-                    analyzerPickerRef.current?.();
+                    // Only move on if a chooser actually opened. The optional call
+                    // here used to swallow a missing picker and advance anyway, which
+                    // is how the cover could sit on "Reading your bill…" with no file
+                    // dialog and no way forward.
+                    const openPicker = analyzerPickerRef.current;
+                    if (!openPicker) {
+                      setBillMode('ai');
+                      setInstantStage(null);
+                      toast('Choose your bill PDF below.', { icon: '📄' });
+                      return;
+                    }
+                    openPicker();
                     setInstantStage('reading');
                   }}
                 >
