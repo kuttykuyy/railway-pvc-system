@@ -1422,6 +1422,34 @@ function NewBillPageContent() {
 
       // Handle errors
       const errorMessage = responseData.error || 'Failed to create bill';
+
+      // This bill already exists. Offer it, rather than leaving the person holding an
+      // error about a bill they cannot see — they have either uploaded the same PDF
+      // twice and want the report that already exists, or mistyped the number and
+      // need to know which bill they collided with.
+      if (response.status === 409 && responseData.existingBillId) {
+        setInstantStage(null); // never leave the cover up over an error
+        toast(
+          (t) => (
+            <span className="flex items-center gap-3">
+              <span>Bill {responseData.existingBillNo} already exists on this contract.</span>
+              <button
+                type="button"
+                className="shrink-0 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white"
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  router.push(`/bills/${responseData.existingBillId}`);
+                }}
+              >
+                Open it
+              </button>
+            </span>
+          ),
+          { duration: 12000, icon: '📄' },
+        );
+        setError(`Bill ${responseData.existingBillNo} already exists on this contract.`);
+        return;
+      }
       
       // Check if this is an insufficient credit error
       if (errorMessage.includes('Insufficient balance') || errorMessage.includes('insufficient credit')) {

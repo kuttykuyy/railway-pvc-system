@@ -336,11 +336,19 @@ export async function POST(request: NextRequest) {
         contractId,
         billNo: { equals: normalizedBillNo, mode: 'insensitive' },
       },
-      select: { id: true },
+      select: { id: true, billNo: true },
     });
     if (duplicateBill) {
+      // The id travels with the refusal so the screen can offer to open it. Someone
+      // who uploads the same PDF twice wants the report that already exists, and
+      // someone who mistyped the number learns which bill they collided with — a bare
+      // "already exists" leaves both of them with a dead end.
       return NextResponse.json(
-        { error: `Bill number ${normalizedBillNo} already exists for this contract` },
+        {
+          error: `Bill number ${duplicateBill.billNo} already exists for this contract`,
+          existingBillId: duplicateBill.id,
+          existingBillNo: duplicateBill.billNo,
+        },
         { status: 409 },
       );
     }
@@ -927,8 +935,18 @@ export async function POST(request: NextRequest) {
       // is check-then-act with several awaits in between, so two requests can both pass
       // it. This is the database refusing the second one.
       if (writeError?.code === 'P2002') {
+        // Lost the race to a request that got there first — find what it created so
+        // this one can be pointed at it rather than just turned away.
+        const winner = await prisma.bill.findFirst({
+          where: { contractId, billNo: { equals: normalizedBillNo, mode: 'insensitive' } },
+          select: { id: true, billNo: true },
+        }).catch(() => null);
         return NextResponse.json(
-          { error: `Bill number ${normalizedBillNo} already exists for this contract` },
+          {
+            error: `Bill number ${winner?.billNo ?? normalizedBillNo} already exists for this contract`,
+            existingBillId: winner?.id,
+            existingBillNo: winner?.billNo,
+          },
           { status: 409 },
         );
       }
