@@ -58,7 +58,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { creditAmount, totalAmount, gstAmount, gstOption = 'include' } = body;
+    // The default describes how the charge below is actually worked out: GST is added
+    // ON TOP of the credit amount (serverGst, further down), so the basis is exclusive.
+    // It defaulted to 'include', which said the opposite, and the dialog never sends a
+    // value -- so every payment recorded the wrong basis. That was read in two places
+    // and got both wrong: the wallet was credited the gross rather than the credits
+    // bought, and the invoice was written up as tax-inside, recording a Rs 1,000 supply
+    // with Rs 152.54 of tax when Rs 1,180 had been collected.
+    const { creditAmount, totalAmount, gstAmount, gstOption = 'exclude' } = body;
 
     // Validate gstOption. 'without' is deliberately NOT accepted: it set the tax to
     // zero on a taxable supply, and the value arrives in the request body, so any

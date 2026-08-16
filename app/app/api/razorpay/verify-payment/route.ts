@@ -96,8 +96,8 @@ export async function POST(request: NextRequest) {
       
       // Determine actual credits added based on GST option
       const transactionNotes = transaction.notes as any;
-      const gstOption = transactionNotes?.gstOption || 'exclude';
-      const actualCreditsAdded = gstOption === 'include' ? transaction.totalAmount : transaction.creditAmount;
+      // Same rule as the crediting path below: report the credits bought.
+      const actualCreditsAdded = transaction.creditAmount;
       
       // Get GST invoice
       const gstInvoice = await prisma.gstInvoice.findFirst({
@@ -157,7 +157,14 @@ export async function POST(request: NextRequest) {
     // Determine how much to add to wallet based on GST option
     const transactionNotes = transaction.notes as any;
     const gstOption = transactionNotes?.gstOption || 'exclude';
-    const creditsToAdd = gstOption === 'include' ? transaction.totalAmount : transaction.creditAmount;
+    // Always the credits bought, never the gross paid. This held gstOption === 'include'
+    // ? totalAmount : creditAmount, and nothing ever sent a gstOption, so it took the
+    // stored default and granted the gross -- Rs 1,180 of credit on a Rs 1,000 top-up
+    // the dialog had promised Rs 1,000 for, with the Rs 180 difference being tax owed
+    // to the government. creditAmount is right under either basis: with tax on top it
+    // is what was bought, and with tax inside it is both what was paid and what was
+    // bought. Orders created before this still carry the old note, so read neither.
+    const creditsToAdd = transaction.creditAmount;
 
     // Flip the transaction to 'success' and credit the wallet in a single atomic
     // transaction. The conditional update (status not already 'success') guarantees the
@@ -196,7 +203,7 @@ export async function POST(request: NextRequest) {
           userId: user.id,
           amount: creditsToAdd,
           type: 'add',
-          reason: `Razorpay payment - Order ID: ${razorpay_order_id}${gstOption === 'include' ? ' (includes GST)' : ''}`,
+          reason: `Razorpay payment - Order ID: ${razorpay_order_id}`,
           balanceBefore,
           balanceAfter,
         },

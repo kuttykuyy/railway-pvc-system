@@ -198,9 +198,9 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
 
   // Credit amount honours the GST option so the webhook and client verify-payment
   // credit the same value regardless of which one wins the race.
-  const transactionNotes = transaction.notes as any;
-  const gstOption = transactionNotes?.gstOption || 'exclude';
-  const creditsToAdd = gstOption === 'include' ? transaction.totalAmount : transaction.creditAmount;
+  // The credits bought, never the gross paid -- see the matching note in
+  // verify-payment. Both paths must grant the same value or the race guard is pointless.
+  const creditsToAdd = transaction.creditAmount;
 
   // Flip the transaction to 'success' and credit the wallet in a single atomic
   // transaction. The conditional update (status not already 'success') ensures the
@@ -278,10 +278,8 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
   if (user.phone) {
     logger.log(`[${requestId}] Sending WhatsApp payment confirmation to ${user.phone}...`);
     try {
-      // Determine actual credits added based on GST option
-      const transactionNotes = transaction.notes as any;
-      const gstOption = transactionNotes?.gstOption || 'exclude';
-      const actualCreditsAdded = gstOption === 'include' ? transaction.totalAmount : transaction.creditAmount;
+      // The credits bought -- what the confirmation message tells the customer.
+      const actualCreditsAdded = transaction.creditAmount;
       
       const paymentTime = new Date();
       const whatsappResult = await sendPaymentConfirmation(
