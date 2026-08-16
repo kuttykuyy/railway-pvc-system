@@ -72,6 +72,7 @@ export const ADMIN_ITEMS: NavItem[] = [
   { name: 'Credit Statements', href: '/admin/credit-statements', icon: Wallet, adminOnly: true, section: 'Money & Billing' },
   { name: 'AI Usage & Credit', href: '/admin/ai-usage', icon: Sparkles, adminOnly: true, section: 'Money & Billing' },
   { name: 'Review Rewards', href: '/admin/review-rewards', icon: Star, adminOnly: true, section: 'Money & Billing' },
+  { name: 'Free Bills Used', href: '/admin/trial-claims', icon: Gift, adminOnly: true, section: 'Money & Billing' },
   { name: 'PVC Check Analytics', href: '/admin/analytics', icon: TrendingUp, adminOnly: true, section: 'Money & Billing' },
 
   // ── People & Access ───────────────────────────────────────────────────────────
