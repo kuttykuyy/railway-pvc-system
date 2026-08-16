@@ -1420,8 +1420,13 @@ function NewBillPageContent() {
         return;
       }
 
-      // Handle errors
-      const errorMessage = responseData.error || 'Failed to create bill';
+      // Handle errors. `reason` carries the explanation — "A free trial has already
+      // been used for this Agreement Number", "Insufficient balance. Required: ₹199,
+      // Available: ₹0" — while `error` is the bare category, "Payment required".
+      // Showing only the category told people nothing about what to do, and the
+      // insufficient-credit dialog below never opened either, because it looks for
+      // "Insufficient balance" in this string and that text lives in `reason`.
+      const errorMessage = responseData.reason || responseData.error || 'Failed to create bill';
 
       // This bill already exists. Offer it, rather than leaving the person holding an
       // error about a bill they cannot see — they have either uploaded the same PDF
