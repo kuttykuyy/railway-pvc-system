@@ -35,6 +35,8 @@ export function RazorpayTopupDialog({
   const [creditAmount, setCreditAmount] = useState<string>('1000');
   const [loading, setLoading] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+  /** The checkout script never arrived — usually an ad-blocker or an office network. */
+  const [razorpayBlocked, setRazorpayBlocked] = useState(false);
   const [config, setConfig] = useState<{ enabled: boolean; keyId: string | null } | null>(null);
   
   // GST Invoice Dialog state
@@ -333,6 +335,10 @@ export function RazorpayTopupDialog({
         onError={() => {
           console.error('Failed to load Razorpay');
           toast.error('Failed to load payment gateway');
+          // Without this the toast was the only trace: razorpayLoaded stayed false, the
+          // Pay button stayed greyed with no reason given, and reopening the dialog
+          // could not help because next/script will not re-run onLoad.
+          setRazorpayBlocked(true);
         }}
       />
       
@@ -353,6 +359,28 @@ export function RazorpayTopupDialog({
               <Loader2 className="h-4 w-4 animate-spin" />
               <AlertDescription>
                 Loading payment configuration...
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {razorpayBlocked && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <p className="font-medium">The payment window could not load</p>
+                <p className="mt-1">
+                  Something on this network or browser is blocking checkout.razorpay.com —
+                  usually an ad-blocker or an office firewall. Turn the blocker off for this
+                  site, or try mobile data, then reload the page.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => window.location.reload()}
+                >
+                  Reload the page
+                </Button>
               </AlertDescription>
             </Alert>
           )}

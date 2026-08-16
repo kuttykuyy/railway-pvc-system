@@ -134,6 +134,11 @@ interface BillPdfCementAnalyzerProps {
    *  "Upload bill PDF" somewhere else — a sticky bar, say — without duplicating the
    *  upload logic or the checks that run before it. */
   openFilePickerRef?: MutableRefObject<(() => void) | null>;
+  /** Told when a read ends without details being applied — it failed, or it came back
+   *  locked and needs a hand. A page that hides itself behind a "Reading your bill…"
+   *  cover has no other way to know: onApplyBillDetails simply never fires, so the
+   *  spinner runs for ever and a failed read looks exactly like a slow one. */
+  onExtractionIncomplete?: (reason: string) => void;
 }
 
 interface CementRateSettings {
@@ -192,6 +197,7 @@ export function BillPdfCementAnalyzer({
   onApplyBillDetails,
   multiple = false,
   openFilePickerRef,
+  onExtractionIncomplete,
 }: BillPdfCementAnalyzerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const analysisStartedAtRef = useRef<number | null>(null);
@@ -778,6 +784,14 @@ export function BillPdfCementAnalyzer({
           setProcessingStartedAt(Date.now());
         };
         request.onerror = () => reject(new Error('Network error while uploading the bill PDF.'));
+        // A connection that hangs open fires neither onload nor onerror, so the whole
+        // panel sat on "Processing Document" with a counting timer and no cancel, for
+        // ever. Ten minutes is past any real extraction — a long bill is a minute or two.
+        request.timeout = 10 * 60 * 1000;
+        request.ontimeout = () => reject(new Error(
+          'The bill PDF took too long and the upload was stopped. Try it again, and if it '
+          + 'keeps happening, split the PDF or send it in smaller parts.',
+        ));
         request.onload = () => {
           try {
             resolve({ status: request.status, json: JSON.parse(request.responseText) });
@@ -866,7 +880,12 @@ export function BillPdfCementAnalyzer({
     if (files.length === 1) {
       setQueueFailures([]);
       const outcome = await analyzePdfFile(files[0]);
-      if (outcome.ok === false) toast.error(outcome.reason, { duration: 10000 });
+      if (outcome.ok === false) {
+        toast.error(outcome.reason, { duration: 10000 });
+        onExtractionIncomplete?.(outcome.reason);
+      } else if (outcome.locked) {
+        onExtractionIncomplete?.('The bill was read, but the figures need unlocking before they can be used.');
+      }
       return;
     }
 
@@ -907,6 +926,9 @@ export function BillPdfCementAnalyzer({
         `Read ${extracted} of ${files.length} bill PDFs. ${failures.length} could not be read — see the list below.`,
         { duration: 10000 },
       );
+      if (extracted === 0) {
+        onExtractionIncomplete?.(`None of the ${files.length} bill PDFs could be read.`);
+      }
     }
   };
 

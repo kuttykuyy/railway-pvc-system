@@ -49,8 +49,14 @@ export default function CreditBalance() {
 
   useEffect(() => {
     const fetchCreditBalance = async () => {
-      if (status !== 'authenticated') return;
-      
+      // This return sits before the try, so it skipped the finally below and left the
+      // skeleton pulsing for ever. A signed-out or still-loading session is not a load
+      // in progress — stop showing one.
+      if (status !== 'authenticated') {
+        setLoading(false);
+        return;
+      }
+
       try {
         const response = await fetch('/api/credits/balance');
         if (!response.ok) {

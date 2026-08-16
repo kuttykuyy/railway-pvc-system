@@ -11,6 +11,7 @@ import { useParams } from 'next/navigation';
 import { BackButton } from '@/components/ui/back-button';
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
+import toast from 'react-hot-toast';
 
 interface DetailedReport {
   bill: {
@@ -206,6 +207,7 @@ function FullPvcReportContent() {
   const [detailedReport, setDetailedReport] = useState<DetailedReport | null>(null);
   const [calculationSteps, setCalculationSteps] = useState<CalculationSteps | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -224,8 +226,21 @@ function FullPvcReportContent() {
         fetch(`/api/bills/${billId}/calculation-steps`)
       ]);
 
+      // Both failures used to collapse into one blank "Failed to fetch report data",
+      // throwing away the only sentence that tells the user what to do — that the bill
+      // has no work classification, or no calculation, or is not theirs. Read it back.
       if (!detailedResponse.ok || !calculationResponse.ok) {
-        throw new Error('Failed to fetch report data');
+        const failed = !detailedResponse.ok ? detailedResponse : calculationResponse;
+        const reason = await failed
+          .json()
+          .then((body) => body?.error || body?.message)
+          .catch(() => null);
+        throw new Error(
+          reason
+          || (failed.status === 403
+            ? 'This bill belongs to another account.'
+            : `The report could not be built (${failed.status}).`),
+        );
       }
 
       const detailedData = await detailedResponse.json();
@@ -246,12 +261,14 @@ function FullPvcReportContent() {
   };
 
   const handleDownloadPdf = async () => {
+    setIsDownloading(true);
     try {
       const response = await fetch(`/api/bills/${billId}/pdf-report?format=ir_standard`);
       if (!response.ok) {
-        throw new Error('Failed to generate PDF');
+        const reason = await response.json().then((b) => b?.error).catch(() => null);
+        throw new Error(reason || `The PDF could not be built (${response.status}).`);
       }
-      
+
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -261,8 +278,13 @@ function FullPvcReportContent() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (error) {
+    } catch (error: any) {
+      // This used to be console.error alone: the button did nothing, said nothing, and
+      // gave no hint that anything had been attempted.
       console.error('Error downloading PDF:', error);
+      toast.error(error?.message || 'The PDF could not be downloaded.', { duration: 8000 });
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -274,21 +296,22 @@ function FullPvcReportContent() {
     );
   }
 
-  if (error) {
+  // Both of these are ends of the road, so both need a way onward. "Back to Reports"
+  // pointed at /reports, which has no page — the one button on the error screen was a
+  // 404. The bill itself is the useful destination: it is where the report is fixed.
+  if (error || !detailedReport || !calculationSteps) {
     return (
       <div className="p-6">
-        <StatusMessage type="error" title="Error" message={error} />
-        <div className="mt-4">
-          <BackButton href="/reports" label="Back to Reports" variant="outline" />
+        <StatusMessage
+          type="error"
+          title="This report could not be opened"
+          message={error || 'The report came back empty.'}
+        />
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Button variant="outline" onClick={fetchFullReport}>Try again</Button>
+          <BackButton href={`/bills/${billId}`} label="Open the bill" variant="outline" />
+          <BackButton href="/bills" label="All bills" variant="outline" />
         </div>
-      </div>
-    );
-  }
-
-  if (!detailedReport || !calculationSteps) {
-    return (
-      <div className="p-6">
-        <StatusMessage type="error" title="Error" message="Report data not found" />
       </div>
     );
   }
@@ -321,12 +344,13 @@ function FullPvcReportContent() {
               
               <Button 
                 onClick={handleDownloadPdf}
+                disabled={isDownloading}
                 variant="outline"
                 className="hover:bg-gray-50 shadow-lg"
                 size="lg"
               >
                 <Download className="h-5 w-5 mr-2" />
-                PDF Download
+                {isDownloading ? 'Building the PDF…' : 'PDF Download'}
               </Button>
             </div>
           </div>

@@ -37,6 +37,19 @@ function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Coming back from Google's account chooser with the browser's Back button restores
+  // this page from the back/forward cache — React never remounts, so `loading`, set
+  // just before a redirect that never returns, is still true and both sign-in buttons
+  // are dead. Nothing else can clear it: the signIn promise never settles, so there is
+  // no finally to hang this on. Reset when the page is restored.
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setLoading(false);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
+
   // Handle session errors and success messages from URL parameters
   useEffect(() => {
     const urlError = searchParams.get('error');

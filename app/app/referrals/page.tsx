@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,7 +59,8 @@ export default function ReferralsPage() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
     fetch('/api/referrals')
       .then(async (response) => {
         const payload = await response.json();
@@ -70,6 +72,8 @@ export default function ReferralsPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const copyLink = async () => {
     if (!data) return;
@@ -100,7 +104,13 @@ export default function ReferralsPage() {
   if (!data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-10">
+        {/* This used to be the sentence alone: no retry and no link, so a passing server
+            error left the page unusable until someone thought to reload. */}
         <p className="text-sm text-red-600">Referral information could not be loaded.</p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Button variant="outline" onClick={load}>Try again</Button>
+          <Button variant="outline" asChild><Link href="/contracts">Back to contracts</Link></Button>
+        </div>
       </div>
     );
   }

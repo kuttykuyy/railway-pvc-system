@@ -250,6 +250,17 @@ export default function WelcomePage() {
                   {agreement.agreementNo.trim() ? 'Save contract' : 'Save — number comes from the bill'}
                 </Button>
               </div>
+              {/* Skipping works by falling back to the LOA number read off the PDF. When
+                  that was not found either, there is nothing to name the contract by and
+                  the button greys out — which read as the page contradicting the advice
+                  it had just given, because nothing said why. */}
+              {!agreement.agreementNo.trim() && !String(agreement.extracted?.loaNo || '').trim() && (
+                <p className="text-xs text-amber-700">
+                  We could not find an LOA number in the PDF, so we need one number to file
+                  this contract under. Type the LOA number or the agreement number above —
+                  either will do, and the bill can correct it later.
+                </p>
+              )}
             </div>
           )}
 

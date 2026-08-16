@@ -59,17 +59,25 @@ export function ShareContractDialog({ contractId, agreementNo }: { contractId: s
       setEmail('');
       setCanEdit(false);
       await load();
+    } catch {
+      // A dropped connection or an HTML error page throws before any of the checks
+      // above, and there was no catch — the button simply did nothing.
+      toast.error('Could not share it. Check your connection and try again.');
     } finally {
       setSaving(false);
     }
   };
 
   const revoke = async (userId: string, who: string) => {
-    const res = await fetch(`/api/contracts/${contractId}/share?userId=${userId}`, { method: 'DELETE' });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error || 'Could not remove access'); return; }
-    toast.success(`Access removed for ${who}`);
-    await load();
+    try {
+      const res = await fetch(`/api/contracts/${contractId}/share?userId=${userId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Could not remove access'); return; }
+      toast.success(`Access removed for ${who}`);
+      await load();
+    } catch {
+      toast.error(`Could not remove access for ${who}. Check your connection and try again.`);
+    }
   };
 
   return (

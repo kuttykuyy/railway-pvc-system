@@ -131,6 +131,15 @@ export default function ContractImportPage() {
         toast.error('Failed to parse file. Please use the template.');
       }
     };
+    // Without this a file the browser cannot read — locked by another program, on a
+    // drive that has gone away, blocked by permissions — ran no handler at all: no
+    // message, no change on screen, nothing to suggest the click had registered.
+    reader.onerror = () => {
+      toast.error(
+        `${file.name} could not be read. If it is open in Excel, close it and try again.`,
+        { duration: 8000 },
+      );
+    };
     reader.readAsArrayBuffer(file);
   }, []);
 

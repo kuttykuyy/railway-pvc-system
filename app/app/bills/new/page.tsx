@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,7 +30,8 @@ import {
   ArrowRight,
   Edit,
   Sparkles,
-  Loader2
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -173,6 +174,8 @@ function NewBillPageContent() {
   const [instantExtractedAt, setInstantExtractedAt] = useState(0);
   const instantSubmittedRef = useRef(false);
   const analyzerPickerRef = useRef<(() => void) | null>(null);
+  /** Why the upload did not fill the form, kept on the page rather than in a toast. */
+  const [extractionNotice, setExtractionNotice] = useState<string | null>(null);
 
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [classificationGroups, setClassificationGroups] = useState<ClassificationGroup[]>([]);
@@ -714,6 +717,8 @@ function NewBillPageContent() {
 
   const applyExtractedBillDetails = async (data: CementAnalysisData) => {
     setIsAiUploaded(true);
+    // A read has landed, so any earlier "it did not fill the form" notice is stale.
+    setExtractionNotice(null);
     // Block PVC check / create until the derived cement cost is applied: there are
     // cement items (rows with a coefficient) but the cost hasn't been calculated and
     // applied yet (no cementAmountSource / cement amount on the result).
@@ -1214,6 +1219,16 @@ function NewBillPageContent() {
       setInstantStage(null);
     }
   }, [instantStage, isSaving]);
+
+  // A read that ends without details — it failed, or it came back locked — used to leave
+  // "Reading your bill…" spinning for ever, because only a successful extraction moved
+  // the cover on. The toast explaining the failure sat above the cover for ten seconds
+  // and then went, so a failed read became a permanent spinner. Lift the cover and put
+  // the reason where it stays: on the form the user has just been handed.
+  const handleExtractionIncomplete = useCallback((reason: string) => {
+    setInstantStage((stage) => (stage === 'reading' ? null : stage));
+    setExtractionNotice(reason);
+  }, []);
 
   // Instant mode: save the moment the extraction lands complete — and hand over to the
   // human the moment it lands incomplete. The confirm dialog is skipped on purpose: it
@@ -1865,12 +1880,34 @@ function NewBillPageContent() {
                   </div>
                 )}
 
+                {extractionNotice && (
+                  <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 flex gap-2 text-sm text-amber-900">
+                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="font-medium">The upload did not fill the form</p>
+                      <p className="mt-0.5">{extractionNotice}</p>
+                      <p className="mt-1 text-amber-800">
+                        Try the upload again, or fill the bill in below — nothing has been saved
+                        and your free bill has not been used.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="ml-auto text-amber-700 hover:underline shrink-0"
+                      onClick={() => setExtractionNotice(null)}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+
                 {billMode === 'ai' && (
                   <BillPdfCementAnalyzer
                     title="Direct PDF Bill Extraction"
                     contractId={formData.contractId}
                     onApplyBillDetails={applyExtractedBillDetails}
                     openFilePickerRef={analyzerPickerRef}
+                    onExtractionIncomplete={handleExtractionIncomplete}
                   />
                 )}
 
