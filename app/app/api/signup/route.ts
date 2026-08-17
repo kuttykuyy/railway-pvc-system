@@ -33,7 +33,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, password, fullName, whatsappNumber, accountType, railwayZone, referralCode } = await request.json();
+    const { email, password, fullName, whatsappNumber, accountType, railwayZone, referralCode, turnstileToken } = await request.json();
+
+    // Prove a human filled this in. The rate limit above caps how fast one address can
+    // register; it does nothing about a script spread across many, and every account
+    // created here carries a free bill and free AI extraction.
+    const { verifyTurnstileToken } = await import('@/lib/turnstile');
+    const turnstile = await verifyTurnstileToken(turnstileToken, ip);
+    if (!turnstile.ok) {
+      return NextResponse.json({ error: turnstile.reason }, { status: 400 });
+    }
+
     const normalizedEmail = email?.toLowerCase()?.trim();
     const normalizedReferralCode = normalizeReferralCode(referralCode);
 

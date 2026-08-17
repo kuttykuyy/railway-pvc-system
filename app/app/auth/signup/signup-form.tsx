@@ -17,6 +17,7 @@ const PasswordStrengthIndicator = dynamic(
   { ssr: false },
 );
 import { validatePhoneNumber } from '@/lib/phone-validation';
+import { TurnstileWidget } from '@/components/ui/turnstile-widget';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 import { getOfficialRailwayEmailDomainHelp, isOfficialRailwayEmail } from '@/lib/official-email';
@@ -33,6 +34,10 @@ export function SignUpForm() {
   const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  /** Turnstile's proof this is a person. Empty until the check passes, and again once
+   *  it expires. Stays empty when Turnstile is not configured, which the server allows. */
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileReset, setTurnstileReset] = useState(0);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [passwordValidation, setPasswordValidation] = useState<{
     isValid: boolean;
@@ -95,7 +100,7 @@ export function SignUpForm() {
       const response = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, fullName, whatsappNumber, accountType, railwayZone, referralCode }),
+        body: JSON.stringify({ email, password, fullName, whatsappNumber, accountType, railwayZone, referralCode, turnstileToken }),
       });
       const data = await response.json();
 
@@ -159,9 +164,16 @@ export function SignUpForm() {
         router.push('/welcome');
       } else {
         setError(data.error || 'An error occurred during signup');
+        // Cloudflare retires a token the moment it is checked, so the one just sent is
+        // spent whatever the reason for the refusal. Without a fresh challenge the next
+        // attempt would be rejected for the check rather than for the real problem.
+        setTurnstileToken('');
+        setTurnstileReset((n) => n + 1);
       }
     } catch {
       setError('An error occurred. Please try again.');
+      setTurnstileToken('');
+      setTurnstileReset((n) => n + 1);
     } finally {
       setLoading(false);
     }
@@ -363,6 +375,8 @@ export function SignUpForm() {
                   onValidationChange={setPasswordValidation}
                 />
               </div>
+
+              <TurnstileWidget onToken={setTurnstileToken} resetSignal={turnstileReset} />
 
               <Button
                 type="submit"
