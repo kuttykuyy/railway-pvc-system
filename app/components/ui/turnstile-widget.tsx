@@ -39,6 +39,22 @@ export function TurnstileWidget({ onToken, resetSignal = 0 }: TurnstileWidgetPro
   onTokenRef.current = onToken;
   const [failed, setFailed] = useState(false);
 
+  // Rendering nothing is right when Turnstile is deliberately off, and indistinguishable
+  // from a misconfiguration when it is not. NEXT_PUBLIC_ values are inlined at BUILD
+  // time, so the usual cause is a variable that exists in Vercel but was not ticked for
+  // Production, or was named without the NEXT_PUBLIC_ prefix — neither of which shows up
+  // anywhere. Say so in the console rather than leaving a blank space to interpret.
+  useEffect(() => {
+    if (!siteKey) {
+      console.warn(
+        '[turnstile] NEXT_PUBLIC_TURNSTILE_SITE_KEY was empty when this build was made, '
+        + 'so the "I am human" check is not shown and signup is unprotected. The name must '
+        + 'match exactly, must be ticked for the Production environment, and needs a '
+        + 'REDEPLOY after changing — it is baked into the bundle, not read at runtime.',
+      );
+    }
+  }, [siteKey]);
+
   useEffect(() => {
     if (!siteKey) return;
 
