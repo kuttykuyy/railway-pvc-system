@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
+import { signOutToCurrentSite } from '@/lib/sign-out';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
@@ -129,8 +130,8 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
   })).filter(section => section.items.length > 0);
 
   const handleSignOut = () => {
-    signOut({ callbackUrl: '/auth/signin' });
     setIsOpen(false);
+    void signOutToCurrentSite();
   };
 
   const NavLink = ({ href, onClick, className, children }: { href: string; onClick?: () => void; className?: string; children: React.ReactNode }) => {
