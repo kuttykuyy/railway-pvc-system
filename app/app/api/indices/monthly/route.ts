@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { advancedCache } from '@/lib/advanced-cache';
 import { validateAdminAccess } from '@/lib/role-auth';
+import { reapplyWpiProvisionalRule } from '@/lib/wpi-fetcher';
 
 export const dynamic = "force-dynamic";
 
@@ -63,11 +64,20 @@ export async function POST(request: NextRequest) {
         
         results.push(monthlyValue);
       }
-      
-      return NextResponse.json({ 
-        success: true, 
+
+      // A bulk write here can add a newer month directly as final, leaving an older
+      // month stuck showing "provisional" forever — see reapplyWpiProvisionalRule.
+      // Nothing here previously invalidated the cache either, so the fix could sit
+      // behind the cache for however long it takes to expire.
+      await reapplyWpiProvisionalRule().catch((error) => {
+        console.error('Failed to re-sync WPI provisional status after bulk import:', error);
+      });
+      advancedCache.invalidateByTag('indices');
+
+      return NextResponse.json({
+        success: true,
         count: results.length,
-        data: results 
+        data: results
       });
     } else {
       // Single entry
@@ -111,6 +121,12 @@ export async function POST(request: NextRequest) {
         }
       });
       
+      // Re-sync the provisional rule — this single write can be the one that adds a
+      // newer month as final and strands an older one as provisional.
+      await reapplyWpiProvisionalRule().catch((error) => {
+        console.error('Failed to re-sync WPI provisional status after single entry:', error);
+      });
+
       // Invalidate cached indices
       advancedCache.invalidateByTag('indices');
 
@@ -180,7 +196,11 @@ export async function PUT(request: NextRequest) {
       
       results.push(monthlyValue);
     }
-    
+
+    await reapplyWpiProvisionalRule().catch((error) => {
+      console.error('Failed to re-sync WPI provisional status after bulk update:', error);
+    });
+
     // Invalidate cached indices
     advancedCache.invalidateByTag('indices');
 
@@ -226,9 +246,15 @@ export async function DELETE(request: NextRequest) {
         }
       });
       
+      // Deleting the latest month can promote an older one to "latest" and it should
+      // become provisional again — same rule, same reason as on every write.
+      await reapplyWpiProvisionalRule().catch((error) => {
+        console.error('Failed to re-sync WPI provisional status after row delete:', error);
+      });
+
       // Invalidate cached indices
       advancedCache.invalidateByTag('indices');
-      
+
       return NextResponse.json({
         success: true,
         deletedCount: result.count,
@@ -248,6 +274,10 @@ export async function DELETE(request: NextRequest) {
           priceIndexId,
           month: monthDate
         }
+      });
+
+      await reapplyWpiProvisionalRule().catch((error) => {
+        console.error('Failed to re-sync WPI provisional status after value delete:', error);
       });
 
       // Invalidate cached indices

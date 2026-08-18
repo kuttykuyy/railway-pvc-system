@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateAdminAccess } from '@/lib/role-auth';
+import { reapplyWpiProvisionalRule } from '@/lib/wpi-fetcher';
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,13 @@ export async function PUT(
         priceIndex: true
       }
     });
-    
+
+    // An edit here can add or correct a month that changes which two are "latest" —
+    // see reapplyWpiProvisionalRule for why every write path needs to run this.
+    await reapplyWpiProvisionalRule().catch((error) => {
+      console.error('Failed to re-sync WPI provisional status after value edit:', error);
+    });
+
     return NextResponse.json(updatedValue);
   } catch (error: any) {
     console.error('Error updating monthly value:', error);
@@ -70,7 +77,11 @@ export async function DELETE(
     await prisma.monthlyIndexValue.delete({
       where: { id }
     });
-    
+
+    await reapplyWpiProvisionalRule().catch((error) => {
+      console.error('Failed to re-sync WPI provisional status after value delete:', error);
+    });
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting monthly value:', error);

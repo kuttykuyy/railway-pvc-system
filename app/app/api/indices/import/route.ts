@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateAdminAccess } from '@/lib/role-auth';
 import { advancedCache } from '@/lib/advanced-cache';
+import { reapplyWpiProvisionalRule } from '@/lib/wpi-fetcher';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
@@ -307,7 +308,14 @@ export async function POST(request: NextRequest) {
         }
       }
     }
-    
+
+    // This route's own upserts never set isProvisional, so a spreadsheet carrying the
+    // newest month lands as final by default and can strand an older month showing
+    // provisional forever. Re-sync against the database now — see reapplyWpiProvisionalRule.
+    await reapplyWpiProvisionalRule().catch((error) => {
+      console.error('Failed to re-sync WPI provisional status after file import:', error);
+    });
+
     // Invalidate cached indices
     advancedCache.invalidateByTag('indices');
 
