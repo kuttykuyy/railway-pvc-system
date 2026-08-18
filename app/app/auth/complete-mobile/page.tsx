@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
+import { signOutToCurrentSite } from '@/lib/sign-out';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -111,7 +112,7 @@ export default function CompleteMobilePage() {
 
         <button
           type="button"
-          onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+          onClick={() => void signOutToCurrentSite()}
           className="mt-4 w-full text-center text-xs text-slate-400 hover:text-slate-600"
         >
           Sign out

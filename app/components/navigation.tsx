@@ -4,7 +4,8 @@
 import { useState, useMemo, useEffect, Fragment } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
+import { signOutToCurrentSite } from '@/lib/sign-out';
 import { Button } from '@/components/ui/button';
 import { 
   DropdownMenu,
@@ -230,16 +231,7 @@ export default function Navigation() {
   };
 
   const handleSignOut = async () => {
-    try {
-      await signOut({ 
-        callbackUrl: '/auth/signin',
-        redirect: true 
-      });
-    } catch (error) {
-      console.error('Sign out error:', error);
-      // Force redirect to sign in page even if sign out fails
-      window.location.href = '/auth/signin';
-    }
+    await signOutToCurrentSite();
   };
 
   return (

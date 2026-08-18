@@ -2,7 +2,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
+import { signOutToCurrentSite } from '@/lib/sign-out';
 
 const SESSION_DURATION = 60 * 60 * 1000; // 60 minutes (1 hour)
 const CHECK_INTERVAL = 30000; // Check every 30 seconds
@@ -96,18 +97,12 @@ export function SessionTimeoutWarning() {
   }, [status, getLastActivity]);
 
   const handleLogout = async () => {
-    try {
-      // Clear stored activity
-      try { localStorage.removeItem(STORAGE_KEY); } catch {}
-      
-      await signOut({ 
-        callbackUrl: '/auth/signin?timeout=true',
-        redirect: true 
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-      window.location.href = '/auth/signin?timeout=true';
-    }
+    // Clear stored activity
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+
+    // Redirects whether or not the session could be cleared, so there is nothing left
+    // here to fall back to.
+    await signOutToCurrentSite('/auth/signin?timeout=true');
   };
 
   // No UI needed - automatic logout only
