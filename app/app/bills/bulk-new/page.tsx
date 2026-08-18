@@ -929,6 +929,9 @@ export default function BulkBillCreationPage() {
                   disabled={isSaving}
                   title="AI PDF Bill Extraction"
                   multiple
+                  contractId={selectedContract?.id}
+                  contractSchedules={selectedContract?.schedules}
+                  contractRebate={selectedContract?.rebatePercentage}
                   onApplyBillDetails={applyExtractedBillDetailsToBulkRow}
                   openFilePickerRef={openPdfPickerRef}
                 />

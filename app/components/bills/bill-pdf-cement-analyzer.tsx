@@ -10,6 +10,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { unitBlockSize } from '@/lib/dsr-cement-calculation';
 import { CEMENT_DERIVATION_ENABLED } from '@/lib/cement-derivation';
+import {
+  DEFAULT_DSR_BASE_RATE,
+  contractCementRateSettings,
+  deriveCementRate,
+  isBlankCementRateSettings,
+  type CementRateSettings,
+} from '@/lib/dsr-cement-rate';
 
 /** Vercel rejects a serverless request body larger than this, before any of our code runs. */
 const MAX_UPLOAD_BYTES = 4.5 * 1024 * 1024;
@@ -124,6 +131,12 @@ interface BillPdfCementAnalyzerProps {
   compact?: boolean;
   disabled?: boolean;
   contractId?: string;
+  /** Raw Contract.schedules — supplies the agreed escalation/bid rate per schedule, so the
+   *  reference cement figure shown here matches what the manual calculator would derive,
+   *  instead of starting blank until someone types the same numbers in twice. */
+  contractSchedules?: unknown;
+  /** Contract.rebatePercentage — agreed once for the whole agreement. */
+  contractRebate?: number | null;
   onApplyCementAmount?: (amount: number, data: CementAnalysisData) => void;
   onApplyBillDetails?: (data: CementAnalysisData, context?: AppliedExtractionContext) => void | Promise<void>;
   /** Take several bill PDFs in one go, read one after another. A batch of bills arrives
@@ -141,19 +154,11 @@ interface BillPdfCementAnalyzerProps {
   onExtractionIncomplete?: (reason: string) => void;
 }
 
-interface CementRateSettings {
-  escalation: string;
-  bidRate: string;
-  rebate: string;
-}
-
 interface SavedCementRateSettings {
   baseRate: number;
   schedules: Record<string, CementRateSettings>;
   savedAt: string;
 }
-
-const DEFAULT_DSR_BASE_RATE = 688.45;
 
 function formatFileSize(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
@@ -193,6 +198,8 @@ export function BillPdfCementAnalyzer({
   compact = false,
   disabled = false,
   contractId,
+  contractSchedules,
+  contractRebate,
   onApplyCementAmount,
   onApplyBillDetails,
   multiple = false,
@@ -408,38 +415,27 @@ export function BillPdfCementAnalyzer({
     return Array.from(new Set(schedules)).sort();
   };
 
-  // Initialize schedule settings when result changes
+  // Initialize schedule settings when result changes. Prefilled from the CONTRACT's
+  // agreed escalation/bid rate — same source the manual calculator has always read —
+  // rather than blank, so a bill nobody has typed a rate into yet still shows an
+  // accurate reference figure instead of one derived at 0% escalation.
   useEffect(() => {
     if (!result) return;
     const schedules = getUniqueCementSchedules(result);
     setScheduleSettings(prev => {
       const updated = { ...prev };
       schedules.forEach(sched => {
-        if (!updated[sched]) {
-          updated[sched] = { escalation: '', bidRate: '', rebate: '' };
+        if (isBlankCementRateSettings(updated[sched])) {
+          updated[sched] = contractCementRateSettings(contractSchedules, sched, contractRebate);
         }
       });
       return updated;
     });
-  }, [result]);
+  }, [result, contractSchedules, contractRebate]);
 
   const getDerivedRates = (sched: string) => {
-    const settings = scheduleSettings[sched] || { escalation: '', bidRate: '', rebate: '' };
-    const escVal = parseFloat(settings.escalation) || 0;
-    const bidVal = parseFloat(settings.bidRate) || 0;
-    const rebVal = parseFloat(settings.rebate) || 0;
-
-    const afterEsc = dsrBaseRate * (1 + escVal / 100);
-    const afterBid = afterEsc * (1 + bidVal / 100);
-    const afterRebate = afterBid * (1 - rebVal / 100);
-
-    const derivedRatePerQuintal = afterRebate;
-    const derivedRatePerMt = derivedRatePerQuintal * 10;
-
-    return {
-      derivedRatePerQuintal,
-      derivedRatePerMt
-    };
+    const { perQuintal, perMt } = deriveCementRate(dsrBaseRate, scheduleSettings[sched]);
+    return { derivedRatePerQuintal: perQuintal, derivedRatePerMt: perMt };
   };
 
   // A cement coefficient row is identified by its ITEM NUMBER (DSR / item no). An item

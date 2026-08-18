@@ -1905,6 +1905,8 @@ function NewBillPageContent() {
                   <BillPdfCementAnalyzer
                     title="Direct PDF Bill Extraction"
                     contractId={formData.contractId}
+                    contractSchedules={selectedContract?.schedules}
+                    contractRebate={selectedContract?.rebatePercentage}
                     onApplyBillDetails={applyExtractedBillDetails}
                     openFilePickerRef={analyzerPickerRef}
                     onExtractionIncomplete={handleExtractionIncomplete}
