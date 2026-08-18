@@ -23,9 +23,12 @@ export async function POST(request: NextRequest) {
     revalidatePath('/indices');
     
     // Clear any tagged caches
-    revalidateTag('bills');
-    revalidateTag('indices');
-    revalidateTag('pvc-calculations');
+    // Next 16 wants a cache-life profile beside the tag. This route exists to force a
+    // clear now, so the expiry is immediate rather than a named profile that would keep
+    // serving stale index figures for minutes after an admin asked for them to go.
+    revalidateTag('bills', { expire: 0 });
+    revalidateTag('indices', { expire: 0 });
+    revalidateTag('pvc-calculations', { expire: 0 });
     
     // Clear advanced memory caches
     advancedCache.invalidateByTag('indices');
