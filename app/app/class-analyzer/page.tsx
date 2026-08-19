@@ -17,7 +17,6 @@ import { cn } from '@/lib/utils';
 import { TrendingUp, TrendingDown, Calculator, AlertCircle, ChevronDown, ChevronUp, RefreshCcw, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getClientRoleInfo } from '@/lib/role-auth-client';
-import html2canvas from 'html2canvas';
 
 interface MainClassification {
   id: string;
@@ -662,6 +661,11 @@ export default function ClassAnalyzerPage() {
 
     setExportingImage(true);
     try {
+      // Loaded here rather than at the top of the file: html2canvas is a large library
+      // used by this one button, and a static import put it in the bundle every visitor
+      // downloads before the page can render, whether or not they ever export.
+      const { default: html2canvas } = await import('html2canvas');
+
       // Expand all bills before capturing
       const allExpanded: Record<string, boolean> = {};
       multiBillResults.forEach(bill => {

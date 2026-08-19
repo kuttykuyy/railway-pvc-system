@@ -24,29 +24,34 @@ async function ensureBaseMonthValues(baseMonth: Date) {
     // Normalize base month to first day of month
     const normalizedBaseMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1);
     
-    for (const index of allIndices) {
-      // Check if base month value already exists
-      const existingValue = await prisma.monthlyIndexValue.findFirst({
-        where: {
+    const monthEnd = new Date(normalizedBaseMonth.getFullYear(), normalizedBaseMonth.getMonth() + 1, 1);
+
+    // One read for every index, then one write for every gap. This was a findFirst per
+    // index and a create per missing one, run one after another — around fifteen
+    // sequential round-trips on the path that creates a contract, to answer a question
+    // a single query covers.
+    const existing = await prisma.monthlyIndexValue.findMany({
+      where: {
+        priceIndexId: { in: allIndices.map(i => i.id) },
+        month: { gte: normalizedBaseMonth, lt: monthEnd },
+      },
+      select: { priceIndexId: true },
+    });
+    const haveValue = new Set(existing.map(v => v.priceIndexId));
+
+    const missing = allIndices.filter(index => !haveValue.has(index.id));
+    if (missing.length > 0) {
+      await prisma.monthlyIndexValue.createMany({
+        data: missing.map(index => ({
           priceIndexId: index.id,
-          month: {
-            gte: normalizedBaseMonth,
-            lt: new Date(normalizedBaseMonth.getFullYear(), normalizedBaseMonth.getMonth() + 1, 1)
-          }
-        }
+          month: normalizedBaseMonth,
+          value: index.baseValue,
+          source: `Auto-populated base month value for ${index.name}`,
+        })),
+        // The unique index on (priceIndexId, month) is the real guard: two contracts
+        // created for the same base month at once would otherwise collide here.
+        skipDuplicates: true,
       });
-      
-      // If no value exists, create one using the static base value
-      if (!existingValue) {
-        await prisma.monthlyIndexValue.create({
-          data: {
-            priceIndexId: index.id,
-            month: normalizedBaseMonth,
-            value: index.baseValue,
-            source: `Auto-populated base month value for ${index.name}`
-          }
-        });
-      }
     }
   } catch (error) {
     console.error('Error ensuring base month values:', error);
