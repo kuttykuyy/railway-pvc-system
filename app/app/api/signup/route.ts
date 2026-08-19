@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { notifyNewUserSignup } from '@/lib/slack-webhook';
 import { resend, getVerificationEmailHtml } from '@/lib/resend';
+import { emailLinkOrigin } from '@/lib/email-link-origin';
 import { randomBytes } from 'crypto';
 import { validatePhoneNumber, sendUserSignupWelcome, sendWelcomeMessageToUser, getAdminWhatsAppNumber } from '@/lib/whatsapp-mydreams';
 import { isEmailVerificationRequired } from '@/lib/admin-settings';
@@ -238,26 +239,14 @@ export async function POST(request: NextRequest) {
     let emailErrorMessage: string | null = null;
     if (emailVerificationRequired && result.token) {
       try {
-        // Get base URL with multiple fallbacks for reliability
-        const envUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, '');
-        const forwardedHost = request.headers.get('x-forwarded-host');
-        const host = request.headers.get('host');
-        
-        let baseUrl: string;
-        if (envUrl && envUrl.includes('irpvc.in')) {
-          baseUrl = envUrl;
-        } else if (forwardedHost) {
-          baseUrl = `https://${forwardedHost}`;
-        } else if (host && host.includes('irpvc.in')) {
-          baseUrl = `https://${host}`;
-        } else {
-          baseUrl = 'https://irpvc.in';
-        }
-        
+        // A fixed origin, never the request's headers — see lib/email-link-origin.ts.
+        const baseUrl = emailLinkOrigin();
+
         const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${result.token}`;
-        
+
+        // The URL itself is not logged: it carries the verification token, and a token
+        // in a log is a token outside the recipient's inbox.
         logger.log('[Signup] Sending verification email to:', result.user.email);
-        logger.log('[Signup] Verification URL:', verificationUrl);
         
         const { data, error } = await resend.emails.send({
           from: 'Railway PVC System <noreply@irpvc.in>',

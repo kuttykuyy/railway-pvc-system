@@ -2,37 +2,23 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { emailLinkOrigin } from '@/lib/email-link-origin';
 
 // Force dynamic rendering for this route
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
-  // Get base URL with multiple fallbacks for reliability (declared outside try for catch block access)
-  // Priority: 1) NEXTAUTH_URL env var, 2) x-forwarded-host header, 3) host header, 4) hardcoded fallback
-  const envUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, '');
-  const forwardedHost = request.headers.get('x-forwarded-host');
-  const host = request.headers.get('host');
-  
-  let baseUrl: string;
-  if (envUrl && envUrl.includes('irpvc.in')) {
-    baseUrl = envUrl;
-  } else if (forwardedHost) {
-    baseUrl = `https://${forwardedHost}`;
-  } else if (host && host.includes('irpvc.in')) {
-    baseUrl = `https://${host}`;
-  } else {
-    baseUrl = 'https://irpvc.in';
-  }
-  
+  // A fixed origin, never the request's own headers — see lib/email-link-origin.ts.
+  // This decides where the user is sent after their address is verified, so a forged
+  // X-Forwarded-Host landed them on someone else's site holding a fresh session.
+  const baseUrl = emailLinkOrigin();
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const token = searchParams.get('token');
 
     logger.log('[Email Verification] Request received');
-    logger.log('[Email Verification] NEXTAUTH_URL:', envUrl);
-    logger.log('[Email Verification] X-Forwarded-Host:', forwardedHost);
-    logger.log('[Email Verification] Host:', host);
     logger.log('[Email Verification] Selected Base URL:', baseUrl);
     logger.log('[Email Verification] Token present:', !!token);
 

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { randomBytes } from 'crypto';
 import { resend, getVerificationEmailHtml } from '@/lib/resend';
+import { emailLinkOrigin } from '@/lib/email-link-origin';
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,22 +55,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Get base URL
-    const envUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, '');
-    const forwardedHost = request.headers.get('x-forwarded-host');
-    const host = request.headers.get('host');
-    
-    let baseUrl: string;
-    if (envUrl && envUrl.includes('irpvc.in')) {
-      baseUrl = envUrl;
-    } else if (forwardedHost) {
-      baseUrl = `https://${forwardedHost}`;
-    } else if (host && host.includes('irpvc.in')) {
-      baseUrl = `https://${host}`;
-    } else {
-      baseUrl = 'https://irpvc.in';
-    }
-    
+    // A fixed origin, never the request's headers — see lib/email-link-origin.ts.
+    const baseUrl = emailLinkOrigin();
+
     const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${token}`;
 
     logger.log('[Resend Verification] Sending email to:', user.email);

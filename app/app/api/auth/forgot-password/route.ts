@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import crypto from 'crypto';
 import { resend, getResetPasswordEmailHtml } from '@/lib/resend';
+import { emailLinkOrigin } from '@/lib/email-link-origin';
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,36 +46,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Generate reset URL - use the same logic as signup verification
-    let baseUrl = '';
-    
-    // Priority 1: Use NEXTAUTH_URL if it contains irpvc.in
-    if (process.env.NEXTAUTH_URL && process.env.NEXTAUTH_URL.includes('irpvc.in')) {
-      baseUrl = process.env.NEXTAUTH_URL;
-    } 
-    // Priority 2: Check X-Forwarded-Host header
-    else if (request.headers.get('x-forwarded-host')) {
-      const forwardedHost = request.headers.get('x-forwarded-host');
-      baseUrl = `https://${forwardedHost}`;
-    } 
-    // Priority 3: Check Host header if it contains irpvc.in
-    else if (request.headers.get('host')?.includes('irpvc.in')) {
-      const host = request.headers.get('host');
-      baseUrl = `https://${host}`;
-    } 
-    // Fallback: Use hardcoded production URL
-    else {
-      baseUrl = 'https://irpvc.in';
-    }
+    // Built from a fixed origin, never from the request. This used to fall back to the
+    // X-Forwarded-Host header whenever NEXTAUTH_URL did not contain "irpvc.in" — which
+    // is always, because NEXTAUTH_URL names the platform host here. A forged header
+    // therefore put an attacker's domain into an email carrying this real reset token.
+    const baseUrl = emailLinkOrigin();
 
     const resetUrl = `${baseUrl}/auth/reset-password?token=${resetToken}`;
 
     logger.log('Password Reset URL Generation:');
-    logger.log('- NEXTAUTH_URL:', process.env.NEXTAUTH_URL);
-    logger.log('- X-Forwarded-Host:', request.headers.get('x-forwarded-host'));
-    logger.log('- Host:', request.headers.get('host'));
     logger.log('- Selected Base URL:', baseUrl);
-    logger.log('- Reset URL:', resetUrl);
 
     // Send password reset email
     try {
