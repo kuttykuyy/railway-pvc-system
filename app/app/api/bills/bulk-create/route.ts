@@ -398,13 +398,14 @@ export async function POST(request: NextRequest) {
       let totalExplosivesPvc = 0;
       let totalSteelPvc = 0;
 
+      const { getClassificationComponents } = await import('@/lib/pvc-calculations');
+
       for (const entry of billInput.classificationEntries) {
         let hasSteelComponent = false;
         if (entry.subClassificationId) {
-          const subClass = await prisma.subClassification.findUnique({
-            where: { id: entry.subClassificationId },
-            select: { steel: true }
-          });
+          // The same row calculateClassificationEntryPvc needs below, read through the
+          // shared cache instead of a second query per entry.
+          const subClass = await getClassificationComponents(entry.subClassificationId);
           hasSteelComponent = (subClass?.steel ?? 0) > 0;
         }
 

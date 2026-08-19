@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getQuarterFromDate, calculateDedicatedCementPvc, calculateDedicatedSteelPvc, calculateClassificationEntryPvc } from '@/lib/pvc-calculations';
+import { getQuarterFromDate, calculateDedicatedCementPvc, calculateDedicatedSteelPvc, calculateClassificationEntryPvc, getClassificationComponents } from '@/lib/pvc-calculations';
 import { advancedCache } from '@/lib/advanced-cache';
 import { getQuarterlyAverages } from '@/lib/db-utils';
 import { getServerSession } from 'next-auth';
@@ -435,21 +435,9 @@ export async function PUT(
         const hasValidAmount = entry.amount !== '' && entry.amount !== null && entry.amount !== undefined;
         
         if ((entry.subClassificationId || entry.classificationId) && hasValidAmount) {
-          // Check if this classification has steel components
-          let hasSteelComponent = false;
-          if (entry.subClassificationId) {
-            const subClass = await prisma.subClassification.findUnique({
-              where: { id: entry.subClassificationId },
-              select: { steel: true }
-            });
-            hasSteelComponent = (subClass?.steel ?? 0) > 0;
-          } else if (entry.classificationId) {
-            const classification = await prisma.classification.findUnique({
-              where: { id: entry.classificationId },
-              select: { steel: true }
-            });
-            hasSteelComponent = (classification?.steel ?? 0) > 0;
-          }
+          // Shared cache — the same row the PVC calculation reads below.
+          const components = await getClassificationComponents(entry.subClassificationId, entry.classificationId);
+          const hasSteelComponent = (components?.steel ?? 0) > 0;
           
           // Use entry's steel types if specified, otherwise use bill-level steel types if entry has steel
           const entrySteelTypes = entry.steelTypes && entry.steelTypes.length > 0 

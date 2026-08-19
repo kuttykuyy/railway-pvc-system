@@ -139,18 +139,15 @@ export async function POST(request: NextRequest) {
     const extractedSteelTypes = await extractSteelTypesFromEntries(classificationEntries);
 
     if (classificationEntries.length > 0) {
-      const { calculateClassificationEntryPvc } = await import('@/lib/pvc-calculations');
+      const { calculateClassificationEntryPvc, getClassificationComponents } = await import('@/lib/pvc-calculations');
 
       for (const entry of classificationEntries) {
         const hasValidAmount = entry.amount !== '' && entry.amount !== null && entry.amount !== undefined;
         if (!hasValidAmount || !entry.subClassificationId) continue;
 
-        let hasSteelComponent = false;
-        const subClass = await prisma.subClassification.findUnique({
-          where: { id: entry.subClassificationId },
-          select: { steel: true }
-        });
-        hasSteelComponent = (subClass?.steel ?? 0) > 0;
+        // Shared cache — the same row the PVC calculation reads below.
+        const subClass = await getClassificationComponents(entry.subClassificationId);
+        const hasSteelComponent = (subClass?.steel ?? 0) > 0;
 
         const entrySteelTypes = entry.steelTypes?.length > 0
           ? entry.steelTypes

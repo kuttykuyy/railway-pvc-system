@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, calculationMethod);
 
     // Per-entry PVC calculation (no DB writes)
-    const { calculateClassificationEntryPvc } = await import('@/lib/pvc-calculations');
+    const { calculateClassificationEntryPvc, getClassificationComponents } = await import('@/lib/pvc-calculations');
     let labourPvc = 0, plantPvc = 0, fuelPvc = 0, materialsPvc = 0;
     let cementPvc = 0, steelPvc = 0, explosivesPvc = 0, totalPvc = 0;
 
@@ -98,14 +98,10 @@ export async function POST(request: NextRequest) {
       const hasAmount = entry.amount !== '' && entry.amount !== null && entry.amount !== undefined && parseFloat(entry.amount) > 0;
       if (!hasAmount || (!entry.subClassificationId && !entry.classificationId)) continue;
 
-      let hasSteelComponent = false;
-      if (entry.subClassificationId) {
-        const sub = await prisma.subClassification.findUnique({ where: { id: entry.subClassificationId }, select: { steel: true } });
-        hasSteelComponent = (sub?.steel ?? 0) > 0;
-      } else if (entry.classificationId) {
-        const cls = await prisma.classification.findUnique({ where: { id: entry.classificationId }, select: { steel: true } });
-        hasSteelComponent = (cls?.steel ?? 0) > 0;
-      }
+      // Shared cache — the same row calculateClassificationEntryPvc reads below, so this
+      // costs nothing after the first entry that uses it.
+      const components = await getClassificationComponents(entry.subClassificationId, entry.classificationId);
+      const hasSteelComponent = (components?.steel ?? 0) > 0;
 
       const entrySteelTypes = entry.steelTypes?.length > 0
         ? entry.steelTypes

@@ -669,6 +669,47 @@ export function calculateClassificationBasedPvcWithComponentsAndSteps(
  * Calculate PVC for a single classification entry
  * This ensures per-entry calculation matches PDF generation logic
  */
+/**
+ * The component percentages for one classification, remembered briefly.
+ *
+ * These rows are reference data — a few dozen of them, edited only by an admin — but
+ * they were re-read from the database once per bill entry, and twice: the caller read
+ * `steel` to decide the steel types, then this module re-read the whole row. A bulk
+ * import of 20 bills at 12 entries each therefore made 480 sequential round-trips to
+ * fetch a handful of distinct rows, roughly 19 seconds of pure waiting against a
+ * 60-second function limit.
+ *
+ * A minute is short enough that an admin editing a percentage sees it take effect
+ * almost at once, and long enough that a bulk import reads each row once. Same trade
+ * the session role cache in lib/auth.ts already makes.
+ */
+const COMPONENT_CACHE_TTL_MS = 60_000;
+const componentCache = new Map<string, { row: any; at: number }>();
+
+export async function getClassificationComponents(
+  subClassificationId?: string | null,
+  classificationId?: string | null,
+): Promise<any | null> {
+  const key = subClassificationId ? `sub:${subClassificationId}` : classificationId ? `cls:${classificationId}` : '';
+  if (!key) return null;
+
+  const hit = componentCache.get(key);
+  if (hit && Date.now() - hit.at < COMPONENT_CACHE_TTL_MS) return hit.row;
+
+  let row: any = null;
+  if (subClassificationId) {
+    row = await prisma.subClassification.findUnique({ where: { id: subClassificationId } });
+  }
+  if (!row && classificationId) {
+    row = await prisma.classification.findUnique({ where: { id: classificationId } });
+  }
+
+  // A miss is cached too. A bad id in a bulk import would otherwise re-query for every
+  // entry that carries it, which is the case that needs the cache most.
+  componentCache.set(key, { row, at: Date.now() });
+  return row;
+}
+
 export async function calculateClassificationEntryPvc(
   entry: {
     subClassificationId?: string;
@@ -691,29 +732,10 @@ export async function calculateClassificationEntryPvc(
   explosivesPvc: number;
   totalPvc: number;
 }> {
-  const { prisma } = await import('@/lib/db');
-  
-  // Get classification components
-  let components = null;
-  
-  if (entry.subClassificationId) {
-    const subClass = await prisma.subClassification.findUnique({
-      where: { id: entry.subClassificationId }
-    });
-    if (subClass) {
-      components = subClass;
-    }
-  }
-  
-  if (!components && entry.classificationId) {
-    const classification = await prisma.classification.findUnique({
-      where: { id: entry.classificationId }
-    });
-    if (classification) {
-      components = classification;
-    }
-  }
-  
+  // Cached — see getClassificationComponents. This used to be two findUnique calls per
+  // entry, on top of the one the caller had already made for the same row.
+  const components = await getClassificationComponents(entry.subClassificationId, entry.classificationId);
+
   if (!components) {
     return {
       labourPvc: 0,

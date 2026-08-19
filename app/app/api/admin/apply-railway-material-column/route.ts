@@ -208,6 +208,30 @@ const PENDING_EXTRAS: Array<{ label: string; sql: (s: string) => string; why: st
     why: 'Ties the accounts signature to a real user, and clears it if that user is deleted.',
     check: { kind: 'constraint', name: 'bills_passedBy_fkey' },
   },
+  {
+    label: 'credit_transactions_userId_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "credit_transactions_userId_idx"
+      ON "${s}"."credit_transactions" ("userId", "type")`,
+    why: 'credit_transactions carried no index at all, and /api/credits/balance counts '
+      + 'this user\'s top-ups on every call — the second-busiest route in the app, 199 '
+      + 'requests in a day. Every one scanned the whole ledger, which only ever grows. '
+      + 'Eleven other places read it by userId too, including every PDF and Excel report.',
+    check: { kind: 'index', name: 'credit_transactions_userId_idx' },
+  },
+  {
+    label: 'contract_extensions_contractId_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "contract_extensions_contractId_idx"
+      ON "${s}"."contract_extensions" ("contractId")`,
+    why: 'Extensions are always read for one contract, and the table had no index.',
+    check: { kind: 'index', name: 'contract_extensions_contractId_idx' },
+  },
+  {
+    label: 'report_templates_userId_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "report_templates_userId_idx"
+      ON "${s}"."report_templates" ("userId")`,
+    why: 'Templates are listed per user, and the table had no index.',
+    check: { kind: 'index', name: 'report_templates_userId_idx' },
+  },
 ];
 
 async function requireAdmin() {
