@@ -4486,52 +4486,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // ALL BILLS FOR THIS CONTRACT SECTION - Rendered AFTER PVC calculation so we can use recalculated values
     if (templateSettings.sections.allBillsTable) {
-    
-    // Use the recalculated PVC from the PVC calculation section (captured in outer-scope variable)
-    const currentBillRecalculatedPvc = recalculatedPvcForCurrentBill;
-    
-    // Update DB with recalculated PVC if it differs from stored value
-    if (bill.pvcCalculation && Math.abs(currentBillRecalculatedPvc - bill.pvcCalculation.totalPvc) > 0.01) {
-      try {
-        await prisma.pvcCalculation.update({
-          where: { id: bill.pvcCalculation.id },
-          data: { totalPvc: currentBillRecalculatedPvc }
-        });
-        console.log(`Updated bill ${bill.billNo} totalPvc from ${bill.pvcCalculation.totalPvc} to ${currentBillRecalculatedPvc}`);
-        
-        // Recalculate cumulative PVC for all bills in this contract
-        const contractBillsForCumulative = await prisma.bill.findMany({
-          where: { contractId: bill.contractId },
-          include: { pvcCalculation: true },
-          orderBy: { dateOfMeasurement: 'asc' }
-        });
-        let runningCumulative = 0;
-        for (const cb of contractBillsForCumulative) {
-          if (cb.pvcCalculation) {
-            runningCumulative += cb.pvcCalculation.totalPvc;
-            await prisma.pvcCalculation.update({
-              where: { id: cb.pvcCalculation.id },
-              data: {
-                previousPvcTotal: runningCumulative - cb.pvcCalculation.totalPvc,
-                cumulativePvc: runningCumulative
-              }
-            });
-          }
-        }
-        
-        // Refresh allContractBills data with updated values
-        const refreshedBills = await prisma.bill.findMany({
-          where: { contractId: bill.contractId },
-          include: { pvcCalculation: true },
-          orderBy: { createdAt: 'asc' }
-        });
-        allContractBills.length = 0;
-        allContractBills.push(...refreshedBills);
-      } catch (updateErr) {
-        console.error('Failed to update PVC in database:', updateErr);
-      }
+
+    // A report must never write money. This block used to push the PDF's own
+    // recomputed total INTO pvcCalculation.totalPvc whenever it differed by more
+    // than a paisa, then rewrite the whole contract's cumulative chain — and the
+    // PDF's engine diverges from the stored one (no WPI series bridge, seed-value
+    // fill-ins for missing months, TMT-only steel default, no B/C-code exclusion,
+    // no railway-supplied-material factor), so "differed" was the normal case, and
+    // every download silently replaced correct stored figures with the PDF's. Worse:
+    // the recomputation only runs when the template's pvcCalculation section is on,
+    // so a template with allBillsTable on and pvcCalculation off wrote totalPvc = 0
+    // for the bill and cascaded that zero through the contract's cumulatives. If the
+    // stored figure needs recomputing, that is what Regenerate is for — a print-out
+    // is not an edit.
+    if (bill.pvcCalculation && recalculatedPvcForCurrentBill !== 0
+        && Math.abs(recalculatedPvcForCurrentBill - bill.pvcCalculation.totalPvc) > 0.01) {
+      console.warn(`[pdf-report] PDF recomputation for bill ${bill.billNo} differs from stored totalPvc `
+        + `(${recalculatedPvcForCurrentBill} vs ${bill.pvcCalculation.totalPvc}); stored figure kept.`);
     }
-    
+
     checkNewPage(80);
     pdf.setFontSize(19);
     pdf.setFont("helvetica", "bold");
@@ -4542,18 +4515,47 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     pdf.line(marginLeft, yPosition + 2, marginLeft + billsTitleWidth, yPosition + 2);
     yPosition += 12;
 
-    const billsTableData = allContractBills.map((b: any) => [
-      b.billNo,
-      format(new Date(b.dateOfMeasurement), 'dd MMM yyyy'),
-      b.quarter,
-      b.billAmount.toLocaleString('en-IN'),
-      b.pvcCalculation ? b.pvcCalculation.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : 'Not Calculated',
-      b.pvcCalculation ? b.pvcCalculation.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '-'
-    ]);
+    // Whether each bill's quarter is priced on provisional or final indices. The
+    // accounts office treats the two differently — a provisional figure will move when
+    // the final index publishes — so the summary table says which each bill is.
+    // Answered once per distinct quarter/zone/fuel combination, not once per bill.
+    const { isBillUsingProvisionalIndices, relevantIndexNamesForBill } = await import('@/lib/index-status');
+    const statusByKey = new Map<string, string>();
+    const billIndexStatus = async (b: any): Promise<string> => {
+      const key = `${b.quarter}|${b.zone || ''}|${b.fuelPriceType || ''}`;
+      const known = statusByKey.get(key);
+      if (known) return known;
+      let label = '-';
+      try {
+        const status = await isBillUsingProvisionalIndices(
+          b.quarter,
+          new Date(bill.contract.baseMonth),
+          relevantIndexNamesForBill(b.zone, b.fuelPriceType),
+        );
+        label = status.isProvisional ? 'Provisional' : 'Final';
+      } catch (statusError) {
+        console.warn(`[pdf-report] Could not determine index status for bill ${b.billNo}:`, statusError);
+      }
+      statusByKey.set(key, label);
+      return label;
+    };
+
+    const billsTableData: any[][] = [];
+    for (const b of allContractBills) {
+      billsTableData.push([
+        b.billNo,
+        format(new Date(b.dateOfMeasurement), 'dd MMM yyyy'),
+        b.quarter,
+        b.billAmount.toLocaleString('en-IN'),
+        b.pvcCalculation ? b.pvcCalculation.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : 'Not Calculated',
+        b.pvcCalculation ? b.pvcCalculation.cumulativePvc.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '-',
+        await billIndexStatus(b),
+      ]);
+    }
 
     pdf.autoTable({
       startY: yPosition,
-      head: [['Bill No.', 'Measurement Date', 'Quarter', 'Bill Amount', 'PVC Amount', 'Cumulative PVC']],
+      head: [['Bill No.', 'Measurement Date', 'Quarter', 'Bill Amount', 'PVC Amount', 'Cumulative PVC', 'Status']],
       body: billsTableData,
       theme: 'grid',
       headStyles: { 
@@ -4570,12 +4572,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       margin: { left: marginLeft, right: marginRight },
       tableWidth: contentWidth,
       columnStyles: {
-        0: { cellWidth: contentWidth * 0.14, halign: 'center', fontStyle: 'bold' },
-        1: { cellWidth: contentWidth * 0.18, halign: 'center' },
-        2: { cellWidth: contentWidth * 0.12, halign: 'center' },
-        3: { cellWidth: contentWidth * 0.19, halign: 'right' },
-        4: { cellWidth: contentWidth * 0.19, halign: 'right' },
-        5: { cellWidth: contentWidth * 0.18, halign: 'right' }
+        0: { cellWidth: contentWidth * 0.13, halign: 'center', fontStyle: 'bold' },
+        1: { cellWidth: contentWidth * 0.15, halign: 'center' },
+        2: { cellWidth: contentWidth * 0.10, halign: 'center' },
+        3: { cellWidth: contentWidth * 0.17, halign: 'right' },
+        4: { cellWidth: contentWidth * 0.17, halign: 'right' },
+        5: { cellWidth: contentWidth * 0.16, halign: 'right' },
+        6: { cellWidth: contentWidth * 0.12, halign: 'center' }
       },
       didParseCell: function (data: any) {
         if (data.section === 'body' && data.column.index === 2) {
