@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { handleIncomingMessage } from '@/lib/whatsapp-message-handler';
 import { prisma } from '@/lib/db';
 
@@ -72,10 +73,15 @@ export async function POST(req: NextRequest) {
       messageId,
     });
 
-    // Handle the message asynchronously
-    handleIncomingMessage(contact, message).catch((error) => {
-      console.error('Error handling WhatsApp message:', error);
-    });
+    // Via after(), not a bare fire-and-forget: on Vercel the function freezes the
+    // moment the 200 below is returned, so a detached promise was killed mid-flight
+    // and every incoming WhatsApp message was silently dropped. The Telegram webhook
+    // hit and fixed exactly this; this handler was never given the same fix.
+    after(
+      handleIncomingMessage(contact, message).catch((error) => {
+        console.error('Error handling WhatsApp message:', error);
+      })
+    );
 
     // Respond immediately to webhook (don't wait for processing)
     return NextResponse.json({

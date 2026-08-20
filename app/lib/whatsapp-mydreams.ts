@@ -10,6 +10,7 @@ import { prisma } from './db';
 import { formatTemplateParams, validateTemplateParams, getTemplate } from './whatsapp-templates';
 import { format } from 'date-fns';
 import jwt from 'jsonwebtoken';
+import { emailLinkOrigin } from '@/lib/email-link-origin';
 
 interface MyDreamsCredentials {
   licenseNumber: string;
@@ -362,7 +363,9 @@ export async function sendBillPDFWithTemplate(
     const pdfFileName = `PVC_Report_${billData.billNumber.replace(/\//g, '_')}.pdf`;
     const pdfToken = jwt.sign({ billId }, getNextAuthSecret(), { expiresIn: '24h' });
     const encodedToken = encodeURIComponent(pdfToken);
-    const pdfUrl = `${process.env.NEXTAUTH_URL}/api/public/bill-pdf?billId=${billId}&token=${encodedToken}`;
+    // Built from the canonical origin, never NEXTAUTH_URL: that names the platform
+    // host, so contractors received WhatsApp links to a domain that is not the site.
+    const pdfUrl = `${emailLinkOrigin()}/api/public/bill-pdf?billId=${billId}&token=${encodedToken}`;
 
     logger.log('[WhatsApp] Sending bill with complete template data:');
     logger.log('- Bill ID:', billId);

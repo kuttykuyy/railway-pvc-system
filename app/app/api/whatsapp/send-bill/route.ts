@@ -13,6 +13,7 @@ import { sendBillPDFNotification, isMyDreamsWhatsAppConfigured } from '@/lib/wha
 import jwt from 'jsonwebtoken';
 import { format } from 'date-fns';
 import { getNextAuthSecret } from '@/lib/auth';
+import { emailLinkOrigin } from '@/lib/email-link-origin';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,7 +100,9 @@ export async function POST(req: NextRequest) {
     // This endpoint is simpler and handles the PDF generation internally
     // URL-encode the token to prevent URL parsing issues
     const encodedToken = encodeURIComponent(pdfToken);
-    let pdfUrl = `${process.env.NEXTAUTH_URL}/api/public/bill-pdf?billId=${billId}&token=${encodedToken}`;
+    // Built from the canonical origin, never NEXTAUTH_URL: that names the platform
+        // host, so contractors received WhatsApp links to a domain that is not the site.
+        let pdfUrl = `${emailLinkOrigin()}/api/public/bill-pdf?billId=${billId}&token=${encodedToken}`;
     
     // Add templateId to PDF URL if provided
     if (templateId) {

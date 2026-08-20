@@ -15,6 +15,7 @@ export async function canUserEditBill(
       where: { id: billId },
       select: {
         editCount: true,
+        status: true,
         contract: { select: { userId: true } }
       }
     });
@@ -27,6 +28,20 @@ export async function canUserEditBill(
     // Ownership check
     if (bill.contract.userId !== userId) {
       return { allowed: false, reason: 'You can only edit your own bills' };
+    }
+
+    // A bill that has been submitted for approval, approved, or passed by accounts is
+    // a record other people have signed. Editing it changed the amounts while
+    // status/approvedBy/approvedAt still vouched for the OLD numbers — the proposal and
+    // its approval quietly came to disagree. The way to change a submitted bill is the
+    // official's request-revision, which reopens it deliberately.
+    if (bill.status && !['draft', 'revision_requested'].includes(bill.status)) {
+      return {
+        allowed: false,
+        reason: bill.status === 'submitted'
+          ? 'This bill has been submitted for approval and can no longer be edited. Ask the official to request a revision.'
+          : 'This bill has been approved and can no longer be edited. Ask the official to request a revision.',
+      };
     }
 
     // Check ALLOW_MULTIPLE_BILL_EDITS admin setting
@@ -74,10 +89,21 @@ export async function canUserDeleteBill(
     if (userRole === 'admin' || userRole === 'superadmin') return { allowed: true };
 
     const isOwner = bill.contract.userId === userId;
-    return {
-      allowed: isOwner,
-      reason: isOwner ? undefined : 'You can only delete your own bills'
-    };
+    if (!isOwner) {
+      return { allowed: false, reason: 'You can only delete your own bills' };
+    }
+
+    // An approved or accounts-passed bill is a railway record; deleting it destroys
+    // what someone signed. A merely submitted bill may still be withdrawn — deleting
+    // it is the contractor retracting their own proposal before anyone acts on it.
+    if (bill.status === 'approved' || bill.status === 'passed') {
+      return {
+        allowed: false,
+        reason: 'This bill has been approved and can no longer be deleted. Contact an admin if it must be removed.',
+      };
+    }
+
+    return { allowed: true };
   } catch (error) {
     console.error('Error checking bill deletion permission:', error);
     return { allowed: false, reason: 'Error checking permissions' };
@@ -108,13 +134,15 @@ export async function canUserDeleteBills(
 
     if (userRole === 'admin' || userRole === 'superadmin') return { allowed: true };
 
+    // Same two rules as the single delete: own bills only, and nothing already
+    // approved or passed — those are records other people signed.
     const disallowedBills = bills
-      .filter(bill => bill.contract.userId !== userId)
+      .filter(bill => bill.contract.userId !== userId || bill.status === 'approved' || bill.status === 'passed')
       .map(bill => bill.billNo);
     return {
       allowed: disallowedBills.length === 0,
       reason: disallowedBills.length > 0
-        ? `You can only delete your own bills. Cannot delete: ${disallowedBills.join(', ')}`
+        ? `You can only delete your own, not-yet-approved bills. Cannot delete: ${disallowedBills.join(', ')}`
         : undefined,
       disallowedBills
     };

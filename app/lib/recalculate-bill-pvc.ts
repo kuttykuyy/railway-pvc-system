@@ -182,11 +182,15 @@ export async function recalculateBillPvc(billId: string) {
     console.log('\n🔍 [RECALCULATE] ===== CALCULATING WEIGHTED COMPONENTS FROM CLASSIFICATION ENTRIES =====');
     console.log(`📊 Number of classification entries: ${bill.classificationEntries.length}`);
     
-    // Map classification entries to the format expected by calculateWeightedComponents
+    // Map classification entries to the format expected by calculateWeightedComponents.
+    // steelTypes travel with each entry: without them the steel PVC was silently
+    // repriced on the all-four-JPC-types average, so one Regenerate click permanently
+    // changed a figure the bill was created with on TMT-only (or any selected) types.
     const entriesForCalculation = bill.classificationEntries.map((entry: any) => ({
       subClassificationId: entry.subClassificationId || undefined,
       classificationId: entry.classificationId || undefined,
-      amount: entry.amount
+      amount: entry.amount,
+      steelTypes: entry.steelTypes || []
     }));
     
     const hasDedicatedCement = bill.cementAmount && Number(bill.cementAmount) > 0;
@@ -219,26 +223,35 @@ export async function recalculateBillPvc(billId: string) {
   }
   
   // Calculate PVC with GCC 17A/17B extension compliance
+  // GCC-2022 Cl.46A: W excludes railway-supplied material. Creation reduces the PVC
+  // base by that value; this recalculation priced bill.billAmount in full, so one
+  // Regenerate click inflated every component of a bill that had railway-supplied
+  // materials — into the stored figures, not just a display.
+  const railwaySupplied = Math.max(0, Number(bill.railwaySuppliedMaterialValue || 0));
+  const pvcBaseAmount = railwaySupplied > 0 && bill.billAmount > railwaySupplied
+    ? bill.billAmount - railwaySupplied
+    : bill.billAmount;
+
   let extensionCompliantResult;
   try {
     extensionCompliantResult = await calculateExtensionCompliantPvc(
       bill.contractId,
-      bill.billAmount,
+      pvcBaseAmount,
       bill.dateOfMeasurement,
       quarterlyAverages,
       classificationCode,
       true, // Include detailed steps for logging
       componentsForPvcCalculation // Pass weighted components or default classification components
     );
-    
+
     if (extensionCompliantResult.appliedRestrictions.isRestricted) {
     }
   } catch (extensionError) {
-    
+
     // Fallback to legacy calculation
     const pvcResults = calculateClassificationBasedPvcWithComponents(
-      bill.billAmount, 
-      quarterlyAverages, 
+      pvcBaseAmount,
+      quarterlyAverages,
       classificationComponents
     );
     

@@ -322,6 +322,10 @@ export async function PUT(
         extensionType: true,
         originalCompletionDate: true,
         workDescription: true,
+        // The clause decides how the quarter is counted — see the quarter block below.
+        dateOfOpening: true,
+        pre2022WorkType: true,
+        pvcClauseVersion: true,
       }
     });
     
@@ -360,23 +364,57 @@ export async function PUT(
       }, { status: 400 });
     }
     
-    const quarter = getQuarterFromDate(measurementDate, contract.baseMonth);
-    
+    // Quarter derivation, exactly as creation does it. This route used the plain
+    // GCC-2022 rule for everyone, so editing a bill on a pre-2022-clause contract
+    // relabelled it one quarter off, and editing one on a 17B-extended contract lost
+    // the original-completion-date anchor.
+    let quarterDateForCalculation = measurementDate;
+    if (contract.isExtended
+        && contract.extensionType === '17B'
+        && contract.originalCompletionDate
+        && measurementDate > contract.originalCompletionDate) {
+      quarterDateForCalculation = contract.originalCompletionDate;
+    }
+    const { resolvePre2022Setup } = await import('@/lib/pre2022-contract');
+    const clauseSetup = resolvePre2022Setup(contract as any);
+    let quarter: string;
+    if (clauseSetup.isPre2022 && contract.dateOfOpening) {
+      const { pre2022QuarterFromDate } = await import('@/lib/pvc-pre2022');
+      quarter = pre2022QuarterFromDate(quarterDateForCalculation, new Date(contract.dateOfOpening));
+    } else {
+      quarter = getQuarterFromDate(quarterDateForCalculation, contract.baseMonth);
+    }
+
+    // GCC-2022 Cl.46A: W excludes railway-supplied material. Creation reduces the PVC
+    // base by this factor; the edit path priced the full entry amounts, so one edit of
+    // a bill with railway-supplied materials silently inflated its PVC. The stored
+    // value is the fallback so an edit that does not resend the field keeps the
+    // exclusion it was created with.
+    const railwaySupplied = Math.max(0, Number(body.railwaySuppliedMaterialValue ?? existingBill.railwaySuppliedMaterialValue ?? 0) || 0);
+    const extraItems = Math.max(0, Number(body.extraItemsOutsidePvc ?? 0) || 0);
+    const outsidePvc = railwaySupplied + extraItems;
+    const entriesTotalAmount = (classificationEntries || []).reduce(
+      (sum: number, e: any) => sum + (parseFloat(e?.amount) || 0),
+      0,
+    );
+    const pvcBaseFactor = outsidePvc > 0 && entriesTotalAmount > outsidePvc
+      ? (entriesTotalAmount - outsidePvc) / entriesTotalAmount
+      : 1;
+
     // ===== STEP 6: CRITICAL - Extract Steel Types from Classification Entries =====
     console.log('\n🔍 ===== EXTRACTING STEEL TYPES (UPDATE) =====');
     const extractedSteelTypes = await extractSteelTypesFromEntries(classificationEntries);
     console.log(`✅ Steel types to be updated in bill: [${extractedSteelTypes.join(', ') || 'None'}]`);
     console.log('🔍 ===== STEEL TYPES EXTRACTED =====\n');
     
-    // ===== STEP 7: Delete Existing Classification Entries =====
-    await prisma.billClassificationEntry.deleteMany({
-      where: { billId: id }
-    });
-    
-    // ===== STEP 8: Update Bill with New Steel Types =====
-    await prisma.bill.update({
-      where: { id },
-      data: {
+    // ===== STEP 7/8: Assemble the bill update (written atomically in STEP 16) =====
+    // This route used to delete every classification entry FIRST, then update the
+    // bill, fetch indices, and re-create entries one by one — so a failure anywhere in
+    // that stretch (an index lookup throwing, a timeout) left a live bill with no
+    // entries and a calculation matching nothing. Creation was rewritten to write
+    // everything in one transaction; the edit path now does the same: all the heavy
+    // work happens below against plain data, and the writes go together at the end.
+    const billUpdateData = {
         contractId: existingBill.contractId, // always use original contractId — immutable
         billNo: normalizedBillNo,
         editCount: { increment: 1 }, // track edit count for permission control
@@ -393,17 +431,17 @@ export async function PUT(
         quarter,
         zone: zone || null,
         fuelPriceType: fuelPriceType || 'four_city_avg',
-        pvcNumber: pvcNumber || null,
+        // Absent means untouched. `pvcNumber || null` wiped an issued PVC number
+        // whenever a client did not echo the field back on edit.
+        pvcNumber: pvcNumber === undefined ? undefined : (pvcNumber || null),
         isFinalPvc: isFinalPvc || false,
         nonScheduleItems: nonScheduleItems || [],
+        // Keep the exclusion the PVC below was computed with.
+        railwaySuppliedMaterialValue: railwaySupplied,
         lastEditedBy: user.id,
         lastEditedAt: new Date()
-      }
-    });
-    
-    console.log(`✅ Bill updated with ID: ${id}`);
-    console.log(`   Steel types updated: [${extractedSteelTypes.join(', ') || 'None'}]`);
-    
+      };
+
     // ===== STEP 9: Get Quarterly Averages (moved up before creating entries) =====
     // Use zone-based steel city prices instead of default Chennai rates
     const steelIndexNames = getSteelIndexNamesForZone(zone);
@@ -416,9 +454,9 @@ export async function PUT(
     
     const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, calculationMethod);
     
-    // ===== STEP 10: Create New Classification Entries with PVC Breakdown =====
-    // CRITICAL: Accumulate per-entry PVC totals (same approach as bill creation route)
-    // This ensures correct PVC when bill has multiple classification entries
+    // ===== STEP 10: Compute New Classification Entries with PVC Breakdown =====
+    // Collected, not written — the writes happen together in STEP 16's transaction.
+    const entryRowsToCreate: any[] = [];
     let totalClassificationLabour = 0;
     let totalClassificationPlant = 0;
     let totalClassificationFuel = 0;
@@ -451,12 +489,13 @@ export async function PUT(
             classificationPolicy.steelPlatesAmount > 0 ||
             classificationPolicy.steelOtherSectionsAmount > 0;
 
-          // Calculate PVC for this specific entry
+          // Calculate PVC for this specific entry — on the amount net of
+          // railway-supplied material, exactly as creation does.
           const entryPvc = await calculateClassificationEntryPvc(
             {
               subClassificationId: entry.subClassificationId,
               classificationId: entry.classificationId,
-              amount: parseFloat(entry.amount),
+              amount: parseFloat(entry.amount) * pvcBaseFactor,
               steelTypes: entrySteelTypes
             },
             quarterlyAverages,
@@ -465,10 +504,8 @@ export async function PUT(
               hasDedicatedCement
             }
           );
-          
-          // Create entry with PVC breakdown
-          await prisma.billClassificationEntry.create({
-            data: {
+
+          entryRowsToCreate.push({
               billId: id,
               subClassificationId: entry.subClassificationId || null,
               classificationId: entry.classificationId || null,
@@ -489,9 +526,8 @@ export async function PUT(
               steelPvc: entryPvc.steelPvc,
               explosivesPvc: entryPvc.explosivesPvc,
               totalPvc: entryPvc.totalPvc
-            }
           });
-          
+
           // Accumulate totals (same as creation route)
           totalClassificationLabour += entryPvc.labourPvc;
           totalClassificationPlant += entryPvc.plantMachineryPvc;
@@ -580,11 +616,12 @@ export async function PUT(
     // Placeholder values — will be corrected by recalculateCumulativePvcForContract
     const previousPvcTotal = 0;
     
-    // ===== STEP 16: Update PVC Calculation Record =====
-    if (existingBill.pvcCalculation) {
-      await prisma.pvcCalculation.update({
-        where: { id: existingBill.pvcCalculation.id },
-        data: {
+    // ===== STEP 16: Write everything atomically =====
+    // Old entries out, bill updated, new entries in, calculation updated — one
+    // transaction of plain inserts and updates. All the heavy work (index lookups,
+    // per-entry PVC) already happened above, so this opens and closes in milliseconds;
+    // and a failure anywhere leaves the bill exactly as it was before the edit.
+    const pvcCalculationData = {
           labourPvc: extensionCompliantResult.labourPvc,
           plantMachineryPvc: extensionCompliantResult.plantMachineryPvc,
           fuelPowerPvc: extensionCompliantResult.fuelPowerPvc,
@@ -611,43 +648,28 @@ export async function PUT(
           originalPvcAmount: extensionCompliantResult.appliedRestrictions.originalPvcAmount,
           restrictedPvcAmount: extensionCompliantResult.appliedRestrictions.restrictedPvcAmount,
           pvcSavingsDueToRestriction: extensionCompliantResult.appliedRestrictions.savingsAmount || 0
-        }
-      });
-    } else {
-      await prisma.pvcCalculation.create({
-        data: {
-          contractId,
-          billId: id,
-          labourPvc: extensionCompliantResult.labourPvc,
-          plantMachineryPvc: extensionCompliantResult.plantMachineryPvc,
-          fuelPowerPvc: extensionCompliantResult.fuelPowerPvc,
-          otherMaterialsPvc: extensionCompliantResult.otherMaterialsPvc,
-          cementPvc: extensionCompliantResult.cementPvc,
-          explosivesPvc: extensionCompliantResult.explosivesPvc,
-          steelPvc: extensionCompliantResult.steelPvc,
-          dedicatedCementPvc,
-          dedicatedSteelTmtBarsPvc,
-          dedicatedSteelAngleChannelPvc,
-          dedicatedSteelPlatesPvc,
-          dedicatedSteelOtherSectionsPvc,
-          dedicatedSteelPvc: totalDedicatedSteelPvc,
-          totalPvc,
-          previousPvcTotal,
-          cumulativePvc: previousPvcTotal + totalPvc,
-          isExtensionPeriod: extensionCompliantResult.extensionDetails.isInExtensionPeriod,
-          extensionType: extensionCompliantResult.extensionDetails.extensionType,
-          isIndexCapped: extensionCompliantResult.appliedRestrictions.isRestricted,
-          indexCapDate: extensionCompliantResult.extensionDetails.pvcRestrictionDate,
-          pvcRestrictionReason: extensionCompliantResult.appliedRestrictions.isRestricted 
-            ? `GCC ${extensionCompliantResult.extensionDetails.extensionType} Extension - PVC restriction applied`
-            : null,
-          originalPvcAmount: extensionCompliantResult.appliedRestrictions.originalPvcAmount,
-          restrictedPvcAmount: extensionCompliantResult.appliedRestrictions.restrictedPvcAmount,
-          pvcSavingsDueToRestriction: extensionCompliantResult.appliedRestrictions.savingsAmount || 0
-        }
-      });
-    }
-    
+    };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.billClassificationEntry.deleteMany({ where: { billId: id } });
+      await tx.bill.update({ where: { id }, data: billUpdateData });
+      if (entryRowsToCreate.length > 0) {
+        await tx.billClassificationEntry.createMany({ data: entryRowsToCreate });
+      }
+      if (existingBill.pvcCalculation) {
+        await tx.pvcCalculation.update({
+          where: { id: existingBill.pvcCalculation.id },
+          data: pvcCalculationData,
+        });
+      } else {
+        await tx.pvcCalculation.create({
+          data: { contractId, billId: id, ...pvcCalculationData },
+        });
+      }
+    }, { maxWait: 10_000, timeout: 20_000 });
+
+    console.log(`✅ Bill updated atomically: ${id} (${entryRowsToCreate.length} entries)`);
+
     // ===== STEP 17: Recalculate Cumulative PVC for entire contract =====
     // This properly sorts bills by dateOfMeasurement and computes running totals
     await recalculateCumulativePvcForContract(contractId);

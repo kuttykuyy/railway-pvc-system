@@ -21,6 +21,7 @@ import { sendBillPDFNotification, isMyDreamsWhatsAppConfigured, validatePhoneNum
 import { notifyNewBillCreated } from '@/lib/slack-webhook';
 import jwt from 'jsonwebtoken';
 import { getNextAuthSecret } from '@/lib/auth';
+import { emailLinkOrigin } from '@/lib/email-link-origin';
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0; // Disable all caching
@@ -1079,7 +1080,9 @@ export async function POST(request: NextRequest) {
         
         // Generate public PDF URL via proxy endpoint (ensures proper PDF content-type headers)
         const encodedToken = encodeURIComponent(pdfToken);
-        const pdfUrl = `${process.env.NEXTAUTH_URL}/api/public/bill-pdf?billId=${createdBill.id}&token=${encodedToken}`;
+        // Built from the canonical origin, never NEXTAUTH_URL: that names the platform
+        // host, so contractors received WhatsApp links to a domain that is not the site.
+        const pdfUrl = `${emailLinkOrigin()}/api/public/bill-pdf?billId=${createdBill.id}&token=${encodedToken}`;
         const pdfFileName = `PVC_Report_${createdBill.billNo?.replace(/\//g, '_')}.pdf`;
         const customerName = contract.contractorName || 'Customer';
         

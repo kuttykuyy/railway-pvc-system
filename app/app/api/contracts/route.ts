@@ -228,7 +228,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'Contract with this Agreement Number already exists',
-          details: `A contract with Agreement Number "${normalizedAgreementNo}" already exists in the system created by ${existingContract.user?.name || 'another user'}. Please use a different Agreement Number.`
+          // No name: naming the other account told any signed-in user who holds any
+          // agreement number they cared to probe.
+          details: `A contract with Agreement Number "${normalizedAgreementNo}" already exists in the system. If this is your agreement, it may have been registered under another of your accounts — contact support.`
         },
         { status: 409 }
       );

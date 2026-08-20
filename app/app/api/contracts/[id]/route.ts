@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { validateApiAccess } from '@/lib/payment-validation';
 import { normalizeAgreementNo, parseAgreementNumber } from '@/lib/railway-division-helper';
 import { normalizeSchedules } from '@/lib/contract-schedules';
+import { getBaseMonth } from '@/lib/pvc-calculations';
 
 export const dynamic = "force-dynamic";
 
@@ -80,7 +81,11 @@ export async function GET(
           }
         }
       });
-      if (explicitAccess && explicitAccess.isActive) {
+      // An expired grant is no grant. This checked only isActive, so a time-limited
+      // grant kept opening the full contract — every bill, the contractor's phone —
+      // after its expiry, while the list endpoints correctly hid it.
+      if (explicitAccess && explicitAccess.isActive
+          && (!explicitAccess.expiresAt || explicitAccess.expiresAt > new Date())) {
         hasAccess = true;
       }
     }
@@ -122,21 +127,32 @@ export async function PUT(
 
     // Check if user is admin
     const isAdmin = user.role === 'admin' || user.role === 'superadmin';
-    
-    // Build where clause based on user role
-    let whereClause: any = { id: id };
-    
-    // For non-admin users, only allow updating their own contracts
-    if (!isAdmin) {
-      whereClause.userId = user.id;
-    }
 
-    // First check if contract exists and user has access
     const existingContract = await prisma.contract.findUnique({
-      where: whereClause
+      where: { id }
     });
 
     if (!existingContract) {
+      return NextResponse.json(
+        { error: 'Contract not found or access denied' },
+        { status: 404 }
+      );
+    }
+
+    // Owner and admin may edit — and so may a "can edit" share grant. The share
+    // dialog has always written canEdit grants, but this route filtered strictly by
+    // owner, so the granted person got "not found or access denied" on every attempt:
+    // the share feature's edit permission granted nothing at all. (Deleting stays
+    // owner/admin only — sharing an edit is not sharing the right to destroy.)
+    let canModify = isAdmin || existingContract.userId === user.id;
+    if (!canModify) {
+      const grant = await prisma.userContractAccess.findUnique({
+        where: { userId_contractId: { userId: user.id, contractId: id } }
+      });
+      canModify = !!(grant && grant.isActive && grant.canEdit
+        && (!grant.expiresAt || grant.expiresAt > new Date()));
+    }
+    if (!canModify) {
       return NextResponse.json(
         { error: 'Contract not found or access denied' },
         { status: 404 }
@@ -226,7 +242,11 @@ export async function PUT(
           : undefined,
         ...(dateOfOpening && {
           dateOfOpening: new Date(dateOfOpening),
-          baseMonth: new Date(new Date(dateOfOpening).setMonth(new Date(dateOfOpening).getMonth() - 1))
+          // getBaseMonth, the same derivation creation uses. The inline setMonth(-1)
+          // it replaces overflows on day 29-31 when the previous month is shorter —
+          // July 31 setMonth(5) lands on "June 31" = July 1, so the base month never
+          // moved back at all, and every later bill priced against the wrong base.
+          baseMonth: getBaseMonth(new Date(dateOfOpening))
         })
       },
       include: {
