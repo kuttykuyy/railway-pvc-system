@@ -24,6 +24,20 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
+    // One update, one run. Telegram redelivers an update when it doesn't receive the
+    // 200 in time (a slow cold start is enough), and the document flow includes paid
+    // AI extraction — a redelivery ran it twice. update_id is Telegram's own
+    // per-update serial; the database-backed limiter (shared across serverless
+    // instances) admits each one once.
+    if (body.update_id !== undefined) {
+      const { checkDbRateLimit } = await import('@/lib/rate-limit-db');
+      const dedupe = await checkDbRateLimit(`tg-update:${body.update_id}`, 1, 24 * 60 * 60 * 1000);
+      if (!dedupe.allowed) {
+        logger.log(`[Telegram] Duplicate delivery of update ${body.update_id} ignored`);
+        return NextResponse.json({ ok: true });
+      }
+    }
+
     // Handle document (PDF) uploads — agreement + bill → PVC flow
     const message = body.message;
     if (message && message.document) {

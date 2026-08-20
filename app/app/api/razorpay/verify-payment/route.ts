@@ -152,7 +152,19 @@ export async function POST(request: NextRequest) {
     // Fetch payment details from Razorpay
     logger.log(`[${requestId}] Fetching payment details from Razorpay...`);
     const paymentDetails = await fetchPaymentDetails(razorpay_payment_id);
-    logger.log(`[${requestId}] Payment method: ${paymentDetails.method}`);
+    logger.log(`[${requestId}] Payment method: ${paymentDetails.method}, status: ${(paymentDetails as any).status}`);
+
+    // Only captured money is money. An authorized payment whose auto-capture fails is
+    // auto-refunded by Razorpay; crediting it hands out credits for money that goes
+    // back. With auto-capture on, capture follows within moments — the webhook credits
+    // it then, so a genuine payment is never lost by refusing here.
+    if ((paymentDetails as any).status && (paymentDetails as any).status !== 'captured') {
+      logger.log(`[${requestId}] Payment ${razorpay_payment_id} not captured yet (${(paymentDetails as any).status}); not crediting.`);
+      return NextResponse.json(
+        { error: 'Payment is not captured yet. If money was deducted, credits will arrive automatically within a few minutes.' },
+        { status: 409 }
+      );
+    }
 
     // Determine how much to add to wallet based on GST option
     const transactionNotes = transaction.notes as any;

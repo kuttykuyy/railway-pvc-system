@@ -700,26 +700,42 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     });
 
-    // Create a fast O(1) in-memory lookup map keyed by `${priceIndexId}_${yyyy-MM}`
+    // Create a fast O(1) in-memory lookup map keyed by `${priceIndexId}_${yyyy-MM}`.
+    // Values are WPI-BRIDGED as they enter the map: every table and average this
+    // section builds reads from here, so bridging once at the choke point puts the
+    // whole display on the same series the stored engine prices on. Without it, an
+    // old-base contract's steps showed raw new-series numbers from June 2026 on — a
+    // phantom ~30% crash the stored figure does not contain.
+    const { bridgeWpiValue: bridgePdfValue, getWpiLinkingFactors: getPdfWpiFactors } = await import('@/lib/wpi-series');
+    const pdfWpiFactors = await getPdfWpiFactors();
+    const indexNameById = new Map(allIndices.map(index => [index.id, index.name]));
     const dbValuesMap = new Map<string, number>();
     for (const mv of dbMonthlyValues) {
       const yyyyMM = format(mv.month, 'yyyy-MM');
       const mapKey = `${mv.priceIndexId}_${yyyyMM}`;
       if (!dbValuesMap.has(mapKey)) {
-        dbValuesMap.set(mapKey, mv.value);
+        const idxName = indexNameById.get(mv.priceIndexId) || '';
+        dbValuesMap.set(mapKey, bridgePdfValue(idxName, baseMonth, new Date(mv.month), mv.value, pdfWpiFactors));
       }
     }
 
     for (const index of allIndices) {
       allMonthlyValues[index.name] = {};
-      
+
       const currentMonth = new Date(baseMonth);
+      // A missing month borrows the latest earlier value — the same rule the stored
+      // engine uses. Falling back to the static SEED dragged the printed average
+      // toward a number from 2011-12, which the stored figure never saw.
+      let lastKnownValue: number | undefined;
       // Only include months up to and including the measurement month
       while (currentMonth <= measurementEndDate) {
         const monthKey = format(currentMonth, 'yyyy-MM');
         const mapKey = `${index.id}_${monthKey}`;
         const dbValue = dbValuesMap.get(mapKey);
-        const indexValue = dbValue !== undefined ? dbValue : index.baseValue;
+        const indexValue = dbValue !== undefined
+          ? dbValue
+          : (lastKnownValue !== undefined ? lastKnownValue : index.baseValue);
+        lastKnownValue = indexValue;
         allMonthlyValues[index.name][monthKey] = indexValue;
         currentMonth.setMonth(currentMonth.getMonth() + 1);
       }
@@ -781,7 +797,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             if (!value) {
               const mapKey = `${index.id}_${monthKey}`;
               const dbValue = dbValuesMap.get(mapKey);
-              value = dbValue !== undefined ? dbValue : index.baseValue;
+              if (dbValue !== undefined) {
+                value = dbValue;
+              } else {
+                // Borrow the latest earlier month, exactly as the stored engine does
+                // for an unpublished month — never the 2011-12 seed value.
+                let borrowed: number | undefined;
+                const probe = new Date(qMonth);
+                for (let back = 0; back < 24 && borrowed === undefined; back++) {
+                  probe.setMonth(probe.getMonth() - 1);
+                  borrowed = allMonthlyValues[index.name][format(probe, 'yyyy-MM')]
+                    ?? dbValuesMap.get(`${index.id}_${format(probe, 'yyyy-MM')}`);
+                }
+                value = borrowed !== undefined ? borrowed : index.baseValue;
+              }
               allMonthlyValues[index.name][monthKey] = value; // Cache it
             }
             

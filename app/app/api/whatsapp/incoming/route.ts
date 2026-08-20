@@ -73,6 +73,18 @@ export async function POST(req: NextRequest) {
       messageId,
     });
 
+    // One message, one run. The provider redelivers on a missed 200, and messageId
+    // was extracted and then never used — a redelivery ran the whole document/PVC
+    // flow twice. The database-backed limiter admits each id once across instances.
+    if (messageId) {
+      const { checkDbRateLimit } = await import('@/lib/rate-limit-db');
+      const dedupe = await checkDbRateLimit(`wa-msg:${messageId}`, 1, 24 * 60 * 60 * 1000);
+      if (!dedupe.allowed) {
+        logger.log(`[WhatsApp] Duplicate delivery of message ${messageId} ignored`);
+        return NextResponse.json({ success: true, message: 'Duplicate delivery ignored' });
+      }
+    }
+
     // Via after(), not a bare fire-and-forget: on Vercel the function freezes the
     // moment the 200 below is returned, so a detached promise was killed mid-flight
     // and every incoming WhatsApp message was silently dropped. The Telegram webhook

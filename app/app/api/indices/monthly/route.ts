@@ -8,6 +8,21 @@ import { reapplyWpiProvisionalRule } from '@/lib/wpi-fetcher';
 
 export const dynamic = "force-dynamic";
 
+/**
+ * The month the request NAMES, not the month its timestamp happens to land in. A
+ * date string carrying an offset — March 1st IST serialises as Feb 28th 18:30 UTC —
+ * used to be normalised in server-local time, quietly filing the value under the
+ * previous month. The year-month prefix of the string is the admin's intent; it is
+ * read directly whenever present.
+ */
+function normalizeMonthInput(month: unknown): Date {
+  const s = String(month ?? '');
+  const m = s.match(/^([0-9]{4})-([0-9]{2})/);
+  if (m) return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1));
+  const d = new Date(s);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+}
+
 // POST /api/indices/monthly - Add monthly index value(s)
 export async function POST(request: NextRequest) {
   try {
@@ -39,9 +54,7 @@ export async function POST(request: NextRequest) {
           );
         }
         
-        const monthDate = new Date(month);
-        monthDate.setDate(1);
-        monthDate.setHours(0, 0, 0, 0);
+        const monthDate = normalizeMonthInput(month);
         
         const monthlyValue = await prisma.monthlyIndexValue.upsert({
           where: {
@@ -98,9 +111,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const monthDate = new Date(month);
-      monthDate.setDate(1); // Set to first day of month
-      monthDate.setHours(0, 0, 0, 0);
+      const monthDate = normalizeMonthInput(month);
       
       const monthlyValue = await prisma.monthlyIndexValue.upsert({
         where: {
@@ -171,9 +182,7 @@ export async function PUT(request: NextRequest) {
         );
       }
       
-      const monthDate = new Date(month);
-      monthDate.setDate(1);
-      monthDate.setHours(0, 0, 0, 0);
+      const monthDate = normalizeMonthInput(month);
       
       const monthlyValue = await prisma.monthlyIndexValue.upsert({
         where: {
@@ -234,9 +243,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const monthDate = new Date(month);
-    monthDate.setDate(1);
-    monthDate.setHours(0, 0, 0, 0);
+    const monthDate = normalizeMonthInput(month);
 
     if (deleteEntireRow) {
       // Delete all index values for this month

@@ -126,9 +126,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // Handle payment events
-    if (eventType === 'payment.authorized' || eventType === 'payment.captured') {
+    // Handle payment events. Only a CAPTURED payment is money: an authorized one whose
+    // auto-capture fails is auto-refunded by Razorpay, and crediting on authorization
+    // handed out credits for money that then went back. With payment_capture: 1 the
+    // captured event follows authorization within moments, so nothing is delayed —
+    // an authorized event that never captures now simply never credits.
+    if (eventType === 'payment.captured'
+        || (eventType === 'payment.authorized' && payment?.status === 'captured')) {
       await handlePaymentSuccess(requestId, payment);
+    } else if (eventType === 'payment.authorized') {
+      logger.log(`[${requestId}] payment.authorized (status: ${payment?.status}) — waiting for capture before crediting`);
     } else if (eventType === 'payment.failed') {
       await handlePaymentFailure(requestId, payment);
     } else {

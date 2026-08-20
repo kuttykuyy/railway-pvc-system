@@ -611,16 +611,19 @@ export async function POST(request: NextRequest) {
     }
     
     // ===== STEP 6: Calculate Quarter =====
-    let quarterDateForCalculation = measurementDate;
-    
-    // For 17B extensions, use original completion date for quarter determination
-    if (contract.isExtended && 
-        contract.extensionType === '17B' && 
-        contract.originalCompletionDate && 
-        measurementDate > contract.originalCompletionDate) {
-      quarterDateForCalculation = contract.originalCompletionDate;
-      logger.log(`✅ 17B Extension: Using original completion date (${quarterDateForCalculation.toDateString()}) for quarter calculation`);
-    }
+    // Always the MEASUREMENT date's quarter — including under a 17B extension. The
+    // clause (GCC 46A.10, as this codebase reads it in extension-compliance.ts) is
+    // UsedIndex = min(current quarter average, Index_L): price the current quarter,
+    // capped at the last month of the original completion period. Creation used to
+    // freeze the quarter AT the completion date instead — a different reading that
+    // denied the railway the benefit of indices falling after the period, disagreed
+    // with what Regenerate then computed, and mislabelled the stored quarter. The cap
+    // is applied to the averages below.
+    const quarterDateForCalculation = measurementDate;
+    const under17BRestriction = !!(contract.isExtended
+      && contract.extensionType === '17B'
+      && contract.originalCompletionDate
+      && measurementDate > contract.originalCompletionDate);
     
     // The two clauses count quarters from different months: GCC-2022 from the month
     // after the base month, the older clause from the month after the OPENING month.
@@ -725,6 +728,27 @@ export async function POST(request: NextRequest) {
       pre2022MonthsOverride = pre2022QuarterMonths(quarter, new Date(contract.dateOfOpening));
     }
     const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, calculationMethod, pre2022MonthsOverride);
+
+    // GCC 46A.10: under a 17B extension, each index is capped at Index_L — the index
+    // of the last month of the original completion period. min() applied to the
+    // averages HERE reaches every downstream figure the same way: per-entry PVC and
+    // the dedicated cement/steel amounts alike.
+    let indexCapInfo: { indexL: Record<string, number>; restrictionDate: Date } | null = null;
+    if (under17BRestriction && contract.originalCompletionDate) {
+      const { getCappedIndices } = await import('@/lib/extension-compliance');
+      const capped = await getCappedIndices(
+        new Date(contract.originalCompletionDate),
+        quarterlyAverages,
+        new Date(contract.baseMonth),
+      );
+      for (const qa of quarterlyAverages) {
+        if (capped.cappedIndices[qa.indexName] !== undefined) {
+          qa.average = capped.cappedIndices[qa.indexName];
+        }
+      }
+      indexCapInfo = { indexL: capped.indexL_Values, restrictionDate: new Date(contract.originalCompletionDate) };
+      logger.log(`🔒 17B: averages capped at Index_L of ${indexCapInfo.restrictionDate.toISOString().slice(0, 7)}`);
+    }
     
     // ===== STEP 11: Work Out Each Classification Entry's PVC =====
     // Computed here, written in STEP 17 alongside the bill.
@@ -843,18 +867,21 @@ export async function POST(request: NextRequest) {
       explosivesPvc: totalClassificationExplosives,
       totalPvc: totalClassificationPvc,
       extensionDetails: {
-        isInExtensionPeriod: false,
+        isInExtensionPeriod: under17BRestriction,
         extensionType: contract.isExtended ? contract.extensionType : null,
-        pvcRestrictionDate: null
+        pvcRestrictionDate: indexCapInfo?.restrictionDate ?? null
       },
       appliedRestrictions: {
-        isRestricted: false,
+        // The cap was applied to the averages themselves, so the totals above ARE the
+        // restricted figures. Recording isRestricted keeps the stored row honest —
+        // it used to say false even when a 17B extension governed the bill.
+        isRestricted: !!indexCapInfo,
         originalPvcAmount: totalClassificationPvc,
         restrictedPvcAmount: totalClassificationPvc,
         savingsAmount: 0
       }
     };
-    
+
     logger.log('💰 ===== PER-ENTRY PVC CALCULATIONS COMPLETE =====\n');
     
     // ===== STEP 14: Calculate Dedicated Cement and Steel PVC =====

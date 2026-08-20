@@ -74,33 +74,14 @@ export async function recalculateBillPvc(billId: string) {
     entries: bill.classificationEntries.length
   });
   
-  // Determine correct quarter for 17B extensions
-  let correctQuarter = bill.quarter;
-  let quarterRecalculated = false;
-  
-  if (bill.contract.isExtended && 
-      bill.contract.extensionType === '17B' && 
-      bill.contract.originalCompletionDate && 
-      bill.dateOfMeasurement > bill.contract.originalCompletionDate) {
-    // For 17B extensions, recalculate quarter using original completion date
-    const { getQuarterFromDate } = await import('@/lib/pvc-calculations');
-    correctQuarter = getQuarterFromDate(bill.contract.originalCompletionDate, bill.contract.baseMonth);
-    
-    if (correctQuarter !== bill.quarter) {
-      quarterRecalculated = true;
-      console.log('📅 17B Extension: Quarter recalculated');
-      console.log(`   Original Quarter (from measurement date): ${bill.quarter}`);
-      console.log(`   Correct Quarter (from completion date): ${correctQuarter}`);
-      console.log(`   Measurement Date: ${bill.dateOfMeasurement.toDateString()}`);
-      console.log(`   Original Completion: ${bill.contract.originalCompletionDate.toDateString()}`);
-      
-      // Update the quarter in the bill record
-      await prisma.bill.update({
-        where: { id: billId },
-        data: { quarter: correctQuarter }
-      });
-    }
-  }
+  // The MEASUREMENT quarter, under 17B too. GCC 46A.10 as this codebase reads it is
+  // UsedIndex = min(current quarter average, Index_L) — the current quarter priced,
+  // capped at the last month of the original completion period. This used to relabel
+  // the quarter to the completion date's, which fed calculateExtensionCompliantPvc
+  // restriction-quarter averages while the dedicated cement/steel section below capped
+  // measurement-quarter averages — two quarters inside one stored row. Creation now
+  // applies the same min() rule, so the two paths finally agree.
+  const correctQuarter = bill.quarter;
   
   // Get all indices for comprehensive calculation
   // Use zone-based steel city prices instead of default Chennai rates
@@ -536,10 +517,6 @@ export async function recalculateBillPvc(billId: string) {
   // Construct success message with compliance info
   let successMessage = 'PVC recalculated successfully';
   
-  // Add quarter recalculation info
-  if (quarterRecalculated) {
-    successMessage += ` (Quarter updated for 17B extension compliance)`;
-  }
   
   if (extensionCompliantResult.appliedRestrictions.isRestricted) {
     const savingsAmount = extensionCompliantResult.appliedRestrictions.savingsAmount || 0;
@@ -556,7 +533,7 @@ export async function recalculateBillPvc(billId: string) {
     // undefined, so a regenerated row never showed its new amount.
     pvcCalculation: updatedBill?.pvcCalculation ?? pvcCalculation,
     calculation: extensionCompliantResult,
-    quarterRecalculated,
+    quarterRecalculated: false,
     extensionCompliance: {
       isExtended: extensionCompliantResult.extensionDetails.isExtended,
       extensionType: extensionCompliantResult.extensionDetails.extensionType,
