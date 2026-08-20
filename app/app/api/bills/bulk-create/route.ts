@@ -126,7 +126,14 @@ export async function POST(request: NextRequest) {
     // manually entered bills use the manual rate.
     const aiBillCost = billingSettings.aiBillCost || 499;
     const manualBillCost = billingSettings.billCost || 199;
-    const feeForBill = (bill: BillInput) => isFreeAccount ? 0 : (bill.isAiUploaded ? aiBillCost : manualBillCost);
+    // A positive customProcessingFee is a negotiated per-bill rate. The single-bill
+    // path has always honoured it; this route charged such customers the standard rate
+    // on every bulk bill — the same bill priced two ways depending on the screen used.
+    const negotiatedFee = userWithAccount.customProcessingFee !== null && userWithAccount.customProcessingFee > 0
+      ? userWithAccount.customProcessingFee
+      : null;
+    const feeForBill = (bill: BillInput) =>
+      isFreeAccount ? 0 : (negotiatedFee ?? (bill.isAiUploaded ? aiBillCost : manualBillCost));
 
     // (The free-trial claim happens AFTER validation, below — claiming here burned the
     // trial on any batch that was then rejected with nothing created.)
@@ -674,29 +681,31 @@ export async function POST(request: NextRequest) {
             balanceAfter
           }
         });
+
+        // Per-bill records INSIDE the same transaction as the deduction. They used to
+        // be written afterwards, one by one — a failure there tripped the outer catch,
+        // which deletes the bills and releases the trial but has no way to give the
+        // money back: the customer was down the whole batch fee with nothing delivered.
+        // The first trialCount bills are the trial's — free, and marked 'trial' so the
+        // watermark rule sees them.
+        await tx.billTransaction.createMany({
+          data: createdBills.map((bill, index) => {
+            const isTrialBill = index < trialCount;
+            return {
+              billId: bill.id,
+              userId: user.id,
+              amount: isTrialBill ? 0 : (bill.processingFee || 0),
+              originalAmount: bill.processingFee || 0,
+              discount: isTrialBill ? (bill.processingFee || 0) : 0,
+              discountType: isTrialBill ? 'trial' : null,
+              status: 'paid',
+              isFree: isTrialBill
+            };
+          })
+        });
+
         return balanceAfter;
       });
-
-      // Create bill transaction records for each bill. The first trialCount bills are
-      // the trial's — free, and marked 'trial' so the watermark rule sees them; the
-      // rows here previously never set discountType, so no bulk bill could ever be
-      // recognised as a trial bill.
-      for (let index = 0; index < createdBills.length; index += 1) {
-        const bill = createdBills[index];
-        const isTrialBill = index < trialCount;
-        await prisma.billTransaction.create({
-          data: {
-            billId: bill.id,
-            userId: user.id,
-            amount: isTrialBill ? 0 : (bill.processingFee || 0),
-            originalAmount: bill.processingFee || 0,
-            discount: isTrialBill ? (bill.processingFee || 0) : 0,
-            discountType: isTrialBill ? 'trial' : null,
-            status: 'paid',
-            isFree: isTrialBill
-          }
-        });
-      }
 
       creditInfo = {
         cost: totalProcessingFee,

@@ -368,8 +368,24 @@ export async function POST(request: NextRequest) {
 
     let pvcCheckCredit = 0;
     if (recentPvcCheck && !recentPvcCheck.isFree) {
-      pvcCheckCredit = recentPvcCheck.amount; // Typically ₹500
-      logger.log(`✅ Found recent PVC check (${recentPvcCheck.id}): Applying ₹${pvcCheckCredit} credit toward bill processing`);
+      // One check pays for one bill. Nothing marks a PvcCheck consumed, so the credit
+      // used to apply to EVERY bill created in the 30-minute window — one ₹500 check
+      // waived the fee on an unlimited run of bills. A bill for the same contract and
+      // measurement date created after the check means the credit has been spent.
+      const creditAlreadyUsed = await prisma.bill.findFirst({
+        where: {
+          contractId,
+          dateOfMeasurement: new Date(dateOfMeasurement),
+          createdAt: { gt: recentPvcCheck.createdAt },
+        },
+        select: { id: true },
+      });
+      if (!creditAlreadyUsed) {
+        pvcCheckCredit = recentPvcCheck.amount; // Typically ₹500
+        logger.log(`✅ Found recent PVC check (${recentPvcCheck.id}): Applying ₹${pvcCheckCredit} credit toward bill processing`);
+      } else {
+        logger.log(`PVC check ${recentPvcCheck.id} already used by bill ${creditAlreadyUsed.id}; no credit applied`);
+      }
     }
     
     // ===== STEP 4: Check Contract Access =====
@@ -514,7 +530,12 @@ export async function POST(request: NextRequest) {
           const fullCost = isAiUploaded
             ? (billingSettings.aiBillCost || 499)
             : (billingSettings.billCost || 199);
-          const costToCharge = fullCost;
+          // A negotiated per-bill rate applies here too. This downgrade path charged
+          // the standard rate, so a ₹50-a-bill customer paid ₹199 whenever their
+          // agreement's trial was already claimed — same bill, two prices.
+          const costToCharge = user.customProcessingFee !== null && user.customProcessingFee > 0
+            ? user.customProcessingFee
+            : fullCost;
 
           if (currentBalance >= costToCharge) {
             // User can afford the bill, downgrade from free trial to paid bill

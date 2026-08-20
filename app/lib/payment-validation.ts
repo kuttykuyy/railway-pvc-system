@@ -260,9 +260,10 @@ export async function processPaymentForBill(
         // hard create on the agreement number blocks the same agreement from claiming a
         // trial across multiple accounts. If either fails, the trial is not available.
         let claimed = false;
+        let transaction: any = null;
         const identifiers = await trialIdentifiersForBill(billId, agreementNo);
         try {
-          await prisma.$transaction(async (tx) => {
+          transaction = await prisma.$transaction(async (tx) => {
             const res = await tx.user.updateMany({
               where: { id: userId, freeTrialUsed: { lt: freeTrialLimit } },
               data: { freeTrialUsed: { increment: 1 }, totalBillsProcessed: { increment: 1 } },
@@ -291,32 +292,36 @@ export async function processPaymentForBill(
               data: { isTrialActive: (u?.freeTrialUsed ?? freeTrialLimit) < freeTrialLimit },
             });
             claimed = true;
+
+            // Created INSIDE the claim transaction: this used to run after it, so a
+            // failure here left the trial consumed and the agreement pinned with no
+            // bill delivered — the customer's one free bill, spent on an error. Now
+            // either everything commits or nothing does.
+            return tx.billTransaction.create({
+              data: {
+                userId,
+                billId,
+                amount: 0,
+                originalAmount: baseAmount,
+                discount: baseAmount,
+                discountType: freeReason,
+                status: 'paid',
+                isFree: true,
+                paymentMethod: 'free_trial',
+                paidAt: new Date(),
+              },
+            });
           });
         } catch {
           claimed = false; // TRIAL_EXHAUSTED or agreement already claimed (P2002)
         }
 
-        if (!claimed) {
+        if (!claimed || !transaction) {
           return {
             success: false,
             message: 'This free trial is no longer available — it has already been used, or this agreement number already claimed a trial. Please add credits to continue.',
           };
         }
-
-        const transaction = await prisma.billTransaction.create({
-          data: {
-            userId,
-            billId,
-            amount: 0,
-            originalAmount: baseAmount,
-            discount: baseAmount,
-            discountType: freeReason,
-            status: 'paid',
-            isFree: true,
-            paymentMethod: 'free_trial',
-            paidAt: new Date(),
-          },
-        });
 
         const after = await prisma.user.findUnique({ where: { id: userId }, select: { freeTrialUsed: true } });
         const remaining = Math.max(0, freeTrialLimit - (after?.freeTrialUsed ?? freeTrialLimit));
@@ -398,35 +403,12 @@ export async function processPaymentForBill(
       }
     }
 
-    // Paid transaction
-    const transaction = await prisma.billTransaction.create({
-      data: {
-        userId,
-        billId,
-        amount: paidAmount ?? finalAmount,
-        originalAmount: baseAmount,
-        discount,
-        discountType,
-        status: 'paid',
-        isFree: false,
-        paymentMethod,
-        transactionRef: paymentReference,
-        paidAt: new Date(),
-        // Store Razorpay specific data in metadata
-        ...(razorpayData ? {
-          metadata: {
-            razorpayOrderId: razorpayData.razorpayOrderId,
-            razorpayPaymentId: razorpayData.razorpayPaymentId,
-            razorpaySignature: razorpayData.razorpaySignature,
-            paymentMethod: 'razorpay'
-          }
-        } : {})
-      }
-    });
-
-    // Update user stats + deduct credits atomically to prevent partial writes
+    // One transaction: check the balance, take the money, and only then write the
+    // "paid" record. The record used to be created FIRST, so a failed deduction left a
+    // bill whose transaction read fully paid with no money taken — recovered only by a
+    // best-effort delete in the caller, which itself can fail.
     const chargedAmount = paidAmount ?? finalAmount;
-    await prisma.$transaction(async (tx) => {
+    const transaction = await prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: userId },
         data: { totalBillsProcessed: { increment: 1 } }
@@ -471,6 +453,32 @@ export async function processPaymentForBill(
           });
         }
       }
+
+      // The money is taken; now the record that says so.
+      return tx.billTransaction.create({
+        data: {
+          userId,
+          billId,
+          amount: chargedAmount,
+          originalAmount: baseAmount,
+          discount,
+          discountType,
+          status: 'paid',
+          isFree: false,
+          paymentMethod,
+          transactionRef: paymentReference,
+          paidAt: new Date(),
+          // Store Razorpay specific data in metadata
+          ...(razorpayData ? {
+            metadata: {
+              razorpayOrderId: razorpayData.razorpayOrderId,
+              razorpayPaymentId: razorpayData.razorpayPaymentId,
+              razorpaySignature: razorpayData.razorpaySignature,
+              paymentMethod: 'razorpay'
+            }
+          } : {})
+        }
+      });
     });
 
     // (kept for logging below)

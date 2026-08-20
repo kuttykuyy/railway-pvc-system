@@ -255,6 +255,41 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
   logger.log(`[${requestId}] ✅ Payment processed successfully via webhook`);
   logger.log(`[${requestId}] Credits: ₹${transaction.creditAmount} added. GST invoice will be generated when user provides billing details.`);
 
+  // Zoho is the invoice of record, and it was only ever asked from verify-payment's
+  // winning branch. When THIS path wins the crediting race — the user paid and closed
+  // the tab, or the webhook simply landed first — the taxable supply was never
+  // invoiced anywhere, and the customer's own invoice request answered 503 until an
+  // admin ran the backfill by hand. Whoever credits, invoices. Best-effort exactly as
+  // in verify-payment: a Zoho outage must not fail the webhook.
+  try {
+    const { createZohoInvoice } = await import('@/lib/zoho-books');
+    const zohoResult = await createZohoInvoice({
+      customerName: user.name || user.email,
+      customerEmail: user.email,
+      gstin: user.gstin,
+      creditAmount: transaction.creditAmount,
+      gstAmount: transaction.gstAmount,
+      totalAmount: transaction.totalAmount,
+      razorpayOrderId: orderId,
+      razorpayPaymentId: paymentId,
+    });
+    await prisma.razorpayTransaction.update({
+      where: { id: transaction.id },
+      data: {
+        notes: {
+          ...((transaction.notes as any) || {}),
+          zohoInvoiceNumber: zohoResult.invoiceNumber,
+          zohoInvoiceId: zohoResult.invoiceId,
+        },
+      },
+    }).catch((noteError: any) => {
+      console.error(`[${requestId}] ⚠️ Could not record the Zoho invoice number:`, noteError?.message);
+    });
+    logger.log(`[${requestId}] ✅ Zoho Books invoice created: ${zohoResult.invoiceNumber}`);
+  } catch (zohoError: any) {
+    console.error(`[${requestId}] ⚠️ Zoho Books invoice creation failed (webhook path):`, zohoError?.message);
+  }
+
   await processReferralReward(user.id, transaction.id)
     .then((result) => {
       if (result.rewarded) {
@@ -364,9 +399,13 @@ async function handlePaymentFailure(requestId: string, payment: any) {
     return;
   }
 
-  // Update transaction status
-  await prisma.razorpayTransaction.update({
-    where: { id: transaction.id },
+  // Never let a failure notice overwrite a success. Razorpay retries webhooks for a
+  // day and does not guarantee order: a failed first attempt's webhook can arrive
+  // AFTER the successful retry has been credited. A plain update flipped the row back
+  // to 'failed', which re-armed the "status not success" guard both crediting paths
+  // rely on — so the next redelivery of payment.captured credited the same money twice.
+  const marked = await prisma.razorpayTransaction.updateMany({
+    where: { id: transaction.id, status: { not: 'success' } },
     data: {
       razorpayPaymentId: payment.id,
       status: 'failed',
@@ -374,6 +413,10 @@ async function handlePaymentFailure(requestId: string, payment: any) {
     },
   });
 
-  logger.log(`[${requestId}] Payment marked as failed`);
+  if (marked.count === 0) {
+    logger.log(`[${requestId}] Ignoring failure notice for already-successful transaction ${transaction.id}`);
+  } else {
+    logger.log(`[${requestId}] Payment marked as failed`);
+  }
 }
 
