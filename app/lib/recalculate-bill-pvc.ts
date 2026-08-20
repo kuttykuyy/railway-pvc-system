@@ -112,11 +112,23 @@ export async function recalculateBillPvc(billId: string) {
     ...steelIndexNames
   ];
   
+  // Pre-2022 quarters cover different months than the GCC-2022 rule derives from the
+  // label alone — without the override this regenerated an old-clause bill's averages
+  // over the wrong three months.
+  const { resolvePre2022Setup } = await import('./pre2022-contract');
+  const clauseSetup = resolvePre2022Setup(bill.contract as any);
+  let monthsOverride: Date[] | undefined;
+  if (clauseSetup.isPre2022 && bill.contract.dateOfOpening) {
+    const { pre2022QuarterMonths } = await import('./pvc-pre2022');
+    monthsOverride = pre2022QuarterMonths(correctQuarter, new Date(bill.contract.dateOfOpening));
+  }
+
   const quarterlyAverages = await getQuarterlyAverages(
-    correctQuarter, 
-    allIndices, 
-    bill.contract.baseMonth, 
-    'auto'
+    correctQuarter,
+    allIndices,
+    bill.contract.baseMonth,
+    'auto',
+    monthsOverride
   );
   
   quarterlyAverages.forEach(qa => {

@@ -155,10 +155,17 @@ export async function getQuarterlyAverages(quarter: string, priceIndexNames: str
     // contract based AFTER the series switch whose base-month value is missing, falling
     // back to it compares an old-scale base against new-scale months (~95) — a large
     // phantom price fall. Scale the seed down by the linking factor instead, and say so.
-    let actualBaseValue = baseValueMap.get(priceIndex.id) || priceIndex.baseValue;
+    let actualBaseValue = baseValueMap.has(priceIndex.id)
+      ? baseValueMap.get(priceIndex.id)!
+      : priceIndex.baseValue;
     if (!baseValueMap.has(priceIndex.id) && !baseIsOldSeries && wpiFactors[indexName]) {
       actualBaseValue = priceIndex.baseValue / wpiFactors[indexName];
       console.warn(`[WPI] No stored base value for ${indexName} at ${normalizedBaseMonth.toISOString().slice(0, 7)} — seeded old-series default scaled to new base (/${wpiFactors[indexName]})`);
+    } else if (!baseValueMap.has(priceIndex.id)) {
+      // The seeded default stands in for a missing base-month row. That substitution
+      // changes every PVC figure computed from it, and it used to happen in silence —
+      // an inflated or deflated labour PVC with nothing anywhere saying why.
+      console.warn(`[PVC] No stored base value for ${indexName} at ${normalizedBaseMonth.toISOString().slice(0, 7)} — using the seeded default ${priceIndex.baseValue}. Every figure priced on it depends on this substitution.`);
     }
     
     const monthlyValues = [...(quarterlyValuesByIndex.get(priceIndex.id) || [])];

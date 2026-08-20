@@ -235,10 +235,16 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    if (measurementDate <= contract.baseMonth) {
-      return NextResponse.json({ 
+    // The whole base MONTH is out of bounds, not just its first day. Comparing dates
+    // against the 1st let a measurement on, say, the 15th of the base month through —
+    // the web route rejects the entire month, and this one now matches it.
+    const baseMonthDate = new Date(contract.baseMonth);
+    if (measurementDate.getFullYear() < baseMonthDate.getFullYear()
+        || (measurementDate.getFullYear() === baseMonthDate.getFullYear()
+            && measurementDate.getMonth() <= baseMonthDate.getMonth())) {
+      return NextResponse.json({
         success: false,
-        error: `Measurement date must be after contract base month (${contract.baseMonth.toISOString().split('T')[0]})`
+        error: `Measurement date must be in a month after the contract base month (${baseMonthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })})`
       }, { status: 400, headers: getExternalCorsHeaders(request) });
     }
     
@@ -297,17 +303,46 @@ export async function POST(request: NextRequest) {
     const quarter = getQuarterFromDate(quarterDateForCalculation, contract.baseMonth);
     logger.log(`\ud83d\udcca Calculated Quarter: ${quarter}`);
     
+    // ===== Step 7b: Refuse a duplicate bill number =====
+    // Without this the unique index threw P2002 out of the catch-all as a bare 500
+    // with the raw error string — the caller had no way to know the number was taken.
+    const duplicateBill = await prisma.bill.findFirst({
+      where: { contractId, billNo: { equals: String(billNo), mode: 'insensitive' } },
+      select: { id: true, billNo: true },
+    });
+    if (duplicateBill) {
+      return NextResponse.json({
+        success: false,
+        error: `Bill number ${duplicateBill.billNo} already exists for this contract`,
+        existingBillId: duplicateBill.id,
+      }, { status: 409, headers: getExternalCorsHeaders(request) });
+    }
+
     // ===== Step 8: Generate PVC Number =====
-    const billCountForContract = await prisma.bill.count({ where: { contractId } });
-    const sequenceNumber = String(billCountForContract + 1).padStart(3, '0');
+    // Max existing sequence + 1, exactly as the web route. count+1 duplicated an
+    // existing pvcNumber the moment any earlier bill had been deleted.
+    const contractBillNumbers = await prisma.bill.findMany({
+      where: { contractId },
+      select: { pvcNumber: true },
+    });
+    let maxSequence = 0;
+    for (const b of contractBillNumbers) {
+      if (b.pvcNumber) {
+        const seq = parseInt(b.pvcNumber.split('/').pop() || '', 10);
+        if (!isNaN(seq) && seq > maxSequence) maxSequence = seq;
+      }
+    }
+    const sequenceNumber = String(maxSequence + 1).padStart(3, '0');
     const autoPvcNumber = `PVC/${contract.agreementNo}/${sequenceNumber}`;
-    
+
     // ===== Step 9: Extract Steel Types =====
     const extractedSteelTypes = await extractSteelTypesFromEntries(classificationEntries);
-    
-    // ===== Step 10: Create Bill =====
-    const bill = await prisma.bill.create({
-      data: {
+
+    // ===== Step 10: Assemble the bill (created atomically with its calculation below).
+    // It used to be created HERE, before the index lookups and the PVC calculation —
+    // a failure in either left an orphan bill with no calculation and no charge, the
+    // exact partial state the web route's transaction exists to prevent. =====
+    const billData = {
         contractId,
         billNo,
         grossBillAmount: parseFloat(String(grossBillAmount)),
@@ -328,11 +363,8 @@ export async function POST(request: NextRequest) {
         isChargeable: !isFreeAccount,
         processingFee: isFreeAccount ? 0 : billCost,
         subClassifications: []
-      }
-    });
-    
-    logger.log(`\u2705 Bill created: ${bill.id}`);
-    
+    };
+
     // ===== Step 11: Calculate PVC using the same approach as main API =====
     // Use zone-based steel city prices instead of default Chennai rates
     const steelIndexNames = getSteelIndexNamesForZone(zone);
@@ -385,24 +417,30 @@ export async function POST(request: NextRequest) {
     });
     const previousPvcTotal = previousPvcResult?.cumulativePvc || 0;
     
-    // ===== Step 12: Save PVC Calculation =====
-    const pvcCalculation = await prisma.pvcCalculation.create({
-      data: {
-        contractId,
-        billId: bill.id,
-        labourPvc: pvcResult.labourPvc || 0,
-        plantMachineryPvc: pvcResult.plantMachineryPvc || 0,
-        fuelPowerPvc: pvcResult.fuelPowerPvc || 0,
-        otherMaterialsPvc: pvcResult.otherMaterialsPvc || 0,
-        cementPvc: pvcResult.cementPvc || 0,
-        steelPvc: pvcResult.steelPvc || 0,
-        explosivesPvc: pvcResult.explosivesPvc || 0,
-        totalPvc: pvcResult.totalPvc || 0,
-        previousPvcTotal,
-        cumulativePvc: previousPvcTotal + (pvcResult.totalPvc || 0)
-      }
-    });
-    
+    // ===== Step 12: Create the bill and its calculation together =====
+    const { bill, pvcCalculation } = await prisma.$transaction(async (tx) => {
+      const createdBill = await tx.bill.create({ data: billData as any });
+      const createdCalc = await tx.pvcCalculation.create({
+        data: {
+          contractId,
+          billId: createdBill.id,
+          labourPvc: pvcResult.labourPvc || 0,
+          plantMachineryPvc: pvcResult.plantMachineryPvc || 0,
+          fuelPowerPvc: pvcResult.fuelPowerPvc || 0,
+          otherMaterialsPvc: pvcResult.otherMaterialsPvc || 0,
+          cementPvc: pvcResult.cementPvc || 0,
+          steelPvc: pvcResult.steelPvc || 0,
+          explosivesPvc: pvcResult.explosivesPvc || 0,
+          totalPvc: pvcResult.totalPvc || 0,
+          previousPvcTotal,
+          cumulativePvc: previousPvcTotal + (pvcResult.totalPvc || 0)
+        }
+      });
+      return { bill: createdBill, pvcCalculation: createdCalc };
+    }, { maxWait: 10_000, timeout: 20_000 });
+
+    logger.log(`✅ Bill created: ${bill.id}`);
+
     // ===== Step 13: Process Payment =====
     const paymentResult = await processPaymentForBill(
       auth.userId!,
@@ -429,7 +467,14 @@ export async function POST(request: NextRequest) {
     } else {
       logger.log('\\u2705 Payment processed successfully');
     }
-    
+
+    // A back-dated bill changes every later bill's cumulative PVC; the web route
+    // repairs the chain after create and this one never did, so cumulatives went
+    // non-monotonic the first time an API caller sent bills out of date order.
+    const { recalculateCumulativePvcForContract } = await import('@/lib/recalculateCumulativePvc');
+    await recalculateCumulativePvcForContract(contractId).catch((e) =>
+      console.error('Could not recalculate cumulative PVC:', e));
+
     // ===== Step 14: Return Success Response =====
     return NextResponse.json({
       success: true,

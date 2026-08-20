@@ -452,7 +452,16 @@ export async function PUT(
       ...steelIndexNames
     ];
     
-    const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, calculationMethod);
+    // Pre-2022 quarters start a month later than the GCC-2022 rule derives from the
+    // quarter label alone. The label was already clause-aware; without this override
+    // the averages were still taken over the GCC-2022 months — one month early — with
+    // the label merely relabelling them.
+    let pre2022MonthsOverride: Date[] | undefined;
+    if (clauseSetup.isPre2022 && contract.dateOfOpening) {
+      const { pre2022QuarterMonths } = await import('@/lib/pvc-pre2022');
+      pre2022MonthsOverride = pre2022QuarterMonths(quarter, new Date(contract.dateOfOpening));
+    }
+    const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, calculationMethod, pre2022MonthsOverride);
     
     // ===== STEP 10: Compute New Classification Entries with PVC Breakdown =====
     // Collected, not written — the writes happen together in STEP 16's transaction.

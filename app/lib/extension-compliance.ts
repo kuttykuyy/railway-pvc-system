@@ -188,6 +188,14 @@ export async function getCappedIndices(
     formula: 'Index_L = Index of the last month of original completion period'
   });
   
+  // Index_L must live on the same series as the averages it is min'd against. The
+  // quarter averages come back WPI-bridged for old-base contracts; the raw last-month
+  // value was not, so from the June 2026 rebase a new-series Index_L (~95) sat against
+  // a bridged average (~134), the min always chose the unbridged number, and the cap
+  // drove the PVC far below anything the clause intends.
+  const { bridgeWpiValue, getWpiLinkingFactors } = await import('@/lib/wpi-series');
+  const linkingFactors = await getWpiLinkingFactors();
+
   for (const qa of quarterlyAverages) {
     // Fetch the index value for the last month of completion
     const lastMonthValue = await prisma.monthlyIndexValue.findFirst({
@@ -196,10 +204,10 @@ export async function getCappedIndices(
         month: lastMonthOfCompletion
       }
     });
-    
+
     if (lastMonthValue) {
-      // Store Index_L (index of last month)
-      const indexL = lastMonthValue.value;
+      // Store Index_L (last-month index), bridged onto the base month's series.
+      const indexL = bridgeWpiValue(qa.indexName, baseMonth, lastMonthOfCompletion, lastMonthValue.value, linkingFactors);
       indexL_Values[qa.indexName] = indexL;
       
       // GCC 46A.10: UsedIndex = min(CurrentQuarterAvg, Index_L)
@@ -217,11 +225,25 @@ export async function getCappedIndices(
           : 'GCC 46A.10(b) - Using lower quarter value (indices below Index_L)'
       });
     } else {
-      // Fallback if we don't have data for the last month
-      indexL_Values[qa.indexName] = qa.baseValue;
-      cappedIndices[qa.indexName] = qa.baseValue;
+      // The last month isn't published yet — borrow the latest month before it, the
+      // same rule the quarter averages use for a missing month. The old fallback
+      // substituted the BASE value, which makes capped-index minus base exactly zero:
+      // the component's whole PVC silently vanished behind a console warning.
+      const borrowed = await prisma.monthlyIndexValue.findFirst({
+        where: {
+          priceIndex: { name: qa.indexName },
+          month: { lt: lastMonthOfCompletion }
+        },
+        orderBy: { month: 'desc' }
+      });
+      const indexL = borrowed
+        ? bridgeWpiValue(qa.indexName, baseMonth, new Date(borrowed.month), borrowed.value, linkingFactors)
+        : qa.baseValue;
+      indexL_Values[qa.indexName] = indexL;
+      cappedIndices[qa.indexName] = Math.min(qa.average, indexL);
       missingIndices.push(qa.indexName);
-      logger.warn(`⚠️ No monthly data for ${qa.indexName} in ${lastMonthOfCompletion.toISOString().slice(0, 7)}, using base value (PROVISIONAL)`);
+      logger.warn(`⚠️ No monthly data for ${qa.indexName} in ${lastMonthOfCompletion.toISOString().slice(0, 7)}; `
+        + (borrowed ? `borrowed ${new Date(borrowed.month).toISOString().slice(0, 7)} (PROVISIONAL)` : 'no earlier value either — using base value (PROVISIONAL)'));
     }
   }
   

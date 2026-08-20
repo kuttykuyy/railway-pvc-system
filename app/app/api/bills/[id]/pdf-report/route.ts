@@ -2403,6 +2403,29 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           }
         ];
         
+        // GCC-2022 Cl.46A: W excludes railway-supplied material. The stored engine
+        // prices every entry on this reduced base; the PDF's own step-by-step used the
+        // raw amounts, so its printed workings disagreed with the stored figure on any
+        // bill that had railway-supplied materials. Display-only since the write-back
+        // was removed, but a statement must show the W it was actually priced on.
+        const pdfOutsidePvc = Math.max(0, Number(bill.railwaySuppliedMaterialValue || 0));
+        const pdfEntriesTotal = bill.classificationEntries.reduce(
+          (s: number, e: any) => s + (parseFloat(String(e.amount)) || 0), 0);
+        const pdfPvcBaseFactor = pdfOutsidePvc > 0 && pdfEntriesTotal > pdfOutsidePvc
+          ? (pdfEntriesTotal - pdfOutsidePvc) / pdfEntriesTotal
+          : 1;
+
+        // When a dedicated cement/steel amount exists, the pure-supply B/C-coded
+        // entries carry that component through the dedicated calculation instead. The
+        // stored engine zeroes them here; the PDF's own loop did not, so its printout
+        // counted the same cement or steel twice.
+        const hasDedicatedCementForPdf = (bill.cementAmount || 0) > 0;
+        const hasDedicatedSteelForPdf =
+          (bill.steelTmtBarsAmount || 0) > 0 ||
+          (bill.steelAngleChannelAmount || 0) > 0 ||
+          (bill.steelPlatesAmount || 0) > 0 ||
+          (bill.steelOtherSectionsAmount || 0) > 0;
+
         for (const scenario of calculationScenarios) {
         pdf.setFontSize(17);
         pdf.setFont("helvetica", "bold");
@@ -2432,9 +2455,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Loop through each classification entry and calculate PVC separately
         for (let i = 0; i < bill.classificationEntries.length; i++) {
           const entry = bill.classificationEntries[i];
-          const entryAmount = parseFloat(String(entry.amount)) || 0;
-          
-          if (entryAmount <= 0) continue;
+          const entryBilledAmount = parseFloat(String(entry.amount)) || 0;
+
+          if (entryBilledAmount <= 0) continue;
+
+          // W net of railway-supplied material — the base the stored engine prices on.
+          const entryAmount = entryBilledAmount * pdfPvcBaseFactor;
           
           // Get the classification components
           const classificationComponents = entry.subClassification || entry.classification;
@@ -2454,7 +2480,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           
           pdf.setFontSize(12);
           pdf.setFont("helvetica", "normal");
-          pdf.text(`Amount: ${entryAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`, marginLeft, yPosition);
+          pdf.text(`Amount: ${entryBilledAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}${pdfPvcBaseFactor < 1 ? ` (PVC base: ${entryAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })} — net of railway-supplied material)` : ''}`, marginLeft, yPosition);
           yPosition += 10;
           
           // Build PVC calculation table with detailed steps for this classification
@@ -2599,9 +2625,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             addComponentCalculation('Other Materials', classificationComponents.otherMaterials, 'RBI Other Materials');
           }
           
-          if (classificationComponents.steel > 0) {
+          if (classificationComponents.steel > 0
+              && !(hasDedicatedSteelForPdf && String(classCode || '').toUpperCase().endsWith('B'))) {
             // Get steel types from the classification entry
-            const steelTypes = (Array.isArray(entry.steelTypes) ? entry.steelTypes : []) as string[];
+            const steelTypesRaw = (Array.isArray(entry.steelTypes) ? entry.steelTypes : []) as string[];
+            // No selected types means the GCC default: the average of all four JPC
+            // types — which is what the stored engine prices. Defaulting to TMT alone
+            // could flip the sign of the printed steel PVC.
+            const steelTypes = steelTypesRaw.length > 0 ? steelTypesRaw : ['TMT', 'ANGLE_CHANNEL', 'PLATES', 'OTHER_SECTIONS'];
             
             // Map steel type enum to index names
             const steelTypeMap: { [key: string]: string } = {
@@ -2729,7 +2760,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             }
           }
           
-          if (classificationComponents.cement > 0) {
+          if (classificationComponents.cement > 0
+              && !(hasDedicatedCementForPdf && String(classCode || '').toUpperCase().endsWith('C'))) {
             addComponentCalculation('Cement Component', classificationComponents.cement, 'RBI Cement');
           }
           
@@ -2868,9 +2900,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Show step-by-step calculations for each classification
         for (let i = 0; i < bill.classificationEntries.length; i++) {
           const entry = bill.classificationEntries[i];
-          const entryAmount = parseFloat(String(entry.amount)) || 0;
-          
-          if (entryAmount <= 0) continue;
+          const entryBilledAmount = parseFloat(String(entry.amount)) || 0;
+
+          if (entryBilledAmount <= 0) continue;
+
+          // W net of railway-supplied material — the base the stored engine prices on.
+          const entryAmount = entryBilledAmount * pdfPvcBaseFactor;
           
           const classificationComponents = entry.subClassification || entry.classification;
           if (!classificationComponents) continue;
@@ -2980,9 +3015,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             const calc = getComponentCalculation('Other Materials', classificationComponents.otherMaterials, 'RBI Other Materials');
             if (calc) components.push(calc);
           }
-          if (classificationComponents.steel > 0) {
+          if (classificationComponents.steel > 0
+              && !(hasDedicatedSteelForPdf && String(classCode || '').toUpperCase().endsWith('B'))) {
             // Get steel types from the classification entry
-            const steelTypes = (Array.isArray(entry.steelTypes) ? entry.steelTypes : []) as string[];
+            const steelTypesRaw = (Array.isArray(entry.steelTypes) ? entry.steelTypes : []) as string[];
+            // No selected types means the GCC default: the average of all four JPC
+            // types — which is what the stored engine prices. Defaulting to TMT alone
+            // could flip the sign of the printed steel PVC.
+            const steelTypes = steelTypesRaw.length > 0 ? steelTypesRaw : ['TMT', 'ANGLE_CHANNEL', 'PLATES', 'OTHER_SECTIONS'];
             
             // Map steel type enum to index names
             const steelTypeMap: { [key: string]: string } = {
@@ -3064,7 +3104,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
               }
             }
           }
-          if (classificationComponents.cement > 0) {
+          if (classificationComponents.cement > 0
+              && !(hasDedicatedCementForPdf && String(classCode || '').toUpperCase().endsWith('C'))) {
             const calc = getComponentCalculation('Cement', classificationComponents.cement, 'RBI Cement');
             if (calc) components.push(calc);
           }
