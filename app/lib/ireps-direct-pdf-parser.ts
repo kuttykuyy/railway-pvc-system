@@ -15,7 +15,10 @@ import type { DeterministicBillDetails, DeterministicBillItem } from './ireps-bi
 // "Kilometre" spells out what "Km" abbreviates elsewhere on the same bill. Item NS2 of
 // SR/MDU/Civil/2025/0070/B1/R1 is billed in Shifts and went unanchored, leaving that
 // bill Rs 13,335 short — the whole of the row.
-const UNIT_PATTERN = /^(?:Cum|Cu\.?m\.?|Sqm|Sq\.?m\.?|Kg|MT|M\.?T\.?|Metre|Meter|Kilo\s*met(?:re|er)|Each|Num|Nos?\.?|RM|Rmt|TRM|Km|Litre|Ltr|Set|Job|LS|Shifts?|Nights?|Hours?|Hrs?|Days?|Quintal|Qtl|Tonne|Pair|Bags?|Sqft|Cft|Joints?|ERC|Numbers?|MT-?Km|Tonne-?Km)$/i;
+// "Point" prices electrical work by the wiring point — p8 of the signage bill that
+// taught the reader "Square Foot" bills item 55 in it (Rs 0 that period, so it cost
+// nothing yet; the next bill measured in Points would have come out short).
+const UNIT_PATTERN = /^(?:Cum|Cu\.?m\.?|Sqm|Sq\.?m\.?|Kg|MT|M\.?T\.?|Metre|Meter|Kilo\s*met(?:re|er)|Each|Num|Nos?\.?|RM|Rmt|TRM|Km|Litre|Ltr|Set|Job|LS|Shifts?|Nights?|Hours?|Hrs?|Days?|Quintal|Qtl|Tonne|Pair|Bags?|Sqft|Cft|Joints?|ERC|Numbers?|Points?|MT-?Km|Tonne-?Km)$/i;
 const NUMBER_PATTERN = /^-?[\d,]+(?:\.\d*)?$/;
 const X = {
   serial: [50, 88],
@@ -48,7 +51,9 @@ function normalizedX(page: PositionedPdfPage, item: PositionedPdfTextItem) {
  * one whose unit is not recognised is never read at all, which shows up as a bill that
  * reconciles short by exactly those rows.
  */
-const SQUASHED_UNIT_PATTERN = /^(?:track(?:metre|meter)|r(?:metre|meter)|runningmetre|percmwidth|percmdepth|bridgefor(?:1|one)track|per(?:cm)?width|cubicmetre|squaremetre)$/;
+// "squarefoot": LED signage boards are billed per square foot, and the unit cell wraps
+// as "Squa / re / Foot" — the middle fragment's join window reads "SquareFoot".
+const SQUASHED_UNIT_PATTERN = /^(?:track(?:metre|meter)|r(?:metre|meter)|runningmetre|percmwidth|percmdepth|bridgefor(?:1|one)track|per(?:cm)?width|cubicmetre|squaremetre|square(?:foot|feet))$/;
 
 /** Does this text name a unit of measure, written either way? */
 function isUnitText(raw: string): boolean {
@@ -683,7 +688,12 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       const y = Math.round(item.y);
       if (consideredY.has(y)) continue;
       consideredY.add(y);
-      if (anchoredYs.some(other => Math.abs(other - item.y) <= 6)) continue;
+      // ±12 — the same reach as cellText — not ±6. A wrapped unit cell's lines sit
+      // ~10 apart, so a ±6 guard let the arithmetic anchor fire on TWO fragments of
+      // one cell ("Squa" and "re" of Square Foot): the same physical row entered
+      // twice, its amount counted twice, and the reconciliation reported the bill
+      // OVER by exactly the doubled rows while the diagnostics called them unread.
+      if (anchoredYs.some(other => Math.abs(other - item.y) <= 12)) continue;
 
       const rate = numericValue(cellText(page, page.items, X.agreementRate, item.y));
       const quantity = numericValue(cellText(page, page.items, X.qtySinceLast, item.y));
@@ -878,11 +888,19 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
             ? 'NON_SCHEDULE'
             : 'UNKNOWN';
 
+      // The anchor may be one fragment of a wrapped unit cell — "re" out of
+      // "Squa/re/Foot". The row's real unit is the joined cell, not the fragment.
+      const singleUnitText = unitItem.text.trim();
+      const joinedUnitText = cellText(page, page.items, X.unit, unitItem.y);
+      const rowUnitText = isUnitText(singleUnitText)
+        ? singleUnitText
+        : (isUnitText(joinedUnitText) ? joinedUnitText : singleUnitText);
+
       items.push({
         dsrCode: itemNo,
         itemNo,
         description,
-        unit: unitItem.text.replace(/\./g, ''),
+        unit: rowUnitText.replace(/\./g, ''),
         quantitySinceLastBill: quantity,
         quantitySinceLastBillRaw: quantityRaw,
         agreementRate,

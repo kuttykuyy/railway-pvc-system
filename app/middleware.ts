@@ -148,6 +148,13 @@ export const config = {
      * - ads.txt (AdSense ads.txt)
      * - public folder
      */
-    "/((?!api/auth|api/public|api/v1|api/external|api/whatsapp/webhook|api/telegram|api/razorpay/webhook|_next/static|_next/image|favicon|manifest.json|sw.js|icons/|public|api/signup|sitemap.xml|robots.txt|ads.txt|about|pricing|refund|privacy|terms|contact|payment-guide|logo.png|.*\\.(?:html|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // api/pdf-to-markdown is the Python MarkItDown function; it authenticates itself
+    // with an internal secret. The comment above always said it was excluded — the
+    // regex never actually listed it, so the middleware 307'd every call to the
+    // sign-in page, the server-side fetch followed the redirect, and a multipart POST
+    // landing on a PAGE made Next answer "Server action not found". That is the whole
+    // story behind "AI retry also failed" on every bill the exact reader could not
+    // finish: the AI fallback has never once been reachable in production.
+    "/((?!api/auth|api/public|api/v1|api/external|api/whatsapp/webhook|api/telegram|api/razorpay/webhook|api/pdf-to-markdown|_next/static|_next/image|favicon|manifest.json|sw.js|icons/|public|api/signup|sitemap.xml|robots.txt|ads.txt|about|pricing|refund|privacy|terms|contact|payment-guide|logo.png|.*\\.(?:html|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
   ],
 };
