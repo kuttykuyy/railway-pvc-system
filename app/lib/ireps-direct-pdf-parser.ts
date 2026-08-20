@@ -735,6 +735,33 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       }
     }
 
+    // Third anchor: the bill's own payment-status remark. IREPS prints "Now to pay
+    // …%", "Pay Later" or "As per special Condition" in the right-most column on
+    // exactly the rows that carry money — zero rows leave it blank. So a line wearing
+    // that remark IS a data row with value, whatever its unit says and however its
+    // arithmetic rounds: the bill itself is vouching for it. This catches rows the
+    // unit list AND the multiplication both miss — the failure mode that has cost a
+    // row per bill, learned one unit at a time.
+    const REMARK_STATUS_PATTERN = /now\s*to\s*pay|pay\s*later|as\s*per\s*special/i;
+    for (const item of page.items) {
+      if (normalizedX(page, item) <= 700) continue;
+      if (!REMARK_STATUS_PATTERN.test(item.text)) continue;
+      if (anchoredYs.some(other => Math.abs(other - item.y) <= 12)) continue;
+      // Still a data row by its own columns: a remark with no rate beside it is a
+      // heading or a carried-over note, not a row.
+      const remarkRate = numericValue(cellText(page, page.items, X.agreementRate, item.y));
+      const remarkSpecial = numericValue(cellText(page, page.items, X.specialAmount, item.y));
+      const remarkPlain = numericValue(cellText(page, page.items, X.amountSinceLast, item.y));
+      if (!remarkRate) continue;
+      if (remarkSpecial === undefined && remarkPlain === undefined) continue;
+      arithmeticAnchored.push(item);
+      anchoredYs.push(item.y);
+      // The remark is the bill's own word that the row pays; the Qty x Rate check
+      // would re-litigate what the bill already settled (part-rate rows in
+      // particular do not multiply out to their payable figure).
+      amountProvenYs.push(item.y);
+    }
+
     const units = [...unitAnchored, ...arithmeticAnchored].sort((left, right) => left.y - right.y);
     const candidates = units.filter(unitItem => {
       const agreementRaw = cellText(page, page.items, X.agreementRate, unitItem.y);
@@ -889,12 +916,20 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
             : 'UNKNOWN';
 
       // The anchor may be one fragment of a wrapped unit cell — "re" out of
-      // "Squa/re/Foot". The row's real unit is the joined cell, not the fragment.
+      // "Squa/re/Foot" — or, for a remark-anchored row, not sit in the unit column at
+      // all. The row's real unit is the joined unit CELL; the anchor's own text is
+      // only trusted when it names a unit itself.
       const singleUnitText = unitItem.text.trim();
       const joinedUnitText = cellText(page, page.items, X.unit, unitItem.y);
+      const anchorIsInUnitColumn = (() => {
+        const anchorX = normalizedX(page, unitItem);
+        return anchorX >= X.unit[0] && anchorX < X.unit[1];
+      })();
       const rowUnitText = isUnitText(singleUnitText)
         ? singleUnitText
-        : (isUnitText(joinedUnitText) ? joinedUnitText : singleUnitText);
+        : (isUnitText(joinedUnitText) || !anchorIsInUnitColumn)
+          ? (joinedUnitText || '-')
+          : singleUnitText;
 
       items.push({
         dsrCode: itemNo,
