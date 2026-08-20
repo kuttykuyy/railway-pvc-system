@@ -62,7 +62,7 @@ export default function MobileBillForm({ mode = 'create', billId }: MobileBillFo
       setIsLoading(true);
       
       // Load contracts
-      const contractsRes = await fetch('/api/contracts');
+      const contractsRes = await fetch('/api/contracts?lean=1');
       if (contractsRes.ok) {
         const contractsData = await contractsRes.json();
         setContracts(contractsData);

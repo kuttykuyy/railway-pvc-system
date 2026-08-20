@@ -84,6 +84,14 @@ export async function GET(request: NextRequest) {
 
     const contractsWhere = isUnrestricted ? {} : { id: { in: accessibleContractIds } };
 
+    // Seven of the nine screens that read this list are contract pickers — they need
+    // every contract to fill a dropdown, which is why this is deliberately not
+    // paginated, but they never look at the bill and calculation counts. Those counts
+    // are two aggregates over the two largest tables in the app, paid on every one of
+    // those loads. `?lean=1` leaves them out; the default response is unchanged, so a
+    // caller that does not ask still gets exactly what it got before.
+    const lean = request.nextUrl.searchParams.get('lean') === '1';
+
     const contracts = await prisma.contract.findMany({
       where: contractsWhere,
       orderBy: { createdAt: 'desc' },
@@ -94,12 +102,14 @@ export async function GET(request: NextRequest) {
             email: true
           }
         },
-        _count: {
-          select: {
-            bills: true,
-            pvcCalculations: true
+        ...(lean ? {} : {
+          _count: {
+            select: {
+              bills: true,
+              pvcCalculations: true
+            }
           }
-        }
+        }),
       }
     });
     

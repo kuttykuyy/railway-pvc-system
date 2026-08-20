@@ -488,7 +488,7 @@ function NewBillPageContent() {
 
   const fetchContracts = async () => {
     try {
-      const response = await fetch('/api/contracts');
+      const response = await fetch('/api/contracts?lean=1');
       if (!response.ok) throw new Error('Failed to fetch contracts');
       
       const data = await response.json();

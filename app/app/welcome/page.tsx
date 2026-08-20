@@ -45,7 +45,7 @@ export default function WelcomePage() {
   useEffect(() => {
     (async () => {
       try {
-        const [contractsRes, billsRes] = await Promise.all([fetch('/api/contracts'), fetch('/api/bills')]);
+        const [contractsRes, billsRes] = await Promise.all([fetch('/api/contracts?lean=1'), fetch('/api/bills')]);
         if (contractsRes.status === 401) {
           router.replace('/auth/signin');
           return;

@@ -182,7 +182,7 @@ export default function BulkBillCreationPage() {
         console.error('Error checking maintenance mode:', err);
       }
 
-      const contractsRes = await fetch('/api/contracts');
+      const contractsRes = await fetch('/api/contracts?lean=1');
       if (!contractsRes.ok) throw new Error('Failed to load contracts');
       setContracts(await contractsRes.json());
 

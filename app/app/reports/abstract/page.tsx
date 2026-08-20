@@ -146,7 +146,7 @@ function AbstractPageContent() {
 
   const fetchContracts = async () => {
     try {
-      const res = await fetch('/api/contracts');
+      const res = await fetch('/api/contracts?lean=1');
       if (!res.ok) throw new Error('Failed to fetch contracts');
       setContracts(await res.json());
     } catch (e: any) {

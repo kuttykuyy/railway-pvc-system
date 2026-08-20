@@ -92,7 +92,7 @@ function EditBillPageContent() {
     if (!billId) return;
     Promise.all([
       fetch(`/api/bills/${billId}`).then(r => r.json()),
-      fetch('/api/contracts').then(r => r.json()),
+      fetch('/api/contracts?lean=1').then(r => r.json()),
       fetch('/api/classification-groups').then(r => r.json()),
     ]).then(([billData, contractsData, groupsData]) => {
       setBill(billData);

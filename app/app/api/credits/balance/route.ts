@@ -18,13 +18,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Find user with billing info
-    const user = await withPrismaErrorHandling(() => prisma.user.findUnique({
-      where: { email: session.user.email },
-      include: {
-        customerAccount: true,
-      }
-    }));
+    // The user row and the billing settings do not depend on each other, so they are
+    // fetched together rather than one after the other. Only the fields this route
+    // actually reads are selected: `include` pulled every column of a wide User row,
+    // and this is the second-busiest route in the app.
+    const [user, billingSettings] = await Promise.all([
+      withPrismaErrorHandling(() => prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: {
+          id: true,
+          role: true,
+          isFreeAccount: true,
+          customProcessingFee: true,
+          freeTrialUsed: true,
+          pvcToolSubscriptionActive: true,
+          pvcToolSubscriptionExpiry: true,
+          customerAccount: { select: { creditBalance: true } },
+        },
+      })),
+      getBillingSettings(),
+    ]);
 
     if (!user) {
       return NextResponse.json(
@@ -33,8 +46,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get billing settings
-    const billingSettings = await getBillingSettings();
     const isAiUploaded = request.nextUrl.searchParams.get('isAiUploaded') === 'true';
     const baseCost = isAiUploaded ? (billingSettings.aiBillCost || 499) : (billingSettings.billCost || 199);
     const isSuperadmin = user.role === 'superadmin';

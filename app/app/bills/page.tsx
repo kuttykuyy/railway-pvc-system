@@ -310,7 +310,7 @@ export default function BillsPage() {
 
   const fetchContracts = async () => {
     try {
-      const response = await fetch('/api/contracts');
+      const response = await fetch('/api/contracts?lean=1');
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
