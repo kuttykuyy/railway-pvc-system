@@ -53,6 +53,7 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith('/contact') ||
       pathname.startsWith('/payment-guide') ||
       pathname.startsWith('/about') ||
+      pathname.startsWith('/how-it-works') ||
       pathname.startsWith('/pricing')) {
     return NextResponse.next();
   }
@@ -155,6 +156,6 @@ export const config = {
     // landing on a PAGE made Next answer "Server action not found". That is the whole
     // story behind "AI retry also failed" on every bill the exact reader could not
     // finish: the AI fallback has never once been reachable in production.
-    "/((?!api/auth|api/public|api/v1|api/external|api/whatsapp/webhook|api/telegram|api/razorpay/webhook|api/pdf-to-markdown|_next/static|_next/image|favicon|manifest.json|sw.js|icons/|public|api/signup|sitemap.xml|robots.txt|ads.txt|about|pricing|refund|privacy|terms|contact|payment-guide|logo.png|.*\\.(?:html|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/((?!api/auth|api/public|api/v1|api/external|api/whatsapp/webhook|api/telegram|api/razorpay/webhook|api/pdf-to-markdown|_next/static|_next/image|favicon|manifest.json|sw.js|icons/|public|api/signup|sitemap.xml|robots.txt|ads.txt|about|how-it-works|pricing|refund|privacy|terms|contact|payment-guide|logo.png|.*\\.(?:html|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
   ],
 };

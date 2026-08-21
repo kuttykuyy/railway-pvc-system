@@ -320,6 +320,9 @@ export default function WelcomePage() {
       </Card>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm pt-2">
+        <Link href="/how-it-works" className="text-emerald-700 hover:underline font-medium inline-flex items-center gap-1">
+          Watch how it works <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
         <Link href="/try-bill" className="text-emerald-700 hover:underline font-medium inline-flex items-center gap-1">
           See a worked example first <ArrowRight className="h-3.5 w-3.5" />
         </Link>
