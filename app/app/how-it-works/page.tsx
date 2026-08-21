@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import { Walkthrough } from '@/components/how-it-works/walkthrough';
 
 export const metadata: Metadata = {
-  title: 'How it works — contract to PVC report in two uploads | IR-PVC',
+  // The root layout appends "| IR-PVC" itself.
+  title: 'How it works — contract to PVC report in two uploads',
   description:
     'A step-by-step walkthrough of IR-PVC: upload the LOA to add your contract, upload the signed IREPS bill, and the price variation report is prepared — in English and Hindi.',
   alternates: { canonical: '/how-it-works' },
