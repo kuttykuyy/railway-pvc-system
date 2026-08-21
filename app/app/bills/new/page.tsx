@@ -178,6 +178,9 @@ function NewBillPageContent() {
   const [extractionNotice, setExtractionNotice] = useState<string | null>(null);
 
   const [contracts, setContracts] = useState<Contract[]>([]);
+  /** Distinguishes "no contracts yet" from "still fetching" — the LOA-first gate below
+   *  must never flash at someone whose contracts simply have not arrived. */
+  const [contractsLoaded, setContractsLoaded] = useState(false);
   const [classificationGroups, setClassificationGroups] = useState<ClassificationGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<ClassificationGroup | null>(null);
 
@@ -493,7 +496,8 @@ function NewBillPageContent() {
       
       const data = await response.json();
       setContracts(data);
-      
+      setContractsLoaded(true);
+
       // If there's a preselected contract, set it in form data
       if (preselectedContractId) {
         setFormData(prev => ({ ...prev, contractId: preselectedContractId }));
@@ -1539,7 +1543,31 @@ function NewBillPageContent() {
         // the cover rendered transparent and the whole form showed through as noise.
         <div className="fixed inset-0 z-[60] bg-white dark:bg-slate-950 flex items-center justify-center p-6">
           <div className="max-w-md w-full text-center space-y-5">
-            {instantStage === 'upload' && (
+            {/* The bill needs a contract to attach to. A new trial user who has not
+                added their LOA yet used to be waved into the upload anyway, and the
+                flow then stalled mid-way at "select a contract" — after their PDF had
+                already been read. Blocked up front instead, with the way forward. */}
+            {instantStage === 'upload' && contractsLoaded && contracts.length === 0 && (
+              <>
+                <FileText className="h-12 w-12 mx-auto text-amber-500" />
+                <h2 className="text-2xl font-bold">First, add your LOA</h2>
+                <p className="text-sm text-muted-foreground">
+                  Your bill needs a contract to attach to, and you don&apos;t have one yet.
+                  Upload the LOA (Letter of Acceptance) first — it takes one PDF — and
+                  then come back for the bill. Your free bill stays untouched.
+                </p>
+                <Button size="lg" className="w-full" asChild>
+                  <Link href="/welcome">
+                    <FileText className="h-5 w-5 mr-2" />
+                    Upload the LOA
+                  </Link>
+                </Button>
+                <Button variant="outline" className="w-full" asChild>
+                  <Link href="/contracts/new">Type the contract in instead</Link>
+                </Button>
+              </>
+            )}
+            {instantStage === 'upload' && !(contractsLoaded && contracts.length === 0) && (
               <>
                 <Receipt className="h-12 w-12 mx-auto text-emerald-600" />
                 <h2 className="text-2xl font-bold">Upload your signed bill</h2>
@@ -1550,7 +1578,11 @@ function NewBillPageContent() {
                 <Button
                   size="lg"
                   className="w-full"
+                  disabled={!contractsLoaded}
                   onClick={() => {
+                    // Backstop for the gate above: never open the chooser with no
+                    // contract to attach the bill to.
+                    if (contracts.length === 0) return;
                     // Only move on if a chooser actually opened. The optional call
                     // here used to swallow a missing picker and advance anyway, which
                     // is how the cover could sit on "Reading your bill…" with no file

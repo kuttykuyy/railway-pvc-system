@@ -295,16 +295,27 @@ export default function WelcomePage() {
               <h2 className="font-semibold">Upload the signed bill</h2>
             </div>
             <p className="text-sm text-muted-foreground">
-              It reads every item, checks the total against the bill&apos;s own figure, and hands you the
-              report.
+              {agreementDone
+                ? <>It reads every item, checks the total against the bill&apos;s own figure, and hands you the report.</>
+                : <>Finish step 1 first — the bill needs a contract to attach to.</>}
             </p>
           </div>
-          <Button asChild variant={agreementDone ? 'default' : 'outline'}>
-            <Link href="/bills/new?instant=1">
+          {/* Locked until the LOA is in. This button used to be live from the start,
+              and a new user who tapped it first had their bill read and THEN hit
+              "select a contract" with no contract to select. */}
+          {agreementDone ? (
+            <Button asChild>
+              <Link href="/bills/new?instant=1">
+                <Receipt className="h-4 w-4 mr-2" />
+                Upload bill
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="outline" disabled>
               <Receipt className="h-4 w-4 mr-2" />
               Upload bill
-            </Link>
-          </Button>
+            </Button>
+          )}
         </CardContent>
       </Card>
 
