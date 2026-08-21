@@ -1,7 +1,8 @@
 /**
- * Admin-only helper to create the two department demo accounts — one executive, one
- * accounts/audit — so the approval chain can be walked end to end without hunting for
- * official railway email addresses.
+ * Admin-only helper to create the demo accounts — a contractor (the account the
+ * tutorial is recorded on), an executive and an accounts/audit official — so the whole
+ * journey, from LOA to approved bill, can be walked end to end without hunting for
+ * official railway email addresses or spending a real customer's free bill.
  *
  * Deliberate constraints, because this creates accounts that can see and act on other
  * people's bills:
@@ -29,6 +30,16 @@ import { generateUniqueReferralCode } from '@/lib/referrals';
 export const dynamic = 'force-dynamic';
 
 const DEMO_ACCOUNTS = [
+  {
+    // The contractor side: the account the tutorial video is recorded on. It adds a
+    // contract from an LOA and uploads bills exactly as a new customer would — with
+    // the free first bill — so the walkthrough shows the real experience. Recording
+    // on the owner's admin account would show admin menus no customer has.
+    email: 'demo.contractor@irpvc.in',
+    name: 'Demo Contractor',
+    role: 'contractor',
+    what: 'Adds a contract from an LOA and uploads bills — the account the tutorial is recorded on.',
+  },
   {
     email: 'demo.executive@irpvc.in',
     name: 'Demo Executive (Sr.DEN)',
@@ -94,6 +105,9 @@ export async function POST(request: NextRequest) {
       const password = generatePassword();
       const hashed = await bcrypt.hash(password, 12);
       const existing = await prisma.user.findUnique({ where: { email: account.email }, select: { id: true } });
+      // The zone scopes what an OFFICIAL may see; a contractor is scoped by ownership
+      // instead, and gets the free first bill a new customer gets.
+      const isOfficial = account.role !== 'contractor';
 
       if (existing) {
         await prisma.user.update({
@@ -102,9 +116,11 @@ export async function POST(request: NextRequest) {
             password: hashed,
             name: account.name,
             role: account.role,
-            railwayZone: zone,
-            railwayZoneName: zoneName,
+            railwayZone: isOfficial ? zone : null,
+            railwayZoneName: isOfficial ? zoneName : null,
             emailVerified: new Date(),
+            // A re-run is a fresh demo: the contractor's free bill comes back too.
+            ...(isOfficial ? {} : { freeTrialUsed: 0, isTrialActive: true }),
           },
         });
       } else {
@@ -115,13 +131,13 @@ export async function POST(request: NextRequest) {
               password: hashed,
               name: account.name,
               role: account.role,
-              railwayZone: zone,
-              railwayZoneName: zoneName,
+              railwayZone: isOfficial ? zone : null,
+              railwayZoneName: isOfficial ? zoneName : null,
               // Verified on creation: these addresses receive no mail, and an
               // unverifiable account could never sign in.
               emailVerified: new Date(),
               freeTrialUsed: 0,
-              isTrialActive: false,
+              isTrialActive: !isOfficial,
               totalBillsProcessed: 0,
               referralCode: await generateUniqueReferralCode(),
             },
@@ -178,6 +194,16 @@ export async function DELETE(request: NextRequest) {
 
     let deleted = 0;
     const retired: string[] = [];
+
+    // A demo contractor's free bill was claimed against a REAL agreement number —
+    // whatever LOA was used for the recording — and trial claims deliberately outlive
+    // the account that made them. Left in place, that claim would refuse the genuine
+    // contractor their free bill on that agreement forever. Release them with the demo.
+    if (users.length > 0) {
+      await prisma.trialClaimedAgreement.deleteMany({
+        where: { claimedByUserId: { in: users.map((u) => u.id) } },
+      });
+    }
 
     for (const user of users) {
       const decisions = await prisma.billApprovalHistory.count({ where: { userId: user.id } });
