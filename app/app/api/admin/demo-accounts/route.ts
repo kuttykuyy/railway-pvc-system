@@ -124,6 +124,10 @@ export async function POST(request: NextRequest) {
           },
         });
       } else {
+        // Generated BEFORE the transaction: it runs its own uniqueness queries on the
+        // global client, and doing that inside an open interactive transaction over the
+        // pooler blew past the default 5-second limit ("Transaction already closed").
+        const referralCode = await generateUniqueReferralCode();
         await prisma.$transaction(async (tx) => {
           const user = await tx.user.create({
             data: {
@@ -139,7 +143,7 @@ export async function POST(request: NextRequest) {
               freeTrialUsed: 0,
               isTrialActive: !isOfficial,
               totalBillsProcessed: 0,
-              referralCode: await generateUniqueReferralCode(),
+              referralCode,
             },
           });
           await tx.customerAccount.create({
@@ -153,7 +157,7 @@ export async function POST(request: NextRequest) {
               lastMonthBills: 0,
             },
           });
-        });
+        }, { timeout: 20_000 });
       }
 
       created.push({ email: account.email, password, role: account.role, name: account.name, isNew: !existing });
