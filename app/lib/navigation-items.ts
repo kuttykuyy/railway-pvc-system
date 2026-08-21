@@ -1,7 +1,7 @@
 import {
   AlertCircle, BarChart3, Briefcase, Building2, Calculator, CheckSquare, CreditCard, Database,
   FileBarChart, FileText, Gift, Home, Layers, LineChart, MessageSquare, Package, Receipt, Send,
-  Settings, ShieldCheck, Sparkles, Star, Tags, TrendingUp, User, UserCircle, Wallet, BookOpen, HardDrive } from 'lucide-react';
+  Settings, ShieldCheck, Sparkles, Star, Tags, TrendingUp, User, UserCircle, Wallet, BookOpen, HardDrive, PlayCircle } from 'lucide-react';
 
 /**
  * Every screen in the menu, in one place.
@@ -62,6 +62,9 @@ export const WORK_ITEMS: NavItem[] = [
  */
 export const REFERENCE_ITEMS: NavItem[] = [
   { name: 'Price Indices', href: '/indices/view', icon: LineChart, adminOnly: false },
+  // The two-upload walkthrough. In the main menu for every role, so a person who is
+  // stuck mid-way can find it without leaving the page they are stuck on.
+  { name: 'How it works', href: '/how-it-works', icon: PlayCircle, adminOnly: false },
 ];
 
 /** Everything behind the admin gate (app/admin/layout.tsx enforces it server-side). */
