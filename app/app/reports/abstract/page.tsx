@@ -311,7 +311,16 @@ function AbstractPageContent() {
             <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 flex flex-col justify-center gap-2 text-sm">
               <div className="flex justify-between gap-3"><span className="text-gray-500">Value of work covered</span><b className="font-mono tabular-nums">₹{fmt(totals.billAmount, 0)}</b></div>
               <div className="flex justify-between gap-3"><span className="text-gray-500">PVC as % of work</span><b className="font-mono tabular-nums">{pvcPercent == null ? '—' : `${pvcPercent.toFixed(2)}%`}</b></div>
-              <div className="flex justify-between gap-3"><span className="text-gray-500">Bills covered</span><b>{abstractData.billData?.length || 0}{quarters.length > 0 && ` · ${quarters.join(', ')}`}</b></div>
+              {/* Count plus the span, never the full list: a ten-bill contract listed six
+                  quarters and wrapped the card to three lines. */}
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-500">Bills covered</span>
+                <b className="text-right">
+                  {abstractData.billData?.length || 0}
+                  {quarters.length === 1 && ` · ${quarters[0]}`}
+                  {quarters.length > 1 && ` · ${quarters[0]} – ${quarters[quarters.length - 1]}`}
+                </b>
+              </div>
               <div className="flex justify-between gap-3"><span className="text-gray-500">Base month (T₀)</span><b>{abstractData.contract.baseMonth}</b></div>
             </div>
             <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 flex flex-col justify-center gap-2 text-sm">
