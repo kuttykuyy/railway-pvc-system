@@ -151,7 +151,8 @@ interface BillPdfCementAnalyzerProps {
    *  locked and needs a hand. A page that hides itself behind a "Reading your bill…"
    *  cover has no other way to know: onApplyBillDetails simply never fires, so the
    *  spinner runs for ever and a failed read looks exactly like a slow one. */
-  onExtractionIncomplete?: (reason: string) => void;
+  /** Why a PDF did not fill the form, and which file it was (single-file mode). */
+  onExtractionIncomplete?: (reason: string, fileName?: string) => void;
 }
 
 interface SavedCementRateSettings {
@@ -878,9 +879,9 @@ export function BillPdfCementAnalyzer({
       const outcome = await analyzePdfFile(files[0]);
       if (outcome.ok === false) {
         toast.error(outcome.reason, { duration: 10000 });
-        onExtractionIncomplete?.(outcome.reason);
+        onExtractionIncomplete?.(outcome.reason, files[0].name);
       } else if (outcome.locked) {
-        onExtractionIncomplete?.('The bill was read, but the figures need unlocking before they can be used.');
+        onExtractionIncomplete?.('The bill was read, but the figures need unlocking before they can be used.', files[0].name);
       }
       return;
     }

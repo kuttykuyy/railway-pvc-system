@@ -32,7 +32,8 @@ import {
   Edit,
   Sparkles,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  LifeBuoy
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -169,9 +170,13 @@ function NewBillPageContent() {
    */
   const [autoInstant, setAutoInstant] = useState(false);
   const instantMode = instantParam || autoInstant;
-  const [instantStage, setInstantStage] = useState<'upload' | 'reading' | 'saving' | null>(
+  const [instantStage, setInstantStage] = useState<'upload' | 'reading' | 'saving' | 'failed' | null>(
     instantParam ? 'upload' : null,
   );
+  /** The last PDF the reader could not read: what it said, and which file. Shown on the
+   *  cover's failure card and used by "Ask IR-PVC to check this bill". */
+  const [lastReadFailure, setLastReadFailure] = useState<{ reason: string; fileName: string | null } | null>(null);
+  const [reviewRequest, setReviewRequest] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [instantExtractedAt, setInstantExtractedAt] = useState(0);
   const instantSubmittedRef = useRef(false);
   const analyzerPickerRef = useRef<(() => void) | null>(null);
@@ -1230,10 +1235,36 @@ function NewBillPageContent() {
   // the cover on. The toast explaining the failure sat above the cover for ten seconds
   // and then went, so a failed read became a permanent spinner. Lift the cover and put
   // the reason where it stays: on the form the user has just been handed.
-  const handleExtractionIncomplete = useCallback((reason: string) => {
-    setInstantStage((stage) => (stage === 'reading' ? null : stage));
+  const handleExtractionIncomplete = useCallback((reason: string, fileName?: string) => {
+    // In the two-upload flow the cover stays up and says what happened, with the ways
+    // forward on it — dropping straight into the full bill form over a toast was the
+    // moment a new user felt lost. Outside that flow the amber notice on the form does
+    // the same job.
+    setLastReadFailure({ reason, fileName: fileName || null });
+    setReviewRequest('idle');
+    setInstantStage((stage) => (stage === 'reading' ? 'failed' : stage));
     setExtractionNotice(reason);
   }, []);
+
+  /** One click instead of "please email us the PDF": the failure is already stored with
+   *  the file; this marks it as one the person wants looked at, and pings the admin. */
+  const requestReview = useCallback(async () => {
+    if (!lastReadFailure || reviewRequest !== 'idle') return;
+    setReviewRequest('sending');
+    try {
+      const res = await fetch('/api/parse-failures/request-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: lastReadFailure.fileName, reason: lastReadFailure.reason }),
+      });
+      if (!res.ok) throw new Error();
+      setReviewRequest('sent');
+      toast.success('Sent. We have the PDF and will look at it — you will hear back by email.', { duration: 8000 });
+    } catch {
+      setReviewRequest('idle');
+      toast.error('Could not send the request. Please try again, or email admin@illall.in with the PDF.');
+    }
+  }, [lastReadFailure, reviewRequest]);
 
   // Instant mode: save the moment the extraction lands complete — and hand over to the
   // human the moment it lands incomplete. The confirm dialog is skipped on purpose: it
@@ -1629,6 +1660,56 @@ function NewBillPageContent() {
                 </button>
               </>
             )}
+            {instantStage === 'failed' && (
+              <>
+                <AlertCircle className="h-12 w-12 mx-auto text-amber-500" />
+                <h2 className="text-2xl font-bold">We couldn&apos;t read this bill</h2>
+                {lastReadFailure?.reason && (
+                  <p className="text-sm text-left bg-amber-50 border border-amber-200 text-amber-900 rounded-md p-3 whitespace-pre-line">
+                    {lastReadFailure.reason}
+                  </p>
+                )}
+                <p className="text-sm text-muted-foreground">
+                  Nothing was saved and your free bill is untouched. The PDF has been kept so we can
+                  teach the reader this layout.
+                </p>
+                <div className="space-y-2">
+                  <Button
+                    size="lg"
+                    className="w-full"
+                    onClick={() => {
+                      const openPicker = analyzerPickerRef.current;
+                      if (!openPicker) { setBillMode('ai'); setInstantStage(null); return; }
+                      openPicker();
+                      setInstantStage('reading');
+                    }}
+                  >
+                    <FileText className="h-5 w-5 mr-2" />
+                    Try another PDF
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="w-full"
+                    disabled={reviewRequest !== 'idle'}
+                    onClick={requestReview}
+                  >
+                    {reviewRequest === 'sent'
+                      ? <><CheckCircle2 className="h-5 w-5 mr-2 text-emerald-600" /> Request sent — we&apos;ll look at it</>
+                      : reviewRequest === 'sending'
+                        ? <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Sending…</>
+                        : <><LifeBuoy className="h-5 w-5 mr-2" /> Ask IR-PVC to check this bill</>}
+                  </Button>
+                </div>
+                <button
+                  type="button"
+                  className="text-sm text-muted-foreground hover:underline"
+                  onClick={() => setInstantStage(null)}
+                >
+                  Type it in instead
+                </button>
+              </>
+            )}
             {instantStage === 'saving' && (
               <>
                 <LoadingSpinner />
@@ -1924,6 +2005,18 @@ function NewBillPageContent() {
                         Try the upload again, or fill the bill in below — nothing has been saved
                         and your free bill has not been used.
                       </p>
+                      {lastReadFailure && (
+                        <button
+                          type="button"
+                          className="mt-2 inline-flex items-center gap-1.5 text-amber-900 font-semibold hover:underline disabled:opacity-70"
+                          disabled={reviewRequest !== 'idle'}
+                          onClick={requestReview}
+                        >
+                          {reviewRequest === 'sent'
+                            ? <><CheckCircle2 className="h-4 w-4 text-emerald-600" /> Request sent — we&apos;ll look at it</>
+                            : <><LifeBuoy className="h-4 w-4" /> Ask IR-PVC to check this bill</>}
+                        </button>
+                      )}
                     </div>
                     <button
                       type="button"
