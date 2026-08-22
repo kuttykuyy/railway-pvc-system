@@ -242,7 +242,8 @@ export default function IndicesViewPage() {
     if (!baseRows || !qRows) return null;
     const baseDate = new Date(Date.UTC(baseY, baseM, 1));
     const keys = [
-      ...NON_STEEL.map(c => ({ key: c.key, label: c.label, indexName: c.indexName, money: c.key === 'mpngFuel' })),
+      // Fuel is rupees per litre with paise — two decimals, not a rounded rupee.
+      ...NON_STEEL.map(c => ({ key: c.key, label: c.label, indexName: c.indexName, money: false })),
       { key: steelCols[0].key, label: `Steel TMT · ${cityName}`, indexName: 'Steel', money: true },
     ];
     const baseRow = rowOf(baseRows, baseM) as any;
@@ -359,7 +360,9 @@ export default function IndicesViewPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {cards.map(({ key, label, info, f, icon: Icon }) => {
           const prev = info ? prevOf(key, info.m) : null;
-          const delta = info && prev != null && prev !== 0 ? ((info.value / prev) - 1) * 100 : null;
+          const rawDelta = info && prev != null && prev !== 0 ? ((info.value / prev) - 1) * 100 : null;
+          // Below a twentieth of a percent is "unchanged", not an arrow pointing at 0.0%.
+          const delta = rawDelta == null ? null : Math.abs(rawDelta) < 0.05 ? 0 : rawDelta;
           return (
             <div key={key} className="bg-white border border-gray-200 rounded-xl px-4 py-3 relative">
               <div className="flex items-center gap-1.5">
@@ -373,7 +376,7 @@ export default function IndicesViewPage() {
                 {info ? <span className="text-gray-400">{MONTHS[info.m]} {year}</span> : <span className="text-gray-400">No data</span>}
                 {delta != null && (
                   <span className={`ml-2 font-semibold ${delta > 0 ? 'text-red-700' : delta < 0 ? 'text-emerald-700' : 'text-gray-500'}`}>
-                    {delta > 0 ? '▲' : delta < 0 ? '▼' : '■'} {Math.abs(delta).toFixed(1)}% vs {info && prevOf(key, info.m) != null ? 'previous month' : ''}
+                    {delta === 0 ? 'unchanged vs previous month' : <>{delta > 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}% vs previous month</>}
                   </span>
                 )}
               </p>
