@@ -76,16 +76,15 @@ export default async function ContractDetailPage({ params }: Props) {
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <BackButton href="/contracts" label="Contracts" variant="outline" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mt-2 break-all">{contract.agreementNo}</h1>
-          <p className="text-sm text-gray-500 mt-1 line-clamp-2">{contract.workDescription}</p>
-        </div>
-        <div className="flex flex-wrap gap-2 shrink-0">
+      {/* Header: the back button and the actions share the top row; the agreement
+          number and the work description take the full width beneath. With the six
+          actions beside the title instead, the title was squeezed into a third of the
+          page — the agreement number broke in two, the description was cut — and a
+          page-wide blank sat under the buttons. */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <BackButton href="/contracts" label="Contracts" variant="outline" />
+          <div className="flex flex-wrap gap-2">
           <ShareContractDialog contractId={contract.id} agreementNo={contract.agreementNo} />
           <Link href={`/contracts/${contract.id}/covering-letter`}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
@@ -112,6 +111,11 @@ export default async function ContractDetailPage({ params }: Props) {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
             <Edit className="h-4 w-4" /> Edit
           </Link>
+          </div>
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-gray-900 break-words">{contract.agreementNo}</h1>
+          <p className="text-sm text-gray-500 mt-1">{contract.workDescription}</p>
         </div>
       </div>
 

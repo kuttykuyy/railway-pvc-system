@@ -112,7 +112,9 @@ export function SampleDocumentDialog({
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        {/* z-[70]: the bill page's instant cover is a fixed z-[60] sheet, and the dialog
+            default (z-50) opened behind it — the link appeared to do nothing. */}
+        <DialogContent className="z-[70] max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{sample.title}</DialogTitle>
             <DialogDescription>{sample.intro}</DialogDescription>
