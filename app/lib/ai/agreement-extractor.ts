@@ -10,7 +10,7 @@
  */
 
 import { PDFDocument } from 'pdf-lib';
-import { recordAiUsage } from '@/lib/ai-usage';
+import { recordAiUsage, tokensFromUsage } from '@/lib/ai-usage';
 
 // Every field we need (agreement no, LOA, contractor, work description, closing
 // date, values) is on the opening pages; a full 70+ page agreement overwhelms the
@@ -226,12 +226,9 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
     };
   }
 
-  const usage = data?.usage || {};
   await recordAiUsage({
     operation: 'agreement-extraction',
-    promptTokens: usage.prompt_tokens,
-    completionTokens: usage.completion_tokens,
-    totalTokens: usage.total_tokens,
+    ...tokensFromUsage(data?.usage),
     success: true,
   });
 

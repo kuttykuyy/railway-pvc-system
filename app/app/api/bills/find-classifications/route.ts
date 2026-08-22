@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { recordAiUsage, tokensFromUsage } from '@/lib/ai-usage';
 
 interface ClassificationMatch {
   classificationId: string;
@@ -415,6 +416,7 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error('LLM API error:', errorData);
+      await recordAiUsage({ operation: 'find-classifications', success: false, errorType: `http_${response.status}` });
       return NextResponse.json(
         { error: 'Failed to process document. Please try again.' },
         { status: 500 }
@@ -423,6 +425,14 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
+    // This call was never recorded at all, so the usage page simply did not know the
+    // classification search existed — every one of its calls was spent unseen.
+    await recordAiUsage({
+      operation: 'find-classifications',
+      ...tokensFromUsage(data?.usage),
+      success: !!content,
+      errorType: content ? null : 'empty_response',
+    });
 
     if (!content) {
       return NextResponse.json(

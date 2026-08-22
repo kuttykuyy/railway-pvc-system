@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { recordAiUsage, tokensFromUsage } from '@/lib/ai-usage';
 
 export async function POST(request: NextRequest) {
   try {
@@ -114,11 +115,19 @@ Respond with raw JSON only. Be specific, practical, and reference actual numbers
     if (!response.ok) {
       const err = await response.text();
       console.error('AI API error:', err);
+      await recordAiUsage({ operation: 'tendering-insights', success: false, errorType: `http_${response.status}` });
       return NextResponse.json({ error: 'AI service error' }, { status: 502 });
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
+    // Previously unrecorded: the usage page did not know the estimator's insights existed.
+    await recordAiUsage({
+      operation: 'tendering-insights',
+      ...tokensFromUsage(data?.usage),
+      success: !!content,
+      errorType: content ? null : 'empty_response',
+    });
 
     if (!content) {
       return NextResponse.json({ error: 'Empty AI response' }, { status: 502 });

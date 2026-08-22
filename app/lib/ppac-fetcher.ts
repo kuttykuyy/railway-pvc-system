@@ -5,6 +5,7 @@
  */
 
 import { prisma } from './db';
+import { recordAiUsage, tokensFromUsage } from './ai-usage';
 
 /**
  * Extracts raw text from a base64-encoded PDF without any external library.
@@ -255,6 +256,8 @@ ${pdfText.substring(0, 12000)}`,
 
       if (!response.ok) {
         const errorText = await response.text();
+        // Each attempt is a separate call the provider charges for; record each.
+        await recordAiUsage({ operation: 'ppac-fuel-fetch', success: false, errorType: `http_${response.status}` });
         if ((response.status >= 500 || response.status === 524) && attempt < MAX_RETRIES) {
           logger.warn(`[PPAC Fetcher] AI API error ${response.status} on attempt ${attempt}, retrying in 5s...`);
           lastError = new Error(`AI API error ${response.status}: ${errorText.substring(0, 200)}`);
@@ -266,6 +269,13 @@ ${pdfText.substring(0, 12000)}`,
 
       const data = await response.json();
       content = data.choices?.[0]?.message?.content || '';
+      // Previously unrecorded: the nightly diesel-price read was spent unseen.
+      await recordAiUsage({
+        operation: 'ppac-fuel-fetch',
+        ...tokensFromUsage(data?.usage),
+        success: !!content,
+        errorType: content ? null : 'empty_response',
+      });
       lastError = null;
       break; // Success, exit retry loop
 

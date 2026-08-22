@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { recordAiUsage } from '@/lib/ai-usage';
+import { recordAiUsage, tokensFromUsage } from '@/lib/ai-usage';
 import rateLimiter, { RATE_LIMITS, getIdentifier } from '@/lib/rate-limiter';
 
 export const dynamic = 'force-dynamic';
@@ -149,12 +149,9 @@ Return ONLY JSON: {"justification": "..."}`;
       justification = String(content || '').trim();
     }
 
-    const usage = data?.usage || {};
     await recordAiUsage({
       operation: 'classification-justification',
-      promptTokens: usage.prompt_tokens,
-      completionTokens: usage.completion_tokens,
-      totalTokens: usage.total_tokens,
+      ...tokensFromUsage(data?.usage),
       success: !!justification,
       errorType: justification ? null : 'empty_response',
     });

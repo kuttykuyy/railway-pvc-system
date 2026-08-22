@@ -30,9 +30,22 @@ interface UsageSummary {
   total: UsageBucket & { failures: number };
   today: UsageBucket;
   month: UsageBucket;
+  byOperation: Array<{ operation: string; calls: number; tokens: number; failures: number }>;
+  untokenedCalls: number;
   recent: RecentCall[];
   lastFailureAt: string | null;
 }
+
+/** What each recorded operation is, in the words a person uses for it. */
+const OPERATION_LABEL: Record<string, string> = {
+  'bill-extraction': 'Bill PDF reading (AI fallback)',
+  'agreement-extraction': 'LOA / agreement reading',
+  'jpc-extraction': 'JPC steel sheet reading',
+  'classification-justification': 'Classification justification',
+  'find-classifications': 'Classification search',
+  'tendering-insights': 'Tendering estimator insights',
+  'ppac-fuel-fetch': 'Diesel price fetch (nightly)',
+};
 type ProviderStatus = 'working' | 'payment_required' | 'out_of_credit' | 'not_configured' | 'error';
 
 const STATUS_META: Record<ProviderStatus, { label: string; className: string; Icon: typeof CheckCircle2 }> = {
@@ -103,8 +116,9 @@ export default function AdminAiUsagePage() {
         <CardHeader>
           <CardTitle>Provider status</CardTitle>
           <CardDescription>
-            Abacus does not expose a remaining-credit figure — it only reports when credit is exhausted. Use the check below to
-            confirm whether AI extraction is currently working. The real balance lives in the Abacus dashboard.
+            What this page can and cannot tell you. It <b>can</b> show every AI call the app made, with its tokens, by feature.
+            It <b>cannot</b> show the rupee balance: Abacus has no API for it and only says when credit has run out. The
+            balance lives in the Abacus dashboard; the check below tells you whether AI calls are working right now.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -139,6 +153,58 @@ export default function AdminAiUsagePage() {
         <StatCard title="Failed calls" value={usage ? numberFmt.format(usage.total.failures) : '—'} sub={usage?.lastFailureAt ? `last ${format(new Date(usage.lastFailureAt), 'dd MMM, HH:mm')}` : 'none'} />
       </div>
 
+      {/* Which feature is spending it */}
+      <Card>
+        <CardHeader>
+          <CardTitle>This month, by feature</CardTitle>
+          <CardDescription>Where the tokens went. Seven features call the provider; each is listed when it has been used this month.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {usage?.untokenedCalls ? (
+            <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {numberFmt.format(usage.untokenedCalls)} successful {usage.untokenedCalls === 1 ? 'call' : 'calls'} this month
+              carried no token count, so the totals are an undercount by that much. (Before 22 Aug 2026 three features
+              recorded their calls as 0 tokens and three recorded nothing at all; both are fixed from that date.)
+            </div>
+          ) : null}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Feature</TableHead>
+                <TableHead className="text-right">Calls</TableHead>
+                <TableHead className="text-right">Tokens</TableHead>
+                <TableHead className="text-right">Failed</TableHead>
+                <TableHead className="text-right">Share</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {usage && usage.byOperation.length > 0 ? (
+                usage.byOperation.map((row) => (
+                  <TableRow key={row.operation}>
+                    <TableCell>
+                      {OPERATION_LABEL[row.operation] || row.operation}
+                      <span className="block text-xs text-muted-foreground">{row.operation}</span>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{numberFmt.format(row.calls)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{numberFmt.format(row.tokens)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{row.failures ? <span className="text-red-700">{numberFmt.format(row.failures)}</span> : '—'}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {usage.month.tokens > 0 ? `${((row.tokens / usage.month.tokens) * 100).toFixed(0)}%` : '—'}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    {loading ? 'Loading…' : 'No AI calls this month.'}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
       {/* Recent calls */}
       <Card>
         <CardHeader>
@@ -161,7 +227,7 @@ export default function AdminAiUsagePage() {
                 usage.recent.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="whitespace-nowrap">{format(new Date(row.createdAt), 'dd MMM, HH:mm:ss')}</TableCell>
-                    <TableCell>{row.operation}</TableCell>
+                    <TableCell>{OPERATION_LABEL[row.operation] || row.operation}</TableCell>
                     <TableCell>{row.model}</TableCell>
                     <TableCell className="text-right">{numberFmt.format(row.totalTokens)}</TableCell>
                     <TableCell>

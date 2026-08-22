@@ -11,7 +11,7 @@
  * the system, and unlike a bill there is no printed total to reconcile against.
  */
 
-import { recordAiUsage } from '@/lib/ai-usage';
+import { recordAiUsage, tokensFromUsage } from '@/lib/ai-usage';
 import { JPC_ITEMS } from '@/lib/jpc-items';
 
 const ABACUS_ENDPOINT = 'https://routellm.abacus.ai/v1/chat/completions';
@@ -141,12 +141,9 @@ Rules:
     return { ok: false, status: 502, error: 'Could not read the sheet clearly. Try a sharper scan.' };
   }
 
-  const usage = payload?.usage || {};
   await recordAiUsage({
     operation: 'jpc-extraction',
-    promptTokens: usage.prompt_tokens,
-    completionTokens: usage.completion_tokens,
-    totalTokens: usage.total_tokens,
+    ...tokensFromUsage(payload?.usage),
     success: true,
   });
 

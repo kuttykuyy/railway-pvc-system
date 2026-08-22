@@ -19,7 +19,7 @@ import { enrichItemsFromRateBook } from '@/lib/rate-book-lookup';
 import { composeJustification, repairAiJustification, officialGroupName } from '@/lib/classification-justification';
 import { fillAgreementNumberFromBill } from '@/lib/agreement-number-from-bill';
 import { inferScheduleSubHead, CONTEXT as DSR_CONTEXT } from '@/lib/dsr-subhead-classification';
-import { recordAiUsage } from '@/lib/ai-usage';
+import { recordAiUsage, tokensFromUsage } from '@/lib/ai-usage';
 import { parseIrepsBillPdfDirect } from '@/lib/ireps-direct-pdf-parser';
 
 export const dynamic = 'force-dynamic';
@@ -578,14 +578,10 @@ async function requestAiExtraction(
   const content = extractAiMessageContent(choice?.message?.content);
   const usage = data.usage && typeof data.usage === 'object' ? data.usage : null;
 
-  // Abacus RouteLLM reports usage as input_tokens/output_tokens (not the OpenAI
-  // prompt_tokens/completion_tokens names) — accept both so token counts land.
   await recordAiUsage({
     operation: 'bill-extraction',
     success: true,
-    promptTokens: Number(usage?.prompt_tokens ?? usage?.input_tokens ?? 0),
-    completionTokens: Number(usage?.completion_tokens ?? usage?.output_tokens ?? 0),
-    totalTokens: Number(usage?.total_tokens ?? 0),
+    ...tokensFromUsage(usage),
   });
 
   return {
