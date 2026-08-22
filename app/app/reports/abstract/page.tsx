@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { StatusMessage } from '@/components/ui/status-message';
-import { Download } from 'lucide-react';
+import { Download, Printer, FileSpreadsheet, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 
 interface Contract {
@@ -17,6 +18,9 @@ interface Contract {
   agreementNo: string;
   contractorName: string;
   workDescription: string;
+  /** Present on the full list (not ?lean=1): lets the empty state say which contracts
+   *  actually have bills, instead of offering a dropdown of names with nothing behind them. */
+  _count?: { bills: number; pvcCalculations: number };
 }
 
 interface BillData {
@@ -146,7 +150,9 @@ function AbstractPageContent() {
 
   const fetchContracts = async () => {
     try {
-      const res = await fetch('/api/contracts?lean=1');
+      // The full list on purpose: this page's opening screen names the contracts that
+      // have bills, which needs the counts the lean list leaves out.
+      const res = await fetch('/api/contracts');
       if (!res.ok) throw new Error('Failed to fetch contracts');
       setContracts(await res.json());
     } catch (e: any) {
@@ -213,47 +219,117 @@ function AbstractPageContent() {
 
   if (isLoading) return <div className="flex justify-center py-16"><LoadingSpinner size="lg" text="Loading..." /></div>;
 
+  const quarters = Array.from(new Set((abstractData?.billData || []).map(b => b.quarter).filter(Boolean)));
+  const pvcPercent = totals.billAmount > 0 && abstractData ? (abstractData.grandTotal / totals.billAmount) * 100 : null;
+  const components: Array<[string, number]> = abstractData ? [
+    ['Labour', totals.labour],
+    ['Plant & machinery', totals.plantMachinery],
+    ['Fuel', totals.fuel],
+    ['Cement', abstractData.totalForCement],
+    ['Steel', totals.steel],
+    ['Other materials', totals.material],
+  ] : [];
+  const largest = components.length
+    ? components.reduce((a, b) => (Math.abs(b[1]) > Math.abs(a[1]) ? b : a))
+    : null;
+  const withBills = contracts.filter(c => (c._count?.bills ?? 0) > 0);
+  const withoutBills = contracts.filter(c => (c._count?.bills ?? 0) === 0);
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Abstract Report</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Quarterly PVC breakdown by component</p>
-        </div>
-        {abstractData && (
-          <Button onClick={handleDownloadPDF} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
-            <Download className="h-4 w-4 mr-1.5" />
-            Download PDF
-          </Button>
-        )}
+    <div className="space-y-5 max-w-7xl mx-auto">
+      {/* Header — what this document is, not just what it is called. */}
+      <div className="print:hidden">
+        <nav className="text-sm text-gray-500 flex items-center gap-1.5" aria-label="Breadcrumb">
+          <Link href="/bills" className="text-emerald-700 font-semibold hover:underline">Reports</Link>
+          <span aria-hidden>›</span>
+          <span>Abstract</span>
+        </nav>
+        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900 mt-1">Abstract — all bills on one statement</h1>
+        <p className="text-sm text-gray-500 mt-1 max-w-[80ch]">
+          Every bill on a contract with its price variation split by component, in the railway&apos;s proforma —
+          the sheet you submit with a periodic or final claim.
+        </p>
       </div>
 
       {error && <StatusMessage type="error" title="Error" message={error} />}
 
-      {/* Contract selector */}
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Contract</label>
-        <div className="w-96">
-          <Select value={selectedContract} onValueChange={handleContractChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select a contract" />
-            </SelectTrigger>
-            <SelectContent>
-              {contracts.map(c => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.agreementNo} — {c.contractorName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      {/* Toolbar: the contract, what the statement covers, and the two ways out of it. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 print:hidden">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <label className="text-sm text-gray-500 whitespace-nowrap">Contract</label>
+          <div className="w-[22rem] max-w-full">
+            <Select value={selectedContract} onValueChange={handleContractChange}>
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Select a contract" />
+              </SelectTrigger>
+              <SelectContent>
+                {contracts.map(c => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.agreementNo} — {c.contractorName}
+                    {c._count ? ` (${c._count.bills} ${c._count.bills === 1 ? 'bill' : 'bills'})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {abstractData && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-full px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200">
+              {abstractData.billData?.length || 0} {abstractData.billData?.length === 1 ? 'bill' : 'bills'}
+              {quarters.length > 0 && ` · ${quarters.length === 1 ? quarters[0] : `${quarters[0]} – ${quarters[quarters.length - 1]}`}`}
+            </span>
+          )}
         </div>
+        {abstractData && (
+          <div className="flex items-center gap-2">
+            <Button onClick={() => window.print()} size="sm" variant="outline">
+              <Printer className="h-4 w-4 mr-1.5" /> Print
+            </Button>
+            <Button onClick={handleDownloadPDF} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Download className="h-4 w-4 mr-1.5" /> Download PDF
+            </Button>
+          </div>
+        )}
       </div>
 
       {isLoadingAbstract ? (
         <div className="flex justify-center py-16"><LoadingSpinner size="lg" text="Generating abstract..." /></div>
       ) : abstractData ? (
-        <div className="space-y-6">
+        <div className="space-y-5">
+          {/* The answer, before the working. The one figure a person opens this page for
+              sat in small text under a wide table; it now leads, with the words beside it
+              (a railway money statement carries both) and the facts that qualify it. */}
+          <div className="grid gap-3 lg:grid-cols-[1.15fr_1fr_1fr] print:hidden">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-emerald-800">
+                Total price variation {abstractData.totalSay < 0 ? 'recoverable' : 'payable'}
+              </p>
+              <p className={`font-mono tabular-nums text-3xl font-semibold mt-1 ${abstractData.totalSay < 0 ? 'text-red-700' : 'text-emerald-800'}`}>
+                {abstractData.totalSay < 0 ? '−' : ''}₹{fmt(Math.abs(abstractData.totalSay), 0)}
+              </p>
+              <p className="text-xs text-emerald-900/80 mt-1.5">{amountInWords(abstractData.totalSay)}</p>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 flex flex-col justify-center gap-2 text-sm">
+              <div className="flex justify-between gap-3"><span className="text-gray-500">Value of work covered</span><b className="font-mono tabular-nums">₹{fmt(totals.billAmount, 0)}</b></div>
+              <div className="flex justify-between gap-3"><span className="text-gray-500">PVC as % of work</span><b className="font-mono tabular-nums">{pvcPercent == null ? '—' : `${pvcPercent.toFixed(2)}%`}</b></div>
+              <div className="flex justify-between gap-3"><span className="text-gray-500">Bills covered</span><b>{abstractData.billData?.length || 0}{quarters.length > 0 && ` · ${quarters.join(', ')}`}</b></div>
+              <div className="flex justify-between gap-3"><span className="text-gray-500">Base month (T₀)</span><b>{abstractData.contract.baseMonth}</b></div>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 flex flex-col justify-center gap-2 text-sm">
+              {largest && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">Largest component</span>
+                  <b>{largest[0]} · <span className={`font-mono tabular-nums ${numClass(largest[1])}`}>₹{fmt(largest[1], 0)}</span></b>
+                </div>
+              )}
+              {components.filter(([label]) => label !== largest?.[0]).slice(0, 3).map(([label, value]) => (
+                <div key={label} className="flex justify-between gap-3">
+                  <span className="text-gray-500">{label}</span>
+                  <b className={`font-mono tabular-nums ${numClass(value)}`}>{value < 0 ? '−' : ''}₹{fmt(Math.abs(value), 0)}</b>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Proforma heading and contract block, matching the single-bill IR statement so
               the two documents read as one set when submitted together. */}
           <div className="border border-gray-300 rounded-lg bg-white">
@@ -514,7 +590,68 @@ function AbstractPageContent() {
       ) : selectedContract ? (
         <div className="text-center py-16 text-gray-500">No data found for this contract.</div>
       ) : (
-        <div className="text-center py-16 text-gray-400">Select a contract to view the abstract report.</div>
+        /* The opening screen. "Select a contract to view the abstract report." on an empty
+           page told a first-time reader neither what the abstract is nor which contracts
+           have anything to show — the dropdown lists every contract, including the ones
+           with no bills, which produce an empty statement. */
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr] items-start">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="flex items-center gap-2">
+              <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
+              <h2 className="font-bold text-gray-900">What the abstract is</h2>
+            </div>
+            <p className="text-sm text-gray-600 mt-2">
+              One statement covering <b>every bill on a contract</b>: each bill&apos;s value of work and its
+              price variation split into labour, plant &amp; machinery, fuel, cement, steel and other
+              materials, with the total in figures and in words, and space for the three signatures.
+            </p>
+            <ul className="mt-3 space-y-1.5 text-sm text-gray-600 list-disc pl-5">
+              <li>Submitted with a periodic or final claim, alongside the single-bill statements.</li>
+              <li>Steel is split into TMT, angle/channel, plates and other sections, priced on different JPC baskets.</li>
+              <li>If the total comes out negative, the sheet explains the recovery and its GST separately.</li>
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <h2 className="font-bold text-gray-900">Pick a contract</h2>
+            {withBills.length === 0 ? (
+              <p className="text-sm text-gray-600 mt-2">
+                No contract has a bill yet. Add a bill first and its abstract builds itself.{' '}
+                <Link href="/bills/new" className="text-emerald-700 font-semibold hover:underline">Add a bill →</Link>
+              </p>
+            ) : (
+              <>
+                <p className="text-sm text-gray-500 mt-1">{withBills.length} {withBills.length === 1 ? 'contract has' : 'contracts have'} bills to abstract.</p>
+                <div className="mt-3 divide-y divide-gray-100 max-h-80 overflow-y-auto">
+                  {withBills.slice(0, 12).map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => handleContractChange(c.id)}
+                      className="w-full text-left py-2.5 flex items-center justify-between gap-3 group"
+                    >
+                      <span className="min-w-0">
+                        <span className="block font-semibold text-sm text-gray-900 truncate">{c.agreementNo}</span>
+                        <span className="block text-xs text-gray-500 truncate">{c.contractorName}</span>
+                      </span>
+                      <span className="shrink-0 text-xs text-gray-500 inline-flex items-center gap-1.5">
+                        {c._count?.bills} {c._count?.bills === 1 ? 'bill' : 'bills'}
+                        <ArrowRight className="h-3.5 w-3.5 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {withBills.length > 12 && (
+                  <p className="text-xs text-gray-400 mt-2">…and {withBills.length - 12} more — use the dropdown above.</p>
+                )}
+              </>
+            )}
+            {withoutBills.length > 0 && (
+              <p className="text-xs text-gray-400 mt-3 border-t border-gray-100 pt-3">
+                {withoutBills.length} {withoutBills.length === 1 ? 'contract has' : 'contracts have'} no bills yet — their abstract would be empty.
+              </p>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
