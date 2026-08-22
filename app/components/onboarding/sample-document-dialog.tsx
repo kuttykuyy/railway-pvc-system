@@ -114,7 +114,9 @@ export function SampleDocumentDialog({
       <Dialog open={open} onOpenChange={setOpen}>
         {/* z-[70]: the bill page's instant cover is a fixed z-[60] sheet, and the dialog
             default (z-50) opened behind it — the link appeared to do nothing. */}
-        <DialogContent className="z-[70] max-w-3xl max-h-[90vh] overflow-y-auto">
+        {/* Nearly the whole viewport: the point is to READ the page, and at the dialog's
+            default width a bill page was a thumbnail. */}
+        <DialogContent className="z-[70] w-[96vw] max-w-[1400px] max-h-[94vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{sample.title}</DialogTitle>
             <DialogDescription>{sample.intro}</DialogDescription>
