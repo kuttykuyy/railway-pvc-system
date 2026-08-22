@@ -11,6 +11,7 @@ import { notFound } from 'next/navigation';
 import { formatContractValue } from '@/lib/gcc-compliance';
 import { BackButton } from '@/components/ui/back-button';
 import { ShareContractDialog } from '@/components/contracts/share-contract-dialog';
+import { ContractMoreMenu } from '@/components/contracts/contract-more-menu';
 import { BillCard } from '@/components/bill-card';
 import { resolvePre2022Setup } from '@/lib/pre2022-contract';
 import { DeleteBillButton } from '@/components/bills/delete-bill-button';
@@ -76,47 +77,68 @@ export default async function ContractDetailPage({ params }: Props) {
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
 
-      {/* Header: the back button and the actions share the top row; the agreement
-          number and the work description take the full width beneath. With the six
-          actions beside the title instead, the title was squeezed into a third of the
-          page — the agreement number broke in two, the description was cut — and a
-          page-wide blank sat under the buttons. */}
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <BackButton href="/contracts" label="Contracts" variant="outline" />
-          <div className="flex flex-wrap gap-2">
-          <ShareContractDialog contractId={contract.id} agreementNo={contract.agreementNo} />
-          <Link href={`/contracts/${contract.id}/covering-letter`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
-            <FileText className="h-4 w-4" /> Covering Letter
-          </Link>
-          <Link href={`/contracts/${contract.id}/extensions`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
-            <Calendar className="h-4 w-4" /> Extensions
-            {contract.isExtended && (
-              <span className="ml-1 text-xs px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-full">{contract.extensions.length}</span>
+      {/* Header: a document title with its facts, and one primary action. Six equal
+          buttons beside the title used to leave the page with no obvious next step and
+          the title squeezed into a corner; now Add bill leads, Edit and Share stay at
+          hand, and the documents and analyses sit behind "More". The facts row carries
+          what the four stat tiles below it used to — contractor, value, base month,
+          bills and PVC — so the page is one row shorter. */}
+      <div className="bg-white border border-gray-200 rounded-xl px-5 py-4 sm:px-6 sm:py-5">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          <div className="min-w-0">
+            <nav className="text-sm text-gray-500 flex items-center gap-1.5" aria-label="Breadcrumb">
+              <Link href="/contracts" className="text-emerald-700 font-semibold hover:underline">Contracts</Link>
+              <span aria-hidden>›</span>
+              <span className="truncate">{contract.agreementNo}</span>
+            </nav>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900 break-words mt-1.5">{contract.agreementNo}</h1>
+            <p className="text-sm sm:text-[15px] text-gray-500 mt-1 max-w-[78ch]">{contract.workDescription}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {contract.bills.length === 0 ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-full px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200">
+                <span className="h-1.5 w-1.5 rounded-full bg-current" /> Setup · no bills yet
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-full px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200">
+                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                {contract.pvcCalculations.length > 0 ? 'PVC ready' : 'Active'} · {contract.bills.length} {contract.bills.length === 1 ? 'bill' : 'bills'}
+              </span>
             )}
-          </Link>
-          {/* The whole contract's PVC on one grid, plus the JPC working — the layout
-              accounts offices keep by hand, computed. */}
-          <a href={`/api/contracts/${contract.id}/master-sheet`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
-            <FileText className="h-4 w-4" /> Master Sheet (PDF)
-          </a>
-          <Link href={`/contracts/${contract.id}/quarterly-averages`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
-            <BarChart3 className="h-4 w-4" /> Quarterly Averages
-          </Link>
-          <Link href={`/contracts/${contract.id}/edit`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
-            <Edit className="h-4 w-4" /> Edit
-          </Link>
+            <Link href={`/bills/new?contractId=${contract.id}`}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+              <Plus className="h-4 w-4" /> Add bill
+            </Link>
+            <Link href={`/contracts/${contract.id}/edit`}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50">
+              <Edit className="h-4 w-4" /> Edit
+            </Link>
+            <ShareContractDialog contractId={contract.id} agreementNo={contract.agreementNo} />
+            <ContractMoreMenu contractId={contract.id} extensionCount={contract.extensions.length} />
           </div>
         </div>
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-gray-900 break-words">{contract.agreementNo}</h1>
-          <p className="text-sm text-gray-500 mt-1">{contract.workDescription}</p>
-        </div>
+
+        <dl className="flex flex-wrap gap-x-7 gap-y-3 mt-4 pt-4 border-t border-gray-100 text-sm">
+          {[
+            ['Contractor', contract.contractorName],
+            ['Agreement value', contract.contractValue ? formatContractValue(contract.contractValue) : '—'],
+            ['Base month', format(new Date(contract.baseMonth), 'MMMM yyyy')],
+            ['LOA', contract.loaNo
+              ? `${contract.loaNo}${contract.loaDate ? ` · ${format(new Date(contract.loaDate as unknown as string), 'dd MMM yyyy')}` : ''}`
+              : '—'],
+            ['Completion', contract.completionPeriodMonths ? `${contract.completionPeriodMonths} months` : '—'],
+            ['Bills', `${contract.bills.length} · ₹${totalBillAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`],
+            // On a pre-2022 contract the stored totals are GCC-2022 figures — the wrong
+            // clause — and a number in a headline gets quoted. The statements carry the
+            // right figures.
+            ['Total PVC', pre2022.isPre2022 ? 'see statements' : `₹${totalPvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`],
+          ].map(([label, value]) => (
+            <div key={label} className="min-w-0">
+              <dt className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">{label}</dt>
+              <dd className="font-medium text-gray-800 break-words">{value}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
 
       {/* The doorway to the older-GCC statement. Full-width and OUTSIDE the header row —
@@ -152,27 +174,6 @@ export default async function ContractDetailPage({ params }: Props) {
           )}
         </div>
       )}
-
-      {/* Stats strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Contractor', value: contract.contractorName, icon: User, color: 'text-emerald-600' },
-          { label: 'Base Month', value: format(new Date(contract.baseMonth), 'MMM yyyy'), icon: Calendar, color: 'text-green-600' },
-          { label: 'Total Bills', value: `₹${totalBillAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, icon: FileText, color: 'text-emerald-600' },
-          // On a pre-2022 contract the stored totals are GCC-2022 figures — the wrong
-          // clause — and a number on a headline card gets quoted. The statements carry
-          // the right figures.
-          { label: 'Total PVC', value: pre2022.isPre2022 ? 'see statements' : `₹${totalPvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, icon: Calculator, color: 'text-orange-600' },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="bg-white border border-gray-200 rounded-lg px-4 py-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Icon className={`h-4 w-4 ${color}`} />
-              <span className="text-xs text-gray-400 uppercase tracking-wide">{label}</span>
-            </div>
-            <p className="text-sm font-semibold text-gray-800 truncate">{value}</p>
-          </div>
-        ))}
-      </div>
 
       {/* Contract Details + GCC */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
