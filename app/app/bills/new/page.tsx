@@ -1735,17 +1735,16 @@ function NewBillPageContent() {
         </div>
       )}
 
-      <div className="flex items-center gap-4">
-        <BackButton href="/bills" label={t('form.bill.back')} variant="outline" />
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <FileText className="h-8 w-8 text-emerald-600" />
-            {t('form.bill.add_title')}
-          </h1>
-          <p className="text-gray-600 mt-2">
-            {language === 'hi' ? 'स्वचालित पीवीसी गणना के साथ एक नया रनिंग अकाउंट बिल जोड़ें' : 'Add a new running account bill with automatic PVC calculation'}
-          </p>
-        </div>
+      {/* Page title as a breadcrumb line plus heading — the same shape as the contract
+          page. The boxed back button, big icon and full-sentence subtitle took a tall
+          band for one word of information. */}
+      <div>
+        <nav className="text-sm text-gray-500 flex items-center gap-1.5" aria-label="Breadcrumb">
+          <Link href="/bills" className="text-emerald-700 font-semibold hover:underline">{language === 'hi' ? 'बिल' : 'Bills'}</Link>
+          <span aria-hidden>›</span>
+          <span>{t('form.bill.add_title')}</span>
+        </nav>
+        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900 mt-1">{t('form.bill.add_title')}</h1>
       </div>
 
       {/* Railway Official — Incomplete Posting Details Block */}
