@@ -1,6 +1,6 @@
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Building2, Sparkles } from 'lucide-react';
-import { BackButton } from '@/components/ui/back-button';
 import ContractForm from '@/components/contract-form';
 
 export default function NewContractPage({
@@ -27,14 +27,14 @@ export default function NewContractPage({
         </div>
       )}
       <div className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm">
+        {/* A breadcrumb line, like the bill pages — Contracts is one click away in the
+            nav, so a boxed back button beside the title was a second door to the same room. */}
+        <nav className="text-sm text-gray-500 flex items-center gap-1.5 mb-2" aria-label="Breadcrumb">
+          <Link href="/contracts" className="text-emerald-700 font-semibold hover:underline">Contracts</Link>
+          <span aria-hidden>›</span>
+          <span>New contract</span>
+        </nav>
         <div className="flex flex-wrap items-center gap-4">
-          <BackButton 
-            href="/contracts" 
-            label="Back to Contracts" 
-            variant="outline" 
-            className="border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl" 
-          />
-          <div className="h-6 w-px bg-slate-200 hidden md:block" />
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
             <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600">
               <Building2 className="h-6 w-6 sm:h-7 sm:w-7" />

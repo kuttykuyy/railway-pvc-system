@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { BackButton } from '@/components/ui/back-button';
 import { toast } from 'react-hot-toast';
 import { Upload, X, Save, Eye } from 'lucide-react';
 import Image from 'next/image';
@@ -167,7 +166,6 @@ export default function SettingsPage() {
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl">
       <div className="mb-6">
-        <BackButton href="/dashboard" className="mb-4" />
         <h1 className="text-3xl font-bold">Report Branding Settings</h1>
         <p className="text-muted-foreground mt-2">
           Customize how your PVC reports look with your company logo and branding

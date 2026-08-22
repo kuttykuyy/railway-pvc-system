@@ -309,7 +309,7 @@ export default function ReportTemplatesPage() {
       <div className="absolute top-1/3 -left-20 w-80 h-80 bg-emerald-300/10 blur-[100px] rounded-full pointer-events-none" />
       <div className="absolute bottom-10 right-20 w-[450px] h-[450px] bg-emerald-300/5 blur-[150px] rounded-full pointer-events-none" />
 
-      <BackButton href="/dashboard" className="mb-4 inline-flex items-center text-slate-500 hover:text-slate-800" />
+      <BackButton href="/admin/system" label="System" className="mb-4 inline-flex items-center text-slate-500 hover:text-slate-800" />
       
       {/* Header Container */}
       <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6 p-8 bg-white/80 backdrop-blur-xl border border-slate-200/50 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.03)] overflow-hidden">

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BackButton } from '@/components/ui/back-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Check, IndianRupee, Zap, Building2, Users, Shield, Clock, Award, Sparkles, CheckCircle, Crown, ScanText, PencilLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -25,7 +24,6 @@ export default function PricingPage() {
       <div className="absolute bottom-10 right-20 w-[450px] h-[450px] bg-emerald-300/5 blur-[150px] rounded-full pointer-events-none" />
 
       <div className="container mx-auto px-4 py-8 max-w-6xl relative z-10 space-y-8">
-        <BackButton href="/" variant="outline" className="mb-4 border-slate-200/80 bg-white/80 hover:bg-slate-50 text-slate-600 hover:text-slate-800" />
         
         {/* Header Section */}
         <div className="text-center space-y-4 max-w-3xl mx-auto">

@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BackButton } from '@/components/ui/back-button';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 import { useLanguage } from '@/components/i18n-provider';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -237,7 +236,8 @@ export default function TenderingEstimatorPage() {
       <div className="bg-white border-b border-slate-200 sticky top-0 z-20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <BackButton className="text-slate-500 hover:text-slate-700" />
+            {/* No back button: the estimator is a top-level nav item, and router.back()
+                from a nav click lands on whatever page happened to be open before. */}
             <div>
               <h1 className="text-base font-bold text-slate-900">PVC Tendering Estimator</h1>
               <p className="text-[11px] text-slate-400 hidden sm:block">Forecast price escalation payouts before you bid</p>

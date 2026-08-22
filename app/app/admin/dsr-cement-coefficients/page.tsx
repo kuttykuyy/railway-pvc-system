@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { BackButton } from '@/components/ui/back-button';
 import { toast } from 'react-hot-toast';
 import { Trash2, Plus, Search, Loader2, Pencil, X, Check, Package } from 'lucide-react';
 
@@ -135,7 +134,6 @@ export default function DsrCementCoefficientsPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <BackButton />
 
       <div>
         <h1 className="text-3xl font-bold flex items-center gap-2">

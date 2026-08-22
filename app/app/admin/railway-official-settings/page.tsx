@@ -75,7 +75,7 @@ export default function RailwayOfficialSettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      <BackButton href="/admin/users" className="mb-6" />
+      <BackButton href="/admin/people" label="People & Access" className="mb-6" />
 
       <div className="mb-6 flex items-center gap-3">
         <div className="rounded-xl bg-emerald-100 p-2.5">

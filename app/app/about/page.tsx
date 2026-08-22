@@ -1,6 +1,5 @@
 'use client';
 
-import { BackButton } from '@/components/ui/back-button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Building2, Target, Users, Award, Shield, Zap, Sparkles, Phone, Mail, Globe, Clock, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -14,7 +13,6 @@ export default function AboutUsPage() {
       <div className="absolute bottom-10 right-20 w-[450px] h-[450px] bg-emerald-300/5 blur-[150px] rounded-full pointer-events-none" />
 
       <div className="container mx-auto px-4 py-8 max-w-6xl relative z-10 space-y-8">
-        <BackButton href="/" variant="outline" className="mb-4 border-slate-200/80 bg-white/80 hover:bg-slate-50 text-slate-600 hover:text-slate-800" />
         
         {/* Organization Banner */}
         <div className="relative flex flex-col items-center justify-center p-10 bg-white/80 backdrop-blur-xl border border-slate-200/50 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.03)] overflow-hidden text-center space-y-4">

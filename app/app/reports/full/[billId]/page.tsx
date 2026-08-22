@@ -321,7 +321,9 @@ function FullPvcReportContent() {
       {/* Enhanced Print/Download Controls - Hidden in print */}
       <div className="no-print bg-gradient-to-r from-gray-50 via-emerald-50 to-emerald-50 border-b border-gray-200 p-6">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <BackButton href="/reports" label="Back to Reports" variant="outline" size="lg" className="hover:bg-white" />
+          {/* /reports has no page; this was a 404 on every full report. The bill is
+              where the report comes from, and where it is fixed. */}
+          <BackButton href={`/bills/${billId}`} label="Back to the bill" variant="outline" size="lg" className="hover:bg-white" />
           
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <div className="bg-gradient-to-r from-emerald-100 to-green-100 rounded-xl px-6 py-3 border border-emerald-200">

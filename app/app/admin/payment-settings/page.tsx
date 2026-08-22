@@ -95,7 +95,9 @@ export default function PaymentSettingsPage() {
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
       <div className="space-y-6">
-        <BackButton href="/admin/settings" className="mb-4" />
+        {/* /admin/settings never existed — this was a 404. The screen lives in the
+            Money & Billing hub now, so that is "back". */}
+        <BackButton href="/admin/money" label="Money & Billing" className="mb-4" />
         
         {/* Header */}
         <div className="text-center space-y-2">

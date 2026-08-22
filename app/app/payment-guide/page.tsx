@@ -15,7 +15,6 @@ import {
   Clock 
 } from 'lucide-react';
 import Link from 'next/link';
-import { BackButton } from '@/components/ui/back-button';
 
 interface BillingSettings {
   billCost: number;
@@ -75,7 +74,6 @@ export default function PaymentGuidePage() {
       <div className="absolute bottom-10 right-20 w-[450px] h-[450px] bg-emerald-300/5 blur-[150px] rounded-full pointer-events-none" />
 
       <div className="container mx-auto px-4 py-8 max-w-4xl relative z-10 space-y-8">
-        <BackButton href="/contact" variant="outline" className="mb-4 border-slate-200/80 bg-white/80 hover:bg-slate-50 text-slate-600 hover:text-slate-800" />
         
         <Card className="border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_15px_35px_rgba(0,0,0,0.02)] rounded-3xl overflow-hidden">
           <CardHeader className="p-8 sm:p-10 border-b border-slate-100 bg-gradient-to-r from-emerald-500/5 to-emerald-500/5">

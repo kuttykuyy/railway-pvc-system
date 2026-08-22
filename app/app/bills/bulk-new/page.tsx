@@ -15,7 +15,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-dialog';
-import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
 import { scheduleNames, normalizeSchedules } from '@/lib/contract-schedules';
 import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr-cement-calculator';
@@ -769,7 +768,11 @@ export default function BulkBillCreationPage() {
   return (
     // pb-24 keeps the page's own submit button clear of the sticky bar below.
     <div className="container mx-auto p-6 pb-24 max-w-7xl">
-      <div className="mb-6"><BackButton href="/bills" /></div>
+      <nav className="text-sm text-gray-500 flex items-center gap-1.5 mb-6" aria-label="Breadcrumb">
+        <Link href="/bills" className="text-emerald-700 font-semibold hover:underline">Bills</Link>
+        <span aria-hidden>›</span>
+        <span>Bulk bills</span>
+      </nav>
 
       {isMaintenanceMode && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg mb-6">

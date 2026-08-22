@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BackButton } from '@/components/ui/back-button';
 import { toast } from 'react-hot-toast';
 import {
   Upload, Download, FileSpreadsheet, CheckCircle2, XCircle,
@@ -210,7 +209,6 @@ export default function ContractImportPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
-      <BackButton href="/contracts" className="mb-2" />
 
       {/* Header */}
       <div className="flex items-center gap-3">

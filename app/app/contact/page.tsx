@@ -1,7 +1,6 @@
 
 'use client';
 
-import { BackButton } from '@/components/ui/back-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Phone, Mail, Globe, MapPin, Clock, User, MessageCircle } from 'lucide-react';
@@ -10,7 +9,6 @@ import Link from 'next/link';
 export default function ContactPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <BackButton href="/" className="mb-6" />
       
       <div className="space-y-6">
         {/* Header */}

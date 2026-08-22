@@ -4,7 +4,6 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BackButton } from '@/components/ui/back-button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -206,7 +205,6 @@ export default function HelpCenter() {
 
   return (
     <div className="space-y-6">
-      <BackButton href="/dashboard" className="mb-4" />
       {/* Header */}
       <Card className="border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-white">
         <CardHeader className="text-center space-y-4">

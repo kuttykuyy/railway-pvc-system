@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { ArrowLeft, ChevronLeft, ChevronRight, Database, Calculator } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Calculator } from 'lucide-react';
+import { BackButton } from '@/components/ui/back-button';
 import { JPC_ITEMS, JpcItem } from '@/lib/jpc-items';
 import { OfficialSheetViewer } from '@/components/official-sheet-viewer';
 import toast from 'react-hot-toast';
@@ -175,9 +176,7 @@ export default function JpcViewPage() {
     <div className="p-4 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/indices/view')}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
+        <BackButton href="/indices/view" label="Price indices" variant="outline" />
         <div>
           <h1 className="text-2xl font-bold text-gray-900">JPC Steel Rates</h1>
           <p className="text-sm text-gray-500">{selectedCity} market prices for 34 steel items (Joint Plant Committee)</p>

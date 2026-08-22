@@ -174,7 +174,9 @@ export default function GettingStartedPage() {
     <div className="container mx-auto px-4 py-6 max-w-5xl">
       {/* Header */}
       <div className="mb-8">
-        <BackButton href="/dashboard" />
+        {/* The dashboard is admin-only; a new contractor sent there saw a page that was
+            not theirs. The welcome page is where a person starting out belongs. */}
+        <BackButton href="/welcome" label="Welcome" />
         <div className="flex items-center gap-3 mt-4 mb-2">
           <div className="p-3 bg-emerald-100 rounded-xl">
             <BookOpen className="h-8 w-8 text-emerald-600" />

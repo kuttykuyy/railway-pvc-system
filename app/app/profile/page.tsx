@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BackButton } from '@/components/ui/back-button';
 import { toast } from 'react-hot-toast';
 import {
   User, Loader2, History, CreditCard, IndianRupee, FileText,
@@ -221,7 +220,6 @@ export default function ProfilePage() {
     <div className="container mx-auto py-8 px-4 max-w-5xl">
       {/* Header */}
       <div className="mb-6">
-        <BackButton href="/dashboard" className="mb-4" />
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
           <User className="h-6 w-6 text-emerald-600" />
           Profile & Billing
