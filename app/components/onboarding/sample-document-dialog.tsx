@@ -104,10 +104,10 @@ export function SampleDocumentDialog({
         onClick={() => setOpen(true)}
         className={
           className ||
-          'inline-flex items-center gap-1 text-sm text-emerald-700 hover:underline font-medium'
+          'inline-flex items-center gap-2 mt-1 px-3 py-1.5 rounded-md border border-emerald-300 bg-emerald-50 text-base font-semibold text-emerald-800 hover:bg-emerald-100'
         }
       >
-        <Eye className="h-3.5 w-3.5" />
+        <Eye className="h-5 w-5" />
         {label || (kind === 'loa' ? 'See a sample LOA' : 'See a sample bill')}
       </button>
 
