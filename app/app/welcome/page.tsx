@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { FileUp, Receipt, CheckCircle2, ArrowRight, Loader2, AlertTriangle } from 'lucide-react';
 import { normalizeSchedules } from '@/lib/contract-schedules';
 import { shortScheduleName } from '@/lib/bill-schedule-matching';
+import { SampleDocumentDialog } from '@/components/onboarding/sample-document-dialog';
 
 type AgreementStage =
   | { step: 'idle' }
@@ -212,6 +213,8 @@ export default function WelcomePage() {
                     ? 'Done — your contract is in.'
                     : 'It reads the agreement number, tender date, schedules and rates by itself.'}
               </p>
+              {/* Which PDF is meant is the first doubt; one real page settles it. */}
+              {!agreementDone && <SampleDocumentDialog kind="loa" />}
             </div>
             <Button
               onClick={() => fileInput.current?.click()}
@@ -299,6 +302,7 @@ export default function WelcomePage() {
                 ? <>It reads every item, checks the total against the bill&apos;s own figure, and hands you the report.</>
                 : <>Finish step 1 first — the bill needs a contract to attach to.</>}
             </p>
+            <SampleDocumentDialog kind="bill" />
           </div>
           {/* Locked until the LOA is in. This button used to be live from the start,
               and a new user who tapped it first had their bill read and THEN hit

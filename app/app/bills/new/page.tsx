@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { SampleDocumentDialog } from '@/components/onboarding/sample-document-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -1575,6 +1576,7 @@ function NewBillPageContent() {
                   The PDF from IREPS, with the item pages. It is read, checked against its own
                   total, and your report is prepared — nothing to fill in.
                 </p>
+                <SampleDocumentDialog kind="bill" label="What does a signed bill look like?" />
                 <Button
                   size="lg"
                   className="w-full"
