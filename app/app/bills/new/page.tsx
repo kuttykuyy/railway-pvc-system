@@ -33,7 +33,9 @@ import {
   Sparkles,
   Loader2,
   AlertCircle,
-  LifeBuoy
+  LifeBuoy,
+  FileUp,
+  Check
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -276,6 +278,16 @@ function NewBillPageContent() {
   const [billMode, setBillMode] = useState<'choose' | 'manual' | 'ai'>(
     searchParams?.get('instant') === '1' ? 'ai' : 'choose',
   );
+  /** "Choose the bill PDF" on the opener: the file input belongs to the analyzer, which
+   *  only exists in 'ai' mode, so the click is remembered and fired once it has mounted. */
+  const [pickerRequested, setPickerRequested] = useState(false);
+  useEffect(() => {
+    if (!pickerRequested || billMode !== 'ai') return;
+    const open = analyzerPickerRef.current;
+    if (!open) return;
+    setPickerRequested(false);
+    open();
+  }, [pickerRequested, billMode]);
 
   // Insufficient credit dialog state
   const [showInsufficientCredit, setShowInsufficientCredit] = useState(false);
@@ -1805,58 +1817,114 @@ function NewBillPageContent() {
         </div>
       )}
 
-      {/* Step 0 — choose how to create the bill */}
-      {billMode === 'choose' && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8">
-          <h2 className="text-lg font-bold text-slate-900 text-center">
-            {language === 'hi' ? 'बिल कैसे बनाना है?' : 'How do you want to create this bill?'}
-          </h2>
-          <p className="text-sm text-slate-500 text-center mt-1">
-            {language === 'hi' ? 'एक विकल्प चुनें। आप बाद में बदल सकते हैं।' : 'Pick one option. You can change it later.'}
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 max-w-3xl mx-auto">
-            <button
-              type="button"
-              onClick={() => setBillMode('manual')}
-              className="text-left rounded-2xl border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 transition-all p-5 group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="bg-slate-100 group-hover:bg-emerald-100 text-slate-600 group-hover:text-emerald-600 p-2.5 rounded-xl transition-colors">
-                  <Edit className="h-6 w-6" />
-                </div>
-                <div className="font-bold text-slate-900">
-                  {language === 'hi' ? 'मैन्युअल रूप से भरें' : 'Enter details manually'}
-                </div>
-              </div>
-              <p className="text-sm text-slate-500 mt-3">
-                {language === 'hi'
-                  ? 'फ़ॉर्म को चरण-दर-चरण स्वयं भरें।'
-                  : 'Fill the form yourself, step by step.'}
-              </p>
-            </button>
+      {/* Step 0 — the opener. The old version asked "How do you want to create this
+          bill?" with two equal cards, and still described the upload as AI charged at
+          the AI rate — out of date since the exact reader took over. Now: with a contract
+          already chosen (from its page, or picked earlier), a step rail shows where the
+          person is and the upload is open at once, with "Type it in" beside it. With no
+          contract yet, the upload is the page and typing is one quiet line beneath. */}
+      {billMode === 'choose' && (() => {
+        const hi = language === 'hi';
+        const openUpload = () => { setBillMode('ai'); setPickerRequested(true); };
+        const ticks = hi
+          ? ['कुछ टाइप नहीं — आइटम, मात्रा और रकम PDF से पढ़ी जाती हैं', 'जोड़ बिल के अपने छपे टोटल से मिलाया जाता है', 'न पढ़ पाए तो कुछ सेव नहीं होता; आपका मुफ़्त बिल बना रहता है']
+          : ['Nothing to type — items, quantities and amounts come off the PDF', 'The total is checked against the bill’s own printed total', 'If it can’t be read, nothing is saved and your free bill stays'];
+        const TickList = () => (
+          <ul className="mt-3 space-y-1.5">
+            {ticks.map(t => (
+              <li key={t} className="flex items-start gap-2 text-sm text-slate-700">
+                <Check className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" /> {t}
+              </li>
+            ))}
+          </ul>
+        );
 
-            <button
-              type="button"
-              onClick={() => setBillMode('ai')}
-              className="text-left rounded-2xl border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 transition-all p-5 group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="bg-emerald-50 group-hover:bg-emerald-100 text-emerald-600 p-2.5 rounded-xl transition-colors">
-                  <Sparkles className="h-6 w-6" />
+        if (selectedContract) {
+          // Variant C — contract known: step rail, contract strip, upload open.
+          return (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-7">
+              <div className="flex items-center gap-2.5 text-sm mb-4">
+                <span className="flex items-center gap-2 text-slate-600"><span className="h-6 w-6 rounded-full bg-emerald-600 text-white grid place-items-center"><Check className="h-3.5 w-3.5" /></span>{hi ? 'ठेका' : 'Contract'}</span>
+                <span className="flex-1 h-0.5 bg-slate-200" />
+                <span className="flex items-center gap-2 font-semibold text-emerald-800"><span className="h-6 w-6 rounded-full border-2 border-emerald-600 grid place-items-center text-xs">2</span>{hi ? 'बिल' : 'Bill'}</span>
+                <span className="flex-1 h-0.5 bg-slate-200" />
+                <span className="flex items-center gap-2 text-slate-400"><span className="h-6 w-6 rounded-full border border-slate-300 grid place-items-center text-xs">3</span>{hi ? 'PVC रिपोर्ट' : 'PVC report'}</span>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 mb-4">
+                <div className="min-w-0">
+                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-400">{hi ? 'इस ठेके के लिए' : 'For contract'}</div>
+                  <div className="text-sm">
+                    <b className="text-slate-900">{selectedContract.agreementNo}</b>
+                    {selectedContract.workDescription && <span className="text-slate-500"> · {selectedContract.workDescription.length > 70 ? selectedContract.workDescription.slice(0, 70) + '…' : selectedContract.workDescription}</span>}
+                    {selectedContract.baseMonth && <span className="text-slate-500"> · {hi ? 'आधार माह' : 'base month'} {new Date(selectedContract.baseMonth).toLocaleString('en-IN', { month: 'short', year: 'numeric' })}</span>}
+                  </div>
                 </div>
-                <div className="font-bold text-slate-900">
-                  {language === 'hi' ? 'साइन किया हुआ बिल PDF अपलोड करें' : 'Upload signed bill PDF'}
+                <button type="button" className="text-sm font-semibold text-emerald-700 hover:underline" onClick={() => setBillMode('manual')}>
+                  {hi ? 'बदलें' : 'Change'}
+                </button>
+              </div>
+
+              <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden mb-4">
+                <button type="button" className="px-4 py-2 text-sm font-semibold bg-emerald-600 text-white">{hi ? 'साइन किया बिल PDF अपलोड करें' : 'Upload the signed bill PDF'}</button>
+                <button type="button" className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50" onClick={() => setBillMode('manual')}>{hi ? 'टाइप करें' : 'Type it in'}</button>
+              </div>
+
+              <div className="rounded-2xl border-2 border-dashed border-emerald-200 bg-gradient-to-b from-emerald-50 to-white p-7 sm:p-9 text-center">
+                <div className="h-12 w-12 rounded-xl bg-emerald-600 text-white grid place-items-center mx-auto mb-3"><FileUp className="h-6 w-6" /></div>
+                <h3 className="text-xl font-extrabold text-slate-900">{hi ? 'साइन किया हुआ बिल PDF चुनें' : 'Choose the signed bill PDF'}</h3>
+                <p className="text-sm text-slate-500 mt-1.5 max-w-[60ch] mx-auto">
+                  {hi ? 'सभी पेज, जैसा IREPS से डाउनलोड हुआ। हर आइटम ठीक-ठीक पढ़ा जाता है और बिल के अपने टोटल से मिलाया जाता है।' : 'All pages, as downloaded from IREPS. Read exactly, item by item, and checked against the bill’s own total.'}
+                </p>
+                <Button type="button" size="lg" className="mt-4" onClick={openUpload}>
+                  <FileUp className="h-5 w-5 mr-2" /> {hi ? 'बिल PDF चुनें' : 'Choose the bill PDF'}
+                </Button>
+                <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 mt-4 text-xs text-slate-500">
+                  <span>✓ {hi ? 'पहला बिल मुफ़्त' : 'First bill free'}</span>
+                  <span>✓ {hi ? 'न पढ़ पाए तो कुछ सेव नहीं' : 'Nothing saved if it can’t be read'}</span>
+                  <SampleDocumentDialog kind="bill" className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline" />
                 </div>
               </div>
-              <p className="text-sm text-slate-500 mt-3">
-                {language === 'hi'
-                  ? 'AI PDF पढ़कर फ़ॉर्म भर देगा। सहेजने पर ही AI दर लगेगी।'
-                  : 'Let AI read the PDF and fill the form. Charged the AI rate only when you save.'}
-              </p>
-            </button>
+            </div>
+          );
+        }
+
+        // Variant A — no contract chosen yet: the upload is the page; typing is a line.
+        return (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-7">
+            <div className="rounded-2xl border-2 border-emerald-200 bg-gradient-to-b from-emerald-50 to-white p-5 sm:p-6 grid gap-6 lg:grid-cols-[1.3fr_1fr] items-center">
+              <div>
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-full px-2.5 py-1 bg-emerald-100 text-emerald-800">
+                  {hi ? 'सुझाया गया · पहला बिल मुफ़्त' : 'Recommended · first bill free'}
+                </span>
+                <h2 className="text-2xl font-extrabold text-slate-900 mt-2.5">{hi ? 'साइन किया हुआ बिल PDF अपलोड करें' : 'Upload the signed bill PDF'}</h2>
+                <p className="text-sm text-slate-600 mt-2">
+                  {hi ? 'IREPS की PDF, सभी पेज। हर आइटम ठीक-ठीक पढ़ा जाता है, जोड़ बिल के अपने टोटल से मिलाया जाता है, और अंत में आपकी PVC रिपोर्ट डाउनलोड हो जाती है। ठेका बिल के एग्रीमेंट नंबर से अपने-आप मिल जाता है।' : 'The PDF from IREPS, all pages. Every item is read exactly and the total is checked against the bill’s own figure — to the paisa. Your PVC report downloads at the end. The contract is matched from the bill’s agreement number.'}
+                </p>
+                <TickList />
+              </div>
+              <div className="rounded-xl border-2 border-dashed border-emerald-200 bg-white p-6 text-center">
+                <div className="h-11 w-11 rounded-xl bg-emerald-600 text-white grid place-items-center mx-auto mb-2.5"><FileUp className="h-5 w-5" /></div>
+                <Button type="button" size="lg" className="w-full sm:w-auto" onClick={openUpload}>
+                  {hi ? 'बिल PDF चुनें' : 'Choose the bill PDF'}
+                </Button>
+                <div className="mt-3">
+                  <SampleDocumentDialog kind="bill" className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline" />
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-4 text-sm text-slate-600">
+              <span>
+                {hi ? 'टाइप करना पसंद है? ' : 'Prefer to type it in? '}
+                <button type="button" className="font-semibold text-emerald-700 hover:underline" onClick={() => setBillMode('manual')}>
+                  {hi ? 'विवरण हाथ से भरें →' : 'Enter the details manually →'}
+                </button>
+              </span>
+              <span className="text-xs text-slate-400">{hi ? 'ठेका अगले चरण में चुना जाता है' : 'The contract is picked in the next step'}</span>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {billMode !== 'choose' && (
         <div className="flex items-center justify-between bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-2.5">
@@ -1864,8 +1932,8 @@ function NewBillPageContent() {
             {language === 'hi' ? 'तरीका: ' : 'Method: '}
             <span className="font-semibold text-slate-900">
               {billMode === 'ai'
-                ? (language === 'hi' ? 'PDF अपलोड (AI)' : 'PDF upload (AI)')
-                : (language === 'hi' ? 'मैन्युअल' : 'Manual')}
+                ? (language === 'hi' ? 'PDF अपलोड' : 'PDF upload')
+                : (language === 'hi' ? 'हाथ से' : 'Typed in')}
             </span>
           </span>
           <Button type="button" variant="ghost" size="sm" onClick={() => setBillMode('choose')} className="text-slate-500 hover:text-slate-700">
