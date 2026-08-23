@@ -5,6 +5,9 @@ import { validateAdminAccess } from '@/lib/role-auth';
 
 export const dynamic = "force-dynamic";
 
+/** Ceiling on the unpaginated admin user list, newest first. */
+const USER_LIST_CAP = 2000;
+
 // POST /api/admin/users - Repair missing billing accounts for legacy/OAuth users
 export async function POST(request: NextRequest) {
   try {
@@ -85,10 +88,25 @@ export async function GET(request: NextRequest) {
           }
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      // Bounded. The admin screen searches and filters in the browser over the whole
+      // list, so paging this would break its own search — but every user in the system,
+      // each with a joined account row, is not a query to leave without a ceiling.
+      // Newest first, so a capped list is the recent signups an admin is looking for.
+      take: USER_LIST_CAP,
     });
 
-    return NextResponse.json(users);
+    const total = await prisma.user.count();
+    if (total > USER_LIST_CAP) {
+      console.warn(`[admin/users] list capped: returned ${USER_LIST_CAP} of ${total}`);
+    }
+    return NextResponse.json(users, {
+      headers: {
+        'X-Total-Count': String(total),
+        'X-Returned-Count': String(users.length),
+        'X-Truncated': total > USER_LIST_CAP ? '1' : '0',
+      },
+    });
   } catch (error) {
     console.error('Error fetching users:', error);
     return NextResponse.json(

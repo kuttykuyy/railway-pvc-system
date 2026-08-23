@@ -61,6 +61,9 @@ async function ensureBaseMonthValues(baseMonth: Date) {
 
 export const dynamic = "force-dynamic";
 
+/** Ceiling on the unpaginated contract list. Far above any real account (53 today). */
+const CONTRACT_LIST_CAP = 2000;
+
 // GET /api/contracts - Get all contracts (admin) or user's own contracts (user)
 export async function GET(request: NextRequest) {
   try {
@@ -92,28 +95,49 @@ export async function GET(request: NextRequest) {
     // caller that does not ask still gets exactly what it got before.
     const lean = request.nextUrl.searchParams.get('lean') === '1';
 
-    const contracts = await prisma.contract.findMany({
-      where: contractsWhere,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        user: {
-          select: {
-            name: true,
-            email: true
-          }
-        },
-        ...(lean ? {} : {
-          _count: {
+    // Not paginated, deliberately (see above) — but not unbounded either. Seven of the
+    // nine callers are dropdowns that need every contract, and all of them search in the
+    // browser over the whole list, so paging this would break the search it feeds. What
+    // it must not do is grow without limit: an account with tens of thousands of
+    // contracts would serve tens of thousands of rows into a select box.
+    //
+    // So: a ceiling far above any real account today (53 is the largest), newest first,
+    // and the truth in the headers when it bites — never a quietly shortened list.
+    const [total, contracts] = await Promise.all([
+      prisma.contract.count({ where: contractsWhere }),
+      prisma.contract.findMany({
+        where: contractsWhere,
+        orderBy: { createdAt: 'desc' },
+        take: CONTRACT_LIST_CAP,
+        include: {
+          user: {
             select: {
-              bills: true,
-              pvcCalculations: true
+              name: true,
+              email: true
             }
-          }
-        }),
-      }
+          },
+          ...(lean ? {} : {
+            _count: {
+              select: {
+                bills: true,
+                pvcCalculations: true
+              }
+            }
+          }),
+        }
+      }),
+    ]);
+
+    if (total > CONTRACT_LIST_CAP) {
+      console.warn(`[contracts] list capped: returned ${CONTRACT_LIST_CAP} of ${total}`);
+    }
+    return NextResponse.json(contracts, {
+      headers: {
+        'X-Total-Count': String(total),
+        'X-Returned-Count': String(contracts.length),
+        'X-Truncated': total > CONTRACT_LIST_CAP ? '1' : '0',
+      },
     });
-    
-    return NextResponse.json(contracts);
   } catch (error) {
     console.error('Error fetching contracts:', error);
     return NextResponse.json(

@@ -12,6 +12,8 @@ import type { User } from '../types';
 export function useUsers() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Set when the server returned fewer users than exist — see fetchUsers. */
+  const [truncated, setTruncated] = useState<{ shown: number; total: number } | null>(null);
   const { toast } = useToast();
 
   const fetchUsers = useCallback(async () => {
@@ -29,6 +31,17 @@ export function useUsers() {
 
       const data = await response.json();
       setUsers(Array.isArray(data) ? data : []);
+      // The list is capped server-side (it is not paginated, because this screen
+      // searches in the browser). A cap that hides rows without saying so reads as
+      // "these are all the users" — so when it bites, say so.
+      if (response.headers.get('X-Truncated') === '1') {
+        setTruncated({
+          shown: Number(response.headers.get('X-Returned-Count')) || (Array.isArray(data) ? data.length : 0),
+          total: Number(response.headers.get('X-Total-Count')) || 0,
+        });
+      } else {
+        setTruncated(null);
+      }
     } catch (error) {
       console.error('Error fetching users:', error);
       toast({
@@ -151,6 +164,7 @@ export function useUsers() {
   return {
     users,
     loading,
+    truncated,
     fetchUsers,
     deleteUser,
     updateUserRole,

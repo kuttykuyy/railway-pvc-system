@@ -38,7 +38,7 @@ export default function AdminUsersPage() {
   const router = useRouter();
 
   // Custom hooks
-  const { users, loading, fetchUsers, deleteUser, updateUserRole, updateProcessingFee } = useUsers();
+  const { users, loading, truncated, fetchUsers, deleteUser, updateUserRole, updateProcessingFee } = useUsers();
   const { transactions, loadingTransactions, fetchCreditHistory, addOrDeductCredits } = useCreditManagement();
 
   // Dialog state
@@ -235,6 +235,16 @@ export default function AdminUsersPage() {
           onRoleFilterChange={setRoleFilter}
           onAccountTypeFilterChange={setAccountTypeFilter}
         />
+
+        {/* The list is capped server-side; searching happens in the browser over what
+            was returned, so a cap that said nothing would make a search look conclusive
+            when it had not seen every user. */}
+        {truncated && (
+          <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Showing the {truncated.shown.toLocaleString('en-IN')} newest of {truncated.total.toLocaleString('en-IN')} users.
+            Searching only looks at those — older accounts are not loaded.
+          </div>
+        )}
 
         {/* Users List */}
         {filteredUsers.length === 0 ? (

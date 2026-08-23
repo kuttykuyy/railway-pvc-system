@@ -73,6 +73,8 @@ export default function ManualIndicesManagePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [monthlyValues, setMonthlyValues] = useState<MonthlyIndexValue[]>([]);
+  /** Set when the server returned fewer rows than exist — see fetchData. */
+  const [truncated, setTruncated] = useState<{ shown: number; total: number } | null>(null);
   const [filteredValues, setFilteredValues] = useState<MonthlyIndexValue[]>([]);
   const [priceIndices, setPriceIndices] = useState<PriceIndex[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -127,10 +129,19 @@ export default function ManualIndicesManagePage() {
     try {
       setIsLoading(true);
       
-      // Fetch all monthly values
+      // Fetch monthly values — capped server-side by recency, since this table only
+      // grows and this screen filters in the browser. Say so when the cap bites.
       const valuesResponse = await fetch('/api/indices/monthly/all');
       if (!valuesResponse.ok) throw new Error('Failed to fetch monthly values');
       const valuesData = await valuesResponse.json();
+      setTruncated(
+        valuesResponse.headers.get('X-Truncated') === '1'
+          ? {
+              shown: Number(valuesResponse.headers.get('X-Returned-Count')) || valuesData.length,
+              total: Number(valuesResponse.headers.get('X-Total-Count')) || 0,
+            }
+          : null,
+      );
       
       // Fetch price indices
       const indicesResponse = await fetch('/api/indices');
@@ -373,6 +384,13 @@ export default function ManualIndicesManagePage() {
           </p>
         </div>
       </div>
+
+      {truncated && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Showing the {truncated.shown.toLocaleString('en-IN')} most recent of {truncated.total.toLocaleString('en-IN')} values.
+          The filters below only search these — older months are not loaded.
+        </div>
+      )}
 
       {/* Status Messages */}
       {error && (

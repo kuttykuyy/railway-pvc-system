@@ -320,12 +320,21 @@ export default function ContractsPage() {
 
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  /** Set only when the server capped the list — the true number of contracts. */
+  const [totalContracts, setTotalContracts] = useState<number | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('contractsViewMode');
     if (saved === 'grid' || saved === 'table') setViewMode(saved);
     fetch('/api/contracts')
-      .then((r) => { if (!r.ok) throw new Error('Failed to fetch'); return r.json(); })
+      .then((r) => {
+        if (!r.ok) throw new Error('Failed to fetch');
+        // Capped server-side (the list is not paginated because the pickers that share
+        // this endpoint need every contract). Remember the total so the count line can
+        // say so rather than implying these are all of them.
+        if (r.headers.get('X-Truncated') === '1') setTotalContracts(Number(r.headers.get('X-Total-Count')) || null);
+        return r.json();
+      })
       .then((data) => {
         setContracts(data);
         // First-time users: land them on the upload-first contract form instead of an
@@ -606,6 +615,9 @@ export default function ContractsPage() {
           {filtered.length === contracts.length
             ? <>{contracts.length} contract{contracts.length !== 1 ? 's' : ''}</>
             : <><strong className="text-slate-800">{filtered.length}</strong> of {contracts.length} contracts</>}
+          {totalContracts !== null && (
+            <span className="text-amber-700"> · newest {contracts.length} of {totalContracts.toLocaleString('en-IN')} loaded</span>
+          )}
         </span>
         {hasFilters && (
           <button onClick={resetFilters} className="flex items-center gap-1 rounded-md px-2 py-1 font-medium text-emerald-700 hover:bg-emerald-50">
