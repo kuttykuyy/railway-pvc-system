@@ -146,7 +146,15 @@ function findFuelIndex(indexMap: Map<string, QuarterlyAverage>): QuarterlyAverag
 
 // Helper to find a steel index in the indexMap by base name, supporting city-suffixed names
 // E.g., looking for 'Steel TMT Bars' will also match 'Steel TMT Bars - Delhi'
-function findSteelIndex(indexMap: Map<string, QuarterlyAverage>, baseName: string): QuarterlyAverage | undefined {
+/**
+ * The only three fields the steel blend needs. Stated structurally so the PDF generator,
+ * which carries its own slightly wider QuarterlyAverage (monthly values, WPI conversion
+ * notes), can hand its rows straight to the same resolver instead of keeping a second
+ * copy of the rule.
+ */
+export type SteelIndexRow = { indexName: string; average: number; baseValue: number };
+
+function findSteelIndex<T extends SteelIndexRow>(indexMap: Map<string, T>, baseName: string): T | undefined {
   // First try exact match (default/Chennai indices)
   const exact = indexMap.get(baseName);
   if (exact) return exact;
@@ -160,83 +168,146 @@ function findSteelIndex(indexMap: Map<string, QuarterlyAverage>, baseName: strin
   return undefined;
 }
 
+/** Map steel category codes to their base index names (Cl.46A.9(1)'s four categories). */
+export const STEEL_TYPE_INDEX_NAMES: { [key: string]: string } = {
+  'TMT': 'Steel TMT Bars',
+  'ANGLE_CHANNEL': 'Steel Angle/Channel',
+  'PLATES': 'Steel Plates',
+  'OTHER_SECTIONS': 'Steel Other Sections'
+};
+
+export const ALL_STEEL_BASE_NAMES = [
+  'Steel TMT Bars', 'Steel Angle/Channel', 'Steel Plates', 'Steel Other Sections',
+];
+
+export interface SteelIndexBasis {
+  /** The base-month figure the money is worked out from — blended when several apply. */
+  baseValue: number;
+  /** The quarter average, blended the same way. */
+  averageValue: number;
+  /** (averageValue - baseValue) / baseValue. */
+  variation: number;
+  /** The index names that went into the blend, in schedule order. */
+  indexNames: string[];
+  /** True when no category was recorded and all four were averaged. */
+  usedDefault: boolean;
+}
+
+/**
+ * WHICH steel index a steel amount is priced against — the single answer, used by the
+ * calculation AND by the report that prints it.
+ *
+ * They used to decide separately. The maths averaged every category that applied; the
+ * PDF printed the FIRST of them beside that blended amount. On a bill with no category
+ * recorded, the report showed TMT Bars (first of the four) next to a figure worked out
+ * from all four — so the statement read
+ *
+ *   Rs 11,56,255.59 x [(55233.33 - 55530.00) / 55530.00] = -Rs 24,770.55
+ *
+ * which comes to -Rs 6,177. An accounts office checks that line by hand. Now both read
+ * this, so the printed sum is the sum that was done.
+ *
+ * A note on the default: averaging all four is arithmetically identical to Other
+ * Sections alone, because 46A.9(1) defines Other Sections as the mean of the other
+ * three. Worth knowing when reading a statement that says "average of all four".
+ */
+export function resolveSteelIndexBasis(
+  indexMap: Map<string, SteelIndexRow>,
+  steelTypes?: string[] | null,
+): SteelIndexBasis | null {
+  const selected: SteelIndexRow[] = [];
+
+  if (steelTypes && steelTypes.length > 0) {
+    for (const steelType of steelTypes) {
+      const baseName = STEEL_TYPE_INDEX_NAMES[String(steelType).toUpperCase()];
+      if (!baseName) continue;
+      const found = findSteelIndex(indexMap, baseName);
+      if (found) selected.push(found);
+    }
+  }
+
+  const usedDefault = selected.length === 0;
+  if (usedDefault) {
+    for (const baseName of ALL_STEEL_BASE_NAMES) {
+      const found = findSteelIndex(indexMap, baseName);
+      if (found) selected.push(found);
+    }
+  }
+  if (selected.length === 0) return null;
+
+  const baseValue = selected.reduce((sum, idx) => sum + idx.baseValue, 0) / selected.length;
+  const averageValue = selected.reduce((sum, idx) => sum + idx.average, 0) / selected.length;
+  return {
+    baseValue,
+    averageValue,
+    variation: baseValue === 0 ? 0 : (averageValue - baseValue) / baseValue,
+    indexNames: selected.map(idx => idx.indexName),
+    usedDefault,
+  };
+}
+
 // Helper function to calculate steel PVC with optional steel types
 function calculateSteelPvc(
   billAmount: number,
   indexMap: Map<string, QuarterlyAverage>,
   steelPercentage: number,
-  steelTypes?: string[]
+  steelTypes?: string[],
+  /**
+   * Per-item categories, when the entry's rows are not all the same kind of steel.
+   * One entry can merge reinforcement with structural steelwork — 5.22.6 (TMT) beside
+   * 10.x (angles, flats, sheets) — and applying one category to the whole entry prices
+   * both on whichever was picked. Given rows, each row's own steel is priced with its
+   * own category and the results summed, which is what 46A.9(1)'s "relevant category"
+   * means when an entry holds more than one.
+   */
+  itemRows?: Array<{ amount?: number | string; steelTypes?: string[] | null }> | null,
 ): number {
   if (steelPercentage <= 0) return 0;
 
   // Map steel type codes to base index names
-  const steelTypeMap: { [key: string]: string } = {
-    'TMT': 'Steel TMT Bars',
-    'ANGLE_CHANNEL': 'Steel Angle/Channel',
-    'PLATES': 'Steel Plates',
-    'OTHER_SECTIONS': 'Steel Other Sections'
-  };
+  const steelTypeMap: { [key: string]: string } = STEEL_TYPE_INDEX_NAMES;
 
-  if (steelTypes && steelTypes.length > 0) {
-    // Use selected steel types
-    const selectedIndices: QuarterlyAverage[] = [];
-    
-    for (const steelType of steelTypes) {
-      const baseName = steelTypeMap[steelType];
-      const steelAvg = findSteelIndex(indexMap, baseName);
-      if (steelAvg) {
-        selectedIndices.push(steelAvg);
+  // Rows that carry their own categories, and enough amount to matter.
+  const typedRows = (itemRows || []).filter(
+    row => Array.isArray(row?.steelTypes) && row.steelTypes.length > 0 && Number(row?.amount) > 0,
+  );
+  const typedRowTotal = typedRows.reduce((sum, row) => sum + Number(row.amount), 0);
+
+  if (typedRows.length > 0 && typedRowTotal > 0) {
+    const rowsTotal = (itemRows || []).reduce((sum, row) => sum + (Number(row?.amount) || 0), 0);
+    // Only meaningful when the rows account for the entry: a partial set would price
+    // the whole entry on a fraction of it.
+    if (rowsTotal > 0 && Math.abs(rowsTotal - billAmount) / Math.max(rowsTotal, billAmount) < 0.01) {
+      let total = 0;
+      for (const row of itemRows || []) {
+        const rowAmount = Number(row?.amount) || 0;
+        if (rowAmount <= 0) continue;
+        const basis = resolveSteelIndexBasis(indexMap, (row?.steelTypes as string[]) || null);
+        if (!basis) continue;
+        total += calculatePvcComponent(rowAmount, basis.averageValue, basis.baseValue, steelPercentage);
       }
-    }
-
-    if (selectedIndices.length > 0) {
-      // Calculate average of selected steel indices
-      const avgBaseValue = selectedIndices.reduce((sum, idx) => sum + idx.baseValue, 0) / selectedIndices.length;
-      const avgIndexValue = selectedIndices.reduce((sum, idx) => sum + idx.average, 0) / selectedIndices.length;
-      
-      const pvc = calculatePvcComponent(billAmount, avgIndexValue, avgBaseValue, steelPercentage);
-      
-      logger.log(`📊 Steel PVC Calculation with ${selectedIndices.length} type(s):`, {
-        steelTypes: steelTypes,
-        selectedIndices: selectedIndices.map(idx => ({ name: idx.indexName, base: idx.baseValue, avg: idx.average })),
-        avgBaseValue,
-        avgIndexValue,
-        pvc
+      logger.log('📊 Steel PVC by item row (mixed categories in one entry)', {
+        rows: (itemRows || []).length, typedRows: typedRows.length, total,
       });
-      
-      return pvc;
+      return total;
     }
   }
-  
-  // Default behavior: use AVERAGE of ALL available steel indices (GCC requirement)
-  const steelBaseNames = ['Steel TMT Bars', 'Steel Angle/Channel', 'Steel Plates', 'Steel Other Sections'];
-  const availableIndices: QuarterlyAverage[] = [];
-  
-  for (const baseName of steelBaseNames) {
-    const steelAvg = findSteelIndex(indexMap, baseName);
-    if (steelAvg) {
-      availableIndices.push(steelAvg);
-    }
-  }
-  
-  if (availableIndices.length > 0) {
-    // Calculate average of ALL available steel indices
-    const avgBaseValue = availableIndices.reduce((sum, idx) => sum + idx.baseValue, 0) / availableIndices.length;
-    const avgIndexValue = availableIndices.reduce((sum, idx) => sum + idx.average, 0) / availableIndices.length;
-    
-    const pvc = calculatePvcComponent(billAmount, avgIndexValue, avgBaseValue, steelPercentage);
-    
-    logger.log(`📊 Steel PVC Calculation (default - average of all types):`, {
-      availableIndices: availableIndices.map(idx => ({ name: idx.indexName, base: idx.baseValue, avg: idx.average })),
-      avgBaseValue,
-      avgIndexValue,
-      pvc
-    });
-    
-    return pvc;
-  }
-  
-  return 0;
+
+  // One category set for the whole entry — resolved by the same function the report
+  // reads, so a statement can never print one index beside an amount worked out from
+  // another. When no category was recorded this averages all four, which is what
+  // 46A.9(1) leaves as the residue (and equals Other Sections exactly).
+  const basis = resolveSteelIndexBasis(indexMap, steelTypes);
+  if (!basis) return 0;
+
+  const pvc = calculatePvcComponent(billAmount, basis.averageValue, basis.baseValue, steelPercentage);
+  logger.log('Steel PVC', {
+    categories: basis.usedDefault ? 'none recorded — averaged all four' : basis.indexNames.join(', '),
+    base: basis.baseValue,
+    average: basis.averageValue,
+    pvc,
+  });
+  return pvc;
 }
 
 // Helper function to check if classification is processing fee / overhead type
@@ -716,6 +787,13 @@ export async function calculateClassificationEntryPvc(
     classificationId?: string;
     amount: number;
     steelTypes?: string[];
+    /**
+     * The entry's item rows. Optional, and only steel reads them: when the rows carry
+     * their own categories, each item's steel is priced on its own — one entry can hold
+     * reinforcement (5.22.x) beside structural steelwork (10.x), and one category for
+     * the pair prices both on whichever was chosen.
+     */
+    itemRows?: Array<{ amount?: number | string; steelTypes?: string[] | null }> | null;
   },
   quarterlyAverages: QuarterlyAverage[],
   options?: {
@@ -796,8 +874,8 @@ export async function calculateClassificationEntryPvc(
     ? calculatePvcComponent(entry.amount, cementAvg.average, cementAvg.baseValue, cementPct)
     : 0;
   
-  // For steel, use entry-specific steel types
-  const steelPvc = calculateSteelPvc(entry.amount, indexMap, steelPct, entry.steelTypes);
+  // For steel: the entry's categories, or each row's own when they differ.
+  const steelPvc = calculateSteelPvc(entry.amount, indexMap, steelPct, entry.steelTypes, entry.itemRows);
   
   const explosivesAvg = indexMap.get('RBI Explosives');
   const explosivesPvc = (explosivesAvg && components.explosives > 0)

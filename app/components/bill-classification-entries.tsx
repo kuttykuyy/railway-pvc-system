@@ -929,6 +929,17 @@ export function BillClassificationEntries({
                   </div>
                 )}
 
+                {/* Leaving every box unticked is a real choice with a real price, so say what
+                    it costs instead of leaving it silent. Note that the average of all four
+                    is arithmetically the same as Other Sections alone, because Cl.46A.9(1)
+                    defines Other Sections as the mean of the other three. */}
+                {selectedSub && selectedSub.steel > 0 && (entry.steelTypes || []).length === 0 && (
+                  <p className="text-[11px] text-amber-700">
+                    No steel index ticked. This steel will be priced on the average of all four
+                    categories, and the PVC statement will say so.
+                  </p>
+                )}
+
                 <div className="space-y-2 border-t border-slate-100 pt-3">
                   <div className="hidden grid-cols-[minmax(90px,0.7fr)_minmax(100px,1fr)_24px_minmax(120px,1fr)_minmax(110px,0.8fr)_32px] gap-2 px-1 text-[11px] font-medium text-slate-500 sm:grid">
                     <span>Item / DSR No.</span>

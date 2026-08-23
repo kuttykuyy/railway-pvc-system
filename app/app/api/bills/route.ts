@@ -798,7 +798,10 @@ export async function POST(request: NextRequest) {
               classificationId: entry.classificationId,
               // PVC base excludes railway-supplied material (factor is 1 when none).
               amount: parseFloat(entry.amount) * pvcBaseFactor,
-              steelTypes: entrySteelTypes
+              steelTypes: entrySteelTypes,
+              // One entry can merge reinforcement with structural steelwork. When the rows
+              // carry their own categories, each is priced against its own index.
+              itemRows: entry.itemRows || null
             },
             quarterlyAverages,
             {

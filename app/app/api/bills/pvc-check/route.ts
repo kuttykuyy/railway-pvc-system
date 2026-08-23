@@ -164,7 +164,8 @@ export async function POST(request: NextRequest) {
           {
             subClassificationId: entry.subClassificationId,
             amount: parseFloat(entry.amount),
-            steelTypes: entrySteelTypes
+            steelTypes: entrySteelTypes,
+            itemRows: entry.itemRows || null
           },
           quarterlyAverages,
           {

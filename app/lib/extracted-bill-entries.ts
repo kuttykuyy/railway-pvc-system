@@ -63,6 +63,17 @@ export interface ExtractedItemRow {
   sourceQty?: number;
   coefficient?: number;
   workUnit?: string;
+  /**
+   * Which of Clause 46A.9(1)'s steel categories THIS item draws on.
+   *
+   * Kept per row as well as on the entry, because one entry can hold both kinds: a
+   * Schedule B of steel doors and windows merges 5.22.6 (reinforcement — TMT) with
+   * 10.2 and 10.16.1 (structural steelwork — angles, plates, flats). The entry's own
+   * list is the union of them, and pricing the whole amount on a union prices the
+   * reinforcement as angles and the angles as reinforcement. With the categories on
+   * each row, each item's steel is priced on its own index.
+   */
+  steelTypes?: string[];
 }
 
 export interface BuiltClassificationEntry {
@@ -208,6 +219,7 @@ export function buildClassificationEntriesFromExtractedBill(
                 agreementRate: netRate,
                 amount: netAmount,
                 description: item.description || '',
+                steelTypes: steelCategoriesOf(item),
                 pageNumber: (item as any).pageNumber,
                 rateBookEdition: (item as any).rateBookEdition,
                 rateBookCode: (item as any).rateBookCode,
@@ -284,6 +296,7 @@ export function buildClassificationEntriesFromExtractedBill(
           // of the statement while its money stayed in the total.
           amount: Number(item.amountSinceLastBill) || 0,
           description: item.description || '',
+          steelTypes: steelCategoriesOf(item),
           pageNumber: (item as any).pageNumber,
           rateBookEdition: (item as any).rateBookEdition,
           rateBookCode: (item as any).rateBookCode,

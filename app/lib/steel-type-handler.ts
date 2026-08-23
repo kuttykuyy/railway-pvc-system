@@ -6,7 +6,7 @@
  * This module provides a single source of truth for steel type handling across the app.
  */
 
-import { prisma } from '@/lib/db';
+import { getClassificationComponents } from '@/lib/pvc-calculations';
 
 export type SteelType = 'TMT' | 'ANGLE_CHANNEL' | 'PLATES' | 'OTHER_SECTIONS';
 
@@ -27,6 +27,8 @@ export async function extractSteelTypesFromEntries(
     classificationId?: string;
     amount: number;
     steelTypes?: string[];
+    /** Per-item categories, when one entry merges reinforcement with structural steel. */
+    itemRows?: Array<{ steelTypes?: string[] | null }> | null;
   }>
 ): Promise<string[]> {
   logger.log('\n🔧 [STEEL HANDLER] Extracting steel types from classification entries');
@@ -37,25 +39,22 @@ export async function extractSteelTypesFromEntries(
   for (const entry of classificationEntries) {
     if (entry.amount <= 0) continue;
 
-    // Get classification components to check if entry has steel
-    let hasSteelComponent = false;
-    
-    if (entry.subClassificationId) {
-      const subClass = await prisma.subClassification.findUnique({
-        where: { id: entry.subClassificationId },
-        select: { steel: true }
-      });
-      hasSteelComponent = (subClass?.steel ?? 0) > 0;
-    } else if (entry.classificationId) {
-      const classification = await prisma.classification.findUnique({
-        where: { id: entry.classificationId },
-        select: { steel: true }
-      });
-      hasSteelComponent = (classification?.steel ?? 0) > 0;
+    // Does this entry carry a steel component at all? Read it through the shared cache
+    // rather than one findUnique per entry -- on Vercel the pool is a single connection,
+    // so an extra query per entry is an extra wait in a queue.
+    const components = await getClassificationComponents(entry.subClassificationId, entry.classificationId);
+    if ((components?.steel ?? 0) <= 0) continue;
+
+    // An entry can hold several items of different steel kinds with no category set on
+    // the entry itself. Those rows are then the only record of what the steel was, so
+    // read them too -- otherwise the bill reports "no category" and gets priced on the
+    // average of all four when it did not have to be.
+    for (const row of entry.itemRows || []) {
+      for (const type of row?.steelTypes || []) collectedSteelTypes.add(type);
     }
 
     // Only collect steel types from entries with steel components
-    if (hasSteelComponent && entry.steelTypes && Array.isArray(entry.steelTypes)) {
+    if (entry.steelTypes && Array.isArray(entry.steelTypes)) {
       logger.log(`   Entry with steel (${entry.amount}): ${entry.steelTypes.join(', ')}`);
       entry.steelTypes.forEach(type => collectedSteelTypes.add(type));
     }

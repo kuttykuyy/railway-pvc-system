@@ -435,7 +435,8 @@ export async function POST(request: NextRequest) {
           {
             subClassificationId: entry.subClassificationId,
             amount: Number(entry.amount) * pvcBaseFactor,
-            steelTypes: entrySteelTypes
+            steelTypes: entrySteelTypes,
+            itemRows: entry.itemRows || null
           },
           quarterlyAverages,
           {

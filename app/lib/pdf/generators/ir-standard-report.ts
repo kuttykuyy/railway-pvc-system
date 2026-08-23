@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import type { SteelBreakdownSection } from '@/lib/jpc-items';
 import { findSubWorkRates } from '@/lib/contract-schedules';
 import { resolvePre2022Setup } from '@/lib/pre2022-contract';
+import { resolveSteelIndexBasis } from '@/lib/pvc-calculations';
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -338,7 +339,11 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   const usedSteelIndexNames = usedSteelPositions.size > 0
     ? Array.from(usedSteelPositions).sort().map(position => steelIndexNames[position]).filter(Boolean)
     : steelIndexNames;
-  const steelIdx = usedSteelIndexNames[0] || steelIndexNames[0] || 'Steel TMT Bars';
+  // The same categories as codes, for the resolver the calculation uses. Empty means
+  // none was recorded on any entry — then all four are averaged, exactly as the
+  // calculation does, and the statement says so rather than implying a choice was made.
+  const POSITION_TO_STEEL_CODE = ['TMT', 'ANGLE_CHANNEL', 'PLATES', 'OTHER_SECTIONS'];
+  const usedSteelCodes = Array.from(usedSteelPositions).sort().map(p => POSITION_TO_STEEL_CODE[p]).filter(Boolean);
 
   const ensureSpace = (need: number) => {
     if (y + need > pageH - 15) {
@@ -554,9 +559,31 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   const cemVar     = cemBase > 0 ? (cemAvg - cemBase) / cemBase : 0;
   const cemPvc     = (pvc?.cementPvc ?? 0) + (pvc?.dedicatedCementPvc ?? 0);
 
-  const steelBase  = getIndexBase(quarterlyAverages, steelIdx, ...usedSteelIndexNames);
-  const steelAvg   = getIndexAvg(quarterlyAverages, steelIdx, ...usedSteelIndexNames);
-  const steelVar   = steelBase > 0 ? (steelAvg - steelBase) / steelBase : 0;
+  // The blend the money was actually worked out from — not the first of the categories.
+  //
+  // getIndexBase/getIndexAvg return the FIRST name that matches, so a bill priced on
+  // several steel categories printed one category's figures beside an amount computed
+  // from all of them, and the statement's own sum did not come out:
+  //   Rs 11,56,255.59 x [(55233.33 - 55530.00) / 55530.00] = -Rs 24,770.55
+  // is arithmetically -Rs 6,177. resolveSteelIndexBasis is the same function the
+  // calculation uses, so the printed line is now the line that was computed.
+  const steelBasis = resolveSteelIndexBasis(
+    new Map(quarterlyAverages.map(q => [q.indexName, q])),
+    usedSteelCodes.length > 0 ? usedSteelCodes : null,
+  );
+  const steelBase  = steelBasis?.baseValue ?? 0;
+  const steelAvg   = steelBasis?.averageValue ?? 0;
+  const steelVar   = steelBasis?.variation ?? 0;
+  // Say which of the four categories these figures are, so a reader can check them
+  // against the monthly tables further down instead of guessing.
+  const shortSteel = (n: string) => n.replace(/^Steel\s+/i, '').replace(/\s*-\s*[A-Za-z ]+$/, '').trim();
+  const steelNote = !steelBasis
+    ? ''
+    : steelBasis.usedDefault
+      ? '\n(no category recorded - average of all four)'
+      : steelBasis.indexNames.length === 1
+        ? `\n(${shortSteel(steelBasis.indexNames[0])})`
+        : `\n(average of ${steelBasis.indexNames.map(shortSteel).join(', ')})`;
   const steelPvc   = (pvc?.steelPvc ?? 0) + (pvc?.dedicatedSteelTmtBarsPvc ?? 0) + (pvc?.dedicatedSteelAngleChannelPvc ?? 0) + (pvc?.dedicatedSteelPlatesPvc ?? 0) + (pvc?.dedicatedSteelOtherSectionsPvc ?? 0);
 
   const otherBase  = getIndexBase(quarterlyAverages, 'RBI Other Materials');
@@ -572,13 +599,13 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   const totalPvcAmt = pvc?.totalPvc ?? 0;
 
   const allComponents = [
-    { name: 'Labour',           pct: weights.labour,          base: labourBase, avg: labourAvg, variation: labourVar, pvcAmt: labourPvc },
-    { name: 'Plant & Machinery',pct: weights.plantMachinery,  base: plantBase,  avg: plantAvg,  variation: plantVar,  pvcAmt: plantPvc  },
-    { name: 'Fuel / Power',     pct: weights.fuel,            base: fuelBase,   avg: fuelAvg,   variation: fuelVar,   pvcAmt: fuelPvc   },
-    { name: 'Cement',           pct: weights.cement,          base: cemBase,    avg: cemAvg,    variation: cemVar,    pvcAmt: cemPvc    },
-    { name: 'Steel',            pct: weights.steel,           base: steelBase,  avg: steelAvg,  variation: steelVar,  pvcAmt: steelPvc  },
-    { name: 'Other Materials',  pct: weights.otherMaterials,  base: otherBase,  avg: otherAvg,  variation: otherVar,  pvcAmt: otherPvc  },
-    { name: 'Explosives',       pct: weights.explosives,      base: explBase,   avg: explAvg,   variation: explVar,   pvcAmt: explPvc   },
+    { key: 'labour', name: 'Labour', pct: weights.labour,          base: labourBase, avg: labourAvg, variation: labourVar, pvcAmt: labourPvc },
+    { key: 'plant', name: 'Plant & Machinery', pct: weights.plantMachinery,  base: plantBase,  avg: plantAvg,  variation: plantVar,  pvcAmt: plantPvc  },
+    { key: 'fuel', name: 'Fuel / Power', pct: weights.fuel,            base: fuelBase,   avg: fuelAvg,   variation: fuelVar,   pvcAmt: fuelPvc   },
+    { key: 'cement', name: 'Cement', pct: weights.cement,          base: cemBase,    avg: cemAvg,    variation: cemVar,    pvcAmt: cemPvc    },
+    { key: 'steel', name: 'Steel' + steelNote, pct: weights.steel,         base: steelBase,  avg: steelAvg,  variation: steelVar,  pvcAmt: steelPvc  },
+    { key: 'other', name: 'Other Materials', pct: weights.otherMaterials,  base: otherBase,  avg: otherAvg,  variation: otherVar,  pvcAmt: otherPvc  },
+    { key: 'explosives', name: 'Explosives', pct: weights.explosives,      base: explBase,   avg: explAvg,   variation: explVar,   pvcAmt: explPvc   },
   ].filter(c => c.pct > 0.0001 || Math.abs(c.pvcAmt) > 0.01);
 
   const totalPct = allComponents.reduce((s, c) => s + c.pct, 0);
@@ -1624,13 +1651,13 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   // Build set of index names actually used in this PVC calculation
   const usedIndexNames = new Set<string>();
   for (const c of allComponents) {
-    if (c.name === 'Labour')           usedIndexNames.add('Labour');
-    if (c.name === 'Plant & Machinery') usedIndexNames.add('RBI Plant Machinery');
-    if (c.name === 'Fuel / Power')     usedIndexNames.add(fuelIndexName);
-    if (c.name === 'Cement')           usedIndexNames.add('RBI Cement');
-    if (c.name === 'Steel')            usedSteelIndexNames.forEach(n => usedIndexNames.add(n));
-    if (c.name === 'Other Materials')  usedIndexNames.add('RBI Other Materials');
-    if (c.name === 'Explosives')       usedIndexNames.add('RBI Explosives');
+    if (c.key === 'labour')     usedIndexNames.add('Labour');
+    if (c.key === 'plant')      usedIndexNames.add('RBI Plant Machinery');
+    if (c.key === 'fuel')       usedIndexNames.add(fuelIndexName);
+    if (c.key === 'cement')     usedIndexNames.add('RBI Cement');
+    if (c.key === 'steel')      usedSteelIndexNames.forEach(n => usedIndexNames.add(n));
+    if (c.key === 'other')      usedIndexNames.add('RBI Other Materials');
+    if (c.key === 'explosives') usedIndexNames.add('RBI Explosives');
   }
   const affectedAverages = quarterlyAverages.filter(qa => usedIndexNames.has(qa.indexName));
 

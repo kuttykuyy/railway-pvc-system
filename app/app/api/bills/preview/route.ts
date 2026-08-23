@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
         : (hasSteelComponent && extractedSteelTypes.length > 0 ? extractedSteelTypes : []);
 
       const pvc = await calculateClassificationEntryPvc(
-        { subClassificationId: entry.subClassificationId, classificationId: entry.classificationId, amount: parseFloat(entry.amount), steelTypes: entrySteelTypes },
+        { subClassificationId: entry.subClassificationId, classificationId: entry.classificationId, amount: parseFloat(entry.amount), steelTypes: entrySteelTypes, itemRows: entry.itemRows || null },
         quarterlyAverages
       );
 

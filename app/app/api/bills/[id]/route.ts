@@ -505,7 +505,9 @@ export async function PUT(
               subClassificationId: entry.subClassificationId,
               classificationId: entry.classificationId,
               amount: parseFloat(entry.amount) * pvcBaseFactor,
-              steelTypes: entrySteelTypes
+              steelTypes: entrySteelTypes,
+              // Same as creation: per-row steel categories price row by row.
+              itemRows: entry.itemRows || null
             },
             quarterlyAverages,
             {

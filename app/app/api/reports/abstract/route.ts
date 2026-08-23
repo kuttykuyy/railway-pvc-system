@@ -154,7 +154,8 @@ export async function GET(request: NextRequest) {
               subClassificationId: entry.subClassificationId || undefined,
               classificationId: entry.classificationId || undefined,
               amount: entry.amount,
-              steelTypes: (entry.steelTypes as string[]) || []
+              steelTypes: (entry.steelTypes as string[]) || [],
+              itemRows: (entry.itemRows as any) || null
             },
             quarterlyAverages,
             {

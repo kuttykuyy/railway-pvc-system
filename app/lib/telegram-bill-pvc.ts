@@ -131,7 +131,10 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     (groupCode ? subs.find((s) => s.code.toUpperCase().startsWith(groupCode)) : undefined) ||
     subs.find((s) => s.code.toUpperCase().endsWith('A'));
 
-  type ItemRow = { itemNumber: string; quantity: number | ''; agreementRate: number | ''; cementMt?: number };
+  // amount and steelTypes are carried per row so a single entry that mixes reinforcement
+  // with structural steelwork is priced row by row against each row's own steel index,
+  // instead of one category being applied to the whole entry.
+  type ItemRow = { itemNumber: string; quantity: number | ''; agreementRate: number | ''; cementMt?: number; amount?: number; steelTypes?: string[] };
   type EntryAgg = { subClassificationId: string; amount: number; steel: number; steelTypes: Set<string>; rows: ItemRow[] };
   const agg = new Map<string, EntryAgg>();
   let unclassifiedAmount = 0;
@@ -155,6 +158,8 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       itemNumber: String(it.itemNo || it.dsrCode || '').trim(),
       quantity: Number.isFinite(q) && q > 0 ? q : '',
       agreementRate: Number.isFinite(r) && r > 0 ? r : '',
+      amount: amt,
+      steelTypes: it.isSteelItem && it.steelType ? [String(it.steelType)] : undefined,
     });
     agg.set(sub.id, cur);
   }
@@ -251,7 +256,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   let totalPvc = 0, labour = 0, plant = 0, fuel = 0, materials = 0, cement = 0, steel = 0, explosives = 0;
   for (const pe of preparedEntries) {
     const pvc = await calculateClassificationEntryPvc(
-      { subClassificationId: pe.subClassificationId, amount: pe.amount, steelTypes: pe.steelTypes },
+      { subClassificationId: pe.subClassificationId, amount: pe.amount, steelTypes: pe.steelTypes, itemRows: pe.rows as any },
       quarterlyAverages,
     );
     labour += pvc.labourPvc; plant += pvc.plantMachineryPvc; fuel += pvc.fuelPowerPvc;
