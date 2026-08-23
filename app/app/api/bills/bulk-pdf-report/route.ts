@@ -2,6 +2,7 @@ import { logger } from '@/lib/logger';
 
 
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
@@ -158,19 +159,18 @@ export async function POST(request: NextRequest) {
     if (!requester) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-    const { getUserAccessibleBills } = await import('@/lib/permissions');
-    const accessibleBillIds = await getUserAccessibleBills(requester.id);
-    const permittedBillIds = accessibleBillIds === null
-      ? billIds // unrestricted (admin)
-      : billIds.filter((id: string) => accessibleBillIds.includes(id));
-    if (permittedBillIds.length === 0) {
-      return NextResponse.json({ error: 'You do not have access to these bills.' }, { status: 403 });
-    }
+    // The permission is a condition on the query, not a list compared in JavaScript:
+    // "these ids, AND ones this person may see" is one indexed lookup. It used to fetch
+    // every accessible id and intersect the two arrays here. null = admin, no filter.
+    const { billAccessWhere, compareBillAccessPaths } = await import('@/lib/permissions');
+    const accessWhere = await billAccessWhere(requester.id);
+    after(() => compareBillAccessPaths(requester.id, 'bulk-pdf-report'));
 
     // Get all selected bills with detailed information
     const bills = await prisma.bill.findMany({
       where: {
-        id: { in: permittedBillIds }
+        id: { in: billIds },
+        ...(accessWhere ? { AND: [accessWhere] } : {}),
       },
       include: {
         contract: {
@@ -221,8 +221,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (bills.length === 0) {
+      // One query now answers both "do these exist" and "may you see them", so this
+      // covers both — and deliberately does not say which, as a 404-vs-403 difference
+      // would tell a caller which ids exist in other people's accounts.
       return NextResponse.json(
-        { error: 'No bills found for the provided IDs' },
+        { error: 'No bills found for the provided IDs that you have access to.' },
         { status: 404 }
       );
     }

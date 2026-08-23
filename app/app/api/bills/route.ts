@@ -1,6 +1,7 @@
 import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getQuarterFromDate, calculateClassificationBasedPvcWithComponents, calculateDedicatedCementPvc, calculateDedicatedSteelPvc, calculateWeightedComponents } from '@/lib/pvc-calculations';
 import { getQuarterlyAverages } from '@/lib/db-utils';
@@ -8,7 +9,7 @@ import { getSteelIndexNamesForZone, getSteelCityForZone, getFuelIndexNameForBill
 import { validateApiAccess, validateBillProcessing } from '@/lib/payment-validation';
 import { calculateExtensionCompliantPvc } from '@/lib/extension-compliance';
 import { getBillingSettings } from '@/lib/admin-settings';
-import { getUserAccessibleBills, checkUserContractAccess } from '@/lib/permissions';
+import { billAccessWhere, compareBillAccessPaths, checkUserContractAccess } from '@/lib/permissions';
 import { validateMeasurementDateAgainstProvisionalIndices } from '@/lib/provisional-validation';
 import { handleApiError } from '@/lib/error-handler';
 import { isBillUsingProvisionalIndices, areFinalIndicesAvailableForBill, relevantIndexNamesForBill } from '@/lib/index-status';
@@ -67,12 +68,14 @@ export async function GET(request: NextRequest) {
         // Get pagination parameters
         const { page, limit, skip } = getPaginationParams(request);
         
-        // Get accessible bill IDs — null means admin (unrestricted, no ID list needed)
-        const accessibleBillIds = await getUserAccessibleBills(user.id);
-        const isUnrestricted = accessibleBillIds === null;
+        // Who may see what, as a condition the database applies while it pages — not a
+        // list of every accessible id brought into memory first. null = admin, no filter.
+        // See billAccessWhere for the rules and the one failure mode that matters.
+        const accessWhere = await billAccessWhere(user.id);
+        const isUnrestricted = accessWhere === null;
 
-        // Build where clause — admins get no ID filter (avoids loading all IDs into memory)
-        let billsWhere: Record<string, any> = isUnrestricted ? {} : { id: { in: accessibleBillIds } };
+        // AND-ed under its own key so a later `contractId` cannot collide with the OR inside.
+        let billsWhere: Record<string, any> = isUnrestricted ? {} : { AND: [accessWhere] };
 
         // If contractId is specified, check contract access and narrow the filter
         if (contractId) {
@@ -83,10 +86,10 @@ export async function GET(request: NextRequest) {
           billsWhere = { ...billsWhere, contractId };
         }
 
-        // Early-exit only for non-admin users with empty access list
-        if (!isUnrestricted && (accessibleBillIds as string[]).length === 0) {
-          return NextResponse.json(createPaginatedResponse([], 0, page, limit));
-        }
+        // Phase-2 check: the old id-list and the new predicate, compared for this person
+        // after the response has gone. Records any disagreement for the admin; never
+        // changes what is shown. Removed once it has been quiet long enough.
+        after(() => compareBillAccessPaths(user.id, 'bills-list'));
 
         // The heavy per-bill relations (workClassification + full classificationEntries)
         // are ONLY read by the new-bill "carry forward classification from the previous

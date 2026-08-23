@@ -13,6 +13,7 @@ const ParseFailures = load(() => import('../parse-failures/page'));
 const SteelCityAudit = load(() => import('../steel-city-audit/page'));
 const JpcCrossCheck = load(() => import('../jpc-cross-check/page'));
 const ClassificationAudit = load(() => import('../classification-audit/page'));
+const AccessCompare = load(() => import('../access-compare/page'));
 
 export default function AdminChecksPage() {
   return (
@@ -24,6 +25,7 @@ export default function AdminChecksPage() {
         { key: 'steel-city', name: 'Steel city audit', href: '/admin/steel-city-audit', render: () => <SteelCityAudit /> },
         { key: 'jpc', name: 'JPC cross-check', href: '/admin/jpc-cross-check', render: () => <JpcCrossCheck /> },
         { key: 'classification', name: 'Classification %', href: '/admin/classification-audit', render: () => <ClassificationAudit /> },
+        { key: 'access', name: 'Bill access check', href: '/admin/access-compare', render: () => <AccessCompare /> },
       ]}
     />
   );

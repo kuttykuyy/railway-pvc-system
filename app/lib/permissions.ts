@@ -388,3 +388,154 @@ export async function getUserAccessibleBills(userId: string): Promise<string[] |
     return [];
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// Access as a database condition, not a list of ids.
+//
+// getUserAccessibleBills above answers "which bills may this person see?" with an
+// array of ids — every one of them — which the bills list then pages with
+// `id IN (…)`. So opening page 1 of 25 first reads every bill the person can access,
+// and because an IN-list cannot use the date index, Postgres sorts them all as well.
+// Fine at a hundred bills; a wall at ten thousand.
+//
+// billAccessWhere answers the same question with a Prisma `where` fragment — the same
+// rules, expressed as a condition the database evaluates while it pages. The rules are
+// transcribed from getUserAccessibleBills and checkUserBillAccess, not rewritten:
+//
+//   admin / superadmin      → null (unrestricted: callers apply no filter, as today)
+//   zone official, zone set → own contracts' bills (drafts included)
+//                             OR bills in the zone that are not drafts
+//   zone official, no zone  → own contracts' bills only
+//   everyone else           → own contracts' bills
+//                             OR bills on contracts shared with them (live share)
+//                             OR bills shared with them directly (live share)
+//
+// "Live share" is the existing rule, copied exactly: active, canView, and either no
+// expiry or an expiry still in the future.
+//
+// ONE THING TO READ TWICE. The old function fails closed: any error returns [], an
+// empty list, which denies everything. The natural "empty" Prisma filter is {} — which
+// means the OPPOSITE: no restriction at all. A caught error that returned {} would
+// hand every bill in the system to whoever asked. So on failure this returns
+// DENY_ALL, an impossible predicate, and null keeps its single meaning of "admin,
+// unrestricted", returned from exactly one place.
+// ─────────────────────────────────────────────────────────────────────────────────────
+
+/** A predicate no row satisfies. The failure value: it denies, as the old [] denied. */
+export const DENY_ALL_BILLS = { id: { in: [] as string[] } } as const;
+
+/** The existing share rule, as a where-fragment on UserBillAccess / UserContractAccess. */
+function liveShare(userId: string, now: Date) {
+  return {
+    userId,
+    isActive: true,
+    canView: true,
+    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+  };
+}
+
+export async function billAccessWhere(userId: string): Promise<Record<string, any> | null> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, railwayZone: true },
+    });
+
+    if (user?.role === 'admin' || user?.role === 'superadmin') {
+      return null; // the one and only "unrestricted"
+    }
+
+    if (isZoneScopedOfficial(user?.role)) {
+      // Own contracts keep their drafts; zone access starts at submission — the same
+      // two rules checkUserBillAccess applies to a single bill.
+      if (!user?.railwayZone) return { contract: { userId } };
+      return {
+        OR: [
+          { contract: { userId } },
+          { zone: user.railwayZone, status: { not: 'draft' } },
+        ],
+      };
+    }
+
+    const now = new Date();
+    return {
+      OR: [
+        { contract: { userId } },
+        { contract: { userAccess: { some: liveShare(userId, now) } } },
+        { userAccess: { some: liveShare(userId, now) } },
+      ],
+    };
+  } catch (error) {
+    console.error('billAccessWhere failed — denying:', error);
+    return DENY_ALL_BILLS;
+  }
+}
+
+/**
+ * Phase-2 safety net: run the OLD id-list and the NEW predicate for the same person
+ * and record whether they agree, without changing what the person is shown.
+ *
+ * The predicate above is a transcription of rules that decide who may see whose money,
+ * and a transcription can be wrong in ways that read correctly. This compares the two
+ * answers on real accounts and real data for a while. Silence is the evidence needed
+ * to delete the old path; any difference is a bug found before it could matter.
+ *
+ * It is cheap to be wrong here and expensive to be wrong there, so this swallows its
+ * own errors: a failure in the check must never fail the request it rides along on.
+ * Runs in the background after the list has been served; on Vercel the caller wraps it
+ * in after() so the function stays alive for it.
+ */
+export async function compareBillAccessPaths(userId: string, label: string): Promise<void> {
+  try {
+    const [oldIds, where] = await Promise.all([getUserAccessibleBills(userId), billAccessWhere(userId)]);
+
+    // Both say "admin, unrestricted"?
+    if (oldIds === null || where === null) {
+      if (oldIds !== null || where !== null) {
+        await recordAccessMismatch(userId, label, 'one path says unrestricted, the other does not', { oldIsNull: oldIds === null, newIsNull: where === null });
+      }
+      return;
+    }
+
+    const newRows = await prisma.bill.findMany({ where, select: { id: true } });
+    const newIds = new Set(newRows.map(b => b.id));
+    const oldSet = new Set(oldIds);
+    const onlyOld = oldIds.filter(id => !newIds.has(id));
+    const onlyNew = [...newIds].filter(id => !oldSet.has(id));
+
+    if (onlyOld.length === 0 && onlyNew.length === 0) return;
+    await recordAccessMismatch(userId, label, `old path sees ${oldIds.length}, new sees ${newIds.size}`, {
+      onlyOld: onlyOld.slice(0, 20),
+      onlyNew: onlyNew.slice(0, 20),
+      onlyOldCount: onlyOld.length,
+      onlyNewCount: onlyNew.length,
+    });
+  } catch (error) {
+    console.error('compareBillAccessPaths failed (ignored):', error);
+  }
+}
+
+/**
+ * Mismatches land in AdminSettings under a stable key, newest first, capped — a table
+ * that exists, needs no DDL, and the admin can read. Also logged, so Vercel keeps it.
+ */
+async function recordAccessMismatch(userId: string, label: string, summary: string, detail: Record<string, unknown>) {
+  const entry = { at: new Date().toISOString(), userId, label, summary, detail };
+  console.warn('[access-compare] MISMATCH', JSON.stringify(entry));
+  try {
+    const key = 'access_compare_mismatches';
+    const existing = await prisma.adminSettings.findUnique({ where: { key }, select: { value: true } });
+    let list: unknown[] = [];
+    try { list = existing?.value ? JSON.parse(existing.value) : []; } catch { list = []; }
+    if (!Array.isArray(list)) list = [];
+    list.unshift(entry);
+    list = list.slice(0, 50);
+    await prisma.adminSettings.upsert({
+      where: { key },
+      update: { value: JSON.stringify(list) },
+      create: { key, value: JSON.stringify(list), description: 'Bill access: disagreements between the old id-list and the new predicate (phase-2 check)' },
+    });
+  } catch (error) {
+    console.error('[access-compare] could not record mismatch:', error);
+  }
+}
