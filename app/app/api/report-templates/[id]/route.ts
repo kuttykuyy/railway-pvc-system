@@ -145,7 +145,18 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (!template) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
-    
+
+    // The default is the template every PDF falls back to when none is chosen. Deleting
+    // it left the account with no default until the next list load silently re-created
+    // one — with the stock settings, not theirs. Make another template the default
+    // first; then this one can go.
+    if (template.isDefault) {
+      return NextResponse.json(
+        { error: 'This is your default template, so every report without a chosen template uses it. Make another template the default first, then delete this one.' },
+        { status: 409 },
+      );
+    }
+
     await prisma.reportTemplate.delete({
       where: { id: id }
     });

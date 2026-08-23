@@ -5,7 +5,6 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BackButton } from '@/components/ui/back-button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -260,7 +259,10 @@ export default function ReportTemplatesPage() {
         toast.success('Template deleted successfully');
         fetchTemplates();
       } else {
-        toast.error('Failed to delete template');
+        // The server says why — "this is your default, make another the default
+        // first" is a sentence worth showing, not "Failed to delete template".
+        const reason = await response.json().then(d => d?.error).catch(() => null);
+        toast.error(reason || 'Failed to delete template', { duration: 8000 });
       }
     } catch (error) {
       console.error('Error deleting template:', error);
@@ -309,27 +311,23 @@ export default function ReportTemplatesPage() {
       <div className="absolute top-1/3 -left-20 w-80 h-80 bg-emerald-300/10 blur-[100px] rounded-full pointer-events-none" />
       <div className="absolute bottom-10 right-20 w-[450px] h-[450px] bg-emerald-300/5 blur-[150px] rounded-full pointer-events-none" />
 
-      <BackButton href="/admin/system" label="System" className="mb-4 inline-flex items-center text-slate-500 hover:text-slate-800" />
-      
-      {/* Header Container */}
-      <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6 p-8 bg-white/80 backdrop-blur-xl border border-slate-200/50 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.03)] overflow-hidden">
-        <div className="absolute inset-0 bg-grid-slate-900/[0.01] pointer-events-none" />
-        <div className="relative space-y-2">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/50 rounded-full shadow-sm">
-            <Sparkles className="h-3 w-3 text-emerald-600" />
-            PDF Customization Panel
-          </div>
-          <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 bg-clip-text text-transparent">
-            Report Templates
-          </h1>
-          <p className="text-sm text-slate-500 max-w-lg font-normal">
-            Customize which sections and data fields appear in your final PDF report outputs.
+      {/* Header: a title, what this page is for in one sentence, and the one action.
+          The boxed hero it replaces ("PDF Customization Panel", a 36px gradient title,
+          a paragraph saying the same thing) took a third of the screen to say "Report
+          Templates" twice, and carried a "← System" back-link inside a tab that IS
+          System. */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">Report templates</h1>
+          <p className="text-sm text-slate-500 mt-1 max-w-[70ch]">
+            Which sections and fields a PDF report carries. Your <b>default</b> is used whenever a report
+            is downloaded without choosing one; a <b>global</b> template (admin-made) is offered to everyone
+            as a choice. The figures are the same in every template — only what is shown changes.
           </p>
         </div>
-        
-        <Button onClick={handleCreate} className="h-11 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/10 transition-colors cursor-pointer shrink-0">
+        <Button onClick={handleCreate} className="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shrink-0">
           <Plus className="h-4 w-4 mr-2" />
-          Create Template
+          Create template
         </Button>
       </div>
 
@@ -360,18 +358,27 @@ export default function ReportTemplatesPage() {
                   <div className="space-y-1">
                     <CardTitle className="text-lg font-bold text-slate-800 flex flex-wrap items-center gap-2">
                       {template.name}
+                      {/* A star alone said nothing; and on a global template it meant
+                          "the admin's default", not "everyone's", which is what the
+                          word reads as. Both badges now say what they mean. */}
                       {template.isDefault && (
-                        <Star className="h-4.5 w-4.5 fill-amber-400 text-amber-500 shrink-0" />
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold rounded-full" title="Used for your reports when no template is chosen">
+                          <Star className="h-3 w-3 fill-amber-400 text-amber-500" />
+                          Your default
+                        </span>
                       )}
                       {template.isGlobal && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 border border-emerald-200/50 text-emerald-700 text-[10px] font-bold rounded-full">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 border border-emerald-200/50 text-emerald-700 text-[10px] font-bold rounded-full" title="Made by the admin; offered to every user as a choice">
                           <Globe className="h-3 w-3" />
                           Global
                         </span>
                       )}
                     </CardTitle>
                     <CardDescription className="text-xs text-slate-500 font-light leading-relaxed">
-                      {template.description || 'No description provided'}
+                      {template.description
+                        || (template.isGlobal
+                          ? 'Offered to every user when downloading a report.'
+                          : 'Add a description so you remember what this one is for.')}
                     </CardDescription>
                   </div>
                 </div>
@@ -445,14 +452,25 @@ export default function ReportTemplatesPage() {
                     >
                       <Copy className="h-3.5 w-3.5 mx-auto" />
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDelete(template.id)}
-                      className="bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 hover:text-rose-700 rounded-xl h-9 w-9 p-0 cursor-pointer transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mx-auto" />
-                    </Button>
+                    {/* The default cannot be deleted (the server refuses too); the
+                        button says so rather than offering a click that fails. A
+                        global template that is not mine is not mine to delete. */}
+                    {(() => {
+                      const isOwn = !template.user || template.user.name === session?.user?.name || !template.isGlobal;
+                      const blocked = template.isDefault ? 'This is the default — set another template as default before deleting it.' : !isOwn ? 'A global template can only be deleted by the admin who made it.' : null;
+                      return (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!!blocked}
+                          title={blocked || 'Delete this template'}
+                          onClick={() => handleDelete(template.id)}
+                          className="bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 hover:text-rose-700 rounded-xl h-9 w-9 p-0 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mx-auto" />
+                        </Button>
+                      );
+                    })()}
                   </div>
                 </div>
               </CardContent>

@@ -363,9 +363,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           // charging for nothing, and the once-per-bill stamp made it permanent.
           let templateShowsDocs = true;
           if (requesterUser) {
+            // A chosen template may be the person's own OR a global one — the list
+            // offers both, and this lookup used to accept only their own, so picking a
+            // global template silently fell through to the default.
             const tpl = templateId
               ? await prisma.reportTemplate.findFirst({
-                  where: { id: templateId, userId: requesterUser.id }, select: { sections: true },
+                  where: { id: templateId, OR: [{ userId: requesterUser.id }, { isGlobal: true }] }, select: { sections: true },
                 })
               : await prisma.reportTemplate.findFirst({
                   where: { userId: requesterUser.id, isDefault: true }, select: { sections: true },
@@ -589,11 +592,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Fetch template settings
         let template = null;
         if (templateId) {
-          // Use specified template
+          // The specified template: the person's own, or a global one. The list offers
+          // both; accepting only their own here meant a global template was shown,
+          // pickable, and then quietly ignored at the moment of generating the PDF.
           template = await prisma.reportTemplate.findFirst({
             where: {
               id: templateId,
-              userId: user.id
+              OR: [{ userId: user.id }, { isGlobal: true }],
             }
           });
         } else {

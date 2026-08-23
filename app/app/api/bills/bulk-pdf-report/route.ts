@@ -464,19 +464,20 @@ export async function POST(request: NextRequest) {
         if (brandUser?.reportHeaderText) irOrgName = brandUser.reportHeaderText;
       }
 
-      // The single-bill route loads the owner's default report template and lets it
-      // hide sections and the calculation steps; this branch never did, so a bulk run
-      // of the very same bills came out with every section shown regardless of the
-      // template — the two reports differed by whatever the template hides.
+      // The single-bill route loads the REQUESTER's default report template and lets it
+      // hide sections and the calculation steps. This branch used to read the contract
+      // OWNER's default instead — so an official downloading one bill and then a batch
+      // of the same bills got two differently-shaped PDFs, each "the default", for
+      // different people. It now reads the same person's template the single route does.
       let irSections: {
         contractDetails?: boolean;
         workClassification?: boolean;
         monthlyIndices?: boolean;
         showCalculationSteps?: boolean;
       } | undefined;
-      if (bills.length > 0 && bills[0].contract?.userId) {
+      if (bills.length > 0 && requester?.id) {
         const template = await prisma.reportTemplate.findFirst({
-          where: { userId: bills[0].contract.userId, isDefault: true },
+          where: { userId: requester.id, isDefault: true },
         });
         if (template) {
           const sections = (template.sections || {}) as any;
