@@ -266,3 +266,50 @@ export async function initializePriceIndices() {
     });
   }
 }
+
+/**
+ * A per-request memo around getQuarterlyAverages.
+ *
+ * Reports and bulk operations call it once per bill, and bills on a contract mostly
+ * share a quarter — so a thirty-bill report asked the database for the same three
+ * months of the same indices thirty times, three or four queries each, in sequence on
+ * the single connection a serverless instance holds.
+ *
+ * Deliberately NOT a module-level cache with a time limit: these numbers price money,
+ * and a bill created a moment after an index import must see the new figures. A memo
+ * created inside one request cannot serve anything stale — it only stops that request
+ * asking twice — and is thrown away with the request.
+ *
+ * Use it wherever the call sits in a loop; leave the single-bill paths as they are,
+ * where there is nothing to memoise.
+ */
+export function createQuarterlyAveragesMemo() {
+  const memo = new Map<string, Promise<Awaited<ReturnType<typeof getQuarterlyAverages>>>>();
+
+  return function quarterlyAverages(
+    quarter: string,
+    priceIndexNames: string[],
+    baseMonth: Date,
+    calculationMethod: string = 'auto',
+    monthsOverride?: Date[],
+  ) {
+    // The names are sorted into the key because two callers asking for the same
+    // indices in a different order want the same answer.
+    const key = JSON.stringify([
+      quarter,
+      [...priceIndexNames].sort(),
+      baseMonth instanceof Date ? baseMonth.getTime() : baseMonth,
+      calculationMethod,
+      monthsOverride?.map(m => m.getTime()) ?? null,
+    ]);
+
+    // The PROMISE is cached, not the result: two bills resolved concurrently would
+    // otherwise both miss and both query.
+    let pending = memo.get(key);
+    if (!pending) {
+      pending = getQuarterlyAverages(quarter, priceIndexNames, baseMonth, calculationMethod, monthsOverride);
+      memo.set(key, pending);
+    }
+    return pending;
+  };
+}

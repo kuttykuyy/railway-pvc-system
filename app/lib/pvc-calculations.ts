@@ -858,8 +858,6 @@ export async function calculateWeightedComponents(
   totalAmount: number;
   steelTypes?: string[];
 }> {
-  const { prisma } = await import('@/lib/db');
-  
   let totalFixed = 0;
   let totalLabour = 0;
   let totalSteel = 0;
@@ -876,30 +874,13 @@ export async function calculateWeightedComponents(
   for (const entry of classificationEntries) {
     if (entry.amount <= 0) continue;
 
-    let components = null;
-    let subClassCode = '';
-
-    // Try to find as SubClassification first
-    if (entry.subClassificationId) {
-      const subClass = await prisma.subClassification.findUnique({
-        where: { id: entry.subClassificationId }
-      });
-      if (subClass) {
-        components = subClass;
-        subClassCode = subClass.code.toUpperCase();
-      }
-    }
-
-    // Fallback to legacy Classification
-    if (!components && entry.classificationId) {
-      const classification = await prisma.classification.findUnique({
-        where: { id: entry.classificationId }
-      });
-      if (classification) {
-        components = classification;
-        subClassCode = classification.code.toUpperCase();
-      }
-    }
+    // Through the cache, not around it. These two lookups used to read the database
+    // directly — once per entry, on the one path where entries come in bulk — while
+    // getClassificationComponents, added for exactly this, sat unused a few hundred
+    // lines above. Twenty bills of twelve entries meant 240 round-trips for a few dozen
+    // distinct reference rows that change only when an admin edits a percentage.
+    const components = await getClassificationComponents(entry.subClassificationId, entry.classificationId);
+    const subClassCode = components ? String(components.code || '').toUpperCase() : '';
 
     if (components) {
       let steelPct = components.steel;

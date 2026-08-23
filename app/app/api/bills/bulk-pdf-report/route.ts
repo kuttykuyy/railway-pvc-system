@@ -6,7 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getQuarterMonths, getQuarterFromDate, calculateWeightedComponents, calculatePvcComponentWithSteps, calculateDedicatedCementPvcWithSteps, calculateDedicatedSteelPvcWithSteps } from '@/lib/pvc-calculations';
-import { getQuarterlyAverages } from '@/lib/db-utils';
+import { createQuarterlyAveragesMemo } from '@/lib/db-utils';
 import { format, addMonths, startOfMonth } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
 import jsPDF from 'jspdf';
@@ -93,6 +93,10 @@ declare module 'jspdf' {
 
 // POST /api/bills/bulk-pdf-report - Generate enhanced combined PDF report for multiple bills
 export async function POST(request: NextRequest) {
+  // One memo for this request. A batch's bills mostly share a quarter, and every one of
+  // them asked the database for the same three months of the same indices — three or
+  // four queries each, in sequence, on one connection.
+  const quarterlyAverages = createQuarterlyAveragesMemo();
   try {
     // Rate limiting for expensive bulk PDF generation
     const identifier = getIdentifier(request);
@@ -235,33 +239,47 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Get all required indices for all bills
-    const allIndicesData = new Map();
-    for (const bill of bills) {
-      const baseMonthDate = bill.contract.baseMonth ? new Date(bill.contract.baseMonth) : addMonths(new Date(bill.contract.dateOfOpening), -1);
+    // Get all required indices for all bills.
+    //
+    // One query for the union of every bill's range, split per bill in memory. This was
+    // a range query per bill — each pulling every index value from that bill's base
+    // month to its measurement month with the price index joined — so a thirty-bill
+    // report ran thirty wide scans over the largest table for spans that overlap almost
+    // entirely. Bills of one contract share a base month, so the overlap is nearly total.
+    const billRanges = bills.map((bill: any) => {
+      const baseMonthDate = bill.contract.baseMonth
+        ? new Date(bill.contract.baseMonth)
+        : addMonths(new Date(bill.contract.dateOfOpening), -1);
       const measurementDate = new Date(bill.dateOfMeasurement);
-      
-      // Get all monthly index values from base month to measurement date (inclusive of measurement month)
-      // Use end of measurement month to ensure measurement month is included
+      // End of the measurement month, so the measurement month itself is included.
       const measurementMonthEnd = new Date(measurementDate.getFullYear(), measurementDate.getMonth() + 1, 0);
-      const indicesData = await prisma.monthlyIndexValue.findMany({
-        where: {
-          month: {
-            gte: startOfMonth(baseMonthDate),
-            lte: startOfMonth(measurementMonthEnd)
-          }
-        },
-        include: {
-          priceIndex: true
-        },
-        orderBy: { month: 'asc' }
+      return {
+        billId: bill.id,
+        baseMonthDate,
+        measurementDate,
+        from: startOfMonth(baseMonthDate),
+        to: startOfMonth(measurementMonthEnd),
+      };
+    });
+
+    const allIndicesData = new Map();
+    if (billRanges.length > 0) {
+      const from = new Date(Math.min(...billRanges.map((r: any) => r.from.getTime())));
+      const to = new Date(Math.max(...billRanges.map((r: any) => r.to.getTime())));
+      const everyValueInRange = await prisma.monthlyIndexValue.findMany({
+        where: { month: { gte: from, lte: to } },
+        include: { priceIndex: true },
+        orderBy: { month: 'asc' },
       });
-      
-      allIndicesData.set(bill.id, {
-        indices: indicesData,
-        baseMonth: baseMonthDate,
-        measurementDate
-      });
+
+      for (const range of billRanges) {
+        allIndicesData.set(range.billId, {
+          // Already sorted by month, so each bill's slice keeps the order it had.
+          indices: everyValueInRange.filter(v => v.month >= range.from && v.month <= range.to),
+          baseMonth: range.baseMonthDate,
+          measurementDate: range.measurementDate,
+        });
+      }
     }
 
     // Helper function to calculate bill PVC from per-entry data (DB values - used as fallback)
@@ -339,7 +357,7 @@ export async function POST(request: NextRequest) {
       // Get quarterly averages
       let qAvgIndices: { [key: string]: number } = {};
       try {
-        const qAvgs = await getQuarterlyAverages(bill.quarter, billSpecificIndices, bill.contract.baseMonth, 'auto');
+        const qAvgs = await quarterlyAverages(bill.quarter, billSpecificIndices, bill.contract.baseMonth, 'auto');
         for (const avg of qAvgs) {
           qAvgIndices[avg.indexName] = avg.average;
         }
@@ -564,7 +582,7 @@ export async function POST(request: NextRequest) {
         const fuelIdxName = getFuelName(bill.zone, bill.fuelPriceType);
         const steelIdxNames = getSteelNames(bill.zone);
         const allIdxNames = ['Labour', 'RBI Plant Machinery', fuelIdxName, 'RBI Other Materials', 'RBI Cement', 'RBI Explosives', ...steelIdxNames];
-        const qaverages = await getQuarterlyAverages(bill.quarter, allIdxNames, baseMonth, 'auto');
+        const qaverages = await quarterlyAverages(bill.quarter, allIdxNames, baseMonth, 'auto');
         const indicesStatus = await getBillIndicesStatus(
           bill.quarter, baseMonth, relevantIndexNamesForBill(bill.zone, bill.fuelPriceType));
 
@@ -2376,7 +2394,7 @@ export async function POST(request: NextRequest) {
           
           let billQuarterlyAverages: any[] = [];
           try {
-            billQuarterlyAverages = await getQuarterlyAverages(bill.quarter, dedicatedIndicesNames, bill.contract.baseMonth, 'auto');
+            billQuarterlyAverages = await quarterlyAverages(bill.quarter, dedicatedIndicesNames, bill.contract.baseMonth, 'auto');
           } catch (error) {
             console.error(`Error getting quarterly averages for bill ${bill.billNo}:`, error);
             billQuarterlyAverages = [];
@@ -2566,7 +2584,7 @@ export async function POST(request: NextRequest) {
           logger.log(`Quarter: ${bill.quarter}`);
           logger.log(`Base Month: ${format(new Date(bill.contract.baseMonth), 'MMM yyyy')}`);
           
-          const quarterlyAvgs = await getQuarterlyAverages(
+          const quarterlyAvgs = await quarterlyAverages(
             bill.quarter, 
             allIndicesNames, 
             bill.contract.baseMonth, 

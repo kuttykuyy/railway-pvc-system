@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { checkUserContractAccess } from '@/lib/permissions';
 import { resolvePre2022Setup } from '@/lib/pre2022-contract';
-import { getQuarterlyAverages } from '@/lib/db-utils';
+import { createQuarterlyAveragesMemo } from '@/lib/db-utils';
 import { getQuarterMonths } from '@/lib/pvc-calculations';
 import { getSteelCityForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
 import jsPDF from 'jspdf';
@@ -25,6 +25,8 @@ export const maxDuration = 120;
  * rows come from the pre-2022 pricer, a current one's from the stored calculations.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Bills on one contract repeat quarters constantly — a 24-bill master sheet asked for the same three months over and over.
+  const quarterlyAveragesFor = createQuarterlyAveragesMemo();
   const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
@@ -119,7 +121,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         try {
           const fuelName = getFuelIndexNameForBill(bill.zone, (bill as any).fuelPriceType);
           const names = ['Labour', 'RBI Other Materials', fuelName, 'RBI Plant Machinery', 'RBI Cement', 'RBI Explosives'];
-          const averages = await getQuarterlyAverages(bill.quarter, names, new Date(contract.baseMonth), 'auto');
+          const averages = await quarterlyAveragesFor(bill.quarter, names, new Date(contract.baseMonth), 'auto');
           for (const row of averages as any[]) {
             indexRows.push([bill.billNo, bill.quarter, row.indexName, row.baseValue,
               ...(row.monthlyValues || []).map((m: any) => m.value), rupee(row.average)]);

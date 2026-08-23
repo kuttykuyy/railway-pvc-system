@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getQuarterFromDate, calculateTotalPvc, calculateClassificationBasedPvcWithComponents, calculateDedicatedCementPvc, calculateDedicatedSteelPvc } from '@/lib/pvc-calculations';
-import { getQuarterlyAverages } from '@/lib/db-utils';
+import { createQuarterlyAveragesMemo } from '@/lib/db-utils';
 import { validateApiAccess } from '@/lib/payment-validation';
 import { checkUserContractAccess } from '@/lib/permissions';
 import { handleApiError, AppError } from '@/lib/error-handler';
@@ -56,6 +56,8 @@ interface BulkCreateRequest {
 }
 
 export async function POST(request: NextRequest) {
+  // A batch imported together shares quarters; it also means every bill in one import is priced from one reading of the indices.
+  const quarterlyAveragesFor = createQuarterlyAveragesMemo();
   try {
     // Validate API access
     const { authorized, user, message: authMessage } = await validateApiAccess(request);
@@ -142,6 +144,15 @@ export async function POST(request: NextRequest) {
     const validationErrors: string[] = [];
     const duplicateBillNumbers: string[] = [];
 
+    // Every bill number already on this contract, read once. This used to be a
+    // findFirst per bill inside the loop below — a twenty-bill import asked the
+    // database twenty separate times what one query answers. Lower-cased on both sides
+    // because the check has always been case-insensitive.
+    const existingBillNos = new Set(
+      (await prisma.bill.findMany({ where: { contractId }, select: { billNo: true } }))
+        .map(b => (b.billNo || '').trim().toLowerCase()),
+    );
+
     for (const billInput of bills) {
       // Validate bill data
       if (!billInput.billNo || !billInput.dateOfMeasurement || !billInput.classificationEntries || billInput.classificationEntries.length === 0) {
@@ -160,15 +171,8 @@ export async function POST(request: NextRequest) {
       billInput.steelPlatesAmount = classificationPolicy.steelPlatesAmount;
       billInput.steelOtherSectionsAmount = classificationPolicy.steelOtherSectionsAmount;
 
-      // Check for duplicate bill number in database
-      const existingBill = await prisma.bill.findFirst({
-        where: {
-          contractId,
-          billNo: { equals: billInput.billNo.trim(), mode: 'insensitive' },
-        },
-      });
-
-      if (existingBill) {
+      // Check for duplicate bill number against the set read above.
+      if (existingBillNos.has(billInput.billNo.trim().toLowerCase())) {
         duplicateBillNumbers.push(billInput.billNo);
       }
 
@@ -380,7 +384,7 @@ export async function POST(request: NextRequest) {
         ...steelIndexNames
       ];
       
-      const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, baseMonth, 'auto');
+      const quarterlyAverages = await quarterlyAveragesFor(quarter, allIndices, baseMonth, 'auto');
       
       if (!quarterlyAverages || quarterlyAverages.length === 0) {
         throw new AppError(

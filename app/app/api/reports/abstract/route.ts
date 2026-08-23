@@ -3,7 +3,7 @@ import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getQuarterFromDate, calculateClassificationEntryPvc } from '@/lib/pvc-calculations';
-import { getQuarterlyAverages } from '@/lib/db-utils';
+import { createQuarterlyAveragesMemo } from '@/lib/db-utils';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
 import { format } from 'date-fns';
 import { getServerSession } from 'next-auth/next';
@@ -41,6 +41,8 @@ interface ClassificationSteel {
 
 
 export async function GET(request: NextRequest) {
+  // Every bill in the abstract was priced with its own index lookups, though they share quarters.
+  const quarterlyAveragesFor = createQuarterlyAveragesMemo();
   try {
     const { searchParams } = new URL(request.url);
     const contractId = searchParams.get('contractId');
@@ -117,7 +119,7 @@ export async function GET(request: NextRequest) {
         logger.log(`🔧 Recalculating ${entriesNeedingFix.length} classification entries for bill ${bill.billNo}`);
         
         // Get quarterly averages for this bill's quarter
-        const quarterlyAverages = await getQuarterlyAverages(
+        const quarterlyAverages = await quarterlyAveragesFor(
           bill.quarter,
           allIndices,
           contract.baseMonth,
