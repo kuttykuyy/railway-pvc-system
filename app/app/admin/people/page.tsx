@@ -13,6 +13,7 @@ const Users = load(() => import('../users/page'));
 const Permissions = load(() => import('../user-permissions/page'));
 const RailwayOfficialSettings = load(() => import('../railway-official-settings/page'));
 const DemoAccounts = load(() => import('../demo-accounts/page'));
+const Jurisdiction = load(() => import('../jurisdiction/page'));
 
 export default function AdminPeoplePage() {
   return (
@@ -24,6 +25,7 @@ export default function AdminPeoplePage() {
         { key: 'permissions', name: 'Roles & permissions', href: '/admin/user-permissions', render: () => <Permissions /> },
         { key: 'officials', name: 'Railway official limits', href: '/admin/railway-official-settings', render: () => <RailwayOfficialSettings /> },
         { key: 'demo', name: 'Demo accounts', href: '/admin/demo-accounts', render: () => <DemoAccounts /> },
+        { key: 'jurisdiction', name: 'Jurisdiction transfers', href: '/admin/jurisdiction', render: () => <Jurisdiction /> },
       ]}
     />
   );

@@ -12,6 +12,7 @@ import { formatContractValue } from '@/lib/gcc-compliance';
 import { BackButton } from '@/components/ui/back-button';
 import { ShareContractDialog } from '@/components/contracts/share-contract-dialog';
 import { ContractMoreMenu } from '@/components/contracts/contract-more-menu';
+import { getAdministeringZone } from '@/lib/jurisdiction';
 import { BillCard } from '@/components/bill-card';
 import { resolvePre2022Setup } from '@/lib/pre2022-contract';
 import { DeleteBillButton } from '@/components/bills/delete-bill-button';
@@ -74,6 +75,12 @@ export default async function ContractDetailPage({ params }: Props) {
   // bill page — someone starting from the contract had no way in at all.
   const pre2022 = resolvePre2022Setup(contract as any);
 
+  // A contract run by a zone other than the one its agreement number names — the
+  // Mangaluru transfer and any like it. Null when never moved, or before the columns
+  // are applied (lib/jurisdiction.ts), and then nothing is shown.
+  const administeringZone = await getAdministeringZone(contract.id);
+  const agreementZone = contract.agreementNo.split('/')[0]?.trim().toUpperCase() || null;
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
 
@@ -95,6 +102,14 @@ export default async function ContractDetailPage({ params }: Props) {
             <p className="text-sm sm:text-[15px] text-gray-500 mt-1 max-w-[78ch]">{contract.workDescription}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {administeringZone && administeringZone !== agreementZone && (
+              <span
+                className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-full px-2.5 py-1 bg-sky-50 text-sky-800 border border-sky-200"
+                title={`This contract is now administered by ${administeringZone}, though its agreement number is ${agreementZone}. See Admin → People & Access → Jurisdiction transfers for the order.`}
+              >
+                Administered by {administeringZone}
+              </span>
+            )}
             {contract.bills.length === 0 ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-full px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200">
                 <span className="h-1.5 w-1.5 rounded-full bg-current" /> Setup · no bills yet

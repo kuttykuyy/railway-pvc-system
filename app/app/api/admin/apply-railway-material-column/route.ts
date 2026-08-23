@@ -135,6 +135,18 @@ const PENDING: PendingColumn[] = [
     ddlType: 'INTEGER',
     why: 'Which page of the bill PDF the item was read from, so a classification can be checked against the printed row without hunting through 27 pages.',
   },
+  {
+    table: 'contracts',
+    column: 'administeringZone',
+    ddlType: 'TEXT',
+    why: 'The zone that now administers a contract when it differs from the agreement number — Railway Board order 2025/E&R/1(3)/1 moves the Mangaluru area from SR (Palakkad) to SWR (Mysuru) from 1 Oct 2026, and the agreement numbers do not change. Null means "as the agreement number says".',
+  },
+  {
+    table: 'contracts',
+    column: 'jurisdictionTransfers',
+    ddlType: "JSONB NOT NULL DEFAULT '[]'",
+    why: 'The record of each transfer: when, from which zone to which, the order it was made under, and who did it.',
+  },
 ];
 
 /**
@@ -288,6 +300,13 @@ const PENDING_EXTRAS: Array<{ label: string; sql: (s: string) => string; why: st
       ON "${s}"."parse_failures" ("userEmail", "createdAt" DESC)`,
     why: '"Ask IR-PVC to check this bill" finds the latest failure for one user and file.',
     check: { kind: 'index', name: 'parse_failures_userEmail_createdAt_idx' },
+  },
+  {
+    label: 'contracts_administeringZone_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "contracts_administeringZone_idx"
+      ON "${s}"."contracts" ("administeringZone") WHERE "administeringZone" IS NOT NULL`,
+    why: 'A zone official\'s contract list asks "which contracts have been transferred to my zone". Partial, because the column is null on every contract that has not moved.',
+    check: { kind: 'index', name: 'contracts_administeringZone_idx' },
   },
   {
     label: 'drop_redundant_indexes',

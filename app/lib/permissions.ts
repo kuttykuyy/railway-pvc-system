@@ -2,6 +2,7 @@
 
 
 import { agreementMatchesZone } from './railway-division-helper';
+import { getAdministeringZone, contractIdsAdministeredBy, contractIdsTransferredAwayFrom } from './jurisdiction';
 
 /**
  * Railway staff who see their own zone's work: the executive (engineering) side and
@@ -64,8 +65,14 @@ export async function checkUserContractAccess(
     }
 
     if (isZoneScopedOfficial(user?.role)) {
-      // Access allowed if contract zone matches official's zone
-      if (agreementMatchesZone(contract.agreementNo, user.railwayZone)) {
+      // A contract that has been transferred is administered by its new zone, whatever
+      // its agreement number still says (lib/jurisdiction.ts). Null means never moved,
+      // and the agreement number decides — exactly as before.
+      const administeringZone = await getAdministeringZone(contractId);
+      const inZone = administeringZone
+        ? administeringZone === (user.railwayZone || '').trim().toUpperCase()
+        : agreementMatchesZone(contract.agreementNo, user.railwayZone);
+      if (inZone) {
         return {
           canView: true,
           canEdit: false,
@@ -262,17 +269,26 @@ export async function getUserAccessibleContracts(userId: string): Promise<string
       // Official can access all contracts matching their zone in the agreement number.
       // The DB `startsWith` is a coarse prefilter; the authoritative agreementMatchesZone
       // refinement keeps this consistent with checkUserContractAccess.
-      const zoneCandidates = await prisma.contract.findMany({
-        where: {
-          agreementNo: {
-            startsWith: `${user.railwayZone}/`,
-            mode: 'insensitive'
-          }
-        },
-        select: { id: true, agreementNo: true }
-      });
-      const zoneContracts = zoneCandidates.filter(c => agreementMatchesZone(c.agreementNo, user.railwayZone));
-      return [...new Set([...ownedContracts.map(c => c.id), ...zoneContracts.map(c => c.id)])];
+      const [zoneCandidates, transferredIn, transferredOut] = await Promise.all([
+        prisma.contract.findMany({
+          where: {
+            agreementNo: {
+              startsWith: `${user.railwayZone}/`,
+              mode: 'insensitive'
+            }
+          },
+          select: { id: true, agreementNo: true }
+        }),
+        // Contracts moved INTO this zone by a jurisdiction transfer, whatever their
+        // agreement number says; and ones moved OUT, which the number alone would still
+        // admit. Both empty until the transfer columns are applied (lib/jurisdiction.ts).
+        contractIdsAdministeredBy(user.railwayZone),
+        contractIdsTransferredAwayFrom(user.railwayZone),
+      ]);
+      const zoneContracts = zoneCandidates
+        .filter(c => agreementMatchesZone(c.agreementNo, user.railwayZone))
+        .filter(c => !transferredOut.has(c.id));
+      return [...new Set([...ownedContracts.map(c => c.id), ...zoneContracts.map(c => c.id), ...transferredIn])];
     }
 
     // Get owned contracts
