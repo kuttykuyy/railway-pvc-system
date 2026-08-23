@@ -1,13 +1,13 @@
 generator client {
-    provider = "prisma-client-js"
-    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
-    output = "../node_modules/.prisma/client"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+  output        = "../node_modules/.prisma/client"
 }
 
 datasource db {
-    provider  = "postgresql"
-    url       = env("DATABASE_URL")
-    directUrl = env("DIRECT_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Account {
@@ -37,83 +37,81 @@ model Session {
 }
 
 model User {
-  id                    String                 @id @default(cuid())
-  name                  String?
-  email                 String                 @unique
-  emailVerified         DateTime?
-  image                 String?
-  password              String?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  address               String?
-  companyName           String?
-  freeTrialUsed         Int                    @default(0)
-  gstin                 String?
-  isTrialActive         Boolean                @default(false)
-  pvcToolSubscriptionActive Boolean          @default(false)
+  id                        String                  @id @default(cuid())
+  name                      String?
+  email                     String                  @unique
+  emailVerified             DateTime?
+  image                     String?
+  password                  String?
+  createdAt                 DateTime                @default(now())
+  updatedAt                 DateTime                @updatedAt
+  address                   String?
+  companyName               String?
+  freeTrialUsed             Int                     @default(0)
+  gstin                     String?
+  isTrialActive             Boolean                 @default(false)
+  pvcToolSubscriptionActive Boolean                 @default(false)
   pvcToolSubscriptionExpiry DateTime?
-  panNumber             String?
-  phone                 String?
-  totalBillsProcessed   Int                    @default(0)
-  role                  String                 @default("contractor")
-  failedLoginAttempts   Int                    @default(0)
-  lastLoginAt           DateTime?
-  lastLoginIp           String?
-  lastPasswordChange    DateTime?
-  lockedUntil           DateTime?
-  passwordExpiresAt     DateTime?
-  logoPath              String?
-  reportFooterText      String?
-  reportHeaderColor     String?
-  reportHeaderText      String?
-  showLogoInReports     Boolean                @default(true)
-  customProcessingFee   Float?
-  isFreeAccount         Boolean                @default(false)
-  department            String?
-  designation           String?
-  division              String?
-  divisionName          String?
-  headquartersStation   String?
-  isCurrentPosting      Boolean                @default(true)
-  officeLocation        String?
-  postingEndDate        DateTime?
-  postingStartDate      DateTime?
-  railwayZone           String?
-  railwayZoneName       String?
-  section               String?
-  contractLimitOverride Int?
-  resetToken            String?
-  resetTokenExpiry      DateTime?
-  referralCode          String?                @unique
-  accounts              Account[]
-  sessions              Session[]
-  billApprovalHistory   BillApprovalHistory[]
-  billTransactions      BillTransaction[]
-  pvcChecks             PvcCheck[]
-  billApprovals         Bill[]                 @relation("BillApprovals")
-  billsPassedByAccounts Bill[]                 @relation("BillAccountsPassed")
-  contracts             Contract[]
-  creditTransactions    CreditTransaction[]
-  customerAccount       CustomerAccount?
-  invoices              Invoice[]
-  reportTemplates       ReportTemplate[]
-  billAccess            UserBillAccess[]
-  contractAccess        UserContractAccess[]
-  pageAccess            UserPageAccess[]
-  labourIndexDocuments  LabourIndexDocument[]
-  gstInvoices           GstInvoice[]
-  whatsappConversations  WhatsAppConversation[]
-  telegramConversations  TelegramConversation[]
-  whatsappLogs          WhatsAppLog[]
-  apiKeys               ApiKey[]
-  referralsMade         Referral[]             @relation("ReferralReferrer")
-  referralReceived      Referral?              @relation("ReferralReferred")
-  reviewRewardSubmission ReviewRewardSubmission?
+  panNumber                 String?
+  phone                     String?
+  totalBillsProcessed       Int                     @default(0)
+  role                      String                  @default("contractor")
+  failedLoginAttempts       Int                     @default(0)
+  lastLoginAt               DateTime?
+  lastLoginIp               String?
+  lastPasswordChange        DateTime?
+  lockedUntil               DateTime?
+  passwordExpiresAt         DateTime?
+  logoPath                  String?
+  reportFooterText          String?
+  reportHeaderColor         String?
+  reportHeaderText          String?
+  showLogoInReports         Boolean                 @default(true)
+  customProcessingFee       Float?
+  isFreeAccount             Boolean                 @default(false)
+  department                String?
+  designation               String?
+  division                  String?
+  divisionName              String?
+  headquartersStation       String?
+  isCurrentPosting          Boolean                 @default(true)
+  officeLocation            String?
+  postingEndDate            DateTime?
+  postingStartDate          DateTime?
+  railwayZone               String?
+  railwayZoneName           String?
+  section                   String?
+  contractLimitOverride     Int?
+  resetToken                String?
+  resetTokenExpiry          DateTime?
+  referralCode              String?                 @unique
+  accounts                  Account[]
+  sessions                  Session[]
+  billApprovalHistory       BillApprovalHistory[]
+  billTransactions          BillTransaction[]
+  pvcChecks                 PvcCheck[]
+  billApprovals             Bill[]                  @relation("BillApprovals")
+  billsPassedByAccounts     Bill[]                  @relation("BillAccountsPassed")
+  contracts                 Contract[]
+  creditTransactions        CreditTransaction[]
+  customerAccount           CustomerAccount?
+  invoices                  Invoice[]
+  reportTemplates           ReportTemplate[]
+  billAccess                UserBillAccess[]
+  contractAccess            UserContractAccess[]
+  pageAccess                UserPageAccess[]
+  labourIndexDocuments      LabourIndexDocument[]
+  gstInvoices               GstInvoice[]
+  whatsappConversations     WhatsAppConversation[]
+  telegramConversations     TelegramConversation[]
+  whatsappLogs              WhatsAppLog[]
+  apiKeys                   ApiKey[]
+  referralsMade             Referral[]              @relation("ReferralReferrer")
+  referralReceived          Referral?               @relation("ReferralReferred")
+  reviewRewardSubmission    ReviewRewardSubmission?
 
-  @@index([email])
   @@index([role])
   @@index([createdAt])
-  @@index([referralCode])
 }
 
 model VerificationToken {
@@ -125,13 +123,13 @@ model VerificationToken {
 }
 
 model PhoneOtp {
-  id          String   @id @default(cuid())
-  phone       String
-  otp         String
-  attempts    Int      @default(0)
-  verified    Boolean  @default(false)
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  phone     String
+  otp       String
+  attempts  Int      @default(0)
+  verified  Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
   @@index([phone, otp])
   @@index([phone, verified])
@@ -263,21 +261,21 @@ model Contract {
   userAccess                   UserContractAccess[]
 
   @@index([userId])
-  @@index([agreementNo])
-  @@index([dateOfOpening])
   @@index([createdAt])
+  // "My contracts, newest first" — the dashboard, the Telegram and WhatsApp handlers.
+  // Filtering and sorting on separate indexes made Postgres sort every one of them.
+  @@index([userId, createdAt])
   @@map("contracts")
 }
 
 // Tracks which normalized agreement numbers have already consumed a free trial
 // globally — prevents multi-account trial abuse on the same contract.
 model TrialClaimedAgreement {
-  id                   String   @id @default(cuid())
-  normalizedAgreementNo String  @unique
-  claimedByUserId      String
-  claimedAt            DateTime @default(now())
+  id                    String   @id @default(cuid())
+  normalizedAgreementNo String   @unique
+  claimedByUserId       String
+  claimedAt             DateTime @default(now())
 
-  @@index([normalizedAgreementNo])
   @@map("trial_claimed_agreements")
 }
 
@@ -383,7 +381,6 @@ model MonthlyIndexValue {
 
   @@unique([priceIndexId, month])
   @@index([month])
-  @@index([priceIndexId, month])
   @@map("monthly_index_values")
 }
 
@@ -455,65 +452,64 @@ model LabourIndexDocument {
 
   @@index([componentType, year])
   @@index([year])
-  @@index([isProvisional])
   @@map("labour_index_documents")
 }
 
 model Bill {
-  id                       String                    @id @default(cuid())
-  contractId               String
-  billNo                   String
-  billAmount               Float
-  dateOfMeasurement        DateTime
-  quarter                  String
-  createdAt                DateTime                  @default(now())
-  updatedAt                DateTime                  @updatedAt
-  isChargeable             Boolean                   @default(true)
-  processingFee            Float                     @default(1000)
-  cementAmount             Float?                    @default(0)
-  steelAmount              Float?                    @default(0)
-  selectedSteelComponent   String?                   @default("Steel TMT Bars")
-  steelTypes               Json?                     @default("[]") // Array of steel types for classification-based calculations: ["TMT", "ANGLE_CHANNEL", "PLATES", "OTHER_SECTIONS"]
-  isFinalPvc               Boolean                   @default(false)
-  editCount                Int                       @default(0) // tracks how many times bill has been edited
-  pvcNumber                String?
-  zone                     String?
-  fuelPriceType            String?                   @default("four_city_avg") // "four_city_avg" or "zone_city"
-  dateOfCompletion         DateTime?
-  nonScheduleItems         Json?                     @default("[]")
-  steelAngleChannelAmount  Float?                    @default(0)
-  steelOtherSectionsAmount Float?                    @default(0)
-  steelPlatesAmount        Float?                    @default(0)
-  steelTmtBarsAmount       Float?                    @default(0)
-  grossBillAmount          Float
-  subClassifications       Json?                     @default("[]")
-  workClassificationId     String?
-  batchId                  String?
-  batchName                String?
-  approvalComments         String?
-  approvedAt               DateTime?
-  approvedBy               String?
-  rejectionReason          String?
+  id                           String                    @id @default(cuid())
+  contractId                   String
+  billNo                       String
+  billAmount                   Float
+  dateOfMeasurement            DateTime
+  quarter                      String
+  createdAt                    DateTime                  @default(now())
+  updatedAt                    DateTime                  @updatedAt
+  isChargeable                 Boolean                   @default(true)
+  processingFee                Float                     @default(1000)
+  cementAmount                 Float?                    @default(0)
+  steelAmount                  Float?                    @default(0)
+  selectedSteelComponent       String?                   @default("Steel TMT Bars")
+  steelTypes                   Json?                     @default("[]") // Array of steel types for classification-based calculations: ["TMT", "ANGLE_CHANNEL", "PLATES", "OTHER_SECTIONS"]
+  isFinalPvc                   Boolean                   @default(false)
+  editCount                    Int                       @default(0) // tracks how many times bill has been edited
+  pvcNumber                    String?
+  zone                         String?
+  fuelPriceType                String?                   @default("four_city_avg") // "four_city_avg" or "zone_city"
+  dateOfCompletion             DateTime?
+  nonScheduleItems             Json?                     @default("[]")
+  steelAngleChannelAmount      Float?                    @default(0)
+  steelOtherSectionsAmount     Float?                    @default(0)
+  steelPlatesAmount            Float?                    @default(0)
+  steelTmtBarsAmount           Float?                    @default(0)
+  grossBillAmount              Float
+  subClassifications           Json?                     @default("[]")
+  workClassificationId         String?
+  batchId                      String?
+  batchName                    String?
+  approvalComments             String?
+  approvedAt                   DateTime?
+  approvedBy                   String?
+  rejectionReason              String?
   /// draft -> submitted -> approved (executive) -> passed_for_payment (accounts).
   /// rejected and revision_requested can be set at either stage.
-  status                   String                    @default("draft")
-  submittedAt              DateTime?
+  status                       String                    @default("draft")
+  submittedAt                  DateTime?
   /// The accounts/audit stage, which follows the executive approval. A PVC proposal is
   /// approved by the engineering side and then vetted by accounts before payment, and
   /// the two are separate people answering for separate things — so the bill records
   /// both, not one "approved" flag.
-  passedAt                 DateTime?
-  passedBy                 String?
-  passedComments           String?
+  passedAt                     DateTime?
+  passedBy                     String?
+  passedComments               String?
   /// Set when accounts send the proposal back, so the contractor sees what to fix.
-  accountsReturnReason     String?
+  accountsReturnReason         String?
   /// Which checks the accounts office ticked when passing it, and which they did not.
   /// "Passed for payment" on its own says nothing about what was looked at; this is
   /// what answers a query months later. See lib/accounts-checklist.ts.
-  accountsVerification     Json?
-  hasBeenEditedOnce        Boolean                   @default(false)
-  lastEditedBy             String?
-  lastEditedAt             DateTime?
+  accountsVerification         Json?
+  hasBeenEditedOnce            Boolean                   @default(false)
+  lastEditedBy                 String?
+  lastEditedAt                 DateTime?
   /// Value of materials supplied by the Railway (free or at fixed rate) included in
   /// this bill. GCC-2022 Cl.46A defines W as the gross value of work done EXCLUDING
   /// "cost of materials supplied by Railway either free or at fixed rate", so this is
@@ -521,48 +517,48 @@ model Bill {
   /// How this bill was created: "manual", "pdf" (read from an uploaded bill PDF),
   /// or "telegram". Null for bills created before the column existed.
   createdVia                   String?
-  railwaySuppliedMaterialValue Float?                @default(0)
-  approvalHistory          BillApprovalHistory[]
-  classificationEntries    BillClassificationEntry[]
-  billTransaction          BillTransaction?
-  approvedByUser           User?                     @relation("BillApprovals", fields: [approvedBy], references: [id])
-  passedByUser             User?                     @relation("BillAccountsPassed", fields: [passedBy], references: [id])
-  contract                 Contract                  @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  workClassification       Classification?           @relation(fields: [workClassificationId], references: [id])
-  pvcCalculation           PvcCalculation?
-  shortfallAudit           ShortfallAudit?
-  userAccess               UserBillAccess[]
-  whatsappLogs             WhatsAppLog[]
+  railwaySuppliedMaterialValue Float?                    @default(0)
+  approvalHistory              BillApprovalHistory[]
+  classificationEntries        BillClassificationEntry[]
+  billTransaction              BillTransaction?
+  approvedByUser               User?                     @relation("BillApprovals", fields: [approvedBy], references: [id])
+  passedByUser                 User?                     @relation("BillAccountsPassed", fields: [passedBy], references: [id])
+  contract                     Contract                  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  workClassification           Classification?           @relation(fields: [workClassificationId], references: [id])
+  pvcCalculation               PvcCalculation?
+  shortfallAudit               ShortfallAudit?
+  userAccess                   UserBillAccess[]
+  whatsappLogs                 WhatsAppLog[]
 
   @@index([contractId])
   @@index([billNo])
   @@index([dateOfMeasurement])
-  @@index([quarter])
   @@index([createdAt])
-  @@index([isChargeable])
-  @@index([batchId])
   @@index([status])
   @@index([approvedBy])
   // Composite indexes for common query patterns
   @@index([contractId, dateOfMeasurement]) // bills filtered by contract ordered by date
-  @@index([contractId, createdAt])         // bills list per contract paginated by creation
-  @@index([quarter, status])               // approval workflow queries
+  @@index([contractId, createdAt]) // bills list per contract paginated by creation
+  // Zone-scoped officials: the permission filter (zone + status) runs on EVERY request
+  // they make, and the accounts inbox then pages by passedAt. Both were unindexed —
+  // one index serves them because zone and status are equality tests in each.
+  @@index([zone, status, passedAt])
   @@map("bills")
 }
 
 model BillClassificationEntry {
-  id                 String  @id @default(cuid())
-  billId             String
-  classificationId   String?
-  subClassifications Json    @default("[]")
-  amount             Float
-  description        String?
-  steelTypes         Json?   @default("[]") // Array of steel types: ["TMT", "ANGLE_CHANNEL", "PLATES", "OTHER_SECTIONS"]
-  scheduleItem       String?
-  itemNumber         String?  // Item number from bill (e.g., "1130 10 (G)")
-  quantity           Float?   // Qty executed since last bill
-  agreementRate      Float?   // Agreement Rate in Rs.
-  itemRows           Json?    // Array of {itemNumber, quantity, agreementRate} for multi-item entries
+  id                          String  @id @default(cuid())
+  billId                      String
+  classificationId            String?
+  subClassifications          Json    @default("[]")
+  amount                      Float
+  description                 String?
+  steelTypes                  Json?   @default("[]") // Array of steel types: ["TMT", "ANGLE_CHANNEL", "PLATES", "OTHER_SECTIONS"]
+  scheduleItem                String?
+  itemNumber                  String? // Item number from bill (e.g., "1130 10 (G)")
+  quantity                    Float? // Qty executed since last bill
+  agreementRate               Float? // Agreement Rate in Rs.
+  itemRows                    Json? // Array of {itemNumber, quantity, agreementRate} for multi-item entries
   classificationJustification String? // Reasoning for why this classification was chosen for the item
 
   // Per-entry PVC breakdown (calculated during bill processing)
@@ -663,6 +659,10 @@ model PvcCalculation {
   bill                           Bill      @relation(fields: [billId], references: [id], onDelete: Cascade)
   contract                       Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
+  // This table had no index at all beyond its two keys, though it holds one row per
+  // bill and is read by contract everywhere — the contract's PVC history, the external
+  // API, the cascade on deletion. Every one of those was a full scan and a sort.
+  @@index([contractId, createdAt])
   @@map("pvc_calculations")
 }
 
@@ -714,21 +714,21 @@ model BillTransaction {
 }
 
 model PvcCheck {
-  id             String   @id @default(cuid())
-  userId         String
-  contractId     String
-  billNo         String?
-  zone           String?
-  fuelPriceType  String   @default("four_city_avg")
+  id                String   @id @default(cuid())
+  userId            String
+  contractId        String
+  billNo            String?
+  zone              String?
+  fuelPriceType     String   @default("four_city_avg")
   dateOfMeasurement DateTime
-  totalPvc       Float
-  isPositive     Boolean
-  amount         Float    @default(500)
-  isFree         Boolean  @default(false)
-  breakdown      Json?
-  createdAt      DateTime @default(now())
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contract       Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  totalPvc          Float
+  isPositive        Boolean
+  amount            Float    @default(500)
+  isFree            Boolean  @default(false)
+  breakdown         Json?
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contract          Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([contractId])
@@ -862,8 +862,8 @@ model Referral {
   rewardedAt              DateTime?
   rejectedAt              DateTime?
   rejectionReason         String?
-  referrer                 User      @relation("ReferralReferrer", fields: [referrerUserId], references: [id], onDelete: Cascade)
-  referredUser             User      @relation("ReferralReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
+  referrer                User      @relation("ReferralReferrer", fields: [referrerUserId], references: [id], onDelete: Cascade)
+  referredUser            User      @relation("ReferralReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
 
   @@index([referrerUserId])
   @@index([status])
@@ -872,19 +872,19 @@ model Referral {
 }
 
 model ReviewRewardSubmission {
-  id             String    @id @default(cuid())
-  userId         String    @unique
-  platform       String
-  reviewText     String
-  proofUrl       String
-  status         String    @default("pending")
-  rewardAmount   Float?
-  submittedAt    DateTime  @default(now())
-  reviewedAt     DateTime?
-  reviewedById   String?
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  platform        String
+  reviewText      String
+  proofUrl        String
+  status          String    @default("pending")
+  rewardAmount    Float?
+  submittedAt     DateTime  @default(now())
+  reviewedAt      DateTime?
+  reviewedById    String?
   reviewedByEmail String?
   rejectionReason String?
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([submittedAt])
@@ -919,7 +919,6 @@ model PvcComparisonSession {
   updatedAt         DateTime @updatedAt
 
   @@index([userId])
-  @@index([sessionToken])
   @@map("pvc_comparison_sessions")
 }
 
@@ -989,7 +988,6 @@ model GstInvoice {
   updatedAt             DateTime @updatedAt
 
   @@index([userId])
-  @@index([invoiceNumber])
   @@map("gst_invoices")
 }
 
@@ -1180,7 +1178,6 @@ model ApiKey {
   updatedAt   DateTime  @updatedAt
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([key])
   @@index([userId])
   @@index([isActive])
   @@map("api_keys")

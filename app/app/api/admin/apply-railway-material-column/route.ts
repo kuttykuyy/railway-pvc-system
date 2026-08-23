@@ -6,10 +6,15 @@
  * a sensitive value and will not reveal. The deployed app already holds that
  * connection, so it can apply these columns itself.
  *
- * Scope is deliberately narrow and additive: columns are added IF NOT EXISTS, and the
- * tables and indexes below are created the same way. Nothing is dropped, no existing
- * data is touched, and it is safe to run twice. GET reports what is present; POST
- * applies what is missing.
+ * Scope is deliberately narrow: columns are added IF NOT EXISTS, and the tables and
+ * indexes below are created the same way. No existing data is ever touched, and it is
+ * safe to run twice. GET reports what is present; POST applies what is missing.
+ *
+ * One entry drops indexes rather than creating them — the redundant ones found by the
+ * database audit. That is still safe by the same standard: an index holds no data, it
+ * is named explicitly, dropping it is instantly reversible by recreating it, and a
+ * `DROP INDEX` can never remove the index behind a unique constraint (those are named
+ * `_key`, the redundant copies `_idx`). Nothing else in this file drops anything.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -138,7 +143,12 @@ const PENDING: PendingColumn[] = [
  * without a database-level foreign key — but without them the live schema drifts from
  * schema.prisma, and the next person to read one would not match the other.
  */
-type ExtraCheck = { kind: 'table' | 'index' | 'constraint'; name: string };
+/**
+ * `indexes-absent` is the mirror of `index`: its `name` is a comma-separated list, and
+ * it counts as applied when NONE of them exist any more — so a drop reports itself the
+ * same way a create does, and the page can say whether it still has work to do.
+ */
+type ExtraCheck = { kind: 'table' | 'index' | 'constraint' | 'indexes-absent'; name: string };
 
 // sql takes the resolved schema so every statement names where it acts — an
 // unqualified CREATE lands wherever the pooled search path points that instant.
@@ -232,6 +242,92 @@ const PENDING_EXTRAS: Array<{ label: string; sql: (s: string) => string; why: st
     why: 'Templates are listed per user, and the table had no index.',
     check: { kind: 'index', name: 'report_templates_userId_idx' },
   },
+
+  // ── From the database audit of 23 Aug 2026 ──────────────────────────────────────
+  {
+    label: 'pvc_calculations_contractId_createdAt_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "pvc_calculations_contractId_createdAt_idx"
+      ON "${s}"."pvc_calculations" ("contractId", "createdAt")`,
+    why: 'pvc_calculations held one row per bill and had no index at all beyond its two '
+      + 'keys, though it is read BY CONTRACT everywhere — the contract\'s PVC history, the '
+      + 'external API, and the cascade when a contract is deleted. Every one of those read '
+      + 'the whole table and then sorted it.',
+    check: { kind: 'index', name: 'pvc_calculations_contractId_createdAt_idx' },
+  },
+  {
+    label: 'bills_zone_status_passedAt_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "bills_zone_status_passedAt_idx"
+      ON "${s}"."bills" ("zone", "status", "passedAt")`,
+    why: 'The zone permission filter (zone + status) runs on EVERY request a railway '
+      + 'official makes, and the accounts inbox then pages the same rows by passedAt — '
+      + 'which was indexed nowhere. One index serves both, because zone and status are '
+      + 'equality tests in each and only the sort column differs.',
+    check: { kind: 'index', name: 'bills_zone_status_passedAt_idx' },
+  },
+  {
+    label: 'contracts_userId_createdAt_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "contracts_userId_createdAt_idx"
+      ON "${s}"."contracts" ("userId", "createdAt")`,
+    why: '"My contracts, newest first" — the dashboard and both chat handlers. userId and '
+      + 'createdAt were indexed separately, which cannot serve a filter and a sort together, '
+      + 'so every one of a user\'s contracts was sorted to return five.',
+    check: { kind: 'index', name: 'contracts_userId_createdAt_idx' },
+  },
+  {
+    label: 'parse_failures_createdAt_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "parse_failures_createdAt_idx"
+      ON "${s}"."parse_failures" ("createdAt" DESC)`,
+    why: 'parse_failures was created by this same route and given nothing but its primary '
+      + 'key, though the admin list sorts by createdAt and the table only grows — and each '
+      + 'row carries a whole PDF, so a scan is expensive.',
+    check: { kind: 'index', name: 'parse_failures_createdAt_idx' },
+  },
+  {
+    label: 'parse_failures_userEmail_createdAt_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "parse_failures_userEmail_createdAt_idx"
+      ON "${s}"."parse_failures" ("userEmail", "createdAt" DESC)`,
+    why: '"Ask IR-PVC to check this bill" finds the latest failure for one user and file.',
+    check: { kind: 'index', name: 'parse_failures_userEmail_createdAt_idx' },
+  },
+  {
+    label: 'drop_redundant_indexes',
+    sql: (s) => `DO $$
+      DECLARE
+        dead text[] := ARRAY[
+          'User_email_idx', 'User_referralCode_idx',
+          'contracts_agreementNo_idx', 'contracts_dateOfOpening_idx',
+          'bills_batchId_idx', 'bills_isChargeable_idx', 'bills_quarter_idx',
+          'bills_quarter_status_idx',
+          'api_keys_key_idx', 'gst_invoices_invoiceNumber_idx',
+          'trial_claimed_agreements_normalizedAgreementNo_idx',
+          'pvc_comparison_sessions_sessionToken_idx',
+          'monthly_index_values_priceIndexId_month_idx',
+          'labour_index_documents_isProvisional_idx'
+        ];
+        n text;
+      BEGIN
+        FOREACH n IN ARRAY dead LOOP
+          EXECUTE format('DROP INDEX IF EXISTS %I.%I', '${s}', n);
+        END LOOP;
+      END $$`,
+    why: 'Fourteen indexes that cost a write on every insert and update and serve no read. '
+      + 'Eight are exact duplicates of a unique constraint — Postgres already built that '
+      + 'index, so there were two of each (email, referralCode, agreementNo, api key, '
+      + 'invoice number, claimed agreement, comparison token, and the priceIndexId+month '
+      + 'pair). The other six are on columns nothing ever filters by: a bill\'s batchId, '
+      + 'isChargeable and quarter, a contract\'s dateOfOpening, and a document\'s '
+      + 'isProvisional. Only the redundant "_idx" copies are named; the "_key" index behind '
+      + 'each unique constraint is untouched, and a DROP INDEX cannot remove one anyway.',
+    check: {
+      kind: 'indexes-absent',
+      name: 'User_email_idx, User_referralCode_idx, contracts_agreementNo_idx, '
+        + 'contracts_dateOfOpening_idx, bills_batchId_idx, bills_isChargeable_idx, '
+        + 'bills_quarter_idx, bills_quarter_status_idx, api_keys_key_idx, '
+        + 'gst_invoices_invoiceNumber_idx, trial_claimed_agreements_normalizedAgreementNo_idx, '
+        + 'pvc_comparison_sessions_sessionToken_idx, monthly_index_values_priceIndexId_month_idx, '
+        + 'labour_index_documents_isProvisional_idx',
+    },
+  },
 ];
 
 async function requireAdmin() {
@@ -264,7 +360,12 @@ async function extraExists(check: ExtraCheck): Promise<boolean> {
     ? `SELECT 1 FROM information_schema.tables WHERE table_schema = '${s}' AND table_name = '${check.name}'`
     : check.kind === 'index'
       ? `SELECT 1 FROM pg_indexes WHERE schemaname = '${s}' AND indexname = '${check.name}'`
-      : `SELECT 1 FROM information_schema.table_constraints WHERE table_schema = '${s}' AND constraint_name = '${check.name}'`;
+      : check.kind === 'indexes-absent'
+        ? `SELECT 1 WHERE NOT EXISTS (
+             SELECT 1 FROM pg_indexes WHERE schemaname = '${s}' AND indexname IN (
+               ${check.name.split(',').map(n => `'${n.trim()}'`).join(', ')}
+             ))`
+        : `SELECT 1 FROM information_schema.table_constraints WHERE table_schema = '${s}' AND constraint_name = '${check.name}'`;
   const rows = await prisma.$queryRawUnsafe<Array<unknown>>(sql);
   return rows.length > 0;
 }
@@ -290,7 +391,9 @@ async function statuses() {
 async function extraStatuses() {
   return Promise.all(
     PENDING_EXTRAS.map(async (extra) => ({
-      table: extra.check.name,
+      // The label, not check.name: one entry's check names fourteen indexes at once, and
+      // the page would have rendered the whole list as if it were a table name.
+      table: extra.label,
       column: extra.check.kind,
       why: extra.why,
       exists: await extraExists(extra.check),
