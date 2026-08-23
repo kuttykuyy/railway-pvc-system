@@ -175,6 +175,44 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const requesterRole = String((session?.user as any)?.role || '').toLowerCase();
         const isAdminRequester = requesterRole === 'admin' || requesterRole === 'superadmin';
 
+        /**
+         * The person asking for this report, read at most once.
+         *
+         * Three places wanted them — the access check, the JPC charging gate, and the
+         * report branding — and each ran its own findUnique on the same email, so one
+         * download read the same User row three times. The fields are the union of what
+         * those three asked for, which is six columns of one row.
+         *
+         * A function rather than a value because the request may be an unauthenticated
+         * public-link download, where the row must never be fetched at all.
+         */
+        let requesterPromise: Promise<{
+          id: string;
+          logoPath: string | null;
+          reportHeaderText: string | null;
+          reportHeaderColor: string | null;
+          reportFooterText: string | null;
+          showLogoInReports: boolean;
+        } | null> | null = null;
+        const getRequester = () => {
+          const email = session?.user?.email;
+          if (!email) return Promise.resolve(null);
+          if (!requesterPromise) {
+            requesterPromise = prisma.user.findUnique({
+              where: { email },
+              select: {
+                id: true,
+                logoPath: true,
+                reportHeaderText: true,
+                reportHeaderColor: true,
+                reportFooterText: true,
+                showLogoInReports: true,
+              },
+            });
+          }
+          return requesterPromise;
+        };
+
         // A trial bill is watermarked "NOT FOR OFFICIAL USE" until the bill owner
         // tops up their account. Once they have made at least one credit top-up
         // (a CreditTransaction of type 'add'), the watermark is waived on all of
@@ -209,15 +247,41 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           if (!session?.user?.email) {
             return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
           }
-          const requester = await prisma.user.findUnique({
-            where: { email: session.user.email },
-            select: { id: true },
-          });
+          const requester = await getRequester();
           const access = requester ? await checkUserBillAccess(requester.id, billId) : null;
           if (!access?.canDownloadPdf) {
             return NextResponse.json({ error: 'You do not have access to this bill.' }, { status: 403 });
           }
         }
+
+        // Everything the checks below need, read once.
+        //
+        // The same bill row used to be fetched three times before the report itself was
+        // even loaded: once to decide which clause governs, once for the trial
+        // watermark, and once to decide whether JPC documents are chargeable. Three
+        // round-trips for one row, in sequence, on the single connection a serverless
+        // instance holds. The selects are unioned here; each check below reads the part
+        // it always read.
+        const preflightBill = await prisma.bill.findUnique({
+          where: { id: billId },
+          select: {
+            billNo: true,
+            dateOfMeasurement: true,
+            pvcCalculation: true,
+            billTransaction: { select: { discountType: true } },
+            classificationEntries: {
+              select: { steelTypes: true, subClassification: { select: { code: true } } },
+            },
+            contract: {
+              select: {
+                agreementNo: true, contractorName: true, workDescription: true,
+                dateOfOpening: true, userId: true,
+                pvcClauseVersion: true, pre2022WorkType: true,
+                user: { select: { role: true, isFreeAccount: true, customProcessingFee: true } },
+              },
+            },
+          },
+        });
 
         // ===== WHICH CLAUSE GOVERNS =====
         // A pre-2022 contract is priced by a different clause, and this route used to
@@ -226,20 +290,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // clause that actually governs, so the wrong-rules figure can no longer leave
         // the app through the main door.
         {
-          const clauseCheck = await prisma.bill.findUnique({
-            where: { id: billId },
-            select: {
-              billNo: true,
-              dateOfMeasurement: true,
-              contract: {
-                select: {
-                  agreementNo: true, contractorName: true, workDescription: true,
-                  dateOfOpening: true, userId: true,
-                  pvcClauseVersion: true, pre2022WorkType: true,
-                },
-              },
-            },
-          });
+          const clauseCheck = preflightBill;
           if (clauseCheck?.contract) {
             const { resolvePre2022Setup } = await import('@/lib/pre2022-contract');
             const setup = resolvePre2022Setup(clauseCheck.contract as any);
@@ -258,11 +309,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
               }));
               // Same trial watermark rule as every other report.
               if (!isAdminRequester && !trialWatermarkWaived) {
-                const stamp = await prisma.bill.findUnique({
-                  where: { id: billId },
-                  select: { billTransaction: { select: { discountType: true } } },
-                });
-                if (stamp?.billTransaction?.discountType === 'trial') {
+                if (preflightBill?.billTransaction?.discountType === 'trial') {
                   const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
                   pre2022Bytes = await applyTrialWatermark(pre2022Bytes);
                 }
@@ -295,17 +342,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // incomplete file from the cache.
         let deliveryIncomplete = false;
         {
-          const jpcBill = await prisma.bill.findUnique({
-            where: { id: billId },
-            select: {
-              billNo: true,
-              pvcCalculation: true,
-              classificationEntries: {
-                select: { steelTypes: true, subClassification: { select: { code: true } } },
-              },
-              contract: { select: { userId: true, user: { select: { role: true, isFreeAccount: true, customProcessingFee: true } } } },
-            },
-          });
+          // The same row read above — its select already carries these fields.
+          const jpcBill = preflightBill;
           // Exactly the test the embedding below uses. The old gate read the legacy
           // steelAmount column — which no current create path writes — and the
           // bill-level steelTypes, so a bill carrying dedicated steel amounts with no
@@ -316,7 +354,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           // (before charging) to read that owner's report template.
           const requesterEmail = session?.user?.email || null;
           const requesterUser = requesterEmail
-            ? await prisma.user.findUnique({ where: { email: requesterEmail }, select: { id: true } })
+            ? await getRequester()
             : null;
 
           // The template decides whether the report carries index documents at all, and
@@ -527,17 +565,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     };
 
     if (session?.user?.email) {
-      const user = await prisma.user.findUnique({
-        where: { email: session.user.email },
-        select: {
-          id: true,
-          logoPath: true,
-          reportHeaderText: true,
-          reportHeaderColor: true,
-          reportFooterText: true,
-          showLogoInReports: true,
-        },
-      });
+      const user = await getRequester();
 
       if (user) {
         brandingSettings = {
