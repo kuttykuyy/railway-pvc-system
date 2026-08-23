@@ -1,6 +1,7 @@
 import { logger } from '@/lib/logger';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getQuarterFromDate, calculateClassificationEntryPvc } from '@/lib/pvc-calculations';
 import { createQuarterlyAveragesMemo } from '@/lib/db-utils';
@@ -98,7 +99,20 @@ export async function GET(request: NextRequest) {
     }
 
     // ===== FIX MISSING CLASSIFICATION ENTRY PVC DATA =====
-    // Check and recalculate any classification entries that have all 0 PVC values
+    //
+    // Some entries were saved with every PVC component at zero, so the abstract has
+    // always recomputed them before rendering. That part stays — the report must show
+    // the right figures.
+    //
+    // What has changed is when they are WRITTEN BACK. Each recomputed entry used to be
+    // updated one at a time, inside the per-bill loop, while the reader waited: fifteen
+    // bills of ten entries meant 150 sequential writes on a request that only asked to
+    // read a report. The repair is now collected here and persisted after the response
+    // has gone (via after(), which on Vercel keeps the function alive rather than
+    // letting a fire-and-forget promise be killed), in one batch. The reader gets their
+    // statement immediately, the rows are still mended, and the next request finds
+    // nothing left to mend.
+    const repairs: Array<{ id: string; data: Record<string, number> }> = [];
 
     for (const bill of billsWithPvc) {
       // Use zone-based steel city prices for each bill
@@ -149,9 +163,9 @@ export async function GET(request: NextRequest) {
             }
           );
 
-          // Update the entry in the database
-          await prisma.billClassificationEntry.update({
-            where: { id: entry.id },
+          // Queued, not written — see the note above.
+          repairs.push({
+            id: entry.id,
             data: {
               labourPvc: entryPvc.labourPvc,
               plantMachineryPvc: entryPvc.plantMachineryPvc,
@@ -175,8 +189,27 @@ export async function GET(request: NextRequest) {
           entry.totalPvc = entryPvc.totalPvc;
         }
 
-        logger.log(`✅ Fixed ${entriesNeedingFix.length} entries for bill ${bill.billNo}`);
+        logger.log(`🔧 Queued ${entriesNeedingFix.length} entries for repair on bill ${bill.billNo}`);
       }
+    }
+
+    if (repairs.length > 0) {
+      after(async () => {
+        try {
+          // One batch rather than a write per entry. This is the ARRAY form of
+          // $transaction, which sends the statements together in a single round-trip
+          // and is not governed by the five-second interactive limit — so it needs no
+          // timeout, and would reject one if given.
+          await prisma.$transaction(
+            repairs.map(r => prisma.billClassificationEntry.update({ where: { id: r.id }, data: r.data })),
+          );
+          logger.log(`✅ Repaired ${repairs.length} classification entries after serving the abstract`);
+        } catch (error: any) {
+          // The reader already has a correct statement; a failed repair only means the
+          // next request recomputes it again.
+          console.error('abstract: could not persist recalculated entries:', error?.message || error);
+        }
+      });
     }
     // ===== END FIX =====
 
