@@ -167,7 +167,15 @@ function AbstractPageContent() {
     setError('');
     try {
       const res = await fetch(`/api/reports/abstract?contractId=${contractId}`);
-      if (!res.ok) throw new Error('Failed to fetch abstract data');
+      if (!res.ok) {
+        // The API says what is actually wrong — most often "no bills with PVC
+        // calculations on this contract", which is not an error so much as an empty
+        // contract. "Failed to fetch abstract data" told the reader nothing, and a
+        // deep link with ?contractId= skips the opening screen that would have shown
+        // them which contracts have bills.
+        const reason = await res.json().then(d => d?.error).catch(() => null);
+        throw new Error(reason || 'The abstract could not be built. Please try again.');
+      }
       setAbstractData(await res.json());
     } catch (e: any) {
       setError(e.message);
