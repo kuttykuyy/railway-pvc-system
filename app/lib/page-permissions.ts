@@ -76,13 +76,6 @@ export const AVAILABLE_PAGES: PageDefinition[] = [
     description: 'Manage work classifications',
     icon: 'ListChecks'
   },
-  {
-    path: '/classifications-new',
-    name: 'GCC Classifications',
-    category: 'Data',
-    description: 'Manage GCC-2022 classifications',
-    icon: 'Layers'
-  },
   
   // Account & Settings
   {

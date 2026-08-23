@@ -12,13 +12,16 @@ function getAuthSecret(): string {
 export async function middleware(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
 
-  // Redirect old PVC Comparison URLs to new Class Analyzer URLs
-  if (pathname.startsWith('/pvc-comparison')) {
+  // The Class Analyzer page (and its older /pvc-comparison address) is gone — it was
+  // reachable from no menu, and /indices/comparison does the comparing. Its payment
+  // API routes stay, unreachable, so any session data is preserved. An old bookmark
+  // lands on the live comparison tool rather than a 404.
+  if (pathname.startsWith('/pvc-comparison') || pathname.startsWith('/class-analyzer')) {
     const newUrl = new URL(req.url);
-    newUrl.pathname = pathname.replace('/pvc-comparison', '/class-analyzer');
+    newUrl.pathname = '/indices/comparison';
     return NextResponse.redirect(newUrl);
   }
-  
+
   if (pathname.startsWith('/api/pvc-comparison')) {
     const newUrl = new URL(req.url);
     newUrl.pathname = pathname.replace('/api/pvc-comparison', '/api/class-analyzer');
