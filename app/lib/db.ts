@@ -200,44 +200,46 @@ async function ensureConnection(): Promise<void> {
   }
 }
 
-// Aggressive reconnection with exponential backoff and jitter
-async function reconnectDatabase(retries = 5): Promise<void> {
+/**
+ * Confirms the pool is answering again after a connection error.
+ *
+ * It used to call `prisma.$disconnect()` first, then sleep with exponential backoff —
+ * up to ten seconds a try, five tries. That client is shared by every request running on
+ * the instance, so one request having a bad moment aborted the in-flight queries of all
+ * the others and then held them for up to half a minute. It was reachable from a live
+ * request path (withPrismaErrorHandling → validateConnection) as well as from the
+ * keep-alive timer.
+ *
+ * Nothing needs to be torn down: Prisma reopens a dropped connection by itself on the
+ * next query. So this now just retries a cheap query a few times, briefly, and reports
+ * whether the database is back. Worst case is under half a second, and no other
+ * request is disturbed.
+ */
+async function reconnectDatabase(retries = 3): Promise<void> {
   if (globalForPrisma.reconnecting) {
     return
   }
-  
+
   globalForPrisma.reconnecting = true
-  
-  for (let i = 0; i < retries; i++) {
-    try {
-      logger.log(`🔄 [${new Date().toISOString()}] Reconnecting to database (attempt ${i + 1}/${retries})...`)
-      
-      // Force disconnect all connections
-      await prisma.$disconnect().catch(() => {})
-      
-      // Exponential backoff with jitter to prevent thundering herd
-      const delay = Math.min(500 * Math.pow(2, i) + Math.random() * 1000, 10000)
-      await new Promise(resolve => setTimeout(resolve, delay))
-      
-      // Reconnect
-      await prisma.$connect()
-      
-      // Verify with actual query
-      await prisma.$queryRaw`SELECT 1`
-      
-      logger.log('✅ Database reconnected successfully')
-      globalForPrisma.lastHealthCheck = Date.now()
-      globalForPrisma.reconnecting = false
-      return
-    } catch (error: any) {
-      console.error(`❌ Reconnection attempt ${i + 1} failed:`, error?.message)
-      
-      if (i === retries - 1) {
-        console.error('🚨 All reconnection attempts exhausted')
-        globalForPrisma.reconnecting = false
-        throw error
+  try {
+    for (let i = 0; i < retries; i++) {
+      try {
+        await prisma.$queryRaw`SELECT 1`
+        if (i > 0) logger.log('✅ Database connection recovered')
+        globalForPrisma.lastHealthCheck = Date.now()
+        return
+      } catch (error: any) {
+        if (i === retries - 1) {
+          console.error('🚨 Database still unreachable after retries:', error?.message)
+          throw error
+        }
+        // 150ms, 300ms — long enough for a dropped socket to be replaced, short enough
+        // that a request waiting on this does not notice.
+        await new Promise(resolve => setTimeout(resolve, 150 * Math.pow(2, i)))
       }
     }
+  } finally {
+    globalForPrisma.reconnecting = false
   }
 }
 

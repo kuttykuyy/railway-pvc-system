@@ -157,7 +157,14 @@ export async function DELETE(
       );
     }
 
-    // Delete user and all related data in a transaction
+    // Delete user and all related data in a transaction.
+    //
+    // The timeout is not decoration: this runs twenty-five sequential deleteMany calls,
+    // and Prisma's default interactive limit is five seconds. Any account with real
+    // history blew past it, the transaction rolled back, and the admin was told the
+    // deletion failed having deleted nothing — the same P2028 that stopped demo-account
+    // creation. maxWait covers waiting for a connection on the pooler, where a serverless
+    // instance holds only one.
     await prisma.$transaction(async (prisma: any) => {
       // Delete in proper order to respect foreign key constraints
       
@@ -296,7 +303,7 @@ export async function DELETE(
       await prisma.user.delete({
         where: { id: userId }
       });
-    });
+    }, { maxWait: 10_000, timeout: 60_000 });
 
     return NextResponse.json({
       message: 'User and all related data deleted successfully',
