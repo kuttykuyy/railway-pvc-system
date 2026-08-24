@@ -10,6 +10,7 @@ import {
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand,
   ListPartsCommand,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createS3Client, getBucketConfig, resolveStorageSettings } from './aws-config';
@@ -357,6 +358,31 @@ export async function uploadFile(buffer: Buffer, fileName: string): Promise<stri
     // before falling back to the database, where anything over a few megabytes is
     // dropped rather than kept.
     return (await viaRest()) ?? `db://${fileName}`;
+  }
+}
+
+/**
+ * Is this object actually in the bucket?
+ *
+ * Needed after the storage project was deleted: the database still holds the key of
+ * every file that was in the old bucket, and nothing in the row itself says the file
+ * behind it is gone. Only asking storage settles it.
+ *
+ * Three answers, not two. "Present", "missing", and "could not tell" — a network
+ * failure or a refused credential is not evidence that a file is gone, and reporting it
+ * as gone would send somebody re-uploading files that are sitting there.
+ */
+export async function objectExists(key: string): Promise<'present' | 'missing' | 'unknown'> {
+  if (!key || key.startsWith('db://')) return 'present';
+  if (useLocalFallback || !s3Client) return 'unknown';
+  try {
+    await s3Client.send(new HeadObjectCommand({ Bucket: bucketName, Key: key }));
+    return 'present';
+  } catch (error: any) {
+    const status = error?.$metadata?.httpStatusCode;
+    const name = String(error?.name || '');
+    if (status === 404 || /NotFound|NoSuchKey/i.test(name)) return 'missing';
+    return 'unknown';
   }
 }
 
