@@ -1445,6 +1445,26 @@ export function BillPdfCementAnalyzer({
 
             {isUnlocked && (result.summary.cementAmount === null || result.summary.cementAmount === undefined) ? (
               <div className="space-y-3">
+                {/* While cement derivation is off, this is not a problem and not a
+                    calculation waiting to be made — it is simply how a DSR bill works,
+                    so it is one line and no numbers.
+
+                    It used to print a seven-figure TOTAL DERIVED CEMENT COST in bold,
+                    with a faint grey line beside it admitting the figure was not used
+                    by anything. A number shown that confidently gets quoted; the note
+                    saying to ignore it does not travel with it. */}
+                {!CEMENT_DERIVATION_ENABLED ? (
+                  <div className="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600">
+                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    <div>
+                      <span className="font-medium text-slate-800">No separate cement item in this bill</span> —
+                      nothing to enter. Cement stays inside the DSR item rates, and is priced through
+                      each item&apos;s own classification under the GCC component table. Splitting it out
+                      would price the same cement twice.
+                    </div>
+                  </div>
+                ) : (
+                <>
                 <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
                   <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <div>
@@ -1598,13 +1618,11 @@ export function BillPdfCementAnalyzer({
                         >
                           Apply Derived Costs
                         </Button>
-                      ) : (
-                        <p className="text-[11px] text-slate-400 max-w-[16rem] text-right">
-                          For reference only — cement is not split out of DSR items, whose rates already include it.
-                        </p>
-                      )}
+                      ) : null}
                     </div>
                   </div>
+                )}
+                </>
                 )}
               </div>
             ) : isUnlocked && result.cementAmountSource === 'USSR_SEPARATE_SUPPLY' ? (
