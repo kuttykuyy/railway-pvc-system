@@ -52,7 +52,7 @@ export interface ExtractedBillItem {
   /** The bill's "Group Name:-" heading — the sub-work this item belongs to. */
   groupName?: string;
   chapter?: string;
-  sourceBook?: 'USSR_2021' | 'DSR_2021' | 'NON_SCHEDULE' | 'UNKNOWN';
+  sourceBook?: 'USSR_2021' | 'DSR_2021' | 'DSR_2023' | 'NON_SCHEDULE' | 'UNKNOWN';
   requiresDsrCementCoefficient?: boolean;
   isCementAffected?: boolean;
   isSteelItem?: boolean;
@@ -1764,6 +1764,110 @@ export async function POST(request: NextRequest) {
       }
       const data = await extractStandaloneMarkdownPart(markdownPart, partNumber, partCount);
       return NextResponse.json({ success: true, data });
+    }
+
+    // ── A bill typed into the spreadsheet, because it could not be read ─────────
+    //
+    // Scanned and hand-made bills have no text layer, so the reader has nothing to work
+    // with. The person fills in four columns — schedule, item number, quantity, rate —
+    // and this turns them into the same items a parsed PDF produces, so everything
+    // after this point (classification, cement, steel, the review screen) is identical.
+    //
+    // The description is not asked for: the item number is a lookup into the schedule of
+    // rates, and the book's own wording is better evidence than anything retyped. The
+    // amount is not asked for either — it is quantity times rate.
+    if (stage === 'sheet') {
+      const formData = await request.formData();
+      const file = formData.get('file') as File | null;
+      if (!file) return NextResponse.json({ error: 'No spreadsheet was uploaded.' }, { status: 400 });
+      if (file.size > 10 * 1024 * 1024) {
+        return NextResponse.json({ error: 'That spreadsheet is too large. Maximum size is 10MB.' }, { status: 400 });
+      }
+
+      const { parseManualBillWorkbook } = await import('@/lib/manual-bill-sheet');
+      const sheet = parseManualBillWorkbook(Buffer.from(await file.arrayBuffer()));
+      if (!sheet.rows.length) {
+        return NextResponse.json(
+          { error: sheet.problems[0] || 'Nothing could be read from that spreadsheet.', problems: sheet.problems },
+          { status: 400 },
+        );
+      }
+
+      let contractDescription = '';
+      let openedAt: Date | null = null;
+      if (contractId) {
+        const contract = await prisma.contract.findUnique({
+          where: { id: contractId },
+          select: { workDescription: true, dateOfOpening: true },
+        });
+        contractDescription = contract?.workDescription || '';
+        openedAt = contract?.dateOfOpening || null;
+      }
+      if (/^work as per agreement$/i.test(contractDescription.trim())) contractDescription = '';
+      const workDescription = contractDescription;
+
+      // Which book an item number belongs to. Six digits is USSOR; a dotted code is
+      // CPWD, and which CPWD edition is decided by when the tender opened — the sheet
+      // carries no schedule heading to read it from. DSR 2023 was published in 2023, so
+      // a tender opened before it cannot have been priced from it.
+      const DSR_2023_FROM = new Date('2023-07-01');
+      const bookFor = (itemNo: string): 'USSR_2021' | 'DSR_2021' | 'DSR_2023' => {
+        const digits = itemNo.replace(/[^0-9]/g, '');
+        if (!itemNo.includes('.') && digits.length === 6) return 'USSR_2021';
+        return openedAt && openedAt >= DSR_2023_FROM ? 'DSR_2023' : 'DSR_2021';
+      };
+
+      const typedItems: ExtractedBillItem[] = sheet.rows.map(row => ({
+        dsrCode: row.itemNo,
+        itemNo: row.itemNo,
+        // Filled from the schedule of rates below. Left empty rather than guessed: an
+        // item the book does not carry reaches the review screen blank and obvious,
+        // which is the honest outcome — not a made-up description nobody can check.
+        description: '',
+        unit: '',
+        quantitySinceLastBill: row.quantity,
+        agreementRate: row.rate,
+        amountSinceLastBill: Number((row.quantity * row.rate).toFixed(2)),
+        amountAtAgreementRateSinceLastBill: Number((row.quantity * row.rate).toFixed(2)),
+        schedule: row.schedule || undefined,
+        sourceBook: bookFor(row.itemNo) as ExtractedBillItem['sourceBook'],
+      }));
+
+      const { enriched } = await enrichItemsFromRateBook(typedItems);
+      const unmatched = typedItems.filter(item => !String(item.description || '').trim());
+      for (const item of unmatched) {
+        // Kept, never dropped. The person typed a real item; the app simply does not
+        // hold that code, and they can write the description on the review screen.
+        item.description = `Item ${item.itemNo}`;
+      }
+
+      const severalWorks = billCoversSeveralWorks(typedItems);
+      const total = typedItems.reduce((sum, item) => sum + (item.amountSinceLastBill || 0), 0);
+
+      billDetails = {
+        workDescription,
+        classificationGroupCode: inferMainClassification(workDescription).code,
+        items: typedItems.map(item => applyDeterministicClassification(item, workDescription, severalWorks)),
+        itemAmountTotal: Number(total.toFixed(2)),
+        grossBillAmount: Number(total.toFixed(2)),
+        // Nothing to reconcile against: the sheet has no printed total of its own, so
+        // the items ARE the total. Said plainly rather than claimed as a check passed.
+        amountsReconciled: true,
+        warnings: [
+          `Typed in from a spreadsheet: ${sheet.rows.length} item(s), `
+          + `${enriched} described from the schedule of rates`
+          + (unmatched.length ? `, ${unmatched.length} not found in it — please check those descriptions` : '')
+          + '. Amounts are quantity x rate. Check every row before creating the bill.',
+          ...sheet.problems,
+        ],
+      };
+
+      const aiReview = await enhanceDeterministicItemsWithAi(billDetails.items, workDescription, '');
+      billDetails.items = aiReview.items;
+      aiEnhancement = aiReview.enhancement;
+      if (aiReview.warning) {
+        billDetails.warnings = [...(billDetails.warnings || []), aiReview.warning];
+      }
     }
 
     if (stage === 'finalize') {

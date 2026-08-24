@@ -39,6 +39,9 @@ export function editionFor(sourceBook: string | undefined, scheduleText: string)
   if (sourceBook === 'NON_SCHEDULE') return null;
   if (/DSR[\s-]*2023|2023[\s-]*DSR/i.test(text)) return 'DSR 2023';
   if (/DSR[\s-]*2021|2021[\s-]*DSR/i.test(text)) return 'DSR 2021';
+  // Named editions, for callers that know the book without a schedule heading to read —
+  // a bill typed into the spreadsheet has no headings at all.
+  if (sourceBook === 'DSR_2023') return 'DSR 2023';
   if (sourceBook === 'DSR_2021') return 'DSR 2021';
   return null;
 }
@@ -99,7 +102,7 @@ export function rateBookKey(code: string, edition: RateBookEdition): string {
  * book does not carry all leave the item exactly as the bill printed it.
  */
 export async function enrichItemsFromRateBook<T extends {
-  itemNo?: string; dsrCode?: string; description: string;
+  itemNo?: string; dsrCode?: string; description: string; unit?: string;
   schedule?: string; chapter?: string; sourceBook?: string;
   rateBookEdition?: string; rateBookCode?: string; rateBookDescription?: string;
 }>(items: T[]): Promise<{ enriched: number; edition?: string }> {
@@ -156,6 +159,13 @@ export async function enrichItemsFromRateBook<T extends {
       enriched += 1;
       editionsUsed.add(edition);
     }
+    // The unit, when the item arrived without one. The bill's own unit wins whenever it
+    // printed one; a bill typed into the spreadsheet prints none, and cement and steel
+    // both key off the unit further down.
+    if (!String(item.unit || '').trim() && entry.unit) {
+      item.unit = entry.unit;
+    }
+
     // The chapter decides the GCC group for USSOR items, and a bill that prints no
     // chapter heading left it blank. The book always knows.
     if (!item.chapter && entry.subHeadName) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { ChangeEvent, DragEvent, MutableRefObject, useRef, useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Cpu, FileCheck2, FileText, HardDrive, Lightbulb, ListChecks, Loader2, Lock, RotateCcw, Save, ScanText, Trash2, Unlock, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Cpu, Download, FileCheck2, FileText, HardDrive, Lightbulb, ListChecks, Loader2, Lock, RotateCcw, Save, ScanText, Trash2, Unlock, Upload } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { Badge } from '@/components/ui/badge';
@@ -60,7 +60,7 @@ export interface ExtractedBillItem {
   scheduleGroup?: string;
   chapter?: string;
   groupName?: string;
-  sourceBook?: 'USSR_2021' | 'DSR_2021' | 'NON_SCHEDULE' | 'UNKNOWN';
+  sourceBook?: 'USSR_2021' | 'DSR_2021' | 'DSR_2023' | 'NON_SCHEDULE' | 'UNKNOWN';
   /** Set when the wording shown was completed from a published schedule of rates. */
   rateBookEdition?: string;
   rateBookCode?: string;
@@ -216,6 +216,7 @@ export function BillPdfCementAnalyzer({
   onExtractionIncomplete,
 }: BillPdfCementAnalyzerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const sheetInputRef = useRef<HTMLInputElement>(null);
   const analysisStartedAtRef = useRef<number | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<CementAnalysisData | null>(null);
@@ -947,6 +948,66 @@ export function BillPdfCementAnalyzer({
     void analyzePdfFiles(files);
   };
 
+  /**
+   * A bill typed into the spreadsheet, for a scan the reader cannot open.
+   *
+   * Deliberately the SAME landing as a read PDF: the server turns the rows into the
+   * same items and hands back the same shape, so the review screen, the classifications
+   * and the cement and steel figures are all reached the same way. A second, parallel
+   * path would be a second set of bugs.
+   */
+  const analyzeSheetFile = async (file: File) => {
+    uploadCounterRef.current += 1;
+    const upload: AppliedExtractionContext = {
+      uploadId: `sheet_${uploadCounterRef.current}_${Math.random().toString(36).slice(2, 8)}`,
+      fileName: file.name,
+    };
+    try {
+      setIsAnalyzing(true);
+      setFileName(file.name);
+      setLoadingStep(1);
+      setProcessingStartedAt(Date.now());
+
+      const body = new FormData();
+      body.append('file', file);
+      const params = new URLSearchParams({ stage: 'sheet' });
+      if (contractId) params.set('contractId', contractId);
+      if (billId) params.set('billId', billId);
+
+      const response = await fetch(`/api/bills/cement-analysis?${params.toString()}`, { method: 'POST', body });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = Array.isArray(json.problems) && json.problems.length
+          ? json.problems.slice(0, 5).join(' ')
+          : '';
+        throw new Error([json.error || 'The spreadsheet could not be read.', detail].filter(Boolean).join(' '));
+      }
+
+      const data = json.data as CementAnalysisData;
+      setResult(data);
+      setExtractionId(json.extractionId || null);
+      setIsUnlocked(true);
+      upload.documentId = typeof json.documentId === 'number' ? json.documentId : null;
+
+      if (onApplyBillDetails) await onApplyBillDetails(data, upload);
+      toast.success(`Read ${data.billDetails?.items?.length || 0} item(s) from the spreadsheet. Check every row before creating the bill.`);
+      return { ok: true as const };
+    } catch (error: any) {
+      const reason = error.message || 'The spreadsheet could not be read.';
+      toast.error(reason, { duration: 12000 });
+      onExtractionIncomplete?.(reason, file.name);
+      return { ok: false as const, reason };
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleSheetUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = (event.target.files || [])[0];
+    event.target.value = '';
+    if (file) void analyzeSheetFile(file);
+  };
+
   const handlePdfDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDraggingFile(false);
@@ -1207,6 +1268,48 @@ export function BillPdfCementAnalyzer({
                 </Button>
               </div>
             </div>
+
+            {/* The way out when the bill is a scan.
+                A photographed or hand-made bill has no text layer, so the reader has
+                nothing to work with and the only alternative used to be typing the whole
+                thing into the form item by item. Four columns in a spreadsheet is the
+                same information in the shape an office already keeps it. */}
+            {contractId && (
+              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/60 p-3">
+                <p className="text-xs font-medium text-slate-700">Bill is a scan, or made by hand?</p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  A scanned bill has no text to read. Fill in four columns instead — schedule,
+                  item number, quantity and rate. The description comes from the schedule of
+                  rates and the amount is quantity × rate.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <a
+                    href={`/api/bills/manual-template?contractId=${encodeURIComponent(contractId)}`}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Download the spreadsheet
+                  </a>
+                  <input
+                    ref={sheetInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    className="hidden"
+                    onChange={handleSheetUpload}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={disabled || isAnalyzing}
+                    onClick={() => sheetInputRef.current?.click()}
+                    className="h-auto px-2.5 py-1.5 text-xs"
+                  >
+                    {isAnalyzing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-1.5 h-3.5 w-3.5" />}
+                    Upload the filled spreadsheet
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {fileName && (
               <div className="text-xs text-muted-foreground">Last file: {fileName}</div>
