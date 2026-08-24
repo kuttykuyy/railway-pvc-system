@@ -73,7 +73,21 @@ export function VerifyMobile({
         body: JSON.stringify({ phone: value.trim() }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setProblem(data.error || 'The code could not be sent.'); return; }
+      if (!response.ok) {
+        // The channel is down, not the number. The server has already stopped requiring
+        // a code, so the form must stop requiring one too — otherwise the person is
+        // staring at a Verify button that can never turn green, and cannot sign up at
+        // all. This is the failure that actually happened: the WhatsApp template was
+        // missing and every new sign-up dead-ended here.
+        if (data.verificationUnavailable) {
+          setRequired(false);
+          onVerifiedChange(true);
+          setNotice(data.error || 'Verification is unavailable — carry on and finish signing up.');
+          return;
+        }
+        setProblem(data.error || 'The code could not be sent.');
+        return;
+      }
       setSentTo(value.trim());
       setNotice('Code sent on WhatsApp. It is good for 5 minutes.');
     } catch {

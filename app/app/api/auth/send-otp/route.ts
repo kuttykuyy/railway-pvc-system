@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 import { sendOtpWhatsApp } from '@/lib/whatsapp-mydreams';
 import { normalizePhone, PHONE_FORMAT_MESSAGE, PHONE_TAKEN_MESSAGE } from '@/lib/phone-validation';
 import { accountsHoldingPhone } from '@/lib/phone-owner';
-import { phoneOtpRequired } from '@/lib/phone-otp';
+import { phoneOtpRequired, markOtpDeliveryBroken, markOtpDeliveryWorking } from '@/lib/phone-otp';
 import { randomInt } from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -104,11 +104,21 @@ export async function POST(request: NextRequest) {
 
     if (!result.success) {
       console.error('[OTP] Failed to send WhatsApp OTP:', result.error);
+      // Trip the breaker: a code that cannot be delivered must not become a wall
+      // between a new user and the product. The signup route reads this and stops
+      // demanding proof until the channel is working again.
+      await markOtpDeliveryBroken(result.error || 'send failed');
       return NextResponse.json(
-        { error: 'Failed to send OTP via WhatsApp. Please check your number and try again.' },
-        { status: 500 }
+        {
+          error: 'We could not send the code right now, so verification has been skipped. '
+            + 'You can carry on and finish signing up.',
+          verificationUnavailable: true,
+        },
+        { status: 503 },
       );
     }
+    // It worked, so whatever was wrong is not wrong now.
+    await markOtpDeliveryWorking();
 
     logger.log('[OTP] ✅ OTP sent to:', phone);
 
