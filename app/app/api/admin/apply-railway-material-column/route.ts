@@ -199,12 +199,13 @@ const PENDING_EXTRAS: Array<{
     why: 'A mobile number identifies an account — the WhatsApp bot finds a person\'s '
       + 'contracts by it — and nothing stopped two accounts holding the same one: signup '
       + 'checked the email for duplicates and never looked at the phone. Partial, so '
-      + 'accounts with no number yet are unaffected. APPLY THIS LAST — check '
-      + '/api/admin/phone-numbers first. It will refuse to build while any number is '
-      + 'still shared, which is exactly what it is for.',
+      + 'accounts with no number yet are unaffected.',
+    // The ordering lives in `caution` and ONLY there. It was in both, so the row printed
+    // the same instruction twice a line apart — the warning this field exists to make
+    // prominent, buried under a copy of itself.
     check: { kind: 'index', name: 'User_phone_key' },
     caution: 'Order matters. Check /api/admin/phone-numbers FIRST: this refuses to build '
-      + 'while a number is on more than one account, and it indexes the stored text -- so '
+      + 'while a number is on more than one account, and it indexes the stored text — so '
       + '"+919876543210" and "9876543210" count as different numbers and would slip past '
       + 'it. Settle the shared numbers, POST there to normalise the formats, then apply.',
   },
@@ -411,9 +412,9 @@ const PENDING_EXTRAS: Array<{
       + 'isChargeable and quarter, a contract\'s dateOfOpening, and a document\'s '
       + 'isProvisional. Only the redundant "_idx" copies are named; the "_key" index behind '
       + 'each unique constraint is untouched, and a DROP INDEX cannot remove one anyway.',
-    caution: 'This one DROPS indexes -- the only change here that removes anything. '
-      + 'Only the redundant "_idx" copies are named; the "_key" index behind a unique '
-      + 'constraint is untouched, and a DROP INDEX cannot remove one anyway.',
+    // Only the fact that it removes something. Why that is safe is already the closing
+    // sentences of `why`, and repeating it here would be the same duplication again.
+    caution: 'This one DROPS indexes — the only change on this page that removes anything.',
     check: {
       kind: 'indexes-absent',
       name: 'User_email_idx, User_referralCode_idx, contracts_agreementNo_idx, '
