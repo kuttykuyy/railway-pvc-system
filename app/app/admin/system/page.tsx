@@ -11,6 +11,7 @@ const load = (importer: any) => dynamic(importer, { ssr: false, loading });
 
 const ReportTemplates = load(() => import('../../report-templates/page'));
 const PendingDbChange = load(() => import('../pending-db-change/page'));
+const PhoneNumbers = load(() => import('../phone-numbers/page'));
 const Storage = load(() => import('../storage/page'));
 
 export default function AdminSystemPage() {
@@ -21,6 +22,9 @@ export default function AdminSystemPage() {
       tabs={[
         { key: 'templates', name: 'Report templates', href: '/report-templates', render: () => <ReportTemplates /> },
         { key: 'db', name: 'Pending DB changes', href: '/admin/pending-db-change', render: () => <PendingDbChange /> },
+        // Beside Pending DB changes on purpose: the unique index on User.phone cannot be
+        // applied until this tab says the numbers are ready for it.
+        { key: 'phones', name: 'Mobile numbers', href: '/admin/phone-numbers', render: () => <PhoneNumbers /> },
         { key: 'storage', name: 'Storage', href: '/admin/storage', render: () => <Storage /> },
       ]}
     />

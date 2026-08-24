@@ -204,10 +204,10 @@ const PENDING_EXTRAS: Array<{
     // the same instruction twice a line apart — the warning this field exists to make
     // prominent, buried under a copy of itself.
     check: { kind: 'index', name: 'User_phone_key' },
-    caution: 'Order matters. Check /api/admin/phone-numbers FIRST: this refuses to build '
-      + 'while a number is on more than one account, and it indexes the stored text — so '
+    caution: 'Order matters. Do the Mobile numbers tab FIRST: this refuses to build while '
+      + 'a number is on more than one account, and it indexes the stored text — so '
       + '"+919876543210" and "9876543210" count as different numbers and would slip past '
-      + 'it. Settle the shared numbers, POST there to normalise the formats, then apply.',
+      + 'it. Settle the shared numbers there, normalise the formats, then apply here.',
   },
   {
     label: 'uploaded_documents',
