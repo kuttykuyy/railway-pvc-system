@@ -100,7 +100,11 @@ export default async function ContractDetailPage({ params }: Props) {
               <span className="truncate">{contract.agreementNo}</span>
             </nav>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900 break-words mt-1.5">{contract.agreementNo}</h1>
-            <p className="text-sm sm:text-[15px] text-gray-500 mt-1 max-w-[78ch]">{contract.workDescription}</p>
+            {/* Two lines, as a subtitle: enough to recognise the work, and the full text
+                lives once below under its own label. It used to print in full here AND
+                in Contract Details -- on a six-clause tender that is the same paragraph
+                twice, a screen apart. */}
+            <p className="text-sm sm:text-[15px] text-gray-500 mt-1 max-w-[78ch] line-clamp-2">{contract.workDescription}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             {administeringZone && administeringZone !== agreementZone && (
@@ -198,17 +202,12 @@ export default async function ContractDetailPage({ params }: Props) {
         <div className="lg:col-span-2 bg-white border border-gray-200 rounded-lg p-5 space-y-5">
           <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Contract Details</h2>
 
+          {/* Only what the header strip does not already carry. Agreement number, LOA
+              number and date, base month and completion period were all printed twice on
+              this page -- the agreement number three times, counting the breadcrumb and
+              the title. What is left here is the dates the header has no room for. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Agreement Number" value={contract.agreementNo} />
-            {contract.loaNo && <Field label="LOA Number" value={contract.loaNo} />}
-            {contract.loaDate && (
-              <Field label="LOA Date" value={format(new Date(contract.loaDate as unknown as string), 'dd MMM yyyy')} />
-            )}
             <Field label="Date of Opening" value={format(new Date(contract.dateOfOpening), 'dd MMM yyyy')} />
-            <Field label="Base Month" value={format(new Date(contract.baseMonth), 'MMMM yyyy')} />
-            {contract.completionPeriodMonths && (
-              <Field label="Completion Period" value={`${contract.completionPeriodMonths} months`} />
-            )}
             {contract.originalCompletionDate && (
               <Field label="Original Completion" value={format(new Date(contract.originalCompletionDate), 'dd MMM yyyy')} />
             )}
@@ -274,14 +273,14 @@ export default async function ContractDetailPage({ params }: Props) {
             <p className="text-xs text-gray-500">Tender Advertised Value not provided. PVC applicability cannot be determined automatically.</p>
           )}
 
-          <div className="space-y-3 pt-1">
-            {contract.tenderAdvertisedValue && (
+          {/* The tender advertised value stays -- it is the figure 46A.1 is judged on and
+              the header does not carry it. The agreement value used to sit beside it and
+              does appear in the header, so it has gone. */}
+          {contract.tenderAdvertisedValue && (
+            <div className="space-y-3 pt-1">
               <Field label="Tender Advertised Value" value={formatContractValue(contract.tenderAdvertisedValue)} />
-            )}
-            {contract.contractValue && (
-              <Field label="Agreement Value" value={formatContractValue(contract.contractValue)} />
-            )}
-          </div>
+            </div>
+          )}
 
           {contract.hasRailwaySuppliedMaterials && (
             <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
@@ -298,10 +297,8 @@ export default async function ContractDetailPage({ params }: Props) {
 
           {/* Quick stats */}
           <div className="border-t border-gray-100 pt-3 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Bills</span>
-              <span className="font-semibold">{contract.bills.length}</span>
-            </div>
+            {/* Bills is not here: the header strip already gives the count AND the value,
+                which is the more useful form of the same fact. */}
             <div className="flex justify-between">
               <span className="text-gray-500">PVC Calculations</span>
               <span className="font-semibold">{contract.pvcCalculations.length}</span>
