@@ -208,3 +208,57 @@ export async function createRestSignedUploadUrl(bucket: string, key: string): Pr
   if (!url) throw new Error('Supabase returned no upload URL');
   return url.startsWith('http') ? url : `${base}${url.startsWith('/') ? '' : '/'}${url}`;
 }
+
+/**
+ * Put a file in the bucket from the SERVER, through the REST door.
+ *
+ * The note at the top of this file says server transfers keep using S3 because it works.
+ * It stopped working: production logs show every bill upload failing with
+ *
+ *     S3 upload failed: char 'P' is not expected.:1:1   httpStatusCode: 410
+ *
+ * — a 410 Gone from the S3 endpoint, with a body that is not even the XML the SDK
+ * expects, so the error arrives as a parser complaint about the letter P rather than as
+ * "the door is shut". Whatever changed at Supabase, the REST door is the one their own
+ * client uses and it is already trusted here for signing browser uploads. So it becomes
+ * the fallback rather than the file being lost.
+ *
+ * Returns true when the object is stored.
+ */
+export async function restUploadFile(
+  bucket: string,
+  key: string,
+  body: Buffer,
+  contentType: string,
+): Promise<boolean> {
+  const base = restBase();
+  const token = serviceKey();
+  if (!base || !token) return false;
+
+  // Presented per shape, for the reason described on describeKey: a new-style
+  // sb_secret_ key put in Authorization is verified as a JWT and refused.
+  const described = describeKey(token);
+  const headers: Record<string, string> = {
+    apikey: token,
+    'Content-Type': contentType || 'application/octet-stream',
+    // Same key twice is the same file; overwriting is the harmless answer.
+    'x-upsert': 'true',
+  };
+  if (described.kind !== 'secret') headers.Authorization = `Bearer ${token}`;
+
+  try {
+    const response = await fetch(`${base}/object/${bucket}/${key}`, {
+      method: 'POST',
+      headers,
+      body: new Uint8Array(body),
+    });
+    if (response.ok) return true;
+    const detail = (await response.text().catch(() => ''))
+      .replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+    console.error(`[supabase-storage] REST upload refused (${response.status}): ${detail}`);
+    return false;
+  } catch (error: any) {
+    console.error('[supabase-storage] REST upload failed:', error?.message || error);
+    return false;
+  }
+}

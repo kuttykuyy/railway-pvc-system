@@ -111,7 +111,10 @@ export async function testS3RoundTrip(): Promise<{
     return { ok: false, failedAt: 'upload', errorMessage: initError || 'Storage is not configured.' };
   }
 
-  const key = `${folderPrefix}connection-test/${Date.now()}.txt`;
+  // No folderPrefix: real uploads do not apply one, and a test that writes somewhere
+  // uploads never go can pass while every upload fails. A diagnostic has to exercise
+  // the path being diagnosed.
+  const key = `connection-test/${Date.now()}.txt`;
 
   /**
    * The names storage will actually answer to.
@@ -294,19 +297,44 @@ export async function getDeletePresignedUrl(key: string, expiresIn: number = 360
 export const DB_STORAGE_MAX_BYTES = 6 * 1024 * 1024;
 
 export async function uploadFile(buffer: Buffer, fileName: string): Promise<string> {
-  if (useLocalFallback || !s3Client) {
-    // If S3 is not available, store the file in the database instead of exposing
-    // it on the public filesystem.
-    return `db://${fileName}`;
-  }
+  const contentType = getContentType(fileName);
 
+  /**
+   * The other door, tried before giving up on the bucket entirely.
+   *
+   * Supabase Storage has two: the S3 protocol one, and the REST one their own client
+   * uses. This code has always used S3 for server transfers on the grounds that it
+   * works — and in production it stopped, answering 410 Gone to every upload with a
+   * body the SDK could not even parse ("char 'P' is not expected"). Falling straight to
+   * the database from there means large files are simply lost, so the REST door gets a
+   * turn first. It is the same bucket; only the doorway differs.
+   */
+  const viaRest = async (): Promise<string | null> => {
+    try {
+      const { isRestUploadAvailable, restUploadFile } = await import('./supabase-storage');
+      if (!isRestUploadAvailable()) return null;
+      const ok = await restUploadFile(bucketName, fileName, buffer, contentType);
+      if (!ok) return null;
+      logger.log(`✅ Uploaded file through the Supabase REST door at: ${fileName}`);
+      return fileName;
+    } catch (error) {
+      console.error('❌ REST upload failed:', error);
+      return null;
+    }
+  };
+
+  if (useLocalFallback || !s3Client) {
+    // No S3 client at all — but the REST door needs only the service key, and may well
+    // be configured when the S3 one is not.
+    return (await viaRest()) ?? `db://${fileName}`;
+  }
 
   try {
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: fileName,
       Body: buffer,
-      ContentType: getContentType(fileName),
+      ContentType: contentType,
     });
 
     await s3Client.send(command);
@@ -314,9 +342,10 @@ export async function uploadFile(buffer: Buffer, fileName: string): Promise<stri
     return fileName;
   } catch (error) {
     console.error('❌ S3 upload failed:', error);
-    // Fall back to database storage in serverless environments. Never write to
-    // the public web root.
-    return `db://${fileName}`;
+    // The bucket is not necessarily unreachable — that door is. Try the other one
+    // before falling back to the database, where anything over a few megabytes is
+    // dropped rather than kept.
+    return (await viaRest()) ?? `db://${fileName}`;
   }
 }
 
@@ -349,6 +378,15 @@ export async function getFileUrl(key: string, expiresIn: number = 3600): Promise
     return url;
   } catch (error) {
     logger.warn(`⚠️ Failed to generate S3 URL for key ${key}:`, error);
+    // Same reasoning as the upload: the file is in the bucket, and if the S3 door will
+    // not sign for it the REST door will. A file that cannot be handed back is a file
+    // that might as well not have been kept.
+    try {
+      const { isRestUploadAvailable, createRestSignedDownloadUrl } = await import('./supabase-storage');
+      if (isRestUploadAvailable()) return await createRestSignedDownloadUrl(bucketName, key, expiresIn);
+    } catch (restError) {
+      logger.warn(`⚠️ REST signing also failed for key ${key}:`, restError);
+    }
     throw new Error('Failed to generate file URL');
   }
 }

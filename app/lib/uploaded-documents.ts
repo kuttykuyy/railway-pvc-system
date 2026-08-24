@@ -111,9 +111,14 @@ export async function storeUploadedDocument(args: {
     // of megabytes of base64 in a column that every SELECT would have to skip past.
     const inBucket = !returned.startsWith('db://');
     const tooBigForRow = !inBucket && args.buffer.byteLength > DB_STORAGE_MAX_BYTES;
+    // Say when the bucket refused it, not only when the file was then too big for the
+    // fallback. Storage failing silently is how it went unnoticed for a fortnight: every
+    // upload logged a line on the server and nothing anywhere else showed a difference.
     const note = tooBigForRow
       ? `File storage was unavailable and the file is larger than ${Math.round(DB_STORAGE_MAX_BYTES / 1024 / 1024)}MB, so only its details were kept.`
-      : null;
+      : !inBucket
+        ? 'File storage was unavailable, so this was kept in the database instead.'
+        : null;
 
     const rows = await prisma.$queryRawUnsafe<Array<{ id: bigint }>>(
       `INSERT INTO ${t}
