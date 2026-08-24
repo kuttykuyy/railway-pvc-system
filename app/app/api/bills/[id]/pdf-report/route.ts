@@ -132,8 +132,18 @@ function numberToWordsIndian(num: number): string {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    // Rate limiting for expensive PDF generation
-    const identifier = getIdentifier(request);
+    // Rate limiting for expensive PDF generation.
+    //
+    // A share-token request is keyed by BILL, not by caller. These arrive from
+    // /api/public/bill-pdf, which invokes this handler in-process for a WhatsApp
+    // attachment — so every one of them looks like the same anonymous caller, and a
+    // batch of ten bills would have had the last five refused at five a minute. One
+    // bill fetched five times a minute is still abuse; ten different bills is a
+    // Tuesday. The token itself is checked further down; this only picks the bucket.
+    const isShareTokenRequest = request.nextUrl.searchParams.get('public_access') === 'true';
+    const identifier = isShareTokenRequest
+      ? getIdentifier(request, `share-bill:${id}`)
+      : getIdentifier(request);
     const rateLimit = rateLimiter.check(identifier, RATE_LIMITS.EXPENSIVE.limit, RATE_LIMITS.EXPENSIVE.windowMs);
     
     if (!rateLimit.allowed) {

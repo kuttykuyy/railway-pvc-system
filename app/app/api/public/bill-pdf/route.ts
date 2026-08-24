@@ -73,19 +73,14 @@ export async function GET(req: NextRequest) {
     
     logger.log('[Public PDF] Bill found:', bill.billNo);
 
-    // Build PDF report URL with all parameters.
+    // The request the report handler will read its options from. It never goes over the
+    // network (see below) — the URL exists because a NextRequest needs an absolute one,
+    // and the canonical origin is the honest thing to put there.
     //
-    // Two things were wrong here.
-    //
-    // The origin came from NEXTAUTH_URL, which on this deployment names the PLATFORM
-    // host and not the site — the same trap emailLinkOrigin() exists to close. A fetch
-    // to the wrong host can answer 200 with an HTML page, and the bytes were forwarded
-    // as application/pdf regardless, which is a corrupt attachment on the phone.
-    //
-    // And no format was asked for, so the route fell to its 'detailed' default. Every
-    // other download in the app asks for ir_standard — the bill list, the bill form,
-    // the full report page. The one PDF a contractor actually receives was the only
-    // one that was not the IR statement.
+    // format matters. Nothing asked for one, so the report route fell through to its
+    // 'detailed' default. Every other download in the app asks for ir_standard — the
+    // bill list, the bill form, the full report page. The one PDF a contractor actually
+    // receives was the only one in the product that was not the IR statement.
     const format = searchParams.get('format') || 'ir_standard';
     let pdfReportUrl = `${emailLinkOrigin()}/api/bills/${billId}/pdf-report`
       + `?public_access=true&format=${encodeURIComponent(format)}&token=${encodeURIComponent(token)}`;
@@ -94,33 +89,45 @@ export async function GET(req: NextRequest) {
       pdfReportUrl += `&templateId=${encodeURIComponent(templateId)}`;
     }
     
-    logger.log('[Public PDF] Fetching PDF from:', pdfReportUrl.substring(0, 80) + '...');
+    logger.log('[Public PDF] Generating report for:', billId, 'format:', format);
 
     try {
-      // Fetch the PDF from the internal endpoint with a longer timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 55000); // 55 second timeout
-      
-      const pdfResponse = await fetch(pdfReportUrl, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'WhatsApp-Public-Access/1.0',
-          'X-Public-Access-Token': token,
-          'Accept': 'application/pdf',
-        },
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-      
-      logger.log('[Public PDF] Internal fetch response:', pdfResponse.status, pdfResponse.statusText);
+      // The report handler is CALLED, not fetched over HTTP.
+      //
+      // This route used to make a real network request back to the app's own domain for
+      // /api/bills/<id>/pdf-report. That request carries no session cookie, and
+      // pdf-report is not in middleware.ts's list of paths that may reach their handler
+      // unauthenticated — so the middleware answered it with a 307 to /auth/signin,
+      // fetch followed the redirect, and the sign-in PAGE came back with status 200.
+      // Those bytes were then served to WhatsApp as application/pdf. That is the whole
+      // story of the corrupted attachment: the contractor was sent the login page.
+      //
+      // The middleware is right to bounce it — nothing about that request proves who it
+      // is until the handler checks the token — so the fix is not to punch a hole in the
+      // middleware but to stop leaving the process at all. The handler is an ordinary
+      // async function; calling it directly keeps its own public_access token check
+      // (which is the real gate), and drops a network round trip and a second cold start
+      // from a request already budgeted at sixty seconds.
+      const { GET: generateReport } = await import('@/app/api/bills/[id]/pdf-report/route');
+      const pdfResponse = await generateReport(
+        new NextRequest(pdfReportUrl, {
+          headers: {
+            'User-Agent': 'WhatsApp-Public-Access/1.0',
+            'X-Public-Access-Token': token,
+            'Accept': 'application/pdf',
+          },
+        }),
+        { params: Promise.resolve({ id: billId }) },
+      );
+
+      logger.log('[Public PDF] Report handler responded:', pdfResponse.status);
 
       if (!pdfResponse.ok) {
         const errorText = await pdfResponse.text();
-        console.error('[Public PDF] Failed to fetch PDF:', pdfResponse.status, pdfResponse.statusText);
+        console.error('[Public PDF] The report could not be generated:', pdfResponse.status);
         console.error('[Public PDF] Error body:', errorText.substring(0, 500));
         return NextResponse.json(
-          { error: 'Failed to generate PDF: ' + pdfResponse.statusText },
+          { error: 'Failed to generate PDF' },
           { status: 500 }
         );
       }
@@ -177,7 +184,7 @@ export async function GET(req: NextRequest) {
       }
       
       return NextResponse.json(
-        { error: 'Failed to fetch PDF: ' + fetchError.message },
+        { error: 'Failed to generate PDF: ' + fetchError.message },
         { status: 500 }
       );
     }
