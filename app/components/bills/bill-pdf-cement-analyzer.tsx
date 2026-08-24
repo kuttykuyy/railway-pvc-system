@@ -127,6 +127,9 @@ export interface AppliedExtractionContext {
   /** The kept copy of this PDF, when the server managed to keep one. Pass it back when
    *  saving the bill so the file is attached to it rather than swept as an orphan. */
   documentId?: number | null;
+  /** Where the details came from. A spreadsheet was typed by a person and its
+   *  descriptions came from a lookup, so it is never saved without being looked at. */
+  source?: 'pdf' | 'sheet';
 }
 
 interface BillPdfCementAnalyzerProps {
@@ -154,6 +157,9 @@ interface BillPdfCementAnalyzerProps {
    *  "Upload bill PDF" somewhere else — a sticky bar, say — without duplicating the
    *  upload logic or the checks that run before it. */
   openFilePickerRef?: MutableRefObject<(() => void) | null>;
+  /** Opens the spreadsheet picker, so a failure screen elsewhere can offer that way out
+   *  without owning a second upload pipeline. */
+  openSheetPickerRef?: MutableRefObject<(() => void) | null>;
   /** Told when a read ends without details being applied — it failed, or it came back
    *  locked and needs a hand. A page that hides itself behind a "Reading your bill…"
    *  cover has no other way to know: onApplyBillDetails simply never fires, so the
@@ -213,10 +219,14 @@ export function BillPdfCementAnalyzer({
   onApplyBillDetails,
   multiple = false,
   openFilePickerRef,
+  openSheetPickerRef,
   onExtractionIncomplete,
 }: BillPdfCementAnalyzerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const sheetInputRef = useRef<HTMLInputElement>(null);
+  /** Set once a read has failed, so the spreadsheet stops being a quiet aside and
+   *  becomes the offered way forward — which at that moment it is. */
+  const [readFailed, setReadFailed] = useState(false);
   const analysisStartedAtRef = useRef<number | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<CementAnalysisData | null>(null);
@@ -225,6 +235,12 @@ export function BillPdfCementAnalyzer({
     openFilePickerRef.current = () => inputRef.current?.click();
     return () => { openFilePickerRef.current = null; };
   }, [openFilePickerRef]);
+
+  useEffect(() => {
+    if (!openSheetPickerRef) return;
+    openSheetPickerRef.current = () => sheetInputRef.current?.click();
+    return () => { openSheetPickerRef.current = null; };
+  }, [openSheetPickerRef]);
   const [coefficientDrafts, setCoefficientDrafts] = useState<Record<string, string>>({});
   // The unit the typed coefficient is quoted PER. DSR publishes cement consumption
   // per a block — "0.117 MT per 100 Sqm" — so this must be captured, not assumed to
@@ -751,6 +767,7 @@ export function BillPdfCementAnalyzer({
       uploadId: `upl_${uploadCounterRef.current}_${Math.random().toString(36).slice(2, 8)}`,
       fileName: file.name,
       batch,
+      source: 'pdf',
     };
     setActiveUpload(upload);
 
@@ -835,6 +852,7 @@ export function BillPdfCementAnalyzer({
 
       const data = json.data as CementAnalysisData;
       setResult(data);
+      setReadFailed(false);
       // The server keeps the uploaded PDF for 90 days and names it here. Carried on the
       // upload context so whoever saves the bill can attach it.
       upload.documentId = typeof json.documentId === 'number' ? json.documentId : null;
@@ -875,6 +893,8 @@ export function BillPdfCementAnalyzer({
       return { ok: true, locked: !unlocked };
     } catch (error: any) {
       console.error('Bill PDF cement analysis failed:', error);
+      // The spreadsheet becomes the offered way forward from here.
+      setReadFailed(true);
       return { ok: false, reason: error.message || 'Failed to analyze bill PDF' };
     } finally {
       setIsAnalyzing(false);
@@ -961,6 +981,7 @@ export function BillPdfCementAnalyzer({
     const upload: AppliedExtractionContext = {
       uploadId: `sheet_${uploadCounterRef.current}_${Math.random().toString(36).slice(2, 8)}`,
       fileName: file.name,
+      source: 'sheet',
     };
     try {
       setIsAnalyzing(true);
@@ -1275,12 +1296,18 @@ export function BillPdfCementAnalyzer({
                 thing into the form item by item. Four columns in a spreadsheet is the
                 same information in the shape an office already keeps it. */}
             {contractId && (
-              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/60 p-3">
-                <p className="text-xs font-medium text-slate-700">Bill is a scan, or made by hand?</p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  A scanned bill has no text to read. Fill in four columns instead — schedule,
-                  item number, quantity and rate. The description comes from the schedule of
-                  rates and the amount is quantity × rate.
+              <div className={`rounded-lg border p-3 ${readFailed
+                ? 'border-amber-300 bg-amber-50'
+                : 'border-dashed border-slate-300 bg-slate-50/60'}`}>
+                <p className={`text-xs font-medium ${readFailed ? 'text-amber-900' : 'text-slate-700'}`}>
+                  {readFailed
+                    ? 'That bill is not in a layout the reader can open — fill it in here instead'
+                    : 'Bill is a scan, or made by hand?'}
+                </p>
+                <p className={`mt-0.5 text-xs ${readFailed ? 'text-amber-800' : 'text-slate-500'}`}>
+                  A scanned or hand-made bill has no text to read. Fill in four columns instead —
+                  schedule, item number, quantity and rate. The description comes from the schedule
+                  of rates and the amount is quantity × rate.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <a

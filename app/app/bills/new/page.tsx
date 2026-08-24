@@ -182,6 +182,9 @@ function NewBillPageContent() {
   const [instantExtractedAt, setInstantExtractedAt] = useState(0);
   const instantSubmittedRef = useRef(false);
   const analyzerPickerRef = useRef<(() => void) | null>(null);
+  /** Opens the analyzer's spreadsheet picker from the failure screen, so that way out
+   *  does not need a second upload pipeline of its own. */
+  const analyzerSheetPickerRef = useRef<(() => void) | null>(null);
   /** Why the upload did not fill the form, kept on the page rather than in a toast. */
   const [extractionNotice, setExtractionNotice] = useState<string | null>(null);
 
@@ -919,6 +922,17 @@ function NewBillPageContent() {
 
     // Signals the instant-mode effect that extraction has landed. The effect reads the
     // states set above, so it must run on a later render, not from here.
+    //
+    // Not for a spreadsheet. The first-run flow saves the bill by itself the moment a
+    // read lands, which is right for a PDF the reader parsed — but a spreadsheet was
+    // typed by a person and its descriptions came out of a lookup, so an item number
+    // the book does not carry arrives blank. Saving that unseen would charge for a bill
+    // nobody had checked. The cover lifts instead and the rows are shown.
+    if (context?.source === 'sheet') {
+      setInstantStage(null);
+      toast('Your spreadsheet is in. Check the items below, then create the bill.', { icon: '📋', duration: 8000 });
+      return;
+    }
     setInstantExtractedAt(Date.now());
   };
 
@@ -1707,6 +1721,39 @@ function NewBillPageContent() {
                     <FileText className="h-5 w-5 mr-2" />
                     Try another PDF
                   </Button>
+                  {/* The way through when the bill simply is not in a layout the reader
+                      knows — which is what "not IREPS format" means in practice. Offered
+                      above asking us to look at it, because it gets them their PVC today
+                      rather than after somebody teaches the reader a new layout. */}
+                  {formData.contractId && (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-left">
+                      <p className="text-sm font-semibold text-emerald-900">Fill it in on a spreadsheet instead</p>
+                      <p className="mt-0.5 text-xs text-emerald-800">
+                        Four columns — schedule, item number, quantity and rate. The description
+                        comes from the schedule of rates and the amount is quantity × rate.
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <a
+                          href={`/api/bills/manual-template?contractId=${encodeURIComponent(formData.contractId)}`}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
+                        >
+                          1. Download the spreadsheet
+                        </a>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
+                          onClick={() => {
+                            const openPicker = analyzerSheetPickerRef.current;
+                            if (!openPicker) { setBillMode('ai'); setInstantStage(null); return; }
+                            openPicker();
+                            setInstantStage('reading');
+                          }}
+                        >
+                          2. Upload it filled in
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <Button
                     size="lg"
                     variant="outline"
@@ -2080,6 +2127,12 @@ function NewBillPageContent() {
                         Try the upload again, or fill the bill in below — nothing has been saved
                         and your free bill has not been used.
                       </p>
+                      {formData.contractId && (
+                        <p className="mt-1 text-amber-800">
+                          If the bill is a scan, or not in the IREPS layout, use the spreadsheet in
+                          the upload panel below — four columns and it fills the form for you.
+                        </p>
+                      )}
                       {lastReadFailure && (
                         <button
                           type="button"
@@ -2111,6 +2164,7 @@ function NewBillPageContent() {
                     contractRebate={selectedContract?.rebatePercentage}
                     onApplyBillDetails={applyExtractedBillDetails}
                     openFilePickerRef={analyzerPickerRef}
+                    openSheetPickerRef={analyzerSheetPickerRef}
                     onExtractionIncomplete={handleExtractionIncomplete}
                   />
                 )}
