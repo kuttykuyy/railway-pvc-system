@@ -236,7 +236,11 @@ function applyDeterministicClassification(
   // A justification is checked, not read: the officer wants the clause, the exact
   // classification as the clause names it, the evidence, what was ruled out, and the
   // percentages the money follows from — in that order, with nothing to look up.
-  const sourceNote = item.rateBookEdition && item.rateBookCode
+  // Keyed on rateBookDescription, not on the edition. The edition now says which book
+  // PRICED the item, which is true of items whose wording the bill printed perfectly
+  // well; claiming their wording came from the book would be a citation to a document
+  // that does not say it.
+  const sourceNote = item.rateBookDescription && item.rateBookEdition && item.rateBookCode
     ? `Wording per ${item.rateBookEdition} item ${item.rateBookCode}.`
     : undefined;
   const justify = (code: string, groupReason: string, subReason?: string) => composeJustification({
@@ -606,7 +610,11 @@ function needsDescriptionRepair(item: ExtractedBillItem) {
   // A model must never rewrite it — a low-confidence row could otherwise have the
   // book's own words replaced by paraphrase, and the classification that follows would
   // rest on something no document says.
-  if (item.rateBookEdition && description.length >= 24) return false;
+  //
+  // rateBookDescription, not rateBookEdition: the edition is now recorded for every
+  // item the book could price, including ones whose wording came from the bill itself.
+  // Guarding on the edition would have quietly stopped repairing those.
+  if (item.rateBookDescription && description.length >= 24) return false;
   return item.confidence === 'low'
     || description.length < 24
     || /^IREPS item\b/i.test(description)

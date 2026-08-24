@@ -58,6 +58,7 @@ interface ItemRow {
   pageNumber?: number;
   rateBookEdition?: string;
   rateBookCode?: string;
+  rateBookWording?: boolean;
 }
 
 interface ClassificationEntry {
@@ -1010,8 +1011,16 @@ export function BillClassificationEntries({
                               bill p.{row.pageNumber}
                             </span>
                           ) : null}
+                          {/* The badge now appears for every item the book could price,
+                              so the tooltip has to stop claiming the wording came from
+                              there — that is only true when rateBookWording is set. */}
                           {row.rateBookEdition ? (
-                            <span className="text-sky-600" title="The bill prints only this sub-item's own line; the rest is the schedule's wording.">
+                            <span
+                              className="text-sky-600"
+                              title={row.rateBookWording
+                                ? "Priced from this schedule of rates. The bill prints only this sub-item's own line; the rest is the schedule's wording."
+                                : 'Priced from this schedule of rates.'}
+                            >
                               {row.rateBookEdition} {row.rateBookCode}
                             </span>
                           ) : null}

@@ -131,6 +131,20 @@ export async function enrichItemsFromRateBook<T extends {
     if (!edition) continue;
     const entry = entries.get(rateBookKey(String(item.itemNo || item.dsrCode || ''), edition));
     if (!entry) continue;
+
+    // Which book this item is priced from, recorded because it was FOUND — not because
+    // the wording happened to improve.
+    //
+    // These two lines used to sit inside the description branch below, so an item whose
+    // description the bill already printed well kept no record of its edition at all.
+    // The edition is a fact about the item either way, and it is the fact everything
+    // downstream needs: DSR 2021 and DSR 2023 share nine codes in ten and price them a
+    // median 16% apart, so an item that does not say which book it came from cannot be
+    // compared with a published rate afterwards. It was being thrown away as a side
+    // effect of a wording check.
+    item.rateBookEdition = entry.edition;
+    item.rateBookCode = entry.code;
+
     const better = enrichDescription(item.description, entry);
     if (better && better !== item.description) {
       item.description = better;
@@ -138,8 +152,6 @@ export async function enrichItemsFromRateBook<T extends {
       // A statement that reasons from words the bill does not print has to name its
       // source, or the officer checking it against the bill finds nothing and stops
       // believing the rest of it.
-      item.rateBookEdition = entry.edition;
-      item.rateBookCode = entry.code;
       item.rateBookDescription = entry.description;
       enriched += 1;
       editionsUsed.add(edition);

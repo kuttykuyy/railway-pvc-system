@@ -57,8 +57,11 @@ export interface ExtractedItemRow {
   /** Which page of the bill PDF it was read from. */
   pageNumber?: number;
   /** Set when the wording was completed from a published schedule of rates. */
+  /** Which book priced this item — recorded whenever the book knows the code. */
   rateBookEdition?: string;
   rateBookCode?: string;
+  /** True only when the DESCRIPTION shown was taken from that book, not the bill. */
+  rateBookWording?: boolean;
   /** Cement rows carry their derivation so the report can print the working. */
   sourceQty?: number;
   coefficient?: number;
@@ -223,6 +226,7 @@ export function buildClassificationEntriesFromExtractedBill(
                 pageNumber: (item as any).pageNumber,
                 rateBookEdition: (item as any).rateBookEdition,
                 rateBookCode: (item as any).rateBookCode,
+                rateBookWording: !!(item as any).rateBookDescription,
               }],
               classificationJustification: item.suggestedClassificationReason || '',
               aiReviewed: !!item.classificationReviewedByAi,
@@ -300,6 +304,7 @@ export function buildClassificationEntriesFromExtractedBill(
           pageNumber: (item as any).pageNumber,
           rateBookEdition: (item as any).rateBookEdition,
           rateBookCode: (item as any).rateBookCode,
+          rateBookWording: !!(item as any).rateBookDescription,
         }],
         classificationJustification: item.suggestedClassificationReason || '',
         aiReviewed: !!item.classificationReviewedByAi,

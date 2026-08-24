@@ -39,6 +39,7 @@ async function requireAdmin() {
 const NORM = (col: string) => `upper(regexp_replace(${col}, '[^0-9A-Za-z.]', '', 'g'))`;
 
 const num = (value: unknown) => Number(value ?? 0);
+const n2 = (value: unknown) => (value === null || value === undefined ? null : Number(value));
 
 export async function GET() {
   const auth = await requireAdmin();
@@ -128,6 +129,30 @@ export async function GET() {
          )
        GROUP BY 1 ORDER BY 2 DESC`);
 
+    // ── Are the published rates themselves believable? ──────────────────────────
+    // Ratios of 3000 turned up in the spread check, traced to book rates like Rs 0.018
+    // and Rs 3.30 for items quoted in thousands. No schedule item costs two paise, so
+    // either the import put something else in the column or the units differ from the
+    // quoted rate. An average taken over those is poisoned, so count them first.
+    const rateSanity = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT "edition",
+              COUNT(*) FILTER (WHERE "rate" IS NOT NULL AND "rate" > 0) AS priced,
+              COUNT(*) FILTER (WHERE "rate" > 0 AND "rate" < 1) AS under_1_rupee,
+              COUNT(*) FILTER (WHERE "rate" >= 1 AND "rate" < 10) AS under_10_rupees,
+              COUNT(*) FILTER (WHERE "rate" > 1000000) AS over_10_lakh,
+              min("rate") AS min_rate,
+              percentile_cont(0.5) WITHIN GROUP (ORDER BY "rate") AS median_rate,
+              max("rate") AS max_rate
+       FROM ${dsr} WHERE "rate" IS NOT NULL AND "rate" > 0
+       GROUP BY "edition" ORDER BY "edition"`);
+
+    // The cheapest codes, printed so the pattern can be seen by eye — a whole sub-head
+    // priced in paise reads very differently from a handful of odd rows.
+    const cheapest = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT "edition", "code", "unit", "rate", left("description", 90) AS description
+       FROM ${dsr} WHERE "rate" > 0 AND "rate" < 10
+       ORDER BY "rate" LIMIT 30`);
+
     const matchedWithRate = num(entryMatch?.matched_with_rate) + num(rowMatch?.matched);
     const withRate = num(entrySummary?.with_rate) + num(rowSummary?.with_rate);
 
@@ -152,6 +177,19 @@ export async function GET() {
         itemRowsWithAgreementRate: num(rowSummary?.with_rate),
         itemRowsMatchingADsrCode: num(rowMatch?.matched),
       },
+      rateSanity: rateSanity.map(r => ({
+        edition: r.edition,
+        priced: num(r.priced),
+        underOneRupee: num(r.under_1_rupee),
+        underTenRupees: num(r.under_10_rupees),
+        overTenLakh: num(r.over_10_lakh),
+        minRate: n2(r.min_rate),
+        medianRate: n2(r.median_rate),
+        maxRate: n2(r.max_rate),
+      })),
+      cheapestCodes: cheapest.map(r => ({
+        edition: r.edition, code: r.code, unit: r.unit, rate: n2(r.rate), description: r.description,
+      })),
       quotableByZone: byZone.map(z => ({
         zone: z.zone, items: num(z.quotable_items), contracts: num(z.contracts),
       })),

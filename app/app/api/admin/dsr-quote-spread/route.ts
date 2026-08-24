@@ -64,12 +64,14 @@ export async function GET(request: NextRequest) {
     // the itemRows a merged entry keeps its per-item detail in.
     const base = `
       WITH items AS (
-        SELECT e."billId" AS bill_id, e."itemNumber" AS code, e."agreementRate"::numeric AS rate
+        SELECT e."billId" AS bill_id, e."itemNumber" AS code, e."agreementRate"::numeric AS rate,
+               NULL::text AS stored_edition
         FROM ${entries} e
         WHERE e."agreementRate" IS NOT NULL AND e."agreementRate" > 0
           AND btrim(COALESCE(e."itemNumber", '')) <> ''
         UNION ALL
-        SELECT e."billId", r->>'itemNumber', (r->>'agreementRate')::numeric
+        SELECT e."billId", r->>'itemNumber', (r->>'agreementRate')::numeric,
+               NULLIF(btrim(COALESCE(r->>'rateBookEdition', '')), '')
         FROM ${entries} e, jsonb_array_elements(e."itemRows") r
         WHERE jsonb_typeof(e."itemRows") = 'array'
           AND btrim(COALESCE(r->>'itemNumber', '')) <> ''
@@ -83,19 +85,34 @@ export async function GET(request: NextRequest) {
                COALESCE(b."zone", 'unknown') AS zone,
                i.code,
                i.rate,
-               CASE
-                 WHEN regexp_replace(i.code, '[^0-9]', '', 'g') ~ '^[0-9]{6}$'
-                      AND i.code !~ '\\.' THEN 'USSOR 2021'
-                 WHEN c."dateOfOpening" >= '${cutoff}'::date THEN 'DSR 2023'
-                 ELSE 'DSR 2021'
-               END AS edition
+               -- The book the bill itself named, when the row kept it. Guess only when
+               -- it did not: on a DSR code the guess is worth a median 16%.
+               COALESCE(i.stored_edition,
+                 CASE
+                   WHEN regexp_replace(i.code, '[^0-9]', '', 'g') ~ '^[0-9]{6}$'
+                        AND i.code !~ '\\.' THEN 'USSOR 2021'
+                   WHEN c."dateOfOpening" >= '${cutoff}'::date THEN 'DSR 2023'
+                   ELSE 'DSR 2021'
+                 END) AS edition,
+               (i.stored_edition IS NOT NULL) AS edition_known
         FROM items i
         JOIN ${bills} b ON b."id" = i.bill_id
         JOIN ${contracts} c ON c."id" = b."contractId"
       ),
+      -- ONE ROW PER (contract, code, quoted rate).
+      --
+      -- Without this a single item counts once for every running bill it appears in —
+      -- the first run showed the same code at the same rate eight times over. That
+      -- inflates every count, and worse, makes one repeated item look like agreement
+      -- between many. Two genuinely different rates for one code in one contract (two
+      -- schedules, two sub-works) still survive as two rows, which is right.
+      deduped AS (
+        SELECT DISTINCT contract_id, agreement_no, opened, zone, code, rate, edition, edition_known
+        FROM priced
+      ),
       matched AS (
         SELECT p.*, d."rate"::numeric AS book_rate, p.rate / d."rate"::numeric AS ratio
-        FROM priced p
+        FROM deduped p
         JOIN ${dsr} d
           ON d."edition" = p.edition
          AND ${NORM('d."code"')} = ${NORM('p.code')}
@@ -106,6 +123,7 @@ export async function GET(request: NextRequest) {
     const perContract = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
       `${base}
        SELECT agreement_no, zone, opened, edition,
+              bool_and(edition_known) AS edition_from_bill,
               COUNT(*) AS items,
               COUNT(DISTINCT round(ratio, 4)) AS distinct_ratios,
               min(ratio) AS min_ratio,
@@ -116,6 +134,7 @@ export async function GET(request: NextRequest) {
        FROM matched
        GROUP BY agreement_no, zone, opened, edition
        ORDER BY COUNT(*) DESC`);
+    // Note: items are now DISTINCT (contract, code, rate) — see the deduped CTE.
 
     // ── Per zone, counting every matched item ───────────────────────────────────
     const perZone = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
@@ -161,7 +180,9 @@ export async function GET(request: NextRequest) {
         agreementNo: c.agreement_no,
         zone: c.zone,
         opened: c.opened,
-        editionAssumed: c.edition,
+        edition: c.edition,
+        /** True when the bill named the book; false when the opening date guessed it. */
+        editionFromBill: c.edition_from_bill === true,
         items,
         distinctRatios: Number(c.distinct_ratios),
         minRatio: n(c.min_ratio),
