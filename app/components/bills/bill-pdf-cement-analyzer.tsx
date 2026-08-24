@@ -1,7 +1,7 @@
 'use client';
 
 import { ChangeEvent, DragEvent, MutableRefObject, useRef, useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Cpu, Download, FileCheck2, FileText, HardDrive, Lightbulb, ListChecks, Loader2, Lock, RotateCcw, Save, ScanText, Trash2, Unlock, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Cpu, Download, FileCheck2, FileSpreadsheet, FileText, HardDrive, Lightbulb, ListChecks, Loader2, Lock, RotateCcw, Save, ScanText, Trash2, Unlock, Upload } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { Badge } from '@/components/ui/badge';
@@ -1290,31 +1290,47 @@ export function BillPdfCementAnalyzer({
               </div>
             </div>
 
-            {/* The way out when the bill is a scan.
-                A photographed or hand-made bill has no text layer, so the reader has
-                nothing to work with and the only alternative used to be typing the whole
-                thing into the form item by item. Four columns in a spreadsheet is the
-                same information in the shape an office already keeps it. */}
-            {(
-              <div className={`rounded-lg border p-3 ${readFailed
-                ? 'border-amber-300 bg-amber-50'
-                : 'border-dashed border-slate-300 bg-slate-50/60'}`}>
-                <p className={`text-xs font-medium ${readFailed ? 'text-amber-900' : 'text-slate-700'}`}>
+            {fileName && (
+              <div className="text-xs text-muted-foreground">Last file: {fileName}</div>
+            )}
+          </>
+        )}
+
+        {/* The way out when the bill is a scan — OUTSIDE both uploader layouts.
+            It used to sit inside the plain-button branch, so on the page that shows the
+            big drop-zone hero — which is the one a new bill opens on — it rendered
+            nowhere at all. The notice above told people to use a panel that was not on
+            their screen. It is one block now, shown whichever uploader is drawn. */}
+        <div className={showGrandUploader ? 'm-4 mt-0' : ''}>
+          <div className={`rounded-xl border-2 p-4 ${readFailed
+            ? 'border-emerald-400 bg-emerald-50 shadow-sm ring-2 ring-emerald-100'
+            : 'border-dashed border-slate-300 bg-slate-50/70'}`}>
+            <div className="flex items-start gap-3">
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                readFailed ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                <FileSpreadsheet className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className={`text-sm font-bold ${readFailed ? 'text-emerald-900' : 'text-slate-800'}`}>
                   {readFailed
-                    ? 'That bill is not in a layout the reader can open — fill it in here instead'
+                    ? 'This bill cannot be read — fill it in on a spreadsheet instead'
                     : 'Bill is a scan, or made by hand?'}
                 </p>
-                <p className={`mt-0.5 text-xs ${readFailed ? 'text-amber-800' : 'text-slate-500'}`}>
-                  A scanned or hand-made bill has no text to read. Fill in four columns instead —
-                  schedule, item number, quantity and rate. The description comes from the schedule
-                  of rates and the amount is quantity × rate.
+                <p className={`mt-1 text-xs leading-relaxed ${readFailed ? 'text-emerald-900' : 'text-slate-500'}`}>
+                  Four columns — schedule, item number, quantity and rate. The description comes
+                  from the schedule of rates and the amount is quantity × rate.
                 </p>
-                <div className="mt-2 flex flex-wrap gap-2">
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <a
                     href={`/api/bills/manual-template${contractId ? `?contractId=${encodeURIComponent(contractId)}` : ''}`}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold shadow-sm transition-colors ${
+                      readFailed
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                        : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
                   >
-                    <Download className="h-3.5 w-3.5" /> Download the spreadsheet
+                    <Download className="h-4 w-4" />
+                    1. Download the spreadsheet
                   </a>
                   <input
                     ref={sheetInputRef}
@@ -1323,26 +1339,23 @@ export function BillPdfCementAnalyzer({
                     className="hidden"
                     onChange={handleSheetUpload}
                   />
-                  <Button
+                  <button
                     type="button"
-                    variant="outline"
-                    size="sm"
                     disabled={disabled || isAnalyzing}
                     onClick={() => sheetInputRef.current?.click()}
-                    className="h-auto px-2.5 py-1.5 text-xs"
+                    className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60 ${
+                      readFailed
+                        ? 'border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100'
+                        : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
                   >
-                    {isAnalyzing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-1.5 h-3.5 w-3.5" />}
-                    Upload the filled spreadsheet
-                  </Button>
+                    {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    2. Upload it filled in
+                  </button>
                 </div>
               </div>
-            )}
-
-            {fileName && (
-              <div className="text-xs text-muted-foreground">Last file: {fileName}</div>
-            )}
-          </>
-        )}
+            </div>
+          </div>
+        </div>
 
         {result && (
           <div className="space-y-3 rounded-lg border bg-white p-3">
