@@ -55,6 +55,11 @@ const KEEP = {
   unlinkedConversations: 60,
 } as const;
 
+// Uploaded bill and LOA PDFs have their own two clocks, both in lib/uploaded-documents.ts:
+// ninety days from upload, and seven days for a file that was never attached to anything.
+// They live there because the sweep must delete the file in the bucket before the row
+// that names it, and only that module knows how.
+
 function authorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false; // fail closed — no secret configured, no access
@@ -161,6 +166,20 @@ export async function GET(request: NextRequest) {
   await sweep('telegram_conversations_unlinked',
     () => prisma.telegramConversation.count({ where: unlinkedWhere }),
     () => prisma.telegramConversation.deleteMany({ where: unlinkedWhere }));
+
+  // ── Uploaded bill and LOA PDFs ───────────────────────────────────────────────
+  // Not a plain deleteMany: each row names a file in the bucket, and the row is the
+  // only handle the app has on that file. sweepUploadedDocuments deletes the file
+  // first, then the row, in bounded batches.
+  await sweep('uploaded_documents',
+    async () => {
+      const { sweepUploadedDocuments } = await import('@/lib/uploaded-documents');
+      return sweepUploadedDocuments(true);
+    },
+    async () => {
+      const { sweepUploadedDocuments } = await import('@/lib/uploaded-documents');
+      return { count: await sweepUploadedDocuments(false) };
+    });
 
   const total = Object.values(removed).reduce((sum, n) => sum + n, 0);
   const durationMs = Date.now() - startedAt;

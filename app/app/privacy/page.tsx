@@ -68,6 +68,7 @@ export default function PrivacyPolicyPage() {
                     <li>Work descriptions & classifications</li>
                     <li>Calculations & intervals</li>
                     <li>Uploaded PDFs and abstracts</li>
+                    <li>Bill and agreement PDFs you upload, kept 90 days then deleted</li>
                   </ul>
                 </div>
 
@@ -132,6 +133,12 @@ export default function PrivacyPolicyPage() {
               </h3>
               <p>
                 You have full control over your data. You may request access to a copy of your contract lists, edit details, delete your processed bills, or permanently terminate your account by contacting our division administrator.
+              </p>
+              <p>
+                A bill or agreement PDF you upload is kept for 90 days so the bill can be re-read
+                and so you can show where a figure came from, and is then deleted automatically.
+                Deleting the bill or contract deletes its PDF at the same time, and you can remove
+                a kept file yourself from the bill or contract page at any point before that.
               </p>
             </section>
 

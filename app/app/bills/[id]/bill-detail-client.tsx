@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ShortfallAudit } from '@/components/shortfall-audit';
+import { SourceDocuments } from '@/components/documents/source-documents';
 import { BillStatusBadge } from '@/components/bills/bill-status-badge';
 import { ApprovalActions } from '@/components/bills/approval-actions';
 import { ApprovalWorkflowStatus } from '@/components/bills/approval-workflow-status';
@@ -1491,6 +1492,10 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
 
       {/* PVC Shortfall Auditor — compare Railway-paid PVC vs computed entitlement */}
       {bill.pvcCalculation && <ShortfallAudit billId={bill.id} />}
+
+      {/* The bill PDF this was read from, while it is still held. Renders nothing for a
+          bill that was typed in, or one whose upload has passed its ninety days. */}
+      <SourceDocuments billId={bill.id} />
 
       {/* Approval history timeline */}
       <ApprovalHistory billId={bill.id} />

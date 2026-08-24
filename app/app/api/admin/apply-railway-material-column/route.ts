@@ -179,6 +179,50 @@ const PENDING_EXTRAS: Array<{ label: string; sql: (s: string) => string; why: st
     check: { kind: 'table', name: 'parse_failures' },
   },
   {
+    label: 'uploaded_documents',
+    sql: (s) => `CREATE TABLE IF NOT EXISTS "${s}"."uploaded_documents" (
+        "id" BIGSERIAL PRIMARY KEY,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "expiresAt" TIMESTAMP(3) NOT NULL,
+        "kind" TEXT NOT NULL,
+        "billId" TEXT REFERENCES "${s}"."bills"("id") ON DELETE SET NULL ON UPDATE CASCADE,
+        "contractId" TEXT REFERENCES "${s}"."contracts"("id") ON DELETE SET NULL ON UPDATE CASCADE,
+        "userId" TEXT,
+        "userEmail" TEXT,
+        "fileName" TEXT NOT NULL,
+        "contentType" TEXT NOT NULL DEFAULT 'application/pdf',
+        "byteSize" INTEGER NOT NULL DEFAULT 0,
+        "sha256" TEXT,
+        "storagePath" TEXT,
+        "pdfBase64" TEXT,
+        "note" TEXT
+      )`,
+    why: 'The bill and LOA PDFs people upload, kept 90 days. Today the file is read and '
+      + 'dropped, so a bill cannot be re-read when the reader improves, and nothing can '
+      + 'show an auditor where a figure came from. The link to the bill or contract is '
+      + 'ON DELETE SET NULL so a deleted bill leaves an orphan the nightly sweep removes '
+      + 'file and all, rather than a row pointing at nothing.',
+    check: { kind: 'table', name: 'uploaded_documents' },
+  },
+  {
+    label: 'uploaded_documents_expiresAt_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "uploaded_documents_expiresAt_idx" ON "${s}"."uploaded_documents" ("expiresAt")`,
+    why: 'The nightly sweep asks for everything past its expiry, and nothing else.',
+    check: { kind: 'index', name: 'uploaded_documents_expiresAt_idx' },
+  },
+  {
+    label: 'uploaded_documents_billId_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "uploaded_documents_billId_idx" ON "${s}"."uploaded_documents" ("billId")`,
+    why: 'A bill page asks for its own source PDF.',
+    check: { kind: 'index', name: 'uploaded_documents_billId_idx' },
+  },
+  {
+    label: 'uploaded_documents_contractId_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "uploaded_documents_contractId_idx" ON "${s}"."uploaded_documents" ("contractId")`,
+    why: 'A contract page asks for its own LOA.',
+    check: { kind: 'index', name: 'uploaded_documents_contractId_idx' },
+  },
+  {
     label: 'dsr_items',
     sql: (s) => `CREATE TABLE IF NOT EXISTS "${s}"."dsr_items" (
         "edition" TEXT NOT NULL,

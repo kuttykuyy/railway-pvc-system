@@ -48,6 +48,8 @@ interface BillInput {
     itemRows?: Array<Record<string, unknown>>;
   }>;
   processingFee: number;
+  /** The kept copy of the PDF this row was read from, attached once the bill exists. */
+  uploadedDocumentId?: number | null;
 }
 
 interface BulkCreateRequest {
@@ -625,6 +627,13 @@ export async function POST(request: NextRequest) {
           cumulativePvc,
         },
       });
+
+      // Attach the PDF this bill was read from. The upload happened while the batch was
+      // still being filled in, so the document has been sitting unlinked until now.
+      if (billInput.uploadedDocumentId) {
+        const { linkUploadedDocument } = await import('@/lib/uploaded-documents');
+        await linkUploadedDocument(billInput.uploadedDocumentId, { billId: bill.id, userId: user.id });
+      }
 
       createdBills.push(bill);
     }

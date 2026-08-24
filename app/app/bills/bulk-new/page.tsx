@@ -92,6 +92,8 @@ interface BillRow {
   billNo: string;
   dateOfMeasurement: string;
   isAiUploaded?: boolean;
+  /** The kept copy of the PDF this row was read from, claimed when the batch is saved. */
+  uploadedDocumentId?: number | null;
   /** Cl.46A.1(b): extra items ordered under Cl.39(1)(b), outside price variation. */
   extraItemsOutsidePvc?: string;
   cementAmount: number | string | '';
@@ -575,6 +577,7 @@ export default function BulkBillCreationPage() {
       billNo: billDetails?.billNo || row.billNo,
       dateOfMeasurement: normalizeExtractedDate(billDetails?.measurementDate) || row.dateOfMeasurement,
       isAiUploaded: true,
+      uploadedDocumentId: context?.documentId ?? null,
       // AI items stay in classification entries; dedicated component
       // inputs are only for additional manually entered amounts.
       cementAmount: '',
@@ -668,6 +671,7 @@ export default function BulkBillCreationPage() {
             billNo: row.billNo.trim(),
             dateOfMeasurement: row.dateOfMeasurement,
             isAiUploaded: row.isAiUploaded || false,
+            uploadedDocumentId: row.uploadedDocumentId ?? null,
             zone: globalZone,
             fuelPriceType: globalFuelPriceType || 'four_city_avg',
             grossBillAmount: classificationTotal,

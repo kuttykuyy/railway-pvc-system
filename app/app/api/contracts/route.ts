@@ -337,7 +337,14 @@ export async function POST(request: NextRequest) {
         }
       }
     });
-    
+
+    // Attach the LOA this contract was read from, if one was kept. The upload happened
+    // before the contract existed, so the document has been unlinked until now.
+    if (body.uploadedDocumentId) {
+      const { linkUploadedDocument } = await import('@/lib/uploaded-documents');
+      await linkUploadedDocument(body.uploadedDocumentId, { contractId: contract.id, userId: user.id });
+    }
+
     return NextResponse.json(contract);
   } catch (error: any) {
     console.error('Error creating contract:', error);

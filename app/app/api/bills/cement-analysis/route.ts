@@ -1731,6 +1731,13 @@ export async function POST(request: NextRequest) {
 
     const stage = request.nextUrl.searchParams.get('stage') || 'full';
     const contractId = request.nextUrl.searchParams.get('contractId') || undefined;
+    // When the bill already exists (re-reading a PDF on the edit page), the kept file is
+    // attached to it straight away instead of waiting to be claimed on save.
+    const forBillId = request.nextUrl.searchParams.get('billId') || undefined;
+    // Set when the uploaded PDF is kept, and handed back so the client can attach it
+    // to the bill it saves. Null whenever storage is unavailable -- reading the bill
+    // does not depend on keeping it.
+    let storedDocumentId: number | null = null;
     let billDetails: ExtractedBillDetails;
     let aiEnhancement: HybridAiEnhancementStatus = {
       status: 'not_requested',
@@ -1797,12 +1804,28 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'File size too large. Maximum size is 25MB.' }, { status: 400 });
       }
 
+      // Keep the bill PDF for 90 days. Until now the file was read for its numbers and
+      // dropped, so a bill could never be re-read when the reader improved and nothing
+      // could show an auditor the document a figure came from. Best effort by design:
+      // storeUploadedDocument returns null rather than failing the extraction.
+      const uploadedBuffer = Buffer.from(await file.arrayBuffer());
+      const { storeUploadedDocument } = await import('@/lib/uploaded-documents');
+      storedDocumentId = await storeUploadedDocument({
+        kind: 'bill',
+        buffer: uploadedBuffer,
+        fileName: file.name,
+        userId: user?.id || null,
+        userEmail: user?.email || null,
+        billId: forBillId || null,
+      });
+
       if (stage === 'convert') {
         const billMarkdown = await convertPdfToMarkdown(file, request.nextUrl.origin);
         const markdownParts = splitMarkdown(billMarkdown);
         return NextResponse.json({
           success: true,
           fileName: file.name,
+          documentId: storedDocumentId,
           markdownCharacters: billMarkdown.length,
           partCount: markdownParts.length,
           markdownParts,
@@ -1810,7 +1833,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (stage === 'direct') {
-        const directBuffer = Buffer.from(await file.arrayBuffer());
+        const directBuffer = uploadedBuffer;
         // Collected whole on failure — the PDF, the exact error, who hit it — and the
         // admin pinged. "Please send this PDF to support" asked the user to do the
         // collecting, and nobody ever did.
@@ -2042,6 +2065,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       extractionId,
+      // The kept PDF, for the client to attach to the bill it is about to save.
+      documentId: storedDocumentId,
       isUnlocked: true,
       data: fullData,
     });

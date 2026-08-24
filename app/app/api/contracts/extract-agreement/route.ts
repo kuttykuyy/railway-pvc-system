@@ -50,7 +50,20 @@ export async function POST(request: NextRequest) {
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status ?? 500 });
     }
-    return NextResponse.json({ data: result.data });
+
+    // Keep the LOA for 90 days and hand back its id, so the contract this becomes can
+    // carry the document it was read from. Best effort: a storage failure returns null
+    // and the extraction is unaffected.
+    const { storeUploadedDocument } = await import('@/lib/uploaded-documents');
+    const documentId = await storeUploadedDocument({
+      kind: 'agreement',
+      buffer: original,
+      fileName: file.name,
+      userId: (session.user as any)?.id || null,
+      userEmail: session.user.email || null,
+    });
+
+    return NextResponse.json({ data: result.data, documentId });
   } catch (error) {
     console.error('extract-agreement error:', error);
     return NextResponse.json({ error: 'Failed to read the agreement.' }, { status: 500 });

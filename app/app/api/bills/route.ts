@@ -1020,6 +1020,15 @@ export async function POST(request: NextRequest) {
 
     logger.log(`✅ Bill ${bill.id} written with ${entryRowsToCreate.length} entries and its PVC calculation`);
 
+    // Attach the PDF this bill was read from, if one was kept. The upload happened
+    // before the bill existed, so the document has been sitting unlinked since; this
+    // is what makes it show on the bill page and survive past the seven-day sweep of
+    // uploads nobody ever saved. Scoped to the uploader inside linkUploadedDocument.
+    if (body.uploadedDocumentId) {
+      const { linkUploadedDocument } = await import('@/lib/uploaded-documents');
+      await linkUploadedDocument(body.uploadedDocumentId, { billId: bill.id, userId: user.id });
+    }
+
     // ===== STEP 17B: Re-run cumulative totals in measurement order =====
     // The previousPvcTotal above came from the latest calculation BY CREATION TIME.
     // Back-entering an earlier bill (Bill 2 typed after Bill 3) made Bill 2's

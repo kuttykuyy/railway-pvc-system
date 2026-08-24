@@ -112,6 +112,12 @@ export async function DELETE(
       }
     }
 
+    // The kept source PDF goes with the bill, now rather than on the next nightly
+    // sweep. The foreign key would only null the link and leave the file sitting in
+    // the bucket until then, and "deleted" should mean deleted.
+    const { purgeUploadedDocuments } = await import('@/lib/uploaded-documents');
+    await purgeUploadedDocuments({ billId: id });
+
     // Delete the bill — cascades handle PvcCalculation, BillTransaction, BillClassificationEntry, etc.
     await prisma.bill.delete({
       where: { id }

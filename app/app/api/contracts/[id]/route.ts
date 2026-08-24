@@ -342,6 +342,15 @@ export async function DELETE(
         })
       : [];
 
+    // The kept LOA and every kept bill PDF under this contract go with it, now rather
+    // than on the next nightly sweep. Done before the delete, while the rows still say
+    // which bill each file belonged to.
+    const { purgeUploadedDocuments } = await import('@/lib/uploaded-documents');
+    await purgeUploadedDocuments({ contractId: id });
+    for (const contractBill of contractBills) {
+      await purgeUploadedDocuments({ billId: contractBill.id });
+    }
+
     await prisma.$transaction(async tx => {
       if (billTransactions.length > 0) {
         await tx.invoiceItem.deleteMany({

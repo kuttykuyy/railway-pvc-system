@@ -14,6 +14,7 @@ import { ShareContractDialog } from '@/components/contracts/share-contract-dialo
 import { ContractMoreMenu } from '@/components/contracts/contract-more-menu';
 import { getAdministeringZone } from '@/lib/jurisdiction';
 import { BillCard } from '@/components/bill-card';
+import { SourceDocuments } from '@/components/documents/source-documents';
 import { resolvePre2022Setup } from '@/lib/pre2022-contract';
 import { DeleteBillButton } from '@/components/bills/delete-bill-button';
 import { FirstBillFreeTag } from '@/components/billing/first-bill-free-tag';
@@ -410,6 +411,10 @@ export default async function ContractDetailPage({ params }: Props) {
           </>
         )}
       </div>
+
+      {/* The LOA this contract was read from, while it is still held. Renders nothing for
+          a contract that was typed in, or one whose upload has passed its ninety days. */}
+      <SourceDocuments contractId={contract.id} />
     </div>
   );
 }

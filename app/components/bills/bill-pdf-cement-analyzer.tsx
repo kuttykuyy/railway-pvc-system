@@ -124,6 +124,9 @@ export interface AppliedExtractionContext {
   fileName: string;
   /** Set only when this PDF is one of several read in a single run. */
   batch?: { index: number; total: number };
+  /** The kept copy of this PDF, when the server managed to keep one. Pass it back when
+   *  saving the bill so the file is attached to it rather than swept as an orphan. */
+  documentId?: number | null;
 }
 
 interface BillPdfCementAnalyzerProps {
@@ -131,6 +134,10 @@ interface BillPdfCementAnalyzerProps {
   compact?: boolean;
   disabled?: boolean;
   contractId?: string;
+  /** Set when the bill already exists (the edit page). The uploaded PDF is then kept
+   *  against that bill immediately, instead of waiting to be claimed when a new bill
+   *  is saved -- on the edit page, no save ever claims it. */
+  billId?: string;
   /** Raw Contract.schedules — supplies the agreed escalation/bid rate per schedule, so the
    *  reference cement figure shown here matches what the manual calculator would derive,
    *  instead of starting blank until someone types the same numbers in twice. */
@@ -199,6 +206,7 @@ export function BillPdfCementAnalyzer({
   compact = false,
   disabled = false,
   contractId,
+  billId,
   contractSchedules,
   contractRebate,
   onApplyCementAmount,
@@ -763,6 +771,7 @@ export function BillPdfCementAnalyzer({
       const endpoint = () => {
         const params = new URLSearchParams({ stage: 'direct' });
         if (contractId) params.set('contractId', contractId);
+        if (billId) params.set('billId', billId);
         return `/api/bills/cement-analysis?${params.toString()}`;
       };
 
@@ -825,6 +834,9 @@ export function BillPdfCementAnalyzer({
 
       const data = json.data as CementAnalysisData;
       setResult(data);
+      // The server keeps the uploaded PDF for 90 days and names it here. Carried on the
+      // upload context so whoever saves the bill can attach it.
+      upload.documentId = typeof json.documentId === 'number' ? json.documentId : null;
 
       // The contract's agreement number can change as a side effect of reading the
       // bill; that must never happen silently, and a refusal because the number is

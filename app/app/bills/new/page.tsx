@@ -48,7 +48,7 @@ import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
 import { calculateTotalPvc, formatPvcAmount, pvcComparisonAllowsSuffix } from '@/lib/classification-pvc';
 import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-dialog';
-import { BillPdfCementAnalyzer, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
+import { BillPdfCementAnalyzer, type AppliedExtractionContext, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
 import { useLanguage } from '@/components/i18n-provider';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { scheduleNames, normalizeSchedules } from '@/lib/contract-schedules';
@@ -303,6 +303,8 @@ function NewBillPageContent() {
   const [subscribing, setSubscribing] = useState<boolean>(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState<boolean>(false);
   const [isAiUploaded, setIsAiUploaded] = useState(false);
+  /** The kept copy of the uploaded bill PDF, claimed by the bill when it is saved. */
+  const [uploadedDocumentId, setUploadedDocumentId] = useState<number | null>(null);
   // DSR cement derivation: schedules (with cement MT) worked out from the entered items.
   const [cementSchedules, setCementSchedules] = useState<CementSchedule[]>([]);
   const [derivingCement, setDerivingCement] = useState(false);
@@ -737,8 +739,12 @@ function NewBillPageContent() {
     }
   };
 
-  const applyExtractedBillDetails = async (data: CementAnalysisData) => {
+  const applyExtractedBillDetails = async (data: CementAnalysisData, context?: AppliedExtractionContext) => {
     setIsAiUploaded(true);
+    // The server kept the uploaded PDF; hold its id so the bill we are about to save can
+    // claim it. Unclaimed uploads are swept after a week, so this is what decides whether
+    // the original stays with the bill.
+    setUploadedDocumentId(context?.documentId ?? null);
     // A read has landed, so any earlier "it did not fill the form" notice is stale.
     setExtractionNotice(null);
     // Block PVC check / create until the derived cement cost is applied: there are
@@ -1411,6 +1417,8 @@ function NewBillPageContent() {
           ...formData,
           grossBillAmount: grossAmount,
           billAmount: netBillAmount, // Calculated net amount
+          // The PDF this bill was read from, so it is attached rather than swept.
+          uploadedDocumentId,
           classificationEntries: cleanedEntries.map(entry => ({
             subClassificationId: entry.subClassificationId,
             amount: entry.amount === '' || entry.amount === null || entry.amount === undefined

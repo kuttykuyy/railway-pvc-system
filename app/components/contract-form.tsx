@@ -235,6 +235,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
   const [extractingAgreement, setExtractingAgreement] = useState(false);
   /** Set once the agreement PDF fills the form, so the record remembers its origin. */
   const [filledFromPdf, setFilledFromPdf] = useState(false);
+  /** The kept copy of the uploaded LOA, claimed by the contract when it is saved. */
+  const [uploadedDocumentId, setUploadedDocumentId] = useState<number | null>(null);
 
   const handleAgreementUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -270,6 +272,9 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
       }
       handleDocumentDataExtracted(json.data);
       setFilledFromPdf(true);
+      // The server keeps the LOA for 90 days. Hold its id so the contract claims it on
+      // save -- an upload nobody claims is swept after a week.
+      setUploadedDocumentId(typeof json.documentId === 'number' ? json.documentId : null);
       toast.success('Form filled from the agreement. Please review before saving.', { id: toastId });
     } catch {
       toast.error('The upload failed. Please try again.', { id: toastId });
@@ -428,7 +433,12 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...submitData, createdVia: filledFromPdf ? 'pdf' : 'manual' }),
+        body: JSON.stringify({
+          ...submitData,
+          createdVia: filledFromPdf ? 'pdf' : 'manual',
+          // The LOA PDF this form was read from, kept with the contract.
+          uploadedDocumentId,
+        }),
       });
 
       if (!response.ok) {

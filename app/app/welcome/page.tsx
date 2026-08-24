@@ -56,6 +56,8 @@ export default function WelcomePage() {
   const [hasContract, setHasContract] = useState<boolean | null>(null);
   const [hasBill, setHasBill] = useState(false);
   const [agreement, setAgreement] = useState<AgreementStage>({ step: 'idle' });
+  /** The kept copy of the uploaded LOA, claimed by the contract when it is saved. */
+  const [loaDocumentId, setLoaDocumentId] = useState<number | null>(null);
   const [stats, setStats] = useState<SystemStats | null>(null);
 
   useEffect(() => {
@@ -131,6 +133,7 @@ export default function WelcomePage() {
       // Stop for the agreement number before saving anything. The bill matches its
       // contract by this number, so getting it right here is what lets the bill upload
       // run start to finish without showing a form.
+      setLoaDocumentId(typeof extracted.documentId === 'number' ? extracted.documentId : null);
       setAgreement({
         step: 'confirm',
         extracted: extracted.data,
@@ -164,6 +167,8 @@ export default function WelcomePage() {
             ? normalizeSchedules(d.schedules).map(s => ({ ...s, name: shortScheduleName(s.name) }))
             : [],
           createdVia: 'pdf',
+          // The LOA PDF this contract was read from, kept with it for 90 days.
+          uploadedDocumentId: loaDocumentId,
         }),
       });
       const created = await createRes.json().catch(() => ({}));
