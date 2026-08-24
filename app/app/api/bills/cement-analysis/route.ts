@@ -1956,6 +1956,23 @@ export async function POST(request: NextRequest) {
         } catch (parseErr: any) {
           const directError = String(parseErr?.message || parseErr);
           const { recordParseFailure } = await import('@/lib/parse-failure');
+
+          // Not an IREPS bill at all — a scan, or some other document. The AI retry is
+          // for a layout the exact reader has a GAP in, which is our fault and worth
+          // paying to rescue. This is not that: there is no text for the AI to read
+          // either, so it would answer confidently from nothing, at our cost, and the
+          // person would then be checking invented figures. The spreadsheet is the
+          // honest way through and it is offered on the failure screen.
+          const { isNotIrepsError } = await import('@/lib/ireps-direct-pdf-parser');
+          if (isNotIrepsError(parseErr)) {
+            await recordParseFailure({
+              userEmail: user?.email || null,
+              fileName: file.name || null,
+              error: 'NOT AN IREPS PDF (no AI retry attempted) — ' + directError,
+              pdfBuffer: directBuffer,
+            });
+            throw parseErr;
+          }
           // The AI reader gets one automatic try — FREE, because the exact reader's
           // gap is our fault, not the user's. Its answer is accepted only when its own
           // reconciliation holds: item total equal to the bill's printed total, the

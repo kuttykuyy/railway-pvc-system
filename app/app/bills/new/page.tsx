@@ -1725,7 +1725,7 @@ function NewBillPageContent() {
                       knows — which is what "not IREPS format" means in practice. Offered
                       above asking us to look at it, because it gets them their PVC today
                       rather than after somebody teaches the reader a new layout. */}
-                  {formData.contractId && (
+                  {(
                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-left">
                       <p className="text-sm font-semibold text-emerald-900">Fill it in on a spreadsheet instead</p>
                       <p className="mt-0.5 text-xs text-emerald-800">
@@ -1734,7 +1734,7 @@ function NewBillPageContent() {
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <a
-                          href={`/api/bills/manual-template?contractId=${encodeURIComponent(formData.contractId)}`}
+                          href={`/api/bills/manual-template${formData.contractId ? `?contractId=${encodeURIComponent(formData.contractId)}` : ''}`}
                           className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
                         >
                           1. Download the spreadsheet
@@ -2127,12 +2127,10 @@ function NewBillPageContent() {
                         Try the upload again, or fill the bill in below — nothing has been saved
                         and your free bill has not been used.
                       </p>
-                      {formData.contractId && (
-                        <p className="mt-1 text-amber-800">
-                          If the bill is a scan, or not in the IREPS layout, use the spreadsheet in
-                          the upload panel below — four columns and it fills the form for you.
-                        </p>
-                      )}
+                      <p className="mt-1 text-amber-800">
+                        If the bill is a scan, or not in the IREPS layout, use the spreadsheet in
+                        the upload panel below — four columns and it fills the form for you.
+                      </p>
                       {lastReadFailure && (
                         <button
                           type="button"

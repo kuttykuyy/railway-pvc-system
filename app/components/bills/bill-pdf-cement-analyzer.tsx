@@ -1295,7 +1295,7 @@ export function BillPdfCementAnalyzer({
                 nothing to work with and the only alternative used to be typing the whole
                 thing into the form item by item. Four columns in a spreadsheet is the
                 same information in the shape an office already keeps it. */}
-            {contractId && (
+            {(
               <div className={`rounded-lg border p-3 ${readFailed
                 ? 'border-amber-300 bg-amber-50'
                 : 'border-dashed border-slate-300 bg-slate-50/60'}`}>
@@ -1311,7 +1311,7 @@ export function BillPdfCementAnalyzer({
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <a
-                    href={`/api/bills/manual-template?contractId=${encodeURIComponent(contractId)}`}
+                    href={`/api/bills/manual-template${contractId ? `?contractId=${encodeURIComponent(contractId)}` : ''}`}
                     className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
                   >
                     <Download className="h-3.5 w-3.5" /> Download the spreadsheet

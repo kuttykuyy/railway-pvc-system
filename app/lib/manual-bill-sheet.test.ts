@@ -111,3 +111,39 @@ describe('parseManualBillWorkbook', () => {
     expect(problems).toHaveLength(1);
   });
 });
+
+describe('when no contract has been chosen yet', () => {
+  /**
+   * The case that actually broke: on the New Bill page the PDF is uploaded BEFORE a
+   * contract is picked, so at the moment a read fails there is usually no contract —
+   * and the whole way out was hidden behind one.
+   */
+  it('still builds, listing every contract with its schedules', () => {
+    const book = XLSX.read(buildManualBillWorkbook({}, [
+      { agreementNo: 'SR/MDU/GS/2024/0008', scheduleNames: ['Schedule A', 'Schedule B'] },
+      { agreementNo: 'NR/NRC/Civil/2023/0074', scheduleNames: ['Schedule G'] },
+    ]), { type: 'buffer' });
+    const text = XLSX.utils.sheet_to_csv(book.Sheets['Your contract']);
+    expect(text).toMatch(/not picked a contract yet/i);
+    expect(text).toContain('SR/MDU/GS/2024/0008');
+    expect(text).toContain('Schedule B');
+    expect(text).toContain('NR/NRC/Civil/2023/0074');
+    expect(text).toContain('Schedule G');
+  });
+
+  it('says so when the account has no contracts at all', () => {
+    const book = XLSX.read(buildManualBillWorkbook({}, []), { type: 'buffer' });
+    expect(XLSX.utils.sheet_to_csv(book.Sheets['Your contract'])).toMatch(/no contracts on your account/i);
+  });
+
+  it('names a contract whose schedules were never recorded', () => {
+    const book = XLSX.read(buildManualBillWorkbook({}, [{ agreementNo: 'X/1', scheduleNames: [] }]), { type: 'buffer' });
+    const text = XLSX.utils.sheet_to_csv(book.Sheets['Your contract']);
+    expect(text).toContain('X/1');
+    expect(text).toMatch(/no schedules recorded/i);
+  });
+
+  it('is still a sheet the parser can read back', () => {
+    expect(parseManualBillWorkbook(buildManualBillWorkbook({}, [])).rows).toEqual([]);
+  });
+});

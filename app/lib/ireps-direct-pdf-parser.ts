@@ -585,10 +585,31 @@ function describeSkippedRows(skipped: Array<{ reason: string; itemNo: string; am
   return `Rows skipped while reading:\n${lines.join('\n')}`;
 }
 
+/**
+ * This PDF is not an IREPS bill — as opposed to being one the reader stumbled on.
+ *
+ * The distinction decides whether the free AI retry is worth running. A layout the
+ * exact reader has a gap in is our fault and the AI is the right answer to it. A scan,
+ * or a document that is not an IREPS bill at all, is neither: there is nothing for the
+ * AI to read either, and asking it produces a confident answer built from nothing, at
+ * our cost. Those go straight to the spreadsheet instead.
+ */
+export const NOT_IREPS = 'NOT_IREPS';
+
+function notIrepsError(message: string): Error {
+  const error = new Error(message);
+  (error as any).code = NOT_IREPS;
+  return error;
+}
+
+export function isNotIrepsError(error: unknown): boolean {
+  return !!error && typeof error === 'object' && (error as any).code === NOT_IREPS;
+}
+
 export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<DeterministicBillDetails> {
   const pages = await extractPositionedPdfPages(pdfBuffer);
   if (!pages.length || pages.reduce((sum, page) => sum + page.items.length, 0) < 20) {
-    throw new Error(
+    throw notIrepsError(
       'This looks like a scanned copy — the pages are images with no readable text, so the amounts cannot be extracted. '
       + 'Please upload the digitally-generated IREPS PDF (downloaded from IREPS) instead of a scanned or photographed copy.',
     );
@@ -960,7 +981,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
   const financials = extractScheduleSummaryFinancials(pages);
   const netBillAmount = financials.billAmount;
   if (!items.length) {
-    throw new Error('No payable IREPS item rows were found in this PDF.');
+    throw notIrepsError('No payable IREPS item rows were found in this PDF.');
   }
   if (netBillAmount === undefined) {
     throw new Error('The printed Bill Amount could not be read from this PDF.');

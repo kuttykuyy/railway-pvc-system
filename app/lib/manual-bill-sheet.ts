@@ -74,13 +74,27 @@ function toNumber(value: unknown): number | null {
  * the file is what gets forwarded around an office and the covering email is what gets
  * lost.
  */
-export function buildManualBillWorkbook(contract: {
+export interface SheetContract {
   agreementNo?: string | null;
   workDescription?: string | null;
   scheduleNames?: string[];
-}): Buffer {
+}
+
+export function buildManualBillWorkbook(
+  contract: SheetContract,
+  /**
+   * Every contract this person has, for the case where none has been chosen yet.
+   *
+   * The upload happens BEFORE the contract is picked — the contract is matched from the
+   * bill's agreement number — so at the moment a read fails there is often nothing to
+   * build a per-contract sheet from. Gating the whole way out on a contract being
+   * chosen hid it exactly when it was needed, which is what happened.
+   */
+  allContracts: SheetContract[] = [],
+): Buffer {
   const workbook = XLSX.utils.book_new();
   const schedules = (contract.scheduleNames || []).filter(Boolean);
+  const named = Boolean(contract.agreementNo);
 
   // ── The sheet they fill in ──────────────────────────────────────────────────
   const header = [...SHEET_COLUMNS];
@@ -95,15 +109,34 @@ export function buildManualBillWorkbook(contract: {
   // A dropdown would be better, and is not possible: the spreadsheet library here
   // cannot WRITE data validation. So the valid values are listed where they can be
   // copied from, and the upload checks them and says which row disagrees.
-  const contractRows: Array<[string, string]> = [
-    ['Agreement number', String(contract.agreementNo || '')],
-    ['Name of work', String(contract.workDescription || '')],
-    ['', ''],
-    ['Schedules on this agreement', ''],
-    ...(schedules.length
-      ? schedules.map((name): [string, string] => ['', name])
-      : [['', '(none recorded on this contract — leave the Schedule column blank)'] as [string, string]]),
-  ];
+  const contractRows: Array<[string, string]> = named
+    ? [
+      ['Agreement number', String(contract.agreementNo || '')],
+      ['Name of work', String(contract.workDescription || '')],
+      ['', ''],
+      ['Schedules on this agreement', ''],
+      ...(schedules.length
+        ? schedules.map((name): [string, string] => ['', name])
+        : [['', '(none recorded on this contract — leave the Schedule column blank)'] as [string, string]]),
+    ]
+    : [
+      // No contract chosen yet. List them all with their schedules, so the right
+      // schedule can still be copied exactly — the person knows which agreement this
+      // bill is, even though the app does not yet.
+      ['You have not picked a contract yet', ''],
+      ['', 'Pick it in the app when you upload this sheet. Copy the schedule for your'],
+      ['', 'agreement from the list below.'],
+      ['', ''],
+      ...(allContracts.length
+        ? allContracts.flatMap((c): Array<[string, string]> => [
+          [String(c.agreementNo || '(no agreement number)'), ''],
+          ...((c.scheduleNames || []).filter(Boolean).length
+            ? (c.scheduleNames || []).filter(Boolean).map((name): [string, string] => ['', name])
+            : [['', '(no schedules recorded — leave the Schedule column blank)'] as [string, string]]),
+          ['', ''],
+        ])
+        : [['', '(no contracts on your account yet)'] as [string, string]]),
+    ];
   const contractSheet = XLSX.utils.aoa_to_sheet(contractRows);
   contractSheet['!cols'] = [{ wch: 30 }, { wch: 60 }];
   XLSX.utils.book_append_sheet(workbook, contractSheet, CONTRACT_SHEET);
