@@ -25,7 +25,7 @@ export default function PrivacyPolicyPage() {
                 </CardTitle>
                 <div className="flex items-center gap-2 text-xs text-slate-400 mt-1 font-medium">
                   <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                  Last Updated: October 26, 2025
+                  Last Updated: August 24, 2026
                 </div>
               </div>
             </div>
