@@ -164,7 +164,22 @@ type ExtraCheck = { kind: 'table' | 'index' | 'constraint' | 'indexes-absent'; n
 
 // sql takes the resolved schema so every statement names where it acts — an
 // unqualified CREATE lands wherever the pooled search path points that instant.
-const PENDING_EXTRAS: Array<{ label: string; sql: (s: string) => string; why: string; check: ExtraCheck }> = [
+/**
+ * `caution` is what the page shows instead of its blanket reassurance.
+ *
+ * That reassurance said every change "changes no existing data, and is safe to run
+ * twice" -- which was written when they were all ADD COLUMN and is no longer true of
+ * all of them. One drops indexes. One refuses to build unless the data is cleaned up
+ * first, in a specific order. A page that says the same soothing sentence over both is
+ * worse than one that says nothing, because it is trusted.
+ */
+const PENDING_EXTRAS: Array<{
+  label: string;
+  sql: (s: string) => string;
+  why: string;
+  check: ExtraCheck;
+  caution?: string;
+}> = [
   {
     label: 'parse_failures',
     sql: (s) => `CREATE TABLE IF NOT EXISTS "${s}"."parse_failures" (
@@ -188,6 +203,10 @@ const PENDING_EXTRAS: Array<{ label: string; sql: (s: string) => string; why: st
       + '/api/admin/phone-numbers first. It will refuse to build while any number is '
       + 'still shared, which is exactly what it is for.',
     check: { kind: 'index', name: 'User_phone_key' },
+    caution: 'Order matters. Check /api/admin/phone-numbers FIRST: this refuses to build '
+      + 'while a number is on more than one account, and it indexes the stored text -- so '
+      + '"+919876543210" and "9876543210" count as different numbers and would slip past '
+      + 'it. Settle the shared numbers, POST there to normalise the formats, then apply.',
   },
   {
     label: 'uploaded_documents',
@@ -392,6 +411,9 @@ const PENDING_EXTRAS: Array<{ label: string; sql: (s: string) => string; why: st
       + 'isChargeable and quarter, a contract\'s dateOfOpening, and a document\'s '
       + 'isProvisional. Only the redundant "_idx" copies are named; the "_key" index behind '
       + 'each unique constraint is untouched, and a DROP INDEX cannot remove one anyway.',
+    caution: 'This one DROPS indexes -- the only change here that removes anything. '
+      + 'Only the redundant "_idx" copies are named; the "_key" index behind a unique '
+      + 'constraint is untouched, and a DROP INDEX cannot remove one anyway.',
     check: {
       kind: 'indexes-absent',
       name: 'User_email_idx, User_referralCode_idx, contracts_agreementNo_idx, '
@@ -450,6 +472,8 @@ async function statuses() {
       table: c.table,
       column: c.column,
       why: c.why,
+      // A plain ADD COLUMN, always. The ones that need a warning are all in the extras.
+      caution: null,
       exists: await columnExists(c.table, c.column),
     })),
   );
@@ -470,6 +494,7 @@ async function extraStatuses() {
       table: extra.label,
       column: extra.check.kind,
       why: extra.why,
+      caution: extra.caution ?? null,
       exists: await extraExists(extra.check),
     })),
   );

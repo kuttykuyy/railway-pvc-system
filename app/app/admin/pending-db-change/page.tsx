@@ -9,6 +9,8 @@ interface PendingColumnStatus {
   table: string;
   column: string;
   why: string;
+  /** Set when this change needs more than "press the button" — an order, or a drop. */
+  caution?: string | null;
   exists: boolean;
 }
 
@@ -60,6 +62,11 @@ export default function PendingDbChangePage() {
 
   useEffect(() => { check(); }, []);
 
+  const missing = columns.filter((c) => !c.exists);
+  const missingCount = missing.length;
+  // Only the outstanding ones: a caution on a change already applied is history.
+  const cautioned = missing.filter((c) => c.caution);
+
   return (
     <div className="p-6 max-w-2xl space-y-6">
       <div className="flex items-center gap-2">
@@ -75,8 +82,9 @@ export default function PendingDbChangePage() {
           <p className="text-sm text-slate-600 leading-relaxed">
             These ship as migrations, but applying them normally needs the production database
             URL, which Vercel keeps hidden. The app already holds that connection, so it can
-            apply them here. Every one is additive — a column, a table or an index — and nothing
-            is dropped or changed.
+            apply them here. Nearly all are additive — a column, a table or an index — and none
+            rewrites data. Anything that needs more care than that says so against its own name
+            below, in amber.
           </p>
           {columns.length > 0 && (
             <ul className="text-xs space-y-1.5">
@@ -92,6 +100,15 @@ export default function PendingDbChangePage() {
                     {['table', 'index', 'constraint'].includes(c.column) ? ` (${c.column})` : ''}
                     {c.exists ? ' — already applied' : ''}
                     <span className="block text-slate-400">{c.why}</span>
+                    {/* Against the change it belongs to, not as a blanket line at the
+                        bottom — a warning nobody can attach to a specific row is a
+                        warning nobody acts on. */}
+                    {c.caution && !c.exists && (
+                      <span className="mt-1 flex items-start gap-1.5 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-800">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
+                        <span>{c.caution}</span>
+                      </span>
+                    )}
                   </span>
                 </li>
               ))}
@@ -114,7 +131,17 @@ export default function PendingDbChangePage() {
               <div>
                 <p className="text-sm font-medium text-amber-900">Some changes missing</p>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  Adds the missing columns, tables and indexes. Changes no existing data, and is safe to run twice.
+                  {cautioned.length > 0 ? (
+                    <>
+                      Applies the {missingCount} missing change{missingCount === 1 ? '' : 's'}, and can
+                      be run again safely. Read {cautioned.length === 1 ? 'the amber note' : 'the amber notes'} above
+                      first — <strong>{cautioned.map((c) => c.table).join(', ')}</strong>{' '}
+                      {cautioned.length === 1 ? 'needs' : 'need'} something done in a
+                      particular order, or {cautioned.length === 1 ? 'removes' : 'remove'} something.
+                    </>
+                  ) : (
+                    <>Adds the missing columns, tables and indexes. Rewrites no existing data, and is safe to run twice.</>
+                  )}
                 </p>
               </div>
             </div>
