@@ -56,6 +56,28 @@ async function getMyDreamsCredentials(): Promise<MyDreamsCredentials | null> {
 }
 
 /**
+ * One template parameter, made safe to put on the wire.
+ *
+ * MyDreams takes all of a template's values as a SINGLE comma-joined query parameter,
+ * so the provider splits them back apart on commas. A comma inside a value therefore
+ * becomes an extra parameter, and a five-parameter template sent six values is refused
+ * outright — the message is not sent at all, rather than arriving with a stray comma.
+ *
+ * The bill amount was already guarded (which is why it uses toFixed and not
+ * toLocaleString), but names were not, and railway contractor names routinely carry
+ * one: "M/s ABC Constructions, Madurai". Newlines and tabs break the same way.
+ *
+ * A comma becomes a space rather than being dropped, so the name still reads properly.
+ */
+export function safeTemplateParam(value: unknown): string {
+  return String(value ?? '')
+    .replace(/[,\r\n\t]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, 250);
+}
+
+/**
  * Get admin WhatsApp number from settings
  */
 export async function getAdminWhatsAppNumber(): Promise<string | null> {
@@ -123,7 +145,7 @@ export async function sendTextTemplateWhatsApp(params: {
     url.searchParams.append('Contact', formatPhoneNumber(params.contact));
     url.searchParams.append('Template', params.template);
     if (params.params?.length) {
-      url.searchParams.append('Param', params.params.join(','));
+      url.searchParams.append('Param', params.params.map(safeTemplateParam).join(','));
     }
 
     const response = await fetch(url.toString(), {
@@ -165,7 +187,7 @@ export async function sendBillPDFWhatsApp(
     url.searchParams.append('Template', params.template);
     
     if (params.params && params.params.length > 0) {
-      url.searchParams.append('Param', params.params.join(','));
+      url.searchParams.append('Param', params.params.map(safeTemplateParam).join(','));
     }
     
     url.searchParams.append('Fileurl', params.fileUrl);
