@@ -1784,14 +1784,30 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'That spreadsheet is too large. Maximum size is 10MB.' }, { status: 400 });
       }
 
+      const sheetBuffer = Buffer.from(await file.arrayBuffer());
       const { parseManualBillWorkbook } = await import('@/lib/manual-bill-sheet');
-      const sheet = parseManualBillWorkbook(Buffer.from(await file.arrayBuffer()));
+      const sheet = parseManualBillWorkbook(sheetBuffer);
       if (!sheet.rows.length) {
         return NextResponse.json(
           { error: sheet.problems[0] || 'Nothing could be read from that spreadsheet.', problems: sheet.problems },
           { status: 400 },
         );
       }
+
+      // Kept like a bill PDF is. It IS the source document for this bill — where an
+      // auditor's "where did this figure come from?" ends — and the PDF branch keeps
+      // its file for exactly that reason. Skipping it here would leave a typed-in bill
+      // as the only kind with nothing behind it.
+      const { storeUploadedDocument } = await import('@/lib/uploaded-documents');
+      storedDocumentId = await storeUploadedDocument({
+        kind: 'bill',
+        buffer: sheetBuffer,
+        fileName: file.name,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        userId: user?.id || null,
+        userEmail: user?.email || null,
+        billId: forBillId || null,
+      });
 
       let contractDescription = '';
       let openedAt: Date | null = null;
@@ -1907,7 +1923,11 @@ export async function POST(request: NextRequest) {
           (billDetails as any).loaNo,
         );
       }
-    } else {
+    } else if (stage !== 'sheet') {
+      // 'sheet' has already read the request body and built billDetails from it. A
+      // request body can only be read ONCE, so falling in here after that threw
+      // "Body is unusable: Body has already been read" on every spreadsheet upload —
+      // the branch was written as the PDF path's else, before there was a third way in.
       const formData = await request.formData();
       const file = formData.get('file') as File | null;
       if (!file) return NextResponse.json({ error: 'No PDF file provided' }, { status: 400 });

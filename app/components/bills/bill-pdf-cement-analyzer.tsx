@@ -1301,7 +1301,12 @@ export function BillPdfCementAnalyzer({
             big drop-zone hero — which is the one a new bill opens on — it rendered
             nowhere at all. The notice above told people to use a panel that was not on
             their screen. It is one block now, shown whichever uploader is drawn. */}
-        <div className={showGrandUploader ? 'm-4 mt-0' : ''}>
+        {/* A band, not a floating card. The grand uploader is full-bleed inside a
+            CardContent with no padding, so an inset box under it left the dark panel's
+            square bottom corners poking out either side and the two edges touching —
+            it read as one thing overlapping another. A full-width band with a rule
+            above it separates them the way the rest of the card does. */}
+        <div className={showGrandUploader ? 'border-t border-slate-200 bg-white p-4' : ''}>
           <div className={`rounded-xl border-2 p-4 ${readFailed
             ? 'border-emerald-400 bg-emerald-50 shadow-sm ring-2 ring-emerald-100'
             : 'border-dashed border-slate-300 bg-slate-50/70'}`}>
