@@ -8,6 +8,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { normalizePhone, PHONE_FORMAT_MESSAGE, PHONE_TAKEN_MESSAGE } from '@/lib/phone-validation';
 import { phoneIsTaken } from '@/lib/phone-owner';
+import { phoneOtpRequired, consumeVerifiedOtp, PHONE_UNVERIFIED_MESSAGE } from '@/lib/phone-otp';
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,6 +36,20 @@ export async function POST(req: NextRequest) {
     });
     if (await phoneIsTaken(phone, me?.id)) {
       return NextResponse.json({ error: PHONE_TAKEN_MESSAGE }, { status: 409 });
+    }
+
+    // Changing to a DIFFERENT number needs that number proved. Re-saving the one you
+    // already have does not — the profile form posts on every save, and asking someone
+    // to re-verify a number they have not touched is a demand with no purpose.
+    const current = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { phone: true },
+    });
+    const unchanged = normalizePhone(current?.phone) === phone;
+    if (!unchanged && await phoneOtpRequired()) {
+      if (!(await consumeVerifiedOtp(phone))) {
+        return NextResponse.json({ error: PHONE_UNVERIFIED_MESSAGE }, { status: 400 });
+      }
     }
 
     // Update user phone number

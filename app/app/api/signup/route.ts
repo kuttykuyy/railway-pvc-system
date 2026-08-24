@@ -10,6 +10,7 @@ import { randomBytes } from 'crypto';
 import { validatePhoneNumber, sendUserSignupWelcome, sendWelcomeMessageToUser, getAdminWhatsAppNumber } from '@/lib/whatsapp-mydreams';
 import { normalizePhone, PHONE_FORMAT_MESSAGE, PHONE_TAKEN_MESSAGE } from '@/lib/phone-validation';
 import { phoneIsTaken } from '@/lib/phone-owner';
+import { phoneOtpRequired, consumeVerifiedOtp, PHONE_UNVERIFIED_MESSAGE } from '@/lib/phone-otp';
 import { isEmailVerificationRequired } from '@/lib/admin-settings';
 import { validatePassword } from '@/lib/password-strength';
 import { RAILWAY_ZONE_STEEL_CITY_MAP } from '@/lib/zone-steel-city-mapping';
@@ -123,6 +124,16 @@ export async function POST(request: NextRequest) {
     }
     if (await phoneIsTaken(normalizedPhone)) {
       return NextResponse.json({ error: PHONE_TAKEN_MESSAGE }, { status: 400 });
+    }
+
+    // And the number has to have been PROVED, not merely typed. The OTP machinery has
+    // been in the codebase the whole time and called from nowhere; the line this
+    // replaces read "Verify that phone OTP was completed - REMOVED". Spending the
+    // verification deletes it, so one code proves one number once.
+    if (await phoneOtpRequired()) {
+      if (!(await consumeVerifiedOtp(normalizedPhone))) {
+        return NextResponse.json({ error: PHONE_UNVERIFIED_MESSAGE }, { status: 400 });
+      }
     }
 
     // Check if user already exists

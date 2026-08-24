@@ -21,9 +21,13 @@ import { TurnstileWidget } from '@/components/ui/turnstile-widget';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 import { getOfficialRailwayEmailDomainHelp, isOfficialRailwayEmail } from '@/lib/official-email';
+import { VerifyMobile } from '@/components/auth/verify-mobile';
 
 export function SignUpForm() {
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  // Set by VerifyMobile: true once THIS number has been proved, and false again the
+  // moment it is edited. Also true when the server says no code can be sent.
+  const [phoneVerified, setPhoneVerified] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -68,6 +72,11 @@ export function SignUpForm() {
       setLoading(false);
       return;
     }
+    if (!phoneVerified) {
+      setFieldErrors({ whatsappNumber: 'Please verify your number first — tap Verify and enter the code sent on WhatsApp.' });
+      return;
+    }
+
     if (!validatePhoneNumber(whatsappNumber)) {
       setFieldErrors({ whatsappNumber: 'Invalid format. Use: +[country code][number] (e.g., +919876543210)' });
       setLoading(false);
@@ -338,26 +347,12 @@ export function SignUpForm() {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="whatsappNumber" className="text-sm font-semibold text-gray-700">WhatsApp Number <span className="text-red-500">*</span></Label>
-                <Input
-                  id="whatsappNumber"
-                  type="tel"
-                  value={whatsappNumber}
-                  onChange={(e) => {
-                    setWhatsappNumber(e.target.value);
-                    setFieldErrors({});
-                  }}
-                  required
-                  placeholder="+919876543210"
-                  className={`h-11 px-4 bg-gray-50 border-gray-200 focus:bg-white transition-colors ${
-                    fieldErrors.whatsappNumber ? 'border-red-500' : ''
-                  }`}
-                />
-                {fieldErrors.whatsappNumber && (
-                  <p className="text-sm text-red-600">{fieldErrors.whatsappNumber}</p>
-                )}
-              </div>
+              <VerifyMobile
+                value={whatsappNumber}
+                onChange={(next) => { setWhatsappNumber(next); setFieldErrors({}); }}
+                onVerifiedChange={setPhoneVerified}
+                error={fieldErrors.whatsappNumber}
+              />
 
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-semibold text-gray-700">Password</Label>

@@ -1,7 +1,7 @@
 ﻿import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { validatePhoneNumber } from '@/lib/whatsapp-mydreams';
+import { normalizePhone, PHONE_FORMAT_MESSAGE } from '@/lib/phone-validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,20 +9,19 @@ const MAX_ATTEMPTS = 3;
 
 export async function POST(request: NextRequest) {
   try {
-    const { phone, otp } = await request.json();
+    const { phone: rawPhone, otp } = await request.json();
 
-    if (!phone || !otp) {
+    if (!rawPhone || !otp) {
       return NextResponse.json(
         { error: 'Phone number and OTP are required' },
         { status: 400 }
       );
     }
 
-    if (!validatePhoneNumber(phone)) {
-      return NextResponse.json(
-        { error: 'Invalid phone number format' },
-        { status: 400 }
-      );
+    // Same normalised form the code was stored against, or the row is never found.
+    const phone = normalizePhone(rawPhone);
+    if (!phone) {
+      return NextResponse.json({ error: PHONE_FORMAT_MESSAGE }, { status: 400 });
     }
 
     // Find the latest non-expired, non-verified OTP for this phone

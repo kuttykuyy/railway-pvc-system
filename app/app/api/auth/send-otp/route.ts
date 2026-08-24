@@ -1,7 +1,10 @@
 ﻿import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { validatePhoneNumber, sendOtpWhatsApp } from '@/lib/whatsapp-mydreams';
+import { sendOtpWhatsApp } from '@/lib/whatsapp-mydreams';
+import { normalizePhone, PHONE_FORMAT_MESSAGE, PHONE_TAKEN_MESSAGE } from '@/lib/phone-validation';
+import { accountsHoldingPhone } from '@/lib/phone-owner';
+import { phoneOtpRequired } from '@/lib/phone-otp';
 import { randomInt } from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -11,32 +14,40 @@ const MAX_OTPS_PER_HOUR = 5;
 const OTP_EXPIRY_MINUTES = 5;
 const COOLDOWN_SECONDS = 30;
 
+/**
+ * Whether the sign-up form has to ask for a code at all. Read by the form on load so
+ * it can show the Verify step only when a code can actually be delivered.
+ */
+export async function GET() {
+  return NextResponse.json({ required: await phoneOtpRequired() });
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { phone } = await request.json();
+    const { phone: rawPhone } = await request.json();
 
-    if (!phone) {
+    if (!rawPhone) {
       return NextResponse.json(
         { error: 'Phone number is required' },
         { status: 400 }
       );
     }
 
-    if (!validatePhoneNumber(phone)) {
-      return NextResponse.json(
-        { error: 'Invalid phone number format. Use: +[country code][number]' },
-        { status: 400 }
-      );
+    // Everything downstream -- the stored row, the duplicate check, the verification
+    // the signup route later spends -- works on the normalised number. Storing what was
+    // typed here is what made the old duplicate check miss "9876543210" sitting beside
+    // "+919876543210".
+    const phone = normalizePhone(rawPhone);
+    if (!phone) {
+      return NextResponse.json({ error: PHONE_FORMAT_MESSAGE }, { status: 400 });
     }
 
-    // Check if phone is already registered
-    const existingUser = await prisma.user.findFirst({
-      where: { phone },
-    });
-
-    if (existingUser) {
+    // Already somebody's? Matched across the old stored formats, not just this exact
+    // string.
+    const owners = await accountsHoldingPhone(phone);
+    if (owners.length > 0) {
       return NextResponse.json(
-        { error: 'This WhatsApp number is already registered. Please sign in instead.' },
+        { error: PHONE_TAKEN_MESSAGE + ' If it is yours, please sign in instead.' },
         { status: 400 }
       );
     }

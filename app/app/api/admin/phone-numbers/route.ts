@@ -127,6 +127,68 @@ export async function GET() {
   });
 }
 
+/**
+ * Settle one shared number: the account named keeps it, every other account holding it
+ * has it cleared.
+ *
+ * This is the one operation the cleanup needs and the admin pages had no way to perform
+ * — there is no screen anywhere for editing somebody's phone number. Clearing rather
+ * than reassigning is deliberate: we do not know what the other person's real number
+ * is, and inventing one would be worse than asking them.
+ *
+ * What happens to a cleared account: it is bounced to /auth/complete-mobile on its next
+ * page load and has to supply a number, which can no longer be one somebody else holds.
+ * Admins, superadmins and railway officials are exempt from that gate, so clearing
+ * theirs costs them nothing at all.
+ */
+export async function PATCH(request: NextRequest) {
+  const auth = await requireAdmin();
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
+  const { number, keepEmail } = await request.json().catch(() => ({}));
+  const normalized = normalizePhone(String(number || ''));
+  if (!normalized || !keepEmail) {
+    return NextResponse.json(
+      { error: 'Send { number, keepEmail } — the number, and the account that keeps it.' },
+      { status: 400 },
+    );
+  }
+
+  const { byNumber } = await survey();
+  const holders = byNumber.get(normalized) || [];
+  if (holders.length === 0) {
+    return NextResponse.json({ error: `No account holds ${normalized}.` }, { status: 404 });
+  }
+  const keeper = holders.find(h => h.email.toLowerCase() === String(keepEmail).toLowerCase());
+  if (!keeper) {
+    return NextResponse.json(
+      { error: `${keepEmail} does not hold ${normalized}. Holders: ${holders.map(h => h.email).join(', ')}` },
+      { status: 400 },
+    );
+  }
+
+  const released = holders.filter(h => h.id !== keeper.id);
+  for (const holder of released) {
+    await prisma.user.update({ where: { id: holder.id }, data: { phone: null } });
+  }
+  // The keeper's own row is normalised on the way past, so this number is finished with.
+  if (keeper.stored !== normalized) {
+    await prisma.user.update({ where: { id: keeper.id }, data: { phone: normalized } });
+  }
+
+  console.info('[admin/phone-numbers] settled a shared number', {
+    number: normalized,
+    keptBy: keeper.email,
+    clearedFrom: released.map(h => h.email),
+  });
+
+  return NextResponse.json({
+    number: normalized,
+    keptBy: keeper.email,
+    clearedFrom: released.map(h => ({ email: h.email, contracts: h.contracts })),
+  });
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAdmin();
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
