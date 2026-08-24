@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { PDFDocument } from 'pdf-lib';
 import { generateCoveringLetter } from '@/lib/pdf/generators/covering-letter-generator';
+import { emailLinkOrigin } from '@/lib/email-link-origin';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // 60 seconds for combining multiple PDFs
@@ -95,7 +96,10 @@ export async function POST(
     // 2. Generate and add current bill PDF
     console.log('Generating current bill PDF...');
     const billPdfResponse = await fetch(
-      `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/bills/${billId}/pdf-report`,
+      // emailLinkOrigin(), not NEXTAUTH_URL: on this deployment that names the platform
+      // host, and a fetch to the wrong host can answer 200 with an HTML page that then
+      // gets stitched into the combined PDF as if it were a report.
+      `${emailLinkOrigin()}/api/bills/${billId}/pdf-report`,
       {
         headers: {
           Cookie: request.headers.get('cookie') || '',
@@ -117,7 +121,7 @@ export async function POST(
     console.log('Generating abstract PDF...');
     try {
       const abstractPdfResponse = await fetch(
-        `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/reports/abstract/pdf?contractId=${bill.contractId}`,
+        `${emailLinkOrigin()}/api/reports/abstract/pdf?contractId=${bill.contractId}`,
         {
           headers: {
             Cookie: request.headers.get('cookie') || '',
@@ -156,7 +160,7 @@ export async function POST(
       try {
         console.log(`Generating PDF for bill ${prevBill.billNo}...`);
         const prevBillPdfResponse = await fetch(
-          `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/bills/${prevBill.id}/pdf-report`,
+          `${emailLinkOrigin()}/api/bills/${prevBill.id}/pdf-report`,
           {
             headers: {
               Cookie: request.headers.get('cookie') || '',

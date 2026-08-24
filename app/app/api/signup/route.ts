@@ -276,7 +276,10 @@ export async function POST(request: NextRequest) {
 
     // Send welcome email to new user (async, non-blocking)
     try {
-      const appUrl = process.env.NEXTAUTH_URL || 'https://irpvc.in';
+      // The address customers know, not NEXTAUTH_URL -- that names the platform host,
+      // so a welcome email built from it invited people to a domain their account does
+      // not exist on.
+      const appUrl = emailLinkOrigin();
       const appHost = (() => { try { return new URL(appUrl).hostname; } catch { return 'irpvc.in'; } })();
 
       const welcomeHtml = `

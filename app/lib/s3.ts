@@ -13,6 +13,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createS3Client, getBucketConfig, resolveStorageSettings } from './aws-config';
+import { emailLinkOrigin } from './email-link-origin';
 
 let s3Client: S3Client | null = null;
 let bucketName = '';
@@ -325,7 +326,9 @@ export async function uploadFile(buffer: Buffer, fileName: string): Promise<stri
  * /api/public/uploads endpoint. S3-backed files use presigned URLs.
  */
 export async function getFileUrl(key: string, expiresIn: number = 3600): Promise<string> {
-  const baseUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, '') || 'http://localhost:3000';
+  // The site's own address: this URL is handed to a person to click. NEXTAUTH_URL names
+  // the platform host on this deployment, which is a link to a domain they cannot use.
+  const baseUrl = emailLinkOrigin();
 
   // Database-backed files are served through the authenticated streaming API.
   if (key.startsWith('db://')) {

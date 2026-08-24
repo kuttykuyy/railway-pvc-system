@@ -12,6 +12,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import jwt from 'jsonwebtoken';
 import { getNextAuthSecret } from '@/lib/auth';
+import { emailLinkOrigin } from '@/lib/email-link-origin';
+import { looksLikePdf, describeNonPdf } from '@/lib/pdf-bytes';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,11 +73,25 @@ export async function GET(req: NextRequest) {
     
     logger.log('[Public PDF] Bill found:', bill.billNo);
 
-    // Build PDF report URL with all parameters
-    let pdfReportUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/bills/${billId}/pdf-report?public_access=true&token=${encodeURIComponent(token)}`;
-    
+    // Build PDF report URL with all parameters.
+    //
+    // Two things were wrong here.
+    //
+    // The origin came from NEXTAUTH_URL, which on this deployment names the PLATFORM
+    // host and not the site — the same trap emailLinkOrigin() exists to close. A fetch
+    // to the wrong host can answer 200 with an HTML page, and the bytes were forwarded
+    // as application/pdf regardless, which is a corrupt attachment on the phone.
+    //
+    // And no format was asked for, so the route fell to its 'detailed' default. Every
+    // other download in the app asks for ir_standard — the bill list, the bill form,
+    // the full report page. The one PDF a contractor actually receives was the only
+    // one that was not the IR statement.
+    const format = searchParams.get('format') || 'ir_standard';
+    let pdfReportUrl = `${emailLinkOrigin()}/api/bills/${billId}/pdf-report`
+      + `?public_access=true&format=${encodeURIComponent(format)}&token=${encodeURIComponent(token)}`;
+
     if (templateId) {
-      pdfReportUrl += `&templateId=${templateId}`;
+      pdfReportUrl += `&templateId=${encodeURIComponent(templateId)}`;
     }
     
     logger.log('[Public PDF] Fetching PDF from:', pdfReportUrl.substring(0, 80) + '...');
@@ -112,17 +128,40 @@ export async function GET(req: NextRequest) {
       // Get the PDF as a buffer
       const pdfBuffer = await pdfResponse.arrayBuffer();
       const elapsed = Date.now() - startTime;
+
+      // Is it actually a PDF? Every PDF begins "%PDF-". A 200 carrying an HTML error
+      // page was being relabelled application/pdf and handed to WhatsApp, which is a
+      // file that downloads and will not open — and nothing anywhere said so. Better a
+      // failure the log names than an attachment the contractor cannot read.
+      if (!looksLikePdf(pdfBuffer)) {
+        console.error('[Public PDF] The report endpoint did not return a PDF.',
+          'bytes:', pdfBuffer.byteLength, 'got:', describeNonPdf(pdfBuffer));
+        return NextResponse.json(
+          { error: 'The report could not be generated as a PDF.' },
+          { status: 502 },
+        );
+      }
+
       logger.log('[Public PDF] PDF generated successfully, size:', pdfBuffer.byteLength, 'bytes, time:', elapsed, 'ms');
 
-      // Return the PDF with proper headers for WhatsApp
+      // Return the PDF with proper headers for WhatsApp.
+      //
+      // No Content-Length and no Accept-Ranges, both deliberately. The length was set by
+      // hand from the buffer, which is wrong the moment the platform compresses the
+      // response — a declared length that disagrees with the bytes on the wire is a
+      // truncated download. Accept-Ranges promised range support this route does not
+      // implement, so a client that took it up got whatever it made of a full body
+      // answering a partial request. Letting the platform frame its own response is the
+      // fix for both.
+      //
+      // Cache-Control is private: this is one contractor's bill behind a signed token,
+      // and it has no business sitting in a shared cache for an hour.
       return new NextResponse(pdfBuffer, {
         status: 200,
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="PVC_Report_${bill.billNo?.replace(/\//g, '_')}.pdf"`,
-          'Content-Length': pdfBuffer.byteLength.toString(),
-          'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
-          'Accept-Ranges': 'bytes',
+          'Cache-Control': 'private, no-store',
           'X-Generation-Time-Ms': elapsed.toString(),
         },
       });

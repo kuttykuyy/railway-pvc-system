@@ -15,6 +15,7 @@ import {
 } from './whatsapp-conversation';
 import { sendWhatsAppTextMessage } from './whatsapp-response';
 import { prisma } from './db';
+import { emailLinkOrigin } from './email-link-origin';
 
 /**
  * Format phone number for WhatsApp (91XXXXXXXXXX format)
@@ -152,7 +153,7 @@ async function handleCommand(conversation: any, command: string) {
       await sendWhatsAppTextMessage(
         phone,
         '❌ Your phone number is not registered. Please sign up at ' +
-          process.env.NEXTAUTH_URL +
+          emailLinkOrigin() +
           ' first.'
       );
       return;
@@ -200,7 +201,7 @@ async function sendContractSelectionMessage(conversation: any) {
     await sendWhatsAppTextMessage(
       phone,
       '❌ You don\'t have any contracts yet. Please create a contract first at ' +
-        process.env.NEXTAUTH_URL
+        emailLinkOrigin()
     );
     await resetConversation(conversation.id);
     return;
@@ -902,7 +903,7 @@ async function createBillFromConversation(conversation: any) {
         `🏗️ *Classification:* ${data.classificationName}\n` +
         `🧱 *Cement:* ${cementPercentage}% (₹${cementAmount.toLocaleString('en-IN')})\n` +
         `🔩 *Steel:* ${steelPercentage}% (₹${steelAmount.toLocaleString('en-IN')})\n\n` +
-        `You can view the bill details at:\n${process.env.NEXTAUTH_URL}/bills/${bill.id}\n\n` +
+        `You can view the bill details at:\n${emailLinkOrigin()}/bills/${bill.id}\n\n` +
         `Type "help" to see other commands.`
     );
 
@@ -962,7 +963,7 @@ async function sendBillStatusMessage(conversation: any) {
     message += `   Date: ${new Date(bill.dateOfMeasurement).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n`;
   });
 
-  message += `\nView all bills at: ${process.env.NEXTAUTH_URL}/bills`;
+  message += `\nView all bills at: ${emailLinkOrigin()}/bills`;
 
   await sendWhatsAppTextMessage(phone, message);
 }

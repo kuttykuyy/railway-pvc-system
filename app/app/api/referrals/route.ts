@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { emailLinkOrigin } from '@/lib/email-link-origin';
 import {
   ensureUserReferralCode,
   REFERRAL_MINIMUM_TOPUP,
@@ -68,7 +69,9 @@ export async function GET(request: NextRequest) {
     statusCounts.map((item) => [item.status, item._count._all])
   );
   const totalInvited = statusCounts.reduce((sum, item) => sum + item._count._all, 0);
-  const origin = request.headers.get('origin') || process.env.NEXTAUTH_URL || 'https://www.irpvc.in';
+  // A referral link gets pasted into WhatsApp and email, so the fallback has to be the
+  // address customers know -- NEXTAUTH_URL names the platform host.
+  const origin = request.headers.get('origin') || emailLinkOrigin();
   const referralLink = `${origin.replace(/\/$/, '')}/auth/signup?ref=${encodeURIComponent(referralCode)}`;
 
   return NextResponse.json({
