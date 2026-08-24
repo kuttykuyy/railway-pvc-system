@@ -89,7 +89,9 @@ export function VerifyMobile({
         return;
       }
       setSentTo(value.trim());
-      setNotice('Code sent on WhatsApp. It is good for 5 minutes.');
+      // Named by the server, because "check your WhatsApp" while the code is sitting in
+      // the SMS inbox leaves somebody waiting for something that already arrived.
+      setNotice(`${data.message || 'Code sent'}. It is good for 5 minutes.`);
     } catch {
       setProblem('The code could not be sent. Check your connection and try again.');
     } finally {
@@ -183,8 +185,8 @@ export function VerifyMobile({
       {error && <p className="text-sm text-red-600">{error}</p>}
       {required && !verified && !sentTo && (
         <p className="text-xs text-slate-500">
-          We send a code to this number on WhatsApp. It is how your bills reach you, so it
-          has to be a number you can receive messages on.
+          We send a code to this number, on WhatsApp or by SMS. It is how your bills reach
+          you, so it has to be a number you can receive messages on.
         </p>
       )}
     </div>

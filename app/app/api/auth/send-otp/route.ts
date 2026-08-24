@@ -99,11 +99,27 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Send OTP via WhatsApp
-    const result = await sendOtpWhatsApp(phone, otp);
+    // Two channels, tried in order. One channel is one point of failure standing
+    // between a new customer and the product — which is exactly what happened when the
+    // WhatsApp template went missing and nobody could sign up at all.
+    let result = await sendOtpWhatsApp(phone, otp);
+    let sentBy = 'WhatsApp';
+    if (!result.success) {
+      console.warn('[OTP] WhatsApp refused the code, trying SMS:', result.error);
+      const { sendOtpSms, isMsg91Configured } = await import('@/lib/msg91');
+      if (await isMsg91Configured()) {
+        const sms = await sendOtpSms(phone, otp);
+        if (sms.success) {
+          result = { success: true, messageId: sms.messageId };
+          sentBy = 'SMS';
+        } else {
+          console.error('[OTP] SMS also failed:', sms.error);
+        }
+      }
+    }
 
     if (!result.success) {
-      console.error('[OTP] Failed to send WhatsApp OTP:', result.error);
+      console.error('[OTP] No channel could deliver the code:', result.error);
       // Trip the breaker: a code that cannot be delivered must not become a wall
       // between a new user and the product. The signup route reads this and stops
       // demanding proof until the channel is working again.
@@ -120,11 +136,16 @@ export async function POST(request: NextRequest) {
     // It worked, so whatever was wrong is not wrong now.
     await markOtpDeliveryWorking();
 
-    logger.log('[OTP] ✅ OTP sent to:', phone);
+    logger.log(`[OTP] ✅ OTP sent to ${phone} by ${sentBy}`);
 
     return NextResponse.json({
       success: true,
-      message: 'OTP sent to your WhatsApp number',
+      sentBy,
+      // Named, because "check your WhatsApp" while the code is sitting in the SMS inbox
+      // is a person waiting for something that already arrived.
+      message: sentBy === 'SMS'
+        ? 'Code sent by SMS to your mobile number'
+        : 'Code sent to your WhatsApp number',
       expiresIn: OTP_EXPIRY_MINUTES * 60, // seconds
     });
   } catch (error) {

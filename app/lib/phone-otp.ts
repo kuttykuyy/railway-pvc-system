@@ -22,15 +22,6 @@ import { logger } from './logger';
 const VERIFICATION_VALID_MINUTES = 30;
 
 /**
- * Whether a number must be proved before it can be saved.
- *
- * Tied to WhatsApp being configured, because WhatsApp is the only way the code is
- * delivered. Demanding proof that cannot be sent would lock every new user out of the
- * product, so when there is no way to deliver a code the requirement lifts and says so
- * in the log. Turning WhatsApp off is an admin action, not something a signing-up user
- * can reach.
- */
-/**
  * Where the "delivery is broken" flag lives. AdminSettings, so it survives a cold start
  * and every instance sees the same answer.
  */
@@ -56,12 +47,12 @@ export async function markOtpDeliveryBroken(reason: string): Promise<void> {
   const until = new Date(Date.now() + BREAKER_MINUTES * 60 * 1000).toISOString();
   console.error(
     `[phone-otp] Cannot deliver verification codes (${reason}). Mobile numbers will be `
-    + `accepted WITHOUT verification until ${until}. Fix the WhatsApp template to restore it.`,
+    + `accepted WITHOUT verification until ${until}. Fix a delivery channel to restore it.`,
   );
   try {
     await prisma.adminSettings.upsert({
       where: { key: BREAKER_KEY },
-      create: { key: BREAKER_KEY, value: until, description: 'Set automatically when a WhatsApp OTP could not be delivered.' },
+      create: { key: BREAKER_KEY, value: until, description: 'Set automatically when no channel could deliver a verification code.' },
       update: { value: until },
     });
   } catch (error) {
@@ -87,18 +78,25 @@ export async function markOtpDeliveryWorking(): Promise<void> {
  * delivered locks every new user out of the product, which is a far worse failure than
  * an unverified number.
  *
- *   1. WhatsApp is not configured at all — no channel to send on.
- *   2. A send failed recently — a channel that is configured but not working.
+ *   1. No channel is configured at all — neither WhatsApp nor SMS.
+ *   2. Every channel failed recently — configured, but not working.
  *
  * Both are admin-side conditions and neither is something a signing-up user can reach
  * or cause, so lifting the requirement is not a hole they can walk through.
  */
 export async function phoneOtpRequired(): Promise<boolean> {
-  const configured = await isMyDreamsWhatsAppConfigured();
-  if (!configured) {
+  // Either channel will do. Requiring WhatsApp specifically would have switched
+  // verification off across the whole product on the day its template went missing,
+  // even with SMS sitting there working.
+  const { isMsg91Configured } = await import('./msg91');
+  const [whatsApp, sms] = await Promise.all([
+    isMyDreamsWhatsAppConfigured(),
+    isMsg91Configured(),
+  ]);
+  if (!whatsApp && !sms) {
     console.warn(
-      '[phone-otp] WhatsApp is not configured, so mobile numbers are being accepted '
-      + 'WITHOUT verification. Configure WhatsApp in admin settings to turn this back on.',
+      '[phone-otp] No channel can deliver a code — neither WhatsApp nor MSG91 is '
+      + 'configured — so mobile numbers are being accepted WITHOUT verification.',
     );
     return false;
   }
@@ -149,4 +147,4 @@ export async function consumeVerifiedOtp(rawPhone: string): Promise<boolean> {
 
 /** The wording used wherever a number arrives without having been proved. */
 export const PHONE_UNVERIFIED_MESSAGE =
-  'Please verify your mobile number first — tap Verify and enter the code sent to you on WhatsApp.';
+  'Please verify your mobile number first — tap Verify and enter the code we send you.';
