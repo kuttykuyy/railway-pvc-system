@@ -1,5 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
+import { notifyBillByWhatsApp } from '@/lib/bill-whatsapp';
 import { prisma } from '@/lib/db';
 import { getQuarterFromDate, calculateDedicatedCementPvc, calculateDedicatedSteelPvc, calculateClassificationEntryPvc, getClassificationComponents } from '@/lib/pvc-calculations';
 import { advancedCache } from '@/lib/advanced-cache';
@@ -718,6 +720,25 @@ export async function PUT(
     // key-shaped pattern this used never matched, so an edited bill kept handing out
     // its pre-edit report.
     advancedCache.invalidateByTag(`bill:${id}`);
+
+    // Tell the contractor when the money changed, and only then.
+    //
+    // An edited bill used to notify nobody, so a corrected figure never reached the
+    // contractor still holding the report it replaced. But an edit is also how a typo in
+    // a description gets fixed, and nobody wants a WhatsApp message for that -- so the
+    // test is the PVC total itself, to the paisa, not "a save happened".
+    const previousPvc = Number(existingBill.pvcCalculation?.totalPvc ?? 0);
+    const pvcChanged = Math.abs(totalPvc - previousPvc) >= 0.005;
+    if (pvcChanged) {
+      console.log(`📱 PVC changed on edit (₹${previousPvc.toFixed(2)} → ₹${totalPvc.toFixed(2)}) — notifying`);
+      after(() => notifyBillByWhatsApp({
+        billId: id,
+        billNo: billNo,
+        contractorPhone: existingBill.contract?.contractorPhone,
+        contractorName: existingBill.contract?.contractorName,
+        reason: 'revised',
+      }));
+    }
 
     return NextResponse.json(updatedBill);
     

@@ -1,6 +1,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { prisma } from '@/lib/db';
+import { notifyBillByWhatsApp, notifyAdminOfBillBatch } from '@/lib/bill-whatsapp';
 import { getQuarterFromDate, calculateTotalPvc, calculateClassificationBasedPvcWithComponents, calculateDedicatedCementPvc, calculateDedicatedSteelPvc } from '@/lib/pvc-calculations';
 import { createQuarterlyAveragesMemo } from '@/lib/db-utils';
 import { validateApiAccess } from '@/lib/payment-validation';
@@ -311,6 +313,8 @@ export async function POST(request: NextRequest) {
 
     // STEP 3: Create all bills (validation already passed)
     const createdBills = [];
+    /** What the contractor and the admin are told about, once the batch has committed. */
+    const notifiable: Array<{ id: string; billNo: string; totalPvc: number }> = [];
 
     // Get current bill count for contract to generate sequential PVC numbers
     // Get all existing bills for contract to calculate next sequential PVC numbers safely
@@ -635,6 +639,7 @@ export async function POST(request: NextRequest) {
         await linkUploadedDocument(billInput.uploadedDocumentId, { billId: bill.id, userId: user.id });
       }
 
+      notifiable.push({ id: bill.id, billNo: bill.billNo || '', totalPvc });
       createdBills.push(bill);
     }
 
@@ -735,6 +740,42 @@ export async function POST(request: NextRequest) {
       }
       await releaseTrialClaim();
       throw batchError;
+    }
+
+    // Tell the contractor about each bill, and the admin about the batch.
+    //
+    // A batch used to notify nobody at all, so ten bills made through Bulk New reached
+    // the contractor only if somebody thought to send them by hand. One message per
+    // bill, because each bill is a separate claim with its own report -- but only ONE
+    // message to the admin, because ten identical admin notifications for one action is
+    // noise, not information.
+    //
+    // All of it inside after(): a batch of ten would otherwise add ten outbound calls to
+    // a response the user is already waiting on.
+    if (createdBills.length > 0) {
+      // Collected in the loop, where each bill's PVC total is actually in scope — the
+      // created row itself does not carry the calculation.
+      const notified = notifiable;
+      const batchPvc = notified.reduce((sum, b) => sum + b.totalPvc, 0);
+      after(async () => {
+        for (const b of notified) {
+          await notifyBillByWhatsApp({
+            billId: b.id,
+            billNo: b.billNo,
+            contractorPhone: contract.contractorPhone,
+            contractorName: contract.contractorName,
+            reason: 'created',
+            notifyAdmin: false,
+          });
+        }
+        await notifyAdminOfBillBatch({
+          count: notified.length,
+          agreementNo: contract.agreementNo,
+          contractorName: contract.contractorName,
+          totalPvc: batchPvc,
+          billNos: notified.map((b) => b.billNo).filter(Boolean) as string[],
+        });
+      });
     }
 
     return NextResponse.json({

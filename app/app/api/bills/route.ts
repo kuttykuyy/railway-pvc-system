@@ -18,7 +18,7 @@ import { getPaginationParams, createPaginatedResponse } from '@/lib/api-helpers'
 import rateLimiter, { RATE_LIMITS, getIdentifier } from '@/lib/rate-limiter';
 import { extractSteelTypesFromEntries } from '@/lib/steel-type-handler';
 import { resolveBillClassificationPolicy } from '@/lib/bill-classification-policy';
-import { sendBillPDFNotification, isMyDreamsWhatsAppConfigured, validatePhoneNumber, getAdminWhatsAppNumber, sendBillPDFWithTemplate } from '@/lib/whatsapp-mydreams';
+import { notifyBillByWhatsApp } from '@/lib/bill-whatsapp';
 import { notifyNewBillCreated } from '@/lib/slack-webhook';
 import jwt from 'jsonwebtoken';
 import { getNextAuthSecret } from '@/lib/auth';
@@ -1114,83 +1114,25 @@ export async function POST(request: NextRequest) {
     logger.log(`   Transaction Status: ${paymentResult.success ? 'Processed' : 'Failed'}`);
     logger.log(`✅ ===== NEW BILL API: REQUEST COMPLETE =====\n`);
     
-    // Send WhatsApp notification with PDF if configured and contractor has phone number
-    const isWhatsAppConfigured = await isMyDreamsWhatsAppConfigured();
-    const contractorPhone = contract.contractorPhone;
-    
-    if (isWhatsAppConfigured && contractorPhone && validatePhoneNumber(contractorPhone) && createdBill) {
-      try {
-        logger.log(`📱 Sending WhatsApp notification with PDF to contractor: ${contractorPhone}`);
-        
-        // Generate JWT token for public PDF access (valid for 24 hours)
-        const pdfToken = jwt.sign(
-          { billId: createdBill.id },
-          getNextAuthSecret(),
-          { expiresIn: '24h' }
-        );
-        
-        // Generate public PDF URL via proxy endpoint (ensures proper PDF content-type headers)
-        const encodedToken = encodeURIComponent(pdfToken);
-        // Built from the canonical origin, never NEXTAUTH_URL: that names the platform
-        // host, so contractors received WhatsApp links to a domain that is not the site.
-        const pdfUrl = `${emailLinkOrigin()}/api/public/bill-pdf?billId=${createdBill.id}&token=${encodedToken}`;
-        const pdfFileName = `PVC_Report_${createdBill.billNo?.replace(/\//g, '_')}.pdf`;
-        const customerName = contract.contractorName || 'Customer';
-        
-        // Send WhatsApp message with PDF attachment
-        const result = await sendBillPDFNotification(
-          contractorPhone,
-          createdBill.billNo,
-          pdfUrl,
-          customerName,
-          pdfFileName
-        );
-        
-        if (result.success) {
-          logger.log(`✅ WhatsApp notification with PDF sent successfully. Message ID: ${result.messageId}`);
-        } else {
-          console.error(`⚠️ Failed to send WhatsApp notification: ${result.error}`);
-        }
-      } catch (whatsappError) {
-        console.error('⚠️ Error sending WhatsApp notification:', whatsappError);
-        // Don't fail the bill creation if WhatsApp fails
-      }
-    } else if (isWhatsAppConfigured && !contractorPhone) {
-      logger.log('ℹ️ WhatsApp is configured but contractor phone number is missing');
-    } else if (isWhatsAppConfigured && contractorPhone && !validatePhoneNumber(contractorPhone)) {
-      logger.log(`⚠️ WhatsApp is configured but contractor phone number is invalid: ${contractorPhone}`);
+    // Tell the contractor their report is ready, and copy the admin. Shared with the
+    // bulk-create and edit routes so all three say the same thing the same way — this
+    // was seventy lines here and nothing at all there.
+    //
+    // Inside after(): each send is a slow outbound call, and the person who just saved
+    // the bill should not sit through two of them before their screen moves.
+    if (createdBill) {
+      // Bound to a local so after() cannot see a later reassignment, and named apart
+      // from the outer `bill` from the write transaction.
+      const saved = createdBill;
+      after(() => notifyBillByWhatsApp({
+        billId: saved.id,
+        billNo: saved.billNo,
+        contractorPhone: contract.contractorPhone,
+        contractorName: contract.contractorName,
+        reason: 'created',
+      }));
     }
-    
-    // Send WhatsApp notification to admin about new bill creation
-    if (isWhatsAppConfigured && createdBill) {
-      try {
-        const adminWhatsAppNumber = await getAdminWhatsAppNumber();
-        if (adminWhatsAppNumber) {
-          logger.log(`📱 Sending bill creation notification to admin: ${adminWhatsAppNumber}`);
-          
-          // Send to admin with full bill details (function handles PDF generation and formatting)
-          const result = await sendBillPDFWithTemplate(
-            createdBill.id, // Bill ID
-            adminWhatsAppNumber, // Send to admin
-            contract.contractorName || 'Unknown Contractor' // Contractor name for context
-          );
-          
-          if (result.success) {
-            logger.log(`✅ Admin notification sent successfully. Message ID: ${result.messageId}`);
-            logger.log(`   Bill: ${createdBill.billNo}`);
-            logger.log(`   Contractor: ${contract.contractorName}`);
-          } else {
-            console.error(`⚠️ Failed to send admin notification: ${result.error}`);
-          }
-        } else {
-          logger.log('ℹ️ Admin WhatsApp number not configured, skipping admin notification');
-        }
-      } catch (adminWhatsappError) {
-        console.error('⚠️ Error sending admin WhatsApp notification:', adminWhatsappError);
-        // Don't fail the bill creation if admin WhatsApp fails
-      }
-    }
-    
+
     // Send Slack notification asynchronously (don't await to avoid delaying response)
     if (createdBill) {
       notifyNewBillCreated({
