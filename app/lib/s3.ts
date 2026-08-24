@@ -151,6 +151,17 @@ export async function testS3RoundTrip(): Promise<{
       }
     } else if (/SignatureDoesNotMatch|InvalidAccessKeyId|AccessDenied/i.test(errorCode || '') || httpStatus === 403) {
       hint = 'Storage rejected the signature. Usually the region does not match the Supabase project, or the access key and secret are not the S3 access keys from Storage Settings.';
+    } else if (httpStatus === 410) {
+      // The Supabase project itself is gone. The endpoint answers 410 with the plain
+      // text "Project removed.", which the AWS SDK tries to parse as XML and reports as
+      // `char 'P' is not expected` — a message about the letter P, for a deleted
+      // project. Every file that was in the bucket went with it, and no key, region or
+      // bucket name will bring it back: storage has to be pointed at a live project.
+      hint = 'The Supabase project behind SUPABASE_S3_ENDPOINT no longer exists — it answers '
+        + '"Project removed." Nothing here can be fixed by changing keys or the bucket name. '
+        + 'Point SUPABASE_S3_ENDPOINT, SUPABASE_STORAGE_BUCKET, SUPABASE_SERVICE_ROLE_KEY and '
+        + 'the S3 access keys at a project that still exists. Files that were in the old '
+        + 'bucket are gone with it.';
     }
     return { ok: false as const, failedAt, errorCode, errorMessage: String(error?.message || error), httpStatus, hint, existingBuckets };
   };
