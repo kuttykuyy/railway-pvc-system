@@ -6,6 +6,8 @@
  */
 
 import { prisma } from './db';
+import { normalizePhone } from './phone-validation';
+import { phoneMatchCandidates } from './phone-owner';
 
 // Conversation steps
 export enum ConversationStep {
@@ -131,21 +133,38 @@ export async function linkConversationToUser(conversationId: string) {
   // '919876543210', '+919876543210', and the bare 10 digits. The exact-only match
   // meant a user whose profile keeps '+91…' linked fine on Telegram but was told
   // "not registered" here forever.
-  const cleaned = String(conversation.phoneNumber || '').replace(/[^\d]/g, '');
-  const last10 = cleaned.length > 10 ? cleaned.slice(-10) : cleaned;
-  const candidates = Array.from(new Set([
-    conversation.phoneNumber,
-    cleaned,
-    `+${cleaned}`,
-    last10,
-    `+91${last10}`,
-    `91${last10}`,
-  ].filter(Boolean)));
-  const user = await prisma.user.findFirst({
+  const normalized = normalizePhone(conversation.phoneNumber);
+  const candidates = normalized
+    ? phoneMatchCandidates(normalized)
+    : [conversation.phoneNumber].filter(Boolean) as string[];
+
+  // findMany, and it must come back with exactly one.
+  //
+  // This was findFirst on a column with no unique constraint. Nothing stopped two
+  // accounts holding the same number — signup checked the email for duplicates and
+  // never looked at the phone — so when they did, the account a person got was
+  // whichever row the database happened to return, and that is not even stable between
+  // calls. Someone messaging from their own phone could be handed a stranger's
+  // contracts, and be able to file bills against them.
+  //
+  // Refusing is the only safe answer. The number no longer identifies one account, so
+  // there is no correct account to pick; guessing is the failure, not the fallback.
+  const users = await prisma.user.findMany({
     where: { phone: { in: candidates } },
+    select: { id: true, email: true },
   });
 
-  if (user) {
+  if (users.length > 1) {
+    console.error(
+      '[whatsapp] Refusing to link a chat: this number is on more than one account.',
+      { phone: normalized || conversation.phoneNumber, accounts: users.map(u => u.email) },
+    );
+    return null;
+  }
+
+  if (users.length === 1) {
+    const user = await prisma.user.findUnique({ where: { id: users[0].id } });
+    if (!user) return null;
     await prisma.whatsAppConversation.update({
       where: { id: conversationId },
       data: { userId: user.id },

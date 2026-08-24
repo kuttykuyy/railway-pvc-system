@@ -1,4 +1,3 @@
-
 /**
  * API endpoint to update user phone number
  */
@@ -7,7 +6,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { validatePhoneNumber } from '@/lib/whatsapp-mydreams';
+import { normalizePhone, PHONE_FORMAT_MESSAGE, PHONE_TAKEN_MESSAGE } from '@/lib/phone-validation';
+import { phoneIsTaken } from '@/lib/phone-owner';
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,20 +16,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { phone } = await req.json();
+    const { phone: raw } = await req.json();
 
-    // Validate phone number format if provided
-    if (phone && !validatePhoneNumber(phone)) {
-      return NextResponse.json(
-        { error: 'Invalid phone number format. Use format: +[country code][number] (e.g., +919876543210)' },
-        { status: 400 }
-      );
+    // A mobile number is mandatory, so this route may not remove one.
+    //
+    // It used to write `phone: phone || null`, which meant posting an empty string here
+    // cleared the field the middleware exists to require. The session still said the
+    // account had a number, so nothing bounced them until it next expired — a way to
+    // opt out of a rule by using the form meant for keeping it up to date.
+    const phone = normalizePhone(raw);
+    if (!phone) {
+      return NextResponse.json({ error: PHONE_FORMAT_MESSAGE }, { status: 400 });
+    }
+
+    const me = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    });
+    if (await phoneIsTaken(phone, me?.id)) {
+      return NextResponse.json({ error: PHONE_TAKEN_MESSAGE }, { status: 409 });
     }
 
     // Update user phone number
     const updatedUser = await prisma.user.update({
       where: { email: session.user.email },
-      data: { phone: phone || null },
+      data: { phone },
       select: {
         id: true,
         phone: true,

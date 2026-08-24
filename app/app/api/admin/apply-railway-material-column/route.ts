@@ -179,6 +179,17 @@ const PENDING_EXTRAS: Array<{ label: string; sql: (s: string) => string; why: st
     check: { kind: 'table', name: 'parse_failures' },
   },
   {
+    label: 'User_phone_unique',
+    sql: (s) => `CREATE UNIQUE INDEX IF NOT EXISTS "User_phone_key" ON "${s}"."User" ("phone") WHERE "phone" IS NOT NULL`,
+    why: 'A mobile number identifies an account — the WhatsApp bot finds a person\'s '
+      + 'contracts by it — and nothing stopped two accounts holding the same one: signup '
+      + 'checked the email for duplicates and never looked at the phone. Partial, so '
+      + 'accounts with no number yet are unaffected. APPLY THIS LAST — check '
+      + '/api/admin/phone-numbers first. It will refuse to build while any number is '
+      + 'still shared, which is exactly what it is for.',
+    check: { kind: 'index', name: 'User_phone_key' },
+  },
+  {
     label: 'uploaded_documents',
     sql: (s) => `CREATE TABLE IF NOT EXISTS "${s}"."uploaded_documents" (
         "id" BIGSERIAL PRIMARY KEY,

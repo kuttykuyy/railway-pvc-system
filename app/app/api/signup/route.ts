@@ -8,6 +8,8 @@ import { resend, getVerificationEmailHtml } from '@/lib/resend';
 import { emailLinkOrigin } from '@/lib/email-link-origin';
 import { randomBytes } from 'crypto';
 import { validatePhoneNumber, sendUserSignupWelcome, sendWelcomeMessageToUser, getAdminWhatsAppNumber } from '@/lib/whatsapp-mydreams';
+import { normalizePhone, PHONE_FORMAT_MESSAGE, PHONE_TAKEN_MESSAGE } from '@/lib/phone-validation';
+import { phoneIsTaken } from '@/lib/phone-owner';
 import { isEmailVerificationRequired } from '@/lib/admin-settings';
 import { validatePassword } from '@/lib/password-strength';
 import { RAILWAY_ZONE_STEEL_CITY_MAP } from '@/lib/zone-steel-city-mapping';
@@ -105,15 +107,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate WhatsApp number format
-    if (!validatePhoneNumber(whatsappNumber)) {
-      return NextResponse.json(
-        { error: 'Invalid WhatsApp number format. Use format: +[country code][number] (e.g., +919876543210)' },
-        { status: 400 }
-      );
+    // The number is stored in ONE form, and belongs to ONE account.
+    //
+    // It used to be stored exactly as typed and never checked against anybody else's,
+    // so the same mobile could sit on any number of accounts in four different
+    // spellings. The WhatsApp bot finds an account by its number, so a person messaging
+    // from their own phone could land in a stranger's account.
+    //
+    // (The number is still not VERIFIED here — no OTP is sent. send-otp and verify-otp
+    // exist and are called from nowhere. That is a separate piece of work, and until it
+    // is done this check stops a number being claimed twice, not being claimed wrongly.)
+    const normalizedPhone = normalizePhone(whatsappNumber);
+    if (!normalizedPhone) {
+      return NextResponse.json({ error: PHONE_FORMAT_MESSAGE }, { status: 400 });
     }
-
-    // Verify that phone OTP was completed - REMOVED
+    if (await phoneIsTaken(normalizedPhone)) {
+      return NextResponse.json({ error: PHONE_TAKEN_MESSAGE }, { status: 400 });
+    }
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -151,7 +161,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (referrer.phone && referrer.phone === whatsappNumber) {
+      if (referrer.phone && normalizePhone(referrer.phone) === normalizedPhone) {
         return NextResponse.json(
           { error: 'This WhatsApp number is already associated with the referring account' },
           { status: 400 }
@@ -179,7 +189,7 @@ export async function POST(request: NextRequest) {
           email: normalizedEmail,
           password: hashedPassword,
           name: fullName,
-          phone: whatsappNumber,
+          phone: normalizedPhone,
           // Department accounts wait for an admin to approve them; see the admin users page.
           role: resolvedAccountType === 'accounts_official' ? 'pending_accounts_official'
             : resolvedAccountType === 'railway_official' ? 'pending_railway_official'
