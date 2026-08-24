@@ -299,7 +299,23 @@ export async function DELETE(
         where: { userId: userId }
       });
 
-      // 25. Finally delete the user
+      // 25. Release the agreement numbers this account claimed a free trial bill against.
+      //
+      // trial_claimed_agreements holds claimedByUserId as plain text with no foreign
+      // key, so nothing here ever touched it and the claim outlived the account by
+      // design-by-accident. The agreement number stayed barred from a free bill for
+      // ever, even though the bill it was spent on has just been deleted along with
+      // everything else — so a real contractor arriving later with that same agreement
+      // is told their trial is used up by an account that no longer exists.
+      //
+      // This is exactly the case for a farmed trial: the point of deleting the account
+      // is to undo what it did, and leaving the claim behind undoes it for the wrong
+      // person. No abuse route opens up, because only an admin can reach this.
+      await prisma.trialClaimedAgreement.deleteMany({
+        where: { claimedByUserId: userId }
+      });
+
+      // 26. Finally delete the user
       await prisma.user.delete({
         where: { id: userId }
       });
