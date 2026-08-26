@@ -21,7 +21,6 @@ import {
   LayoutGrid,
   LayoutList,
   Plus,
-  FileUp,
   Receipt,
   Search,
   Trash2,
@@ -431,11 +430,6 @@ export default function ContractsPage() {
           <p className="mt-0.5 text-sm text-slate-500">Manage agreements, bills, and PVC calculations.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button asChild variant="outline">
-            <Link href="/contracts/import">
-              <FileUp className="mr-2 h-4 w-4" /> Import
-            </Link>
-          </Button>
           <Button asChild>
             <Link href="/contracts/new">
               <Plus className="mr-2 h-4 w-4" /> New contract
