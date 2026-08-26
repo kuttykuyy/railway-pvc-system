@@ -38,6 +38,11 @@ export function RazorpayTopupDialog({
   /** The checkout script never arrived — usually an ad-blocker or an office network. */
   const [razorpayBlocked, setRazorpayBlocked] = useState(false);
   const [config, setConfig] = useState<{ enabled: boolean; keyId: string | null } | null>(null);
+  // Which gateway is live, from /api/payments/config. Razorpay unless an admin has
+  // switched it, so an old cached answer or a failed fetch keeps today's behaviour.
+  const [gateway, setGateway] = useState<'razorpay' | 'cashfree'>('razorpay');
+  const [cashfreeMode, setCashfreeMode] = useState<'sandbox' | 'production'>('sandbox');
+  const [cashfreeLoaded, setCashfreeLoaded] = useState(false);
   
   // GST Invoice Dialog state
   const [showGstDialog, setShowGstDialog] = useState(false);
@@ -49,6 +54,75 @@ export function RazorpayTopupDialog({
 
   const [configError, setConfigError] = useState<string | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
+
+  // Which gateway is taking money. Separate from the Razorpay-specific config below so a
+  // Cashfree deployment does not depend on the Razorpay config call succeeding.
+  useEffect(() => {
+    if (!open) return;
+    fetch('/api/payments/config')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (!data) return;
+        if (data.gateway === 'cashfree') {
+          setGateway('cashfree');
+          setCashfreeMode(data.mode === 'production' ? 'production' : 'sandbox');
+        } else {
+          setGateway('razorpay');
+        }
+      })
+      .catch(() => { /* keep the Razorpay default */ });
+  }, [open]);
+
+  /**
+   * Pay through Cashfree.
+   *
+   * The server opens the order and the SDK collects the money; the wallet is credited
+   * only after /api/cashfree/verify asks Cashfree itself. So this function's job ends at
+   * "ask the server to confirm" — it never decides a payment succeeded on its own, and
+   * the modal closing without a clear result is not treated as a failure, because the
+   * money may well be through and the webhook will catch it.
+   */
+  const handleCashfreePayment = async () => {
+    if (!cashfreeLoaded || !(window as any).Cashfree) {
+      toast.error('The payment window is still loading. Please try again in a moment.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const orderRes = await fetch('/api/cashfree/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ creditAmount: creditToReceive }),
+      });
+      const orderData = await orderRes.json().catch(() => ({}));
+      if (!orderRes.ok) throw new Error(orderData.error || 'Could not start the payment.');
+
+      const cashfree = (window as any).Cashfree({ mode: cashfreeMode });
+      await cashfree.checkout({ paymentSessionId: orderData.paymentSessionId, redirectTarget: '_modal' });
+
+      // The modal has closed. Ask the server what really happened rather than trusting
+      // the SDK's word for it.
+      const verifyRes = await fetch('/api/cashfree/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: orderData.orderId }),
+      });
+      const verifyData = await verifyRes.json().catch(() => ({}));
+      if (verifyRes.ok && verifyData.success) {
+        toast.success(`₹${verifyData.creditAmount?.toLocaleString('en-IN')} added to your balance.`);
+        onSuccess?.();
+        onOpenChange(false);
+      } else if (verifyRes.status === 409) {
+        toast('Payment not completed. If money was deducted it will be credited automatically.', { icon: 'ℹ️' });
+      } else {
+        toast('We could not confirm the payment yet. If money was deducted it will be credited automatically.', { icon: 'ℹ️' });
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'The payment could not be completed.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fetch Razorpay config with retry
   const fetchConfig = async (retryCount = 0) => {
@@ -329,6 +403,13 @@ export function RazorpayTopupDialog({
 
   return (
     <>
+      {gateway === 'cashfree' && (
+        <Script
+          src="https://sdk.cashfree.com/js/v3/cashfree.js"
+          onLoad={() => setCashfreeLoaded(true)}
+          onError={() => toast.error('Could not load the payment window. Check your connection and try again.')}
+        />
+      )}
       <Script
         src="https://checkout.razorpay.com/v1/checkout.js"
         onLoad={() => setRazorpayLoaded(true)}
@@ -363,7 +444,7 @@ export function RazorpayTopupDialog({
             </Alert>
           )}
 
-          {razorpayBlocked && (
+          {gateway === 'razorpay' && razorpayBlocked && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
@@ -385,7 +466,7 @@ export function RazorpayTopupDialog({
             </Alert>
           )}
 
-          {configError && (
+          {gateway === 'razorpay' && configError && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="flex items-center justify-between">
@@ -397,7 +478,7 @@ export function RazorpayTopupDialog({
             </Alert>
           )}
 
-          {!configLoading && !configError && config && !config.enabled && (
+          {gateway === 'razorpay' && !configLoading && !configError && config && !config.enabled && (
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
@@ -420,7 +501,7 @@ export function RazorpayTopupDialog({
                   onChange={(e) => setCreditAmount(e.target.value)}
                   className="pl-10"
                   placeholder="Enter amount"
-                  disabled={loading || !config?.enabled}
+                  disabled={loading || (gateway === 'razorpay' && !config?.enabled)}
                 />
               </div>
               <p className="text-xs text-gray-500">
@@ -470,8 +551,13 @@ export function RazorpayTopupDialog({
               Cancel
             </Button>
             <Button
-              onClick={handlePayment}
-              disabled={loading || !razorpayLoaded || !config?.enabled || configLoading || !!configError || baseAmount < MIN_TOPUP_AMOUNT}
+              onClick={gateway === 'cashfree' ? handleCashfreePayment : handlePayment}
+              disabled={
+                loading || baseAmount < MIN_TOPUP_AMOUNT ||
+                (gateway === 'cashfree'
+                  ? !cashfreeLoaded
+                  : (!razorpayLoaded || !config?.enabled || configLoading || !!configError))
+              }
               className="w-full sm:w-auto"
             >
               {loading ? (
