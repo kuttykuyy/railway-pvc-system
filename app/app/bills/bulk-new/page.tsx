@@ -23,6 +23,7 @@ import { applyCementSplit, type CementBreakdownItem } from '@/lib/cement-split';
 import { inferMainClassification } from '@/lib/work-classification';
 import { BillPdfCementAnalyzer, type AppliedExtractionContext, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
+import { parseAgreementNumber } from '@/lib/railway-division-helper';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
 import {
   buildClassificationEntriesFromExtractedBill as buildEntriesFromExtractedBill,
@@ -164,6 +165,19 @@ export default function BulkBillCreationPage() {
       errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [error]);
+
+  // Pick the zone from the contract's agreement number the moment a contract is chosen,
+  // the same way the single-bill form does. The number carries the zone (SCR/…, SR/…),
+  // so making the user re-pick it here was just a chance to pick the wrong one. Only
+  // auto-fill while the field is untouched, so a deliberate override is never clobbered.
+  useEffect(() => {
+    if (globalZone || !selectedContract?.agreementNo) return;
+    const parsed = parseAgreementNumber(selectedContract.agreementNo);
+    if (parsed?.zone && getRailwayZoneOptions().some(option => option.value === parsed.zone)) {
+      setGlobalZone(parsed.zone);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedContract?.agreementNo]);
 
   const loadInitialData = async () => {
     try {
@@ -901,7 +915,7 @@ export default function BulkBillCreationPage() {
           {selectedContract && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg border">
               <div className="space-y-2">
-                <Label>Railway Zone * <span className="text-xs text-muted-foreground">(applies to all bills)</span></Label>
+                <Label>Railway Zone * <span className="text-xs text-muted-foreground">(auto-filled from the contract · applies to all bills)</span></Label>
                 <Select value={globalZone || undefined} onValueChange={setGlobalZone} disabled={isSaving}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select zone" />
