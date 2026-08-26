@@ -321,10 +321,10 @@ export async function POST(request: NextRequest) {
         // Rebate is agreed once for the whole agreement. Clamp to a sane 0–100 so a
         // bad/huge/negative value can't corrupt the cement-rate math downstream.
         rebatePercentage: sanitizeRebate(rebatePercentage),
-        // Which diesel price this agreement's PVC uses. Fall back to the four-city
-        // average (the schema default) unless the other known basis is explicitly asked
-        // for, so an unexpected value never sets a strange pricing rule at creation.
-        fuelPriceType: fuelPriceType === 'zone_city' ? 'zone_city' : 'four_city_avg',
+        // Which diesel price this agreement's PVC uses. New contracts default to the
+        // zone's own city — the basis most railways here direct — unless the four-city
+        // average is explicitly chosen, so an unexpected value can't set a strange rule.
+        fuelPriceType: fuelPriceType === 'four_city_avg' ? 'four_city_avg' : 'zone_city',
         userId: user.id
       },
       include: {

@@ -251,6 +251,10 @@ model Contract {
   /// dated 23.01.2026 directs the PPAC average, while Sr.DFM/MDU (Southern Railway)
   /// returned a proposal demanding the Chennai rate. Older agreements may also sit
   /// under a pre-2022 GCC. Bills default to this, and it must never be hardcoded.
+  ///
+  /// The DB column default stays "four_city_avg" so existing rows and the calculation's
+  /// null fallback are unchanged, but the app now writes "zone_city" for every NEW
+  /// contract (form, POST, import, try-bill) — the basis most railways here direct.
   fuelPriceType                String?              @default("four_city_avg")
   schedules                    Json?                @default("[]")
   bills                        Bill[]

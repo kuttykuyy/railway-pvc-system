@@ -253,6 +253,8 @@ export async function POST(request: NextRequest) {
           userId: user.id,
           pvcApplicable: true,
           hasRailwaySuppliedMaterials: false,
+          // The new-contract default: the zone's own city. Editable afterwards.
+          fuelPriceType: 'zone_city',
         },
       });
 

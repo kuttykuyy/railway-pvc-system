@@ -81,8 +81,9 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     hasRailwaySuppliedMaterials: initialData?.hasRailwaySuppliedMaterials || false,
     railwaySuppliedMaterialsNote: initialData?.railwaySuppliedMaterialsNote || '',
     coveringLetterDesignation: initialData?.coveringLetterDesignation || '',
-    // Which diesel price this agreement's PVC uses; bills inherit it.
-    fuelPriceType: initialData?.fuelPriceType || 'four_city_avg'
+    // Which diesel price this agreement's PVC uses; bills inherit it. New contracts
+    // default to the zone's own city — the basis most railways here actually direct.
+    fuelPriceType: initialData?.fuelPriceType || 'zone_city'
   });
 
   const [schedules, setSchedules] = useState<ContractSchedule[]>(normalizeSchedules(initialData?.schedules));

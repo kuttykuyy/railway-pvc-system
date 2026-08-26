@@ -155,6 +155,9 @@ export async function POST(req: NextRequest) {
             pvcApplicable: pvcResult.isEligible,
             pvcEligibilityNote: pvcNote,
             userId: user.id,
+            // Bulk import offers no per-row fuel choice, so take the new-contract
+            // default: the zone's own city. Editable per contract afterwards.
+            fuelPriceType: 'zone_city',
             schedules: [],
           },
           select: { id: true },
