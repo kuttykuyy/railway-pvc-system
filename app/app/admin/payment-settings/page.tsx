@@ -36,8 +36,42 @@ export default function PaymentSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Which online gateway is live — a separate axis from online-vs-manual above.
+  const [gw, setGw] = useState<{ active: 'razorpay' | 'cashfree'; razorpay: { configured: boolean }; cashfree: { configured: boolean; mode: string | null } } | null>(null);
+  const [gwChoice, setGwChoice] = useState<'razorpay' | 'cashfree'>('razorpay');
+  const [gwSaving, setGwSaving] = useState(false);
+
+  const loadGateway = async () => {
+    try {
+      const res = await fetch('/api/admin/payment-gateway');
+      if (!res.ok) return;
+      const data = await res.json();
+      setGw(data);
+      setGwChoice(data.active);
+    } catch { /* leave it */ }
+  };
+
+  const saveGateway = async () => {
+    setGwSaving(true);
+    try {
+      const res = await fetch('/api/admin/payment-gateway', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gateway: gwChoice }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not switch gateway');
+      toast.success(`New top-ups now go through ${gwChoice}.`);
+      loadGateway();
+    } catch (e: any) {
+      toast.error(e.message, { duration: 8000 });
+    } finally {
+      setGwSaving(false);
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
+    loadGateway();
   }, []);
 
   const fetchSettings = async () => {
@@ -261,6 +295,50 @@ export default function PaymentSettingsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Which online gateway takes the money */}
+            {gw && (
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5 text-emerald-600" /> Online payment gateway
+                  </CardTitle>
+                  <CardDescription>
+                    Which provider processes card / UPI top-ups. Only one is live at a time.
+                    Switching takes effect on the next payment — no deploy.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {(['razorpay', 'cashfree'] as const).map(name => {
+                    const configured = name === 'razorpay' ? gw.razorpay.configured : gw.cashfree.configured;
+                    return (
+                      <label key={name} className={`flex items-center justify-between rounded-lg border p-3 ${
+                        configured ? 'cursor-pointer hover:bg-slate-50' : 'opacity-60'} ${
+                        gwChoice === name ? 'border-emerald-400 bg-emerald-50/50' : 'border-slate-200'}`}>
+                        <span className="flex items-center gap-3">
+                          <input type="radio" name="gw" checked={gwChoice === name} disabled={!configured}
+                            onChange={() => setGwChoice(name)} />
+                          <span>
+                            <span className="font-medium capitalize">{name}</span>
+                            {name === 'cashfree' && gw.cashfree.mode && (
+                              <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{gw.cashfree.mode}</span>
+                            )}
+                            {gw.active === name && <span className="ml-2 text-[11px] font-semibold text-emerald-700">live now</span>}
+                          </span>
+                        </span>
+                        {!configured && <span className="text-[11px] text-slate-400">no credentials set</span>}
+                      </label>
+                    );
+                  })}
+                  <Button onClick={saveGateway} disabled={gwSaving || gwChoice === gw.active} className="w-full sm:w-auto">
+                    {gwSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Switching…</> : `Make ${gwChoice} live`}
+                  </Button>
+                  {gw.cashfree.mode === 'sandbox' && gwChoice === 'cashfree' && (
+                    <p className="text-[11px] text-amber-700">Cashfree is in sandbox mode — no real money moves. Set CASHFREE_MODE to production when ready.</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Important Notes */}
             <Alert>
