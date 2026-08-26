@@ -13,7 +13,7 @@ const IndicesManage = load(() => import('../../indices/page'));
 const ComponentDocuments = load(() => import('../../indices/component-documents/page'));
 const RateBooks = load(() => import('../rate-books/page'));
 const CementCoefficients = load(() => import('../dsr-cement-coefficients/page'));
-const QuoteSpread = load(() => import('../dsr-quote-spread/page'));
+const CostVsDsr = load(() => import('../dsr-cost-difference/page'));
 const Classifications = load(() => import('../../classifications/page'));
 const ExtensionSubcategories = load(() => import('../extension-subcategories/page'));
 
@@ -27,7 +27,7 @@ export default function AdminRatesPage() {
         { key: 'documents', name: 'Component documents', href: '/indices/component-documents', render: () => <ComponentDocuments /> },
         { key: 'rate-books', name: 'Schedules of rates', href: '/admin/rate-books', render: () => <RateBooks /> },
         { key: 'cement', name: 'Cement coefficients', href: '/admin/dsr-cement-coefficients', render: () => <CementCoefficients /> },
-        { key: 'quote-spread', name: 'Quoted vs schedule', href: '/admin/dsr-quote-spread', render: () => <QuoteSpread /> },
+        { key: 'cost-vs-dsr', name: 'Cost vs DSR', href: '/admin/dsr-cost-difference', render: () => <CostVsDsr /> },
         { key: 'classifications', name: 'Work classifications', href: '/classifications', render: () => <Classifications /> },
         { key: 'extensions', name: 'Extension categories', href: '/admin/extension-subcategories', render: () => <ExtensionSubcategories /> },
       ]}
