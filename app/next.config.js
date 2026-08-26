@@ -30,7 +30,11 @@ const nextConfig = {
       // script-src, frame-src and connect-src: the widget is a script that opens an
       // iframe and calls home. Miss any one and the check silently never appears, which
       // on a signup form means nobody can sign up.
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://checkout.razorpay.com https://*.razorpay.com https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.googleadservices.com https://*.googletagservices.com https://*.doubleclick.net https://*.google.com https://*.gstatic.com https://*.googletagmanager.com https://*.google-analytics.com https://*.adtrafficquality.google",
+      // Cashfree's checkout SDK: sdk.cashfree.com loads it, *.cashfree.com is the hosted
+      // page it redirects to and the frames it opens. Miss it and the browser blocks the
+      // script, the redirect, or the connect-back with no console error in production —
+      // which is exactly how a working Cashfree order looked like a dead Pay button.
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://checkout.razorpay.com https://*.razorpay.com https://sdk.cashfree.com https://*.cashfree.com https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.googleadservices.com https://*.googletagservices.com https://*.doubleclick.net https://*.google.com https://*.gstatic.com https://*.googletagmanager.com https://*.google-analytics.com https://*.adtrafficquality.google",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https://fonts.gstatic.com",
@@ -39,11 +43,11 @@ const nextConfig = {
       // entry the browser killed every such upload before it left — no network entry,
       // no console error in production, just "Failed to fetch" — which spent a long day
       // being misread as credentials, bucket names, checksums, and CORS in turn.
-      "connect-src 'self' https://challenges.cloudflare.com https://*.supabase.co https://*.storage.supabase.co https://*.razorpay.com https://*.google.com https://*.googlesyndication.com https://*.googleadservices.com https://*.googletagservices.com https://*.doubleclick.net https://*.google-analytics.com https://*.googletagmanager.com https://*.adtrafficquality.google https://pagead2.googlesyndication.com",
+      "connect-src 'self' https://challenges.cloudflare.com https://*.supabase.co https://*.storage.supabase.co https://*.razorpay.com https://*.cashfree.com https://sdk.cashfree.com https://*.google.com https://*.googlesyndication.com https://*.googleadservices.com https://*.googletagservices.com https://*.doubleclick.net https://*.google-analytics.com https://*.googletagmanager.com https://*.adtrafficquality.google https://pagead2.googlesyndication.com",
       // adtrafficquality.google is AdSense's invalid-traffic check. It was already
       // allowed to load and to call home (script-src, connect-src) but not to open its
       // frame, so every page logged two CSP violations and the check never ran.
-      "frame-src https://challenges.cloudflare.com https://*.razorpay.com https://*.google.com https://*.doubleclick.net https://*.googlesyndication.com https://*.googleadservices.com https://*.adtrafficquality.google",
+      "frame-src https://challenges.cloudflare.com https://*.razorpay.com https://*.cashfree.com https://sdk.cashfree.com https://*.google.com https://*.doubleclick.net https://*.googlesyndication.com https://*.googleadservices.com https://*.adtrafficquality.google",
       "object-src 'none'",
       "base-uri 'self'",
       "frame-ancestors 'none'",
