@@ -64,7 +64,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, credited: false });
   }
 
-  const result = await creditPaymentOnce({ payment, gatewayPaymentId: orderId, paymentMethod: 'cashfree' });
+  const result = await creditPaymentOnce({
+    payment, gatewayPaymentId: orderId, paymentMethod: 'cashfree', paidAmount: order.amount,
+  });
   if (result.credited) {
     const user = await prisma.user.findUnique({
       where: { id: payment.userId },

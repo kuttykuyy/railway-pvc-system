@@ -59,7 +59,9 @@ export async function POST(request: NextRequest) {
     }, { status: 409 });
   }
 
-  const result = await creditPaymentOnce({ payment, gatewayPaymentId: orderId, paymentMethod: 'cashfree' });
+  const result = await creditPaymentOnce({
+    payment, gatewayPaymentId: orderId, paymentMethod: 'cashfree', paidAmount: order.amount,
+  });
   if (result.credited) {
     // Only the winning path runs these, and never in the request's critical path.
     await runPaymentSideEffects({

@@ -81,10 +81,24 @@ export async function creditPaymentOnce(args: {
   payment: PaymentRow;
   gatewayPaymentId?: string | null;
   paymentMethod?: string | null;
+  /** What the gateway says was actually paid. Checked against the recorded total. */
+  paidAmount?: number | null;
 }): Promise<CreditResult> {
   const { payment } = args;
   const table = await schemaQualified('payment_transactions');
   const creditsToAdd = payment.creditAmount;
+
+  // The gateway confirmed PAID, but for how much? We set the order amount ourselves, so
+  // this cannot differ today — which is exactly why a difference means something is
+  // wrong (a bug, an order-id reused, a flow tampered with) and crediting anyway would
+  // be the mistake. A rupee of tolerance for rounding; beyond that, refuse and shout.
+  if (typeof args.paidAmount === 'number' && Math.abs(args.paidAmount - payment.totalAmount) > 1) {
+    logger.error(
+      `[payment-credit] REFUSING to credit ${payment.gateway} ${payment.orderId}: paid `
+      + `${args.paidAmount} but the order was for ${payment.totalAmount}.`,
+    );
+    return { credited: false, creditsAdded: 0, newBalance: 0 };
+  }
 
   return prisma.$transaction(async (tx) => {
     // Flip to success only if it is not already — the conditional is what makes a
