@@ -90,12 +90,14 @@ export function RazorpayTopupDialog({
    * the Pay button greyed for ever. Injecting the script here and awaiting its load has
    * no such timing hole.
    */
-  const loadCashfreeSdk = (): Promise<(opts: { mode: string }) => any> => new Promise((resolve, reject) => {
+  const loadCashfreeSdk = (): Promise<any> => new Promise((resolve, reject) => {
     const w = window as any;
-    if (typeof w.Cashfree === 'function') { resolve(w.Cashfree); return; }
+    if (w.Cashfree) { resolve(w.Cashfree); return; }
     const existing = document.getElementById('cashfree-sdk') as HTMLScriptElement | null;
     const onReady = () => {
-      if (typeof w.Cashfree === 'function') resolve(w.Cashfree);
+      // The CDN global may be a factory function OR an object with .load — resolve on
+      // either, and let the caller sort out which shape it got.
+      if (w.Cashfree) resolve(w.Cashfree);
       else reject(new Error('The payment window failed to load. Please try again.'));
     };
     if (existing) { existing.addEventListener('load', onReady); existing.addEventListener('error', () => reject(new Error('Could not load the payment window.'))); return; }
@@ -123,26 +125,28 @@ export function RazorpayTopupDialog({
       // does not reliably fire for a tag added after mount — and this tag only mounts
       // once the gateway resolves to cashfree, which is after the config fetch. That is
       // exactly why the Pay button used to sit greyed for ever.
-      const factory = await loadCashfreeSdk();
-      const cashfree = factory({ mode: cashfreeMode });
-      await cashfree.checkout({ paymentSessionId: orderData.paymentSessionId, redirectTarget: '_modal' });
-
-      // The modal has closed. Ask the server what really happened rather than trusting
-      // the SDK's word for it.
-      const verifyRes = await fetch('/api/cashfree/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: orderData.orderId }),
+      // Redirect to Cashfree's hosted checkout rather than opening its modal. The modal
+      // (redirectTarget '_modal') did not open at all in testing — SDK-shape and popup
+      // fragility that a full-page redirect simply does not have. The page navigates to
+      // Cashfree, the customer pays, and Cashfree returns them to the order's returnUrl
+      // (/profile?cf_order=...), where the return is verified. The webhook is the backstop
+      // either way.
+      const CF: any = await loadCashfreeSdk();
+      const cashfree = typeof CF === 'function'
+        ? CF({ mode: cashfreeMode })
+        : (CF && typeof CF.load === 'function' ? await CF.load({ mode: cashfreeMode }) : null);
+      if (!cashfree || typeof cashfree.checkout !== 'function') {
+        throw new Error('The payment window could not start. Please try again.');
+      }
+      const result = await cashfree.checkout({
+        paymentSessionId: orderData.paymentSessionId,
+        redirectTarget: '_self',
       });
-      const verifyData = await verifyRes.json().catch(() => ({}));
-      if (verifyRes.ok && verifyData.success) {
-        toast.success(`₹${verifyData.creditAmount?.toLocaleString('en-IN')} added to your balance.`);
-        onSuccess?.();
-        onOpenChange(false);
-      } else if (verifyRes.status === 409) {
-        toast('Payment not completed. If money was deducted it will be credited automatically.', { icon: 'ℹ️' });
-      } else {
-        toast('We could not confirm the payment yet. If money was deducted it will be credited automatically.', { icon: 'ℹ️' });
+      // With '_self' the browser usually navigates away before this resolves. If it does
+      // come back — some SDK versions resolve instead of navigating — surface any error
+      // rather than leaving the button spinning.
+      if (result?.error) {
+        throw new Error(result.error.message || 'The payment could not be started.');
       }
     } catch (error: any) {
       toast.error(error?.message || 'The payment could not be completed.');

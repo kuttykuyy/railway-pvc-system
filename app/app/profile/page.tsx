@@ -152,6 +152,42 @@ export default function ProfilePage() {
     }
   };
 
+  // Back from Cashfree's hosted checkout. The order id is in the URL; confirm it with
+  // the server (which asks Cashfree), credit if paid, and clean the URL so a refresh
+  // does not re-run it. The webhook credits the same payment independently, and the
+  // shared guard makes sure that is not a double credit.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get('cf_order');
+    if (!orderId) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/cashfree/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
+          toast.success(`₹${Number(data.creditAmount).toLocaleString('en-IN')} added to your balance.`);
+          await refreshBilling();
+        } else if (res.status === 409) {
+          toast('Payment not completed. If money was deducted it will be credited automatically.', { icon: 'ℹ️' });
+        } else {
+          toast('We could not confirm the payment yet. If money was deducted it will be credited automatically.', { icon: 'ℹ️' });
+        }
+      } catch {
+        toast('Could not confirm the payment. If money was deducted it will be credited automatically.', { icon: 'ℹ️' });
+      } finally {
+        // Drop cf_order from the URL either way.
+        const url = new URL(window.location.href);
+        url.searchParams.delete('cf_order');
+        window.history.replaceState({}, '', url.toString());
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const refreshBilling = async () => {
     const [bRes, tRes, iRes] = await Promise.all([
       fetch('/api/credits/balance'),
