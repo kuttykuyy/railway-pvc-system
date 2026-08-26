@@ -409,10 +409,12 @@ export async function POST(request: NextRequest) {
         extensionType: true,
         originalCompletionDate: true,
         currentCompletionDate: true,
+        completionPeriodMonths: true,
         contractorName: true,
         contractorPhone: true,
         workDescription: true,
-        // Needed to label the quarter under the right clause (see STEP 6).
+        // Needed to label the quarter under the right clause (see STEP 6), and to work
+        // out the completion date the extension gate enforces against.
         dateOfOpening: true,
         pvcClauseVersion: true,
         pre2022WorkType: true,
@@ -574,7 +576,26 @@ export async function POST(request: NextRequest) {
     if (measurementDate > today) {
       return NextResponse.json({ error: 'Measurement date cannot be in the future' }, { status: 400 });
     }
-    
+
+    // A running bill measured past the contract's completion date is work in a period the
+    // contract does not yet cover. Under the GCC that period exists only once a time
+    // extension is granted, and the extension decides whether PVC even applies there (17B
+    // caps the indices) — so it is blocked until the extension is recorded, not priced on
+    // a guess. It lifts itself the moment an extension pushes the completion date out. A
+    // contract with no completion date has nothing to enforce against.
+    const { billRequiresExtension } = await import('@/lib/extension-compliance');
+    const extensionGate = billRequiresExtension(contract, measurementDate);
+    if (extensionGate.blocked) {
+      return NextResponse.json({
+        error: `This bill is measured after the contract's completion date `
+          + `(${extensionGate.coveredUntil?.toLocaleDateString('en-IN')}). Record the time `
+          + `extension for this contract first, then create the bill.`,
+        code: 'EXTENSION_REQUIRED',
+        coveredUntil: extensionGate.coveredUntil,
+        addExtensionUrl: `/contracts/${contract.id}/extensions`,
+      }, { status: 409 });
+    }
+
     const baseMonthDate = new Date(contract.baseMonth);
     const measurementYear = measurementDate.getFullYear();
     const measurementMonth = measurementDate.getMonth();

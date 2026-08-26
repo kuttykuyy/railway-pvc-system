@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { after } from 'next/server';
 import { prisma } from '@/lib/db';
 import { notifyBillByWhatsApp, notifyAdminOfBillBatch } from '@/lib/bill-whatsapp';
+import { billRequiresExtension } from '@/lib/extension-compliance';
 import { getQuarterFromDate, calculateTotalPvc, calculateClassificationBasedPvcWithComponents, calculateDedicatedCementPvc, calculateDedicatedSteelPvc } from '@/lib/pvc-calculations';
 import { createQuarterlyAveragesMemo } from '@/lib/db-utils';
 import { validateApiAccess } from '@/lib/payment-validation';
@@ -186,6 +187,19 @@ export async function POST(request: NextRequest) {
         validationErrors.push(`Bill ${billInput.billNo}: Invalid measurement date (${billInput.dateOfMeasurement})`);
       } else if (measurementDate <= baseMonth) {
         validationErrors.push(`Bill ${billInput.billNo}: Measurement date must be after the contract base month`);
+      } else {
+        // Same completion-date gate as single-bill create: a bill measured past what the
+        // contract covers needs a recorded time extension first. One overrunning bill
+        // stops the whole batch, which is right — the extension is a contract-level fact
+        // the rest of the batch depends on too.
+        const gate = billRequiresExtension(contract, measurementDate);
+        if (gate.blocked) {
+          validationErrors.push(
+            `Bill ${billInput.billNo}: measured after the contract's completion date `
+            + `(${gate.coveredUntil?.toLocaleDateString('en-IN')}). Record the time extension for this `
+            + `contract first — /contracts/${contract.id}/extensions.`,
+          );
+        }
       }
 
       const classificationTotal = billInput.classificationEntries.reduce(

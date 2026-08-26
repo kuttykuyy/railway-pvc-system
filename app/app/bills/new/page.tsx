@@ -1513,6 +1513,31 @@ function NewBillPageContent() {
       // "Insufficient balance" in this string and that text lives in `reason`.
       const errorMessage = responseData.reason || responseData.error || 'Failed to create bill';
 
+      // The bill runs past the contract's completion date and needs a time extension
+      // first. Do not bury this under the generic error — give them the message and a
+      // link straight to the extension screen, which is the one thing that unblocks it.
+      if (response.status === 409 && responseData.code === 'EXTENSION_REQUIRED') {
+        setInstantStage(null);
+        toast(
+          (t) => (
+            <span className="text-sm">
+              {responseData.error}
+              {responseData.addExtensionUrl && (
+                <a
+                  href={responseData.addExtensionUrl}
+                  className="mt-1 block font-semibold text-emerald-700 underline"
+                  onClick={() => toast.dismiss(t.id)}
+                >
+                  Add the extension →
+                </a>
+              )}
+            </span>
+          ),
+          { icon: '📅', duration: 12000 },
+        );
+        return;
+      }
+
       // This bill already exists. Offer it, rather than leaving the person holding an
       // error about a bill they cannot see — they have either uploaded the same PDF
       // twice and want the report that already exists, or mistyped the number and

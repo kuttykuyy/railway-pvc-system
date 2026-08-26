@@ -717,3 +717,60 @@ export async function createContractExtension(
   });
 }
 
+
+/**
+ * The last date a contract is, on its own record, allowed to run to.
+ *
+ * The most generous of what the contract knows: its current (post-extension) completion
+ * date, its original completion date, and the date implied by opening plus the agreed
+ * period. An extension records itself by pushing currentCompletionDate out, so adding one
+ * moves this bound. Null when the contract carries no completion information at all —
+ * then there is nothing to enforce against, and enforcing would be inventing a rule the
+ * data cannot support.
+ */
+export function contractCoveredUntil(contract: {
+  originalCompletionDate?: Date | null;
+  currentCompletionDate?: Date | null;
+  dateOfOpening?: Date | null;
+  completionPeriodMonths?: number | null;
+}): Date | null {
+  const candidates: Date[] = [];
+  if (contract.currentCompletionDate) candidates.push(new Date(contract.currentCompletionDate));
+  if (contract.originalCompletionDate) candidates.push(new Date(contract.originalCompletionDate));
+  if (contract.dateOfOpening && contract.completionPeriodMonths && contract.completionPeriodMonths > 0) {
+    const d = new Date(contract.dateOfOpening);
+    d.setMonth(d.getMonth() + contract.completionPeriodMonths);
+    candidates.push(d);
+  }
+  if (candidates.length === 0) return null;
+  return new Date(Math.max(...candidates.map(d => d.getTime())));
+}
+
+/** Midnight of a date, so a comparison is day-to-day and not tripped by the time of day. */
+function atDay(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+/**
+ * Does this bill run past what the contract is allowed to run to?
+ *
+ * A running bill whose measurement date is beyond the contract's covered-until date is
+ * work done in a period the contract does not yet cover. Under the GCC that period only
+ * exists once a time extension is granted, and the extension governs whether PVC even
+ * applies to it (17B caps the indices). So a bill there without a recorded extension is
+ * not something to price on a guess — it is something to stop until the extension is
+ * entered. Blocked is false when there is no completion date to judge against.
+ */
+export function billRequiresExtension(
+  contract: {
+    originalCompletionDate?: Date | null;
+    currentCompletionDate?: Date | null;
+    dateOfOpening?: Date | null;
+    completionPeriodMonths?: number | null;
+  },
+  measurementDate: Date,
+): { blocked: boolean; coveredUntil: Date | null } {
+  const coveredUntil = contractCoveredUntil(contract);
+  if (!coveredUntil) return { blocked: false, coveredUntil: null };
+  return { blocked: atDay(measurementDate) > atDay(coveredUntil), coveredUntil };
+}
