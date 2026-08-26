@@ -49,6 +49,7 @@ import { BillClassificationEntries } from '@/components/bill-classification-entr
 import { calculateTotalPvc, formatPvcAmount, pvcComparisonAllowsSuffix } from '@/lib/classification-pvc';
 import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-dialog';
 import { BillPdfCementAnalyzer, type AppliedExtractionContext, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
+import { AddExtensionDialog, type ExtensionRequired } from '@/components/contracts/add-extension-dialog';
 import { useLanguage } from '@/components/i18n-provider';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { scheduleNames, normalizeSchedules } from '@/lib/contract-schedules';
@@ -306,6 +307,7 @@ function NewBillPageContent() {
   const [subscribing, setSubscribing] = useState<boolean>(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState<boolean>(false);
   const [isAiUploaded, setIsAiUploaded] = useState(false);
+  const [extensionInfo, setExtensionInfo] = useState<ExtensionRequired | null>(null);
   /** The kept copy of the uploaded bill PDF, claimed by the bill when it is saved. */
   const [uploadedDocumentId, setUploadedDocumentId] = useState<number | null>(null);
   // DSR cement derivation: schedules (with cement MT) worked out from the entered items.
@@ -1514,27 +1516,12 @@ function NewBillPageContent() {
       const errorMessage = responseData.reason || responseData.error || 'Failed to create bill';
 
       // The bill runs past the contract's completion date and needs a time extension
-      // first. Do not bury this under the generic error — give them the message and a
-      // link straight to the extension screen, which is the one thing that unblocks it.
-      if (response.status === 409 && responseData.code === 'EXTENSION_REQUIRED') {
+      // first. Offer to record it inline — same block, without the trip to another
+      // screen and back.
+      if (response.status === 409 && responseData.code === 'EXTENSION_REQUIRED' && responseData.extensionRequired) {
         setInstantStage(null);
-        toast(
-          (t) => (
-            <span className="text-sm">
-              {responseData.error}
-              {responseData.addExtensionUrl && (
-                <a
-                  href={responseData.addExtensionUrl}
-                  className="mt-1 block font-semibold text-emerald-700 underline"
-                  onClick={() => toast.dismiss(t.id)}
-                >
-                  Add the extension →
-                </a>
-              )}
-            </span>
-          ),
-          { icon: '📅', duration: 12000 },
-        );
+        setExtensionInfo(responseData.extensionRequired);
+        toast('This bill runs past the contract’s completion date — record the extension to continue.', { icon: '📅', duration: 7000 });
         return;
       }
 
@@ -3010,6 +2997,13 @@ function NewBillPageContent() {
           </div>
         </div>
       )}
+
+      <AddExtensionDialog
+        open={!!extensionInfo}
+        onOpenChange={(o) => { if (!o) setExtensionInfo(null); }}
+        info={extensionInfo}
+        onSaved={() => { setExtensionInfo(null); handleSubmit(); }}
+      />
     </div>
   );
 }

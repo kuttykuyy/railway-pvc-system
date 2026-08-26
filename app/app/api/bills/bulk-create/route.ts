@@ -148,6 +148,12 @@ export async function POST(request: NextRequest) {
     // STEP 1: Validate all bills upfront before creating any
     const validationErrors: string[] = [];
     const duplicateBillNumbers: string[] = [];
+    // The furthest measurement date the batch needs the contract to cover, and the date
+    // it currently covers to. Drives the inline "add extension" step, so one extension
+    // recorded can clear every blocked bill at once rather than guessing the span from
+    // error text.
+    let extensionNeededUntil: Date | null = null;
+    let extensionCoveredUntil: Date | null = null;
 
     // Every bill number already on this contract, read once. This used to be a
     // findFirst per bill inside the loop below — a twenty-bill import asked the
@@ -194,6 +200,8 @@ export async function POST(request: NextRequest) {
         // the rest of the batch depends on too.
         const gate = billRequiresExtension(contract, measurementDate);
         if (gate.blocked) {
+          if (!extensionNeededUntil || measurementDate > extensionNeededUntil) extensionNeededUntil = measurementDate;
+          extensionCoveredUntil = gate.coveredUntil;
           validationErrors.push(
             `Bill ${billInput.billNo}: measured after the contract's completion date `
             + `(${gate.coveredUntil?.toLocaleDateString('en-IN')}). Record the time extension for this `
@@ -234,7 +242,17 @@ export async function POST(request: NextRequest) {
           error: 'Validation failed',
           details: errorMessage.join('\n\n'),
           duplicateBills: duplicateBillNumbers,
-          validationErrors: validationErrors
+          validationErrors: validationErrors,
+          // Present only when a missing extension is a blocking reason, so the client can
+          // offer to add one inline. originalCompletionDate is what the extension form
+          // starts from; neededUntil is the date the extension must reach to clear the
+          // whole batch.
+          ...(extensionNeededUntil ? { extensionRequired: {
+            contractId: contract.id,
+            originalCompletionDate: (contract.currentCompletionDate || contract.originalCompletionDate || extensionCoveredUntil),
+            coveredUntil: extensionCoveredUntil,
+            neededUntil: extensionNeededUntil,
+          } } : {}),
         },
         { status: 400 }
       );

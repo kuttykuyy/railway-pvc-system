@@ -30,6 +30,7 @@ import {
 } from '@/lib/extracted-bill-entries';
 import { calculateTotalPvc, formatPvcAmount, pvcComparisonAllowsSuffix } from '@/lib/classification-pvc';
 import { computeRebateFactor, scaleComponentsWithRebate } from '@/lib/rebate';
+import { AddExtensionDialog, type ExtensionRequired } from '@/components/contracts/add-extension-dialog';
 
 interface Contract {
   id: string;
@@ -153,6 +154,7 @@ export default function BulkBillCreationPage() {
   const [creditInfo, setCreditInfo] = useState({ currentBalance: 0, requiredAmount: 0, shortfall: 0 });
 
   const [showClassificationDialog, setShowClassificationDialog] = useState(false);
+  const [extensionInfo, setExtensionInfo] = useState<ExtensionRequired | null>(null);
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
 
   useEffect(() => { loadInitialData(); }, []);
@@ -722,6 +724,7 @@ export default function BulkBillCreationPage() {
         error.duplicateBills = errorData.duplicateBills;
         error.validationErrors = errorData.validationErrors;
         error.details = errorData.details;
+        error.extensionRequired = errorData.extensionRequired;
         throw error;
       }
 
@@ -754,7 +757,12 @@ export default function BulkBillCreationPage() {
           return;
         }
       }
-      if (err.duplicateBills || err.validationErrors) {
+      // A missing time extension is the one blocking reason with a one-click fix, so it
+      // gets the inline dialog instead of a wall of red text.
+      if (err.extensionRequired) {
+        setExtensionInfo(err.extensionRequired);
+        toast('These bills run past the contract’s completion date — record the extension to continue.', { icon: '📅', duration: 7000 });
+      } else if (err.duplicateBills || err.validationErrors) {
         let msg = 'Failed to create bills:\n\n';
         if (err.duplicateBills?.length > 0) msg += `⚠️ Duplicate bill numbers found:\n${err.duplicateBills.join(', ')}\n\n`;
         if (err.validationErrors?.length > 0) msg += `\n❌ Validation errors:\n${err.validationErrors.join('\n')}`;
@@ -1233,6 +1241,13 @@ export default function BulkBillCreationPage() {
           </div>
         </div>
       )}
+
+      <AddExtensionDialog
+        open={!!extensionInfo}
+        onOpenChange={(o) => { if (!o) setExtensionInfo(null); }}
+        info={extensionInfo}
+        onSaved={() => { setExtensionInfo(null); handleSubmit(); }}
+      />
     </div>
   );
 }

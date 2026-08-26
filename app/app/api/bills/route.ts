@@ -593,6 +593,12 @@ export async function POST(request: NextRequest) {
         code: 'EXTENSION_REQUIRED',
         coveredUntil: extensionGate.coveredUntil,
         addExtensionUrl: `/contracts/${contract.id}/extensions`,
+        extensionRequired: {
+          contractId: contract.id,
+          originalCompletionDate: (contract.currentCompletionDate || contract.originalCompletionDate || extensionGate.coveredUntil),
+          coveredUntil: extensionGate.coveredUntil,
+          neededUntil: measurementDate,
+        },
       }, { status: 409 });
     }
 
