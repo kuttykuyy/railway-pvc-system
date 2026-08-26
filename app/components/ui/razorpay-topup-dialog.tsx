@@ -42,7 +42,6 @@ export function RazorpayTopupDialog({
   // switched it, so an old cached answer or a failed fetch keeps today's behaviour.
   const [gateway, setGateway] = useState<'razorpay' | 'cashfree'>('razorpay');
   const [cashfreeMode, setCashfreeMode] = useState<'sandbox' | 'production'>('sandbox');
-  const [cashfreeLoaded, setCashfreeLoaded] = useState(false);
   
   // GST Invoice Dialog state
   const [showGstDialog, setShowGstDialog] = useState(false);
@@ -82,11 +81,34 @@ export function RazorpayTopupDialog({
    * the modal closing without a clear result is not treated as a failure, because the
    * money may well be through and the webhook will catch it.
    */
+  /**
+   * Load Cashfree's browser SDK once, on demand, and hand back its factory.
+   *
+   * On demand rather than through next/script's onLoad, which does not reliably fire
+   * for a tag mounted after the first render — and the Cashfree tag can only mount once
+   * the gateway resolves, which is after a fetch. Depending on that onLoad is what left
+   * the Pay button greyed for ever. Injecting the script here and awaiting its load has
+   * no such timing hole.
+   */
+  const loadCashfreeSdk = (): Promise<(opts: { mode: string }) => any> => new Promise((resolve, reject) => {
+    const w = window as any;
+    if (typeof w.Cashfree === 'function') { resolve(w.Cashfree); return; }
+    const existing = document.getElementById('cashfree-sdk') as HTMLScriptElement | null;
+    const onReady = () => {
+      if (typeof w.Cashfree === 'function') resolve(w.Cashfree);
+      else reject(new Error('The payment window failed to load. Please try again.'));
+    };
+    if (existing) { existing.addEventListener('load', onReady); existing.addEventListener('error', () => reject(new Error('Could not load the payment window.'))); return; }
+    const script = document.createElement('script');
+    script.id = 'cashfree-sdk';
+    script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+    script.async = true;
+    script.onload = onReady;
+    script.onerror = () => reject(new Error('Could not load the payment window. Check your connection and try again.'));
+    document.body.appendChild(script);
+  });
+
   const handleCashfreePayment = async () => {
-    if (!cashfreeLoaded || !(window as any).Cashfree) {
-      toast.error('The payment window is still loading. Please try again in a moment.');
-      return;
-    }
     setLoading(true);
     try {
       const orderRes = await fetch('/api/cashfree/create-order', {
@@ -97,7 +119,12 @@ export function RazorpayTopupDialog({
       const orderData = await orderRes.json().catch(() => ({}));
       if (!orderRes.ok) throw new Error(orderData.error || 'Could not start the payment.');
 
-      const cashfree = (window as any).Cashfree({ mode: cashfreeMode });
+      // Load Cashfree's SDK on demand rather than through next/script's onLoad, which
+      // does not reliably fire for a tag added after mount — and this tag only mounts
+      // once the gateway resolves to cashfree, which is after the config fetch. That is
+      // exactly why the Pay button used to sit greyed for ever.
+      const factory = await loadCashfreeSdk();
+      const cashfree = factory({ mode: cashfreeMode });
       await cashfree.checkout({ paymentSessionId: orderData.paymentSessionId, redirectTarget: '_modal' });
 
       // The modal has closed. Ask the server what really happened rather than trusting
@@ -403,13 +430,6 @@ export function RazorpayTopupDialog({
 
   return (
     <>
-      {gateway === 'cashfree' && (
-        <Script
-          src="https://sdk.cashfree.com/js/v3/cashfree.js"
-          onLoad={() => setCashfreeLoaded(true)}
-          onError={() => toast.error('Could not load the payment window. Check your connection and try again.')}
-        />
-      )}
       <Script
         src="https://checkout.razorpay.com/v1/checkout.js"
         onLoad={() => setRazorpayLoaded(true)}
@@ -555,7 +575,7 @@ export function RazorpayTopupDialog({
               disabled={
                 loading || baseAmount < MIN_TOPUP_AMOUNT ||
                 (gateway === 'cashfree'
-                  ? !cashfreeLoaded
+                  ? false
                   : (!razorpayLoaded || !config?.enabled || configLoading || !!configError))
               }
               className="w-full sm:w-auto"
