@@ -1,7 +1,7 @@
 'use client';
 
 import { ChangeEvent, DragEvent, MutableRefObject, useRef, useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Cpu, Download, FileCheck2, FileSpreadsheet, FileText, HardDrive, Lightbulb, ListChecks, Loader2, Lock, RotateCcw, Save, ScanText, Trash2, Unlock, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Cpu, Download, FileSpreadsheet, FileText, HardDrive, Lightbulb, Loader2, Lock, RotateCcw, Save, ScanText, Trash2, Unlock, Upload } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { Badge } from '@/components/ui/badge';
@@ -1179,87 +1179,56 @@ export function BillPdfCementAnalyzer({
           </div>
         ) : showGrandUploader ? (
           <div
-            className={`grid min-h-[330px] grid-cols-1 transition-colors lg:grid-cols-[1.15fr_0.85fr] ${isDraggingFile ? 'bg-emerald-50' : 'bg-white'}`}
-            onDragEnter={(event) => {
-              event.preventDefault();
-              if (!disabled) setIsDraggingFile(true);
-            }}
+            className={`rounded-xl border p-4 transition-colors sm:p-5 ${isDraggingFile ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white'}`}
+            onDragEnter={(event) => { event.preventDefault(); if (!disabled) setIsDraggingFile(true); }}
             onDragOver={(event) => event.preventDefault()}
-            onDragLeave={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsDraggingFile(false);
-            }}
+            onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsDraggingFile(false); }}
             onDrop={handlePdfDrop}
           >
-            <div className="flex flex-col justify-center border-b border-slate-200 bg-slate-950 px-6 py-9 text-white sm:px-10 lg:border-b-0 lg:border-r lg:px-12">
-              <div className="mb-5 flex items-center gap-3 text-sm font-semibold text-emerald-300">
-                <span className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-600 text-white shadow-sm">
-                  <ScanText className="h-5 w-5" />
-                </span>
-                {title}
-              </div>
-              <h2 className="max-w-2xl text-3xl font-bold leading-tight sm:text-4xl">
-                Signed bill in. PVC-ready entries out.
-              </h2>
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-                Convert a railway bill PDF into schedules, current quantities, agreement rates, classifications, and material calculations in one reviewable extraction.
-              </p>
-              <p className="mt-3 inline-flex max-w-2xl items-start gap-1.5 rounded-md bg-slate-800/70 px-3 py-2 text-xs leading-5 text-amber-200">
-                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Extraction and preview are free. A bill created from an AI upload is charged the higher AI PDF rate (not the manual rate) — only when you save it.
-              </p>
-              <div className="mt-7 grid grid-cols-1 gap-4 border-t border-slate-700 pt-5 text-sm sm:grid-cols-3">
-                <div className="flex items-start gap-2.5">
-                  <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-                  <span className="text-slate-200">Schedules and bill items</span>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <FileCheck2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-                  <span className="text-slate-200">Work classifications</span>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-                  <span className="text-slate-200">Cement and steel analysis</span>
-                </div>
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                <ScanText className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-900">{title}</p>
+                <p className="mt-0.5 text-xs leading-5 text-slate-500">
+                  Reads schedules, quantities, rates, classifications and cement/steel from a signed
+                  railway bill PDF. Extraction and preview are free — the AI PDF rate is charged only
+                  when you save.
+                </p>
               </div>
             </div>
 
-            <div className="flex items-stretch p-5 sm:p-7">
-              <input
-                ref={inputRef}
-                type="file"
-                accept="application/pdf,.pdf"
-                multiple={multiple}
-                className="hidden"
-                onChange={handlePdfUpload}
-              />
-              <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
-                disabled={disabled}
-                className={`flex min-h-[240px] w-full flex-col items-center justify-center border-2 border-dashed px-6 py-8 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
-                  isDraggingFile
-                    ? 'border-emerald-600 bg-emerald-50'
-                    : 'border-slate-300 bg-slate-50 hover:border-emerald-500 hover:bg-emerald-50/60'
-                }`}
-              >
-                <span className="flex h-16 w-16 items-center justify-center rounded-md bg-emerald-600 text-white shadow-md">
-                  <Upload className="h-7 w-7" />
-                </span>
-                <span className="mt-5 text-lg font-bold text-slate-900">
+            <input
+              ref={inputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              multiple={multiple}
+              className="hidden"
+              onChange={handlePdfUpload}
+            />
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={disabled}
+              className={`mt-3 flex w-full items-center justify-center gap-3 rounded-lg border-2 border-dashed px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                isDraggingFile ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 bg-slate-50 hover:border-emerald-500 hover:bg-emerald-50/60'
+              }`}
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white shadow-sm">
+                <Upload className="h-5 w-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-slate-900">
                   {isDraggingFile
                     ? 'Release to start extraction'
-                    : multiple ? 'Drop signed bill PDFs here' : 'Drop signed bill PDF here'}
+                    : multiple ? 'Drop bill PDFs, or click to choose' : 'Drop a bill PDF, or click to choose'}
                 </span>
-                <span className="mt-2 text-sm text-slate-500">
-                  {multiple ? 'or click to choose one or more documents' : 'or click to choose a document'}
-                </span>
-                {/* The stated limit has to be the one actually enforced — a bill offered up
-                    to 25 MB is turned away at 4.5 MB by the check above. */}
-                <span className="mt-5 text-xs font-medium text-slate-400">
+                <span className="block text-xs text-slate-500">
                   PDF only, up to {(MAX_UPLOAD_BYTES / 1024 / 1024).toFixed(1)} MB each
                 </span>
-              </button>
-            </div>
+              </span>
+            </button>
           </div>
         ) : (
           <>
