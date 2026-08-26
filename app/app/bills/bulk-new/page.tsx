@@ -1238,17 +1238,9 @@ export default function BulkBillCreationPage() {
                 : <Calculator className="h-4 w-4 mr-1.5" />}
               {previewingRows ? 'Checking PVC…' : 'Preview PVC'}
             </Button>
-            {billMode === 'ai' && (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => openPdfPickerRef.current?.()}
-                disabled={isSaving}
-                className="rounded-full bg-slate-900 text-white hover:bg-slate-800"
-              >
-                <Upload className="h-4 w-4 mr-1.5" />Upload bill PDFs
-              </Button>
-            )}
+            {/* No "Upload bill PDFs" here: the big drop zone above already is the
+                uploader in AI mode, and a second button that opens the same picker read
+                as two ways to do one thing. */}
           </div>
         </div>
       )}
