@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -786,6 +786,10 @@ export default function BulkBillCreationPage() {
         <span>Bulk bills</span>
       </nav>
 
+      {/* Same page chrome as the single New Bill page: a bold heading over the breadcrumb,
+          not a title buried inside a card. */}
+      <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900 mt-1 mb-6">Create Multiple Bills</h1>
+
       {isMaintenanceMode && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg mb-6">
           <div className="flex items-start">
@@ -800,12 +804,19 @@ export default function BulkBillCreationPage() {
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Create Multiple Bills</CardTitle>
-          <p className="text-sm text-muted-foreground mt-2">Create multiple bills for the same contract at once</p>
+      <Card className="border border-slate-100 shadow-sm bg-white rounded-2xl overflow-hidden">
+        <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-6">
+          <CardTitle className="flex items-center gap-3 text-lg font-bold text-slate-900">
+            <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600">
+              <ClipboardList className="h-6 w-6" />
+            </div>
+            Bill Details
+          </CardTitle>
+          <CardDescription className="text-sm text-slate-500 mt-1">
+            Create multiple bills for the same contract at once.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 p-6">
           {error && (
             <div ref={errorRef} className="bg-destructive/10 text-destructive px-4 py-3 rounded-lg flex items-start gap-2">
               <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
