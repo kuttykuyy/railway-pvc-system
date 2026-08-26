@@ -428,10 +428,10 @@ export function RazorpayTopupDialog({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-emerald-600" />
-              Credit Top-up via Razorpay
+              Credit Top-up{gateway === 'cashfree' ? ' via Cashfree' : ' via Razorpay'}
             </DialogTitle>
             <DialogDescription>
-              Add credits to your account using Razorpay payment gateway
+              Add credits to your account using {gateway === 'cashfree' ? 'Cashfree' : 'Razorpay'} — cards, UPI and net banking.
             </DialogDescription>
           </DialogHeader>
 
