@@ -175,7 +175,8 @@ export async function PUT(
       railwaySuppliedMaterialsNote,
       coveringLetterDesignation,
       schedules,
-      rebatePercentage
+      rebatePercentage,
+      fuelPriceType
     } = body;
     
     agreementNoForError = agreementNo || 'unknown';
@@ -239,6 +240,12 @@ export async function PUT(
               const n = Number(rebatePercentage);
               return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
             })()
+          : undefined,
+        // Which diesel price this agreement's PVC uses. Only the two known bases are
+        // accepted; anything else is ignored rather than written, so a stray value can
+        // never silently change how every bill is priced.
+        fuelPriceType: (fuelPriceType === 'four_city_avg' || fuelPriceType === 'zone_city')
+          ? fuelPriceType
           : undefined,
         ...(dateOfOpening && {
           dateOfOpening: new Date(dateOfOpening),

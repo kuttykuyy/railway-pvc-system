@@ -44,6 +44,8 @@ interface ContractFormProps {
     hasRailwaySuppliedMaterials?: boolean;
     railwaySuppliedMaterialsNote?: string;
     coveringLetterDesignation?: string;
+    /** "four_city_avg" (PPAC average) or "zone_city" (the zone's own city). */
+    fuelPriceType?: string;
     /** Legacy string[] or the newer ContractSchedule[]; both are read. */
     schedules?: unknown;
   };
@@ -78,7 +80,9 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     completionPeriodMonths: initialData?.completionPeriodMonths?.toString() || '',
     hasRailwaySuppliedMaterials: initialData?.hasRailwaySuppliedMaterials || false,
     railwaySuppliedMaterialsNote: initialData?.railwaySuppliedMaterialsNote || '',
-    coveringLetterDesignation: initialData?.coveringLetterDesignation || ''
+    coveringLetterDesignation: initialData?.coveringLetterDesignation || '',
+    // Which diesel price this agreement's PVC uses; bills inherit it.
+    fuelPriceType: initialData?.fuelPriceType || 'four_city_avg'
   });
 
   const [schedules, setSchedules] = useState<ContractSchedule[]>(normalizeSchedules(initialData?.schedules));
@@ -812,6 +816,37 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   <p className="text-xs font-medium text-red-600 mt-1">{fieldErrors.contractValue}</p>
                 )}
               </div>
+            </div>
+
+            {/* Fuel price basis — set once per agreement; every bill inherits it. Railways
+                differ: some direct the PPAC four-city average, others the zone's own city. */}
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold text-slate-700">Fuel price basis</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  { value: 'four_city_avg', title: 'Four-city average', desc: 'PPAC average of Delhi, Kolkata, Mumbai & Chennai (GCC-2022 Cl.46A.7)' },
+                  { value: 'zone_city', title: "Zone's own city", desc: 'The diesel rate of this zone’s city' },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, fuelPriceType: opt.value }))}
+                    className={`text-left rounded-xl border px-4 py-3 transition-all ${
+                      formData.fuelPriceType === opt.value
+                        ? 'border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300'
+                        : 'border-slate-200 bg-slate-50/50 hover:bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <span className={`block text-sm font-semibold ${formData.fuelPriceType === opt.value ? 'text-emerald-800' : 'text-slate-700'}`}>
+                      {opt.title}
+                    </span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Chosen once for the whole agreement — new bills use it automatically, so you won&apos;t be asked per bill.
+              </p>
             </div>
 
             {/* PVC Eligibility Status */}

@@ -37,6 +37,7 @@ export default async function EditContractPage({ params }: EditContractPageProps
     hasRailwaySuppliedMaterials: contract.hasRailwaySuppliedMaterials || false,
     railwaySuppliedMaterialsNote: contract.railwaySuppliedMaterialsNote || '',
     coveringLetterDesignation: contract.coveringLetterDesignation || '',
+    fuelPriceType: contract.fuelPriceType || 'four_city_avg',
     schedules: Array.isArray(contract.schedules) ? contract.schedules as string[] : []
   };
 
