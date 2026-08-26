@@ -42,6 +42,7 @@ interface Contract {
   baseMonth: string;
   schedules?: unknown;
   rebatePercentage?: number | null;
+  fuelPriceType?: string | null;
 }
 
 interface SubClassification {
@@ -178,6 +179,16 @@ export default function BulkBillCreationPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedContract?.agreementNo]);
+
+  // Fuel basis is agreed per contract (SWR takes the four-city average, Sr.DFM/MDU the
+  // Chennai rate), so honour whatever the contract stored instead of always defaulting.
+  // Keyed on the contract id so switching contracts re-applies the new one.
+  useEffect(() => {
+    if (selectedContract?.fuelPriceType) {
+      setGlobalFuelPriceType(selectedContract.fuelPriceType);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedContract?.id]);
 
   const loadInitialData = async () => {
     try {
@@ -930,7 +941,7 @@ export default function BulkBillCreationPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Fuel Basis <span className="text-xs text-muted-foreground">(applies to all bills)</span></Label>
+                <Label>Fuel Basis <span className="text-xs text-muted-foreground">(from the contract · applies to all bills)</span></Label>
                 <Select value={globalFuelPriceType} onValueChange={setGlobalFuelPriceType} disabled={isSaving}>
                   <SelectTrigger>
                     <SelectValue placeholder="Fuel basis" />
