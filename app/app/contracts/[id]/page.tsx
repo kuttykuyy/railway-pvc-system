@@ -147,6 +147,7 @@ export default async function ContractDetailPage({ params }: Props) {
               ? `${contract.loaNo}${contract.loaDate ? ` · ${format(new Date(contract.loaDate as unknown as string), 'dd MMM yyyy')}` : ''}`
               : '—'],
             ['Completion', contract.completionPeriodMonths ? `${contract.completionPeriodMonths} months` : '—'],
+            ['Fuel basis', contract.fuelPriceType === 'zone_city' ? "Zone's own city" : 'Four-city average'],
             ['Bills', `${contract.bills.length} · ₹${totalBillAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`],
             // On a pre-2022 contract the stored totals are GCC-2022 figures — the wrong
             // clause — and a number in a headline gets quoted. The statements carry the
