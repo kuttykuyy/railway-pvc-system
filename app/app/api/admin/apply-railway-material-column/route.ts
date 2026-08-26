@@ -194,6 +194,48 @@ const PENDING_EXTRAS: Array<{
     check: { kind: 'table', name: 'parse_failures' },
   },
   {
+    label: 'payment_transactions',
+    sql: (s) => `CREATE TABLE IF NOT EXISTS "${s}"."payment_transactions" (
+        "id" TEXT PRIMARY KEY,
+        "gateway" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "orderId" TEXT NOT NULL,
+        "gatewayOrderId" TEXT,
+        "gatewayPaymentId" TEXT,
+        "amount" DOUBLE PRECISION NOT NULL,
+        "currency" TEXT NOT NULL DEFAULT 'INR',
+        "status" TEXT NOT NULL DEFAULT 'created',
+        "creditAmount" DOUBLE PRECISION NOT NULL,
+        "gstAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "totalAmount" DOUBLE PRECISION NOT NULL,
+        "paymentMethod" TEXT,
+        "receipt" TEXT,
+        "notes" JSONB,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "completedAt" TIMESTAMP(3),
+        CONSTRAINT "payment_transactions_gateway_order_key" UNIQUE ("gateway", "orderId")
+      )`,
+    why: 'Payments from any gateway, named after what they are rather than who took them. '
+      + 'razorpay_transactions holds a razorpayOrderId, a razorpaySignature and a '
+      + 'razorpayPaymentId, so putting a Cashfree order in it would leave every column '
+      + 'name denying its own contents. That table stays exactly as it is, holding the '
+      + 'Razorpay history; new gateways write here.',
+    check: { kind: 'table', name: 'payment_transactions' },
+  },
+  {
+    label: 'payment_transactions_userId_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "payment_transactions_userId_idx" ON "${s}"."payment_transactions" ("userId")`,
+    why: "A person's payment history is read by user.",
+    check: { kind: 'index', name: 'payment_transactions_userId_idx' },
+  },
+  {
+    label: 'payment_transactions_gatewayOrderId_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "payment_transactions_gatewayOrderId_idx" ON "${s}"."payment_transactions" ("gatewayOrderId")`,
+    why: "A webhook arrives knowing only the gateway's own order id.",
+    check: { kind: 'index', name: 'payment_transactions_gatewayOrderId_idx' },
+  },
+  {
     label: 'User_phone_unique',
     sql: (s) => `CREATE UNIQUE INDEX IF NOT EXISTS "User_phone_key" ON "${s}"."User" ("phone") WHERE "phone" IS NOT NULL`,
     why: 'A mobile number identifies an account — the WhatsApp bot finds a person\'s '
