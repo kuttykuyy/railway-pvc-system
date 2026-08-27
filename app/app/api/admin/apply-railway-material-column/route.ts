@@ -147,6 +147,18 @@ const PENDING: PendingColumn[] = [
     ddlType: "JSONB NOT NULL DEFAULT '[]'",
     why: 'The record of each transfer: when, from which zone to which, the order it was made under, and who did it.',
   },
+  {
+    table: 'contracts',
+    column: 'pvcScheme',
+    ddlType: "TEXT DEFAULT 'railway-46a'",
+    why: 'Which price-variation engine prices the contract. Every existing contract is the Railway Clause 46A index-ratio engine (the default); a second engine (CPWD 10CA, star-rate/quantity) reads this to route. Not declared in schema.prisma — read via raw SQL so the two engines never entangle.',
+  },
+  {
+    table: 'contracts',
+    column: 'cpwdRegion',
+    ddlType: 'TEXT',
+    why: "For a CPWD 10CA contract: which region's monthly base-price circular applies (e.g. delhi-ncr). Null for Railway contracts.",
+  },
 ];
 
 /**

@@ -23,7 +23,7 @@ export type PvcScheme = 'railway-46a' | 'cpwd-10ca';
 export const DEFAULT_PVC_SCHEME: PvcScheme = 'railway-46a';
 
 /** Schemes with a working calculation engine behind them right now. */
-const IMPLEMENTED_SCHEMES: ReadonlySet<PvcScheme> = new Set<PvcScheme>(['railway-46a']);
+const IMPLEMENTED_SCHEMES: ReadonlySet<PvcScheme> = new Set<PvcScheme>(['railway-46a', 'cpwd-10ca']);
 
 const KNOWN_SCHEMES: ReadonlySet<string> = new Set<PvcScheme>(['railway-46a', 'cpwd-10ca']);
 
@@ -57,5 +57,35 @@ export function assertSchemeImplemented(scheme: PvcScheme): void {
       `PVC scheme "${scheme}" is selected on this contract but its calculation engine is not built yet. `
       + 'Only the Railway Clause 46A engine is available at present.',
     );
+  }
+}
+
+/**
+ * The scheme (and CPWD region) a contract is on, read straight from the database.
+ *
+ * `pvcScheme` and `cpwdRegion` are deliberately NOT declared in schema.prisma — a Prisma
+ * model load never selects them — so they are read here with a small raw query that
+ * tolerates the columns not existing yet (before the pending DDL is applied) by falling
+ * back to the Railway engine. That keeps the two engines from entangling and means no
+ * window where schema.prisma knows a column the live DB does not.
+ */
+export async function readContractScheme(contractId: string): Promise<{ scheme: PvcScheme; region: string | null }> {
+  try {
+    const { prisma } = await import('./db');
+    const { schemaQualified } = await import('./db-schema');
+    const table = await schemaQualified('contracts');
+    const rows = await prisma.$queryRawUnsafe<Array<{ pvcScheme: string | null; cpwdRegion: string | null }>>(
+      `SELECT "pvcScheme", "cpwdRegion" FROM ${table} WHERE "id" = $1 LIMIT 1`,
+      contractId,
+    );
+    const row = rows[0];
+    return {
+      scheme: resolvePvcScheme({ pvcScheme: row?.pvcScheme }),
+      region: row?.cpwdRegion ? String(row.cpwdRegion).trim().toLowerCase() : null,
+    };
+  } catch {
+    // Columns not applied yet, or any read error → the Railway engine, which is every
+    // contract until CPWD is switched on. Never let this fork break a real bill.
+    return { scheme: DEFAULT_PVC_SCHEME, region: null };
   }
 }

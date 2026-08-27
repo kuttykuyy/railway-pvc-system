@@ -44,12 +44,18 @@ export async function recalculateBillPvc(billId: string) {
     throw new BillNotFoundError('Bill not found');
   }
 
-  // The engine fork. Every contract resolves to the Railway Clause 46A engine today, so
-  // this is a no-op that simply proves the seam: a future scheme (e.g. CPWD 10CA) branches
-  // here instead of anywhere inside the Railway maths below. An unbuilt scheme fails loudly.
-  const { resolvePvcScheme, assertSchemeImplemented } = await import('./pvc-scheme');
-  const pvcScheme = resolvePvcScheme(bill.contract as any);
+  // The engine fork. The scheme is read straight from the DB (not the Prisma model), so a
+  // CPWD 10CA contract branches to Engine B here and never enters the Railway maths below.
+  // Every Railway contract resolves to 'railway-46a' and the existing path runs unchanged.
+  const { readContractScheme, assertSchemeImplemented } = await import('./pvc-scheme');
+  const { scheme: pvcScheme, region: cpwdRegion } = await readContractScheme(bill.contractId);
   assertSchemeImplemented(pvcScheme);
+  if (pvcScheme === 'cpwd-10ca') {
+    const { computeAndStoreEngineB } = await import('./engine-b-bill');
+    const engineB = await computeAndStoreEngineB(bill as any, cpwdRegion);
+    // Engine B keeps its own store; there is no Railway PvcCalculation for these bills.
+    return { billId: bill.id, scheme: 'cpwd-10ca', cpwd10ca: engineB, pvcCalculation: null, quarterRecalculated: false };
+  }
 
   const classificationPolicy = await resolveBillClassificationPolicy(
     bill.contract.workDescription,

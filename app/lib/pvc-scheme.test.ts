@@ -36,12 +36,14 @@ describe('isRailwayScheme', () => {
 });
 
 describe('assertSchemeImplemented', () => {
-  it('passes for the Railway engine', () => {
+  it('passes for the implemented engines', () => {
     expect(() => assertSchemeImplemented('railway-46a')).not.toThrow();
+    expect(() => assertSchemeImplemented('cpwd-10ca')).not.toThrow();
   });
 
   it('throws for a declared-but-unbuilt engine, naming it', () => {
-    expect(() => assertSchemeImplemented('cpwd-10ca')).toThrow(/cpwd-10ca/);
-    expect(() => assertSchemeImplemented('cpwd-10ca')).toThrow(/not built yet/i);
+    // A future scheme that has no engine yet (cast — not in the union yet).
+    expect(() => assertSchemeImplemented('nhai-ham' as any)).toThrow(/nhai-ham/);
+    expect(() => assertSchemeImplemented('nhai-ham' as any)).toThrow(/not built yet/i);
   });
 });
