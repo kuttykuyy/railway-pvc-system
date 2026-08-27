@@ -23,7 +23,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const { schemaQualified } = await import('@/lib/db-schema');
     const table = await schemaQualified('cpwd_10ca_calculations');
     const rows = await prisma.$queryRawUnsafe<Array<any>>(
-      `SELECT "billId","region","baseMonth","billMonth","totalVariation","breakdown","flags","excluded"
+      `SELECT "billId","region","baseMonth","billMonth","totalVariation","breakdown","flags","excluded",
+              COALESCE("cpwd10ccTotal",0) AS "cpwd10ccTotal",
+              COALESCE("cpwd10ccBreakdown",'[]'::jsonb) AS "cpwd10ccBreakdown",
+              COALESCE("combinedTotal","totalVariation") AS "combinedTotal"
        FROM ${table} WHERE "billId" = $1 LIMIT 1`,
       id,
     );
@@ -38,6 +41,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       breakdown: row.breakdown || [],
       flags: row.flags || [],
       excluded: row.excluded || [],
+      cpwd10ccTotal: Number(row.cpwd10ccTotal),
+      cpwd10ccBreakdown: row.cpwd10ccBreakdown || [],
+      combinedTotal: Number(row.combinedTotal),
     });
   } catch {
     // Table not created yet (no CPWD bill has ever computed) → nothing to show.

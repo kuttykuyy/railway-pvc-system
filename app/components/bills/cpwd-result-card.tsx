@@ -11,7 +11,8 @@ import { Boxes, AlertTriangle, FileDown } from 'lucide-react';
  */
 
 interface Line { label: string; unit: string; quantity: number; basePrice: number; currentPrice: number; priceDelta: number; variation: number }
-interface Data { present: boolean; region: string | null; baseMonth: string; billMonth: string; totalVariation: number; breakdown: Line[]; flags: Array<{ code: string; reason: string }>; excluded: string[] }
+interface CcLine { label: string; percent: number; baseIndex: number; currentIndex: number; indexRatio: number; variation: number }
+interface Data { present: boolean; region: string | null; baseMonth: string; billMonth: string; totalVariation: number; breakdown: Line[]; flags: Array<{ code: string; reason: string }>; excluded: string[]; cpwd10ccTotal: number; cpwd10ccBreakdown: CcLine[]; combinedTotal: number }
 
 const rupee = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 const qty = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 3 });
@@ -97,6 +98,47 @@ export function CpwdResultCard({ billId }: { billId: string }) {
         {data.excluded.length > 0 && (
           <p className="mt-2 text-xs text-slate-400">Not priced in this version: {data.excluded.join(', ')}.</p>
         )}
+
+        {/* 10CC — labour / other materials / POL, on WPI/CPI with the 15% haircut. */}
+        {data.cpwd10ccBreakdown.length > 0 && (
+          <div className="mt-5">
+            <div className="text-sm font-semibold text-slate-700 mb-1.5">Clause 10CC — labour, materials &amp; POL</div>
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Component</th>
+                    <th className="px-3 py-2 font-medium text-right">Schedule-E %</th>
+                    <th className="px-3 py-2 font-medium text-right">Base index</th>
+                    <th className="px-3 py-2 font-medium text-right">Current index</th>
+                    <th className="px-3 py-2 font-medium text-right">Variation</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y tabular-nums">
+                  {data.cpwd10ccBreakdown.map((l, i) => (
+                    <tr key={i}>
+                      <td className="px-3 py-2 font-medium text-slate-700">{l.label}</td>
+                      <td className="px-3 py-2 text-right text-slate-500">{l.percent}%</td>
+                      <td className="px-3 py-2 text-right text-slate-500">{l.baseIndex || '—'}</td>
+                      <td className="px-3 py-2 text-right text-slate-500">{l.currentIndex ? l.currentIndex.toFixed(1) : '—'}</td>
+                      <td className={`px-3 py-2 text-right font-semibold ${l.variation >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{rupee(l.variation)}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-slate-50 font-semibold">
+                    <td className="px-3 py-2" colSpan={4}>Total 10CC variation</td>
+                    <td className={`px-3 py-2 text-right ${data.cpwd10ccTotal >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{rupee(data.cpwd10ccTotal)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Combined CPWD total = 10CA + 10CC. */}
+        <div className="mt-4 flex items-center justify-between rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3">
+          <span className="text-sm font-semibold text-emerald-900">Total CPWD price variation (10CA + 10CC)</span>
+          <span className={`text-lg font-bold tabular-nums ${data.combinedTotal >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{rupee(data.combinedTotal)}</span>
+        </div>
       </CardContent>
     </Card>
   );

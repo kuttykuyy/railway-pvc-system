@@ -109,3 +109,69 @@ export async function writeContractScheme(contractId: string, scheme: PvcScheme,
     console.error('[pvc-scheme] could not persist scheme (columns applied?):', error);
   }
 }
+
+/** Clause 10CC's per-contract Schedule-E percentages and optional overrides. */
+export interface Cpwd10ccSchedule {
+  labour: number;
+  materials: number;
+  pol: number;
+  /** Non-escalable fraction; W = haircut × work value. Defaults to 0.85 downstream. */
+  haircut?: number;
+  /** K — departmental (free-issue) material value excluded from the escalable base. */
+  departmentalMaterial?: number;
+  /** L — fixed-charge services value excluded from the escalable base. */
+  fixedChargeServices?: number;
+}
+
+/**
+ * Build a 10CC schedule from three raw percentage inputs. Returns null when none is a
+ * usable number, so a CPWD contract without Schedule-E percentages simply prices 10CA.
+ * Each percent is clamped to 0–100; a missing one is treated as 0.
+ */
+export function buildCpwd10ccSchedule(labour: unknown, materials: unknown, pol: unknown): Cpwd10ccSchedule | null {
+  const num = (v: unknown): number | null => {
+    if (v === '' || v === null || v === undefined) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null;
+  };
+  const l = num(labour), m = num(materials), p = num(pol);
+  if (l === null && m === null && p === null) return null;
+  return { labour: l ?? 0, materials: m ?? 0, pol: p ?? 0 };
+}
+
+/** Read the 10CC Schedule-E config for a contract, or null if none / columns not applied. */
+export async function readCpwd10ccSchedule(contractId: string): Promise<Cpwd10ccSchedule | null> {
+  try {
+    const { prisma } = await import('./db');
+    const { schemaQualified } = await import('./db-schema');
+    const table = await schemaQualified('contracts');
+    const rows = await prisma.$queryRawUnsafe<Array<{ cpwd10ccSchedule: any }>>(
+      `SELECT "cpwd10ccSchedule" FROM ${table} WHERE "id" = $1 LIMIT 1`,
+      contractId,
+    );
+    const raw = rows[0]?.cpwd10ccSchedule;
+    if (!raw) return null;
+    const s = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (s && typeof s === 'object' && ['labour', 'materials', 'pol'].every(k => typeof s[k] === 'number')) {
+      return s as Cpwd10ccSchedule;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Persist the 10CC Schedule-E config (or clear it) via raw SQL. */
+export async function writeCpwd10ccSchedule(contractId: string, schedule: Cpwd10ccSchedule | null): Promise<void> {
+  try {
+    const { prisma } = await import('./db');
+    const { schemaQualified } = await import('./db-schema');
+    const table = await schemaQualified('contracts');
+    await prisma.$executeRawUnsafe(
+      `UPDATE ${table} SET "cpwd10ccSchedule" = $1::jsonb WHERE "id" = $2`,
+      schedule ? JSON.stringify(schedule) : null, contractId,
+    );
+  } catch (error) {
+    console.error('[pvc-scheme] could not persist 10CC schedule (columns applied?):', error);
+  }
+}

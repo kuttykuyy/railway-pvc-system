@@ -28,6 +28,14 @@ export interface Cpwd10caReportLine {
   variation: number;
 }
 
+export interface Cpwd10ccReportLine {
+  label: string;
+  percent: number;
+  baseIndex: number;
+  currentIndex: number;
+  variation: number;
+}
+
 export interface Cpwd10caReportOptions {
   contractorName?: string | null;
   agreementNo?: string | null;
@@ -41,6 +49,11 @@ export interface Cpwd10caReportOptions {
   totalVariation: number;
   flags: Array<{ code: string; reason: string }>;
   excluded: string[];
+  /** 10CC (labour/materials/POL); empty when the contract has no Schedule-E config. */
+  cpwd10ccBreakdown?: Cpwd10ccReportLine[];
+  cpwd10ccTotal?: number;
+  /** 10CA + 10CC — the CPWD price variation for the bill. */
+  combinedTotal?: number;
 }
 
 const rupee = (n: number) => `Rs ${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -160,12 +173,54 @@ export function generateCpwd10caReport(opts: Cpwd10caReportOptions): Buffer {
     y += 5; pdf.setTextColor(0, 0, 0);
   }
 
+  // ── 10CC (labour / other materials / POL) ──
+  const cc = opts.cpwd10ccBreakdown || [];
+  if (cc.length > 0) {
+    y += 4;
+    pdf.setFontSize(10); pdf.setFont('helvetica', 'bold');
+    pdf.text('CLAUSE 10CC — labour, other materials & POL', mL, y);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+    pdf.setTextColor(90, 90, 90);
+    pdf.text('W = 85% of work value; component escalation = W x (Sched-E %) x (I_now - I_base)/I_base, on WPI/CPI indices.', mL, y + 4);
+    pdf.setTextColor(0, 0, 0);
+    y += 8;
+    autoTable(pdf, {
+      startY: y,
+      head: [['Component', 'Sched-E %', 'Base index', 'Current index', 'Variation']],
+      body: cc.map(l => [l.label, `${l.percent}%`, l.baseIndex ? String(l.baseIndex) : '-', l.currentIndex ? l.currentIndex.toFixed(1) : '-', rupee(l.variation)]),
+      foot: [[
+        { content: 'Total 10CC price variation', colSpan: 4, styles: { halign: 'right' as const, fontStyle: 'bold' as const } },
+        { content: rupee(opts.cpwd10ccTotal || 0), styles: { fontStyle: 'bold' as const } },
+      ]],
+      theme: 'grid',
+      headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontSize: 8.5, halign: 'center' },
+      footStyles: { fillColor: [235, 235, 235], textColor: [0, 0, 0] },
+      bodyStyles: { fontSize: 8.5 },
+      columnStyles: { 0: { cellWidth: 60 }, 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+      margin: { left: mL, right: mR },
+    });
+    y = pdf.lastAutoTable.finalY + 5;
+  }
+
+  // ── Combined CPWD total (10CA + 10CC) ──
+  if (opts.combinedTotal != null && cc.length > 0) {
+    pdf.setFillColor(230, 245, 238);
+    pdf.rect(mL, y, contentW, 9, 'F');
+    pdf.setFontSize(10); pdf.setFont('helvetica', 'bold');
+    pdf.text('TOTAL CPWD PRICE VARIATION (10CA + 10CC)', mL + 3, y + 5.8);
+    pdf.text(rupee(opts.combinedTotal), pageW - mR - 3, y + 5.8, { align: 'right' });
+    pdf.setFont('helvetica', 'normal');
+    y += 13;
+  }
+
   // ── Certificate + signatures ──
   y += 4;
   pdf.setFontSize(8.5); pdf.setFont('helvetica', 'italic');
   const cert = pdf.splitTextToSize(
-    'Certified that the above price variation has been computed under CPWD Clause 10CA on the quantities of material '
-    + 'used in this bill and the base prices and indices published by CPWD (base: October 2012).',
+    'Certified that the above price variation has been computed under CPWD Clause 10CA'
+    + (cc.length > 0 ? ' and 10CC' : '')
+    + ' on the quantities of material used in this bill and the base prices and indices published by CPWD '
+    + '(10CA base: October 2012)' + (cc.length > 0 ? ', with 10CC on the WPI/CPI indices for the relevant months.' : '.'),
     contentW,
   );
   pdf.text(cert, mL, y);

@@ -178,7 +178,10 @@ export async function PUT(
       rebatePercentage,
       fuelPriceType,
       pvcScheme,
-      cpwdRegion
+      cpwdRegion,
+      cpwd10ccLabour,
+      cpwd10ccMaterials,
+      cpwd10ccPol
     } = body;
     
     agreementNoForError = agreementNo || 'unknown';
@@ -277,8 +280,12 @@ export async function PUT(
     // Pricing scheme lives in raw-SQL columns (not the Prisma model). Persist whichever
     // was chosen — including switching a contract back to Railway, which clears the region.
     if (pvcScheme === 'cpwd-10ca' || pvcScheme === 'railway-46a') {
-      const { writeContractScheme } = await import('@/lib/pvc-scheme');
+      const { writeContractScheme, writeCpwd10ccSchedule, buildCpwd10ccSchedule } = await import('@/lib/pvc-scheme');
       await writeContractScheme(id, pvcScheme, pvcScheme === 'cpwd-10ca' ? (cpwdRegion || null) : null);
+      // Store Schedule-E for CPWD; clear it when switching back to Railway.
+      await writeCpwd10ccSchedule(id, pvcScheme === 'cpwd-10ca'
+        ? buildCpwd10ccSchedule(cpwd10ccLabour, cpwd10ccMaterials, cpwd10ccPol)
+        : null);
     }
 
     return NextResponse.json(contract);

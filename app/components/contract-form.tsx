@@ -50,6 +50,10 @@ interface ContractFormProps {
     pvcScheme?: string;
     /** For CPWD 10CA: which region's base-price circular applies. */
     cpwdRegion?: string;
+    /** CPWD 10CC Schedule-E percentages (labour / other materials / POL). */
+    cpwd10ccLabour?: number;
+    cpwd10ccMaterials?: number;
+    cpwd10ccPol?: number;
     /** Legacy string[] or the newer ContractSchedule[]; both are read. */
     schedules?: unknown;
   };
@@ -90,7 +94,11 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     fuelPriceType: initialData?.fuelPriceType || 'zone_city',
     // Which pricing engine. Every contract is Railway 46A unless deliberately set to CPWD.
     pvcScheme: initialData?.pvcScheme || 'railway-46a',
-    cpwdRegion: initialData?.cpwdRegion || ''
+    cpwdRegion: initialData?.cpwdRegion || '',
+    // CPWD 10CC Schedule-E percentages (blank = 10CC not computed, 10CA only).
+    cpwd10ccLabour: initialData?.cpwd10ccLabour != null ? String(initialData.cpwd10ccLabour) : '',
+    cpwd10ccMaterials: initialData?.cpwd10ccMaterials != null ? String(initialData.cpwd10ccMaterials) : '',
+    cpwd10ccPol: initialData?.cpwd10ccPol != null ? String(initialData.cpwd10ccPol) : ''
   });
 
   const [schedules, setSchedules] = useState<ContractSchedule[]>(normalizeSchedules(initialData?.schedules));
@@ -766,6 +774,36 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                     Which region&apos;s CPWD monthly base-price circular applies. The base month is the
                     tender-receipt month. Load its prices under Admin → Rates &amp; indices → CPWD 10CA prices.
                   </p>
+
+                  <div className="pt-2 mt-2 border-t border-amber-200">
+                    <Label className="text-sm font-semibold text-amber-900">Clause 10CC — Schedule E percentages</Label>
+                    <p className="text-xs text-amber-800 mt-0.5 mb-2 leading-relaxed">
+                      Labour, other materials and POL as a % of the work value (from the tender&apos;s Schedule E).
+                      Leave blank to price 10CA materials only. 10CC runs on WPI/CPI with a 15% haircut.
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {([
+                        { key: 'cpwd10ccLabour', label: 'Labour %' },
+                        { key: 'cpwd10ccMaterials', label: 'Materials %' },
+                        { key: 'cpwd10ccPol', label: 'POL %' },
+                      ] as const).map(f => (
+                        <div key={f.key} className="space-y-1">
+                          <Label htmlFor={f.key} className="text-xs text-amber-900">{f.label}</Label>
+                          <Input
+                            id={f.key}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={(formData as any)[f.key]}
+                            onChange={e => setFormData(prev => ({ ...prev, [f.key]: e.target.value }))}
+                            placeholder="e.g. 25"
+                            className="bg-white"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

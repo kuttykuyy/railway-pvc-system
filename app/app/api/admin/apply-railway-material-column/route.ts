@@ -159,6 +159,12 @@ const PENDING: PendingColumn[] = [
     ddlType: 'TEXT',
     why: "For a CPWD 10CA contract: which region's monthly base-price circular applies (e.g. delhi-ncr). Null for Railway contracts.",
   },
+  {
+    table: 'contracts',
+    column: 'cpwd10ccSchedule',
+    ddlType: 'JSONB',
+    why: "For a CPWD contract: Clause 10CC's Schedule-E percentages (labour, other materials, POL) and optional overrides (haircut, K, L), so the labour/materials/POL escalation can be computed alongside 10CA. Null for Railway contracts.",
+  },
 ];
 
 /**

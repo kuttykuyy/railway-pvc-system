@@ -25,8 +25,9 @@ export default async function EditContractPage({ params }: EditContractPageProps
   }
 
   // Pricing scheme is stored in raw-SQL columns, so it is read separately from the model.
-  const { readContractScheme } = await import('@/lib/pvc-scheme');
+  const { readContractScheme, readCpwd10ccSchedule } = await import('@/lib/pvc-scheme');
   const { scheme: pvcScheme, region: cpwdRegion } = await readContractScheme(id);
+  const schedule10cc = await readCpwd10ccSchedule(id);
 
   const formData = {
     agreementNo: contract.agreementNo,
@@ -44,6 +45,9 @@ export default async function EditContractPage({ params }: EditContractPageProps
     fuelPriceType: contract.fuelPriceType || 'four_city_avg',
     pvcScheme,
     cpwdRegion: cpwdRegion || '',
+    cpwd10ccLabour: schedule10cc?.labour,
+    cpwd10ccMaterials: schedule10cc?.materials,
+    cpwd10ccPol: schedule10cc?.pol,
     schedules: Array.isArray(contract.schedules) ? contract.schedules as string[] : []
   };
 

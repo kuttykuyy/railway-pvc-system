@@ -27,7 +27,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const table = await schemaQualified('cpwd_10ca_calculations');
     const rows = await prisma.$queryRawUnsafe<Array<any>>(
-      `SELECT "region","baseMonth","billMonth","totalVariation","breakdown","flags","excluded"
+      `SELECT "region","baseMonth","billMonth","totalVariation","breakdown","flags","excluded",
+              COALESCE("cpwd10ccTotal",0) AS "cpwd10ccTotal",
+              COALESCE("cpwd10ccBreakdown",'[]'::jsonb) AS "cpwd10ccBreakdown",
+              COALESCE("combinedTotal","totalVariation") AS "combinedTotal"
        FROM ${table} WHERE "billId" = $1 LIMIT 1`,
       id,
     );
@@ -53,6 +56,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     totalVariation: Number(row.totalVariation),
     flags: Array.isArray(row.flags) ? row.flags : [],
     excluded: Array.isArray(row.excluded) ? row.excluded : [],
+    cpwd10ccBreakdown: Array.isArray(row.cpwd10ccBreakdown) ? row.cpwd10ccBreakdown : [],
+    cpwd10ccTotal: Number(row.cpwd10ccTotal),
+    combinedTotal: Number(row.combinedTotal),
   });
 
   const safeName = String(bill.billNo || 'bill').replace(/[^a-z0-9._-]/gi, '_');
