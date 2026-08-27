@@ -46,6 +46,10 @@ interface ContractFormProps {
     coveringLetterDesignation?: string;
     /** "four_city_avg" (PPAC average) or "zone_city" (the zone's own city). */
     fuelPriceType?: string;
+    /** "railway-46a" (default) or "cpwd-10ca" — which pricing engine. */
+    pvcScheme?: string;
+    /** For CPWD 10CA: which region's base-price circular applies. */
+    cpwdRegion?: string;
     /** Legacy string[] or the newer ContractSchedule[]; both are read. */
     schedules?: unknown;
   };
@@ -83,7 +87,10 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     coveringLetterDesignation: initialData?.coveringLetterDesignation || '',
     // Which diesel price this agreement's PVC uses; bills inherit it. New contracts
     // default to the zone's own city — the basis most railways here actually direct.
-    fuelPriceType: initialData?.fuelPriceType || 'zone_city'
+    fuelPriceType: initialData?.fuelPriceType || 'zone_city',
+    // Which pricing engine. Every contract is Railway 46A unless deliberately set to CPWD.
+    pvcScheme: initialData?.pvcScheme || 'railway-46a',
+    cpwdRegion: initialData?.cpwdRegion || ''
   });
 
   const [schedules, setSchedules] = useState<ContractSchedule[]>(normalizeSchedules(initialData?.schedules));
@@ -717,6 +724,50 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                   <p className="leading-relaxed">{t('form.contract.pvc_rules_text')}</p>
                 </div>
               </div>
+            </div>
+
+            {/* Pricing scheme — which price-variation engine prices this contract. Default is
+                the Railway Clause 46A engine; CPWD 10CA is the star-rate/quantity engine. */}
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold text-slate-700">Pricing scheme</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  { value: 'railway-46a', title: 'Indian Railways — Clause 46A', desc: 'Index-ratio on WPI/CPI, quarterly. The standard for every Railway contract.' },
+                  { value: 'cpwd-10ca', title: 'CPWD — Clause 10CA', desc: 'Star-rate: quantity of material × price movement, on CPWD monthly base prices.' },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, pvcScheme: opt.value }))}
+                    className={`text-left rounded-xl border px-4 py-3 transition-all ${
+                      formData.pvcScheme === opt.value
+                        ? 'border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300'
+                        : 'border-slate-200 bg-slate-50/50 hover:bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <span className={`block text-sm font-semibold ${formData.pvcScheme === opt.value ? 'text-emerald-800' : 'text-slate-700'}`}>
+                      {opt.title}
+                    </span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+              {formData.pvcScheme === 'cpwd-10ca' && (
+                <div className="mt-2 space-y-1.5 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+                  <Label htmlFor="cpwdRegion" className="text-sm font-semibold text-amber-900">CPWD region</Label>
+                  <Input
+                    id="cpwdRegion"
+                    value={formData.cpwdRegion}
+                    onChange={e => setFormData(prev => ({ ...prev, cpwdRegion: e.target.value }))}
+                    placeholder="e.g. delhi-ncr"
+                    className="bg-white"
+                  />
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    Which region&apos;s CPWD monthly base-price circular applies. The base month is the
+                    tender-receipt month. Load its prices under Admin → Rates &amp; indices → CPWD 10CA prices.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

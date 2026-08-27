@@ -89,3 +89,23 @@ export async function readContractScheme(contractId: string): Promise<{ scheme: 
     return { scheme: DEFAULT_PVC_SCHEME, region: null };
   }
 }
+
+/**
+ * Persist a contract's scheme and CPWD region via raw SQL (the columns are not in the
+ * Prisma model). Region is only meaningful for CPWD; it is cleared for Railway. Silently
+ * does nothing if the columns are not applied yet, so saving a contract never fails on it.
+ */
+export async function writeContractScheme(contractId: string, scheme: PvcScheme, region: string | null): Promise<void> {
+  try {
+    const { prisma } = await import('./db');
+    const { schemaQualified } = await import('./db-schema');
+    const table = await schemaQualified('contracts');
+    const cleanRegion = scheme === 'cpwd-10ca' && region ? String(region).trim().toLowerCase() : null;
+    await prisma.$executeRawUnsafe(
+      `UPDATE ${table} SET "pvcScheme" = $1, "cpwdRegion" = $2 WHERE "id" = $3`,
+      scheme, cleanRegion, contractId,
+    );
+  } catch (error) {
+    console.error('[pvc-scheme] could not persist scheme (columns applied?):', error);
+  }
+}

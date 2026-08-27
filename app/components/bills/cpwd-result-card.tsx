@@ -1,0 +1,93 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Boxes, AlertTriangle } from 'lucide-react';
+
+/**
+ * The CPWD 10CA (Engine B) result on a bill page. Fetches the stored result and renders
+ * nothing for a Railway bill (or one not computed), so it is safe to drop onto any bill.
+ */
+
+interface Line { label: string; unit: string; quantity: number; basePrice: number; currentPrice: number; priceDelta: number; variation: number }
+interface Data { present: boolean; region: string | null; baseMonth: string; billMonth: string; totalVariation: number; breakdown: Line[]; flags: Array<{ code: string; reason: string }>; excluded: string[] }
+
+const rupee = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+const qty = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 3 });
+
+export function CpwdResultCard({ billId }: { billId: string }) {
+  const [data, setData] = useState<Data | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/bills/${billId}/cpwd-10ca`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (alive && d?.present) setData(d); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [billId]);
+
+  if (!data) return null;
+
+  return (
+    <Card className="border-emerald-200">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Boxes className="h-5 w-5 text-emerald-700" /> CPWD Clause 10CA — price variation
+        </CardTitle>
+        <p className="text-xs text-slate-500">
+          Region {data.region || '—'} · base {data.baseMonth} → bill {data.billMonth}. Quantity of each material × its price movement.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs text-slate-500">
+              <tr>
+                <th className="px-3 py-2 font-medium">Material</th>
+                <th className="px-3 py-2 font-medium text-right">Quantity</th>
+                <th className="px-3 py-2 font-medium text-right">Base price</th>
+                <th className="px-3 py-2 font-medium text-right">Current price</th>
+                <th className="px-3 py-2 font-medium text-right">Δ / unit</th>
+                <th className="px-3 py-2 font-medium text-right">Variation</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y tabular-nums">
+              {data.breakdown.map((l, i) => (
+                <tr key={i}>
+                  <td className="px-3 py-2 font-medium text-slate-700">{l.label}</td>
+                  <td className="px-3 py-2 text-right text-slate-600">{qty(l.quantity)} {l.unit}</td>
+                  <td className="px-3 py-2 text-right text-slate-500">{rupee(l.basePrice)}</td>
+                  <td className="px-3 py-2 text-right text-slate-500">{rupee(l.currentPrice)}</td>
+                  <td className={`px-3 py-2 text-right ${l.priceDelta >= 0 ? 'text-slate-600' : 'text-red-600'}`}>{rupee(l.priceDelta)}</td>
+                  <td className={`px-3 py-2 text-right font-semibold ${l.variation >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{rupee(l.variation)}</td>
+                </tr>
+              ))}
+              {data.breakdown.length === 0 && (
+                <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">No priced materials — check the CPWD prices are loaded for this region and month.</td></tr>
+              )}
+              <tr className="bg-slate-50 font-semibold">
+                <td className="px-3 py-2" colSpan={5}>Total 10CA variation</td>
+                <td className={`px-3 py-2 text-right ${data.totalVariation >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{rupee(data.totalVariation)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {data.flags.length > 0 && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
+            <div>
+              <span className="font-semibold">{data.flags.length} steel item(s) not priced</span> — unit could not be resolved:
+              {' '}{data.flags.map(f => f.code).join(', ')}. Fix the rate-book unit and recalculate.
+            </div>
+          </div>
+        )}
+
+        {data.excluded.length > 0 && (
+          <p className="mt-2 text-xs text-slate-400">Not priced in this version: {data.excluded.join(', ')}.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

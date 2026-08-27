@@ -194,7 +194,9 @@ export async function POST(request: NextRequest) {
       coveringLetterDesignation,
       schedules,
       rebatePercentage,
-      fuelPriceType
+      fuelPriceType,
+      pvcScheme,
+      cpwdRegion
     } = body;
 
     // Set up from an LOA, before an agreement exists: the LOA number stands in as the
@@ -348,6 +350,13 @@ export async function POST(request: NextRequest) {
     if (body.uploadedDocumentId) {
       const { linkUploadedDocument } = await import('@/lib/uploaded-documents');
       await linkUploadedDocument(body.uploadedDocumentId, { contractId: contract.id, userId: user.id });
+    }
+
+    // Pricing scheme lives in raw-SQL columns (not the Prisma model). Only write when CPWD
+    // is chosen — a Railway contract is the default and needs no row touched.
+    if (pvcScheme === 'cpwd-10ca') {
+      const { writeContractScheme } = await import('@/lib/pvc-scheme');
+      await writeContractScheme(contract.id, 'cpwd-10ca', cpwdRegion || null);
     }
 
     return NextResponse.json(contract);

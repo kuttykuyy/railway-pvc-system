@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import { BillDetailClient } from './bill-detail-client';
+import { CpwdResultCard } from '@/components/bills/cpwd-result-card';
 import { getQuarterlyAverages } from '@/lib/db-utils';
 import { checkUserBillAccess } from '@/lib/permissions';
 import { getQuarterFromDate, getQuarterMonths } from '@/lib/pvc-calculations';
@@ -338,12 +339,16 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
   }
 
   return (
-    <BillDetailClient 
-      bill={JSON.parse(JSON.stringify(bill))}
-      user={JSON.parse(JSON.stringify(user))}
-      indicesData={indicesData}
-      monthlyIndicesData={monthlyIndicesData}
-      detailedMonthlyData={detailedMonthlyData}
-    />
+    <>
+      {/* Renders itself only for a CPWD 10CA bill; nothing for a Railway bill. */}
+      <div className="mb-4"><CpwdResultCard billId={bill.id} /></div>
+      <BillDetailClient
+        bill={JSON.parse(JSON.stringify(bill))}
+        user={JSON.parse(JSON.stringify(user))}
+        indicesData={indicesData}
+        monthlyIndicesData={monthlyIndicesData}
+        detailedMonthlyData={detailedMonthlyData}
+      />
+    </>
   );
 }
