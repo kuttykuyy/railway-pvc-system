@@ -68,6 +68,21 @@ export default function CpwdPricesPage() {
     }
   };
 
+  const fetchNsr = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/admin/cpwd-prices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'fetch-nsr' }) });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Import failed');
+      toast.success(body.message || 'Imported', { duration: 8000 });
+      await load();
+    } catch (e: any) {
+      toast.error(e.message, { duration: 8000 });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const saveMonth = async () => {
     if (!region.trim() || !/^\d{4}-\d{2}$/.test(month)) { toast.error('Enter a region and a month as YYYY-MM.'); return; }
     setBusy(true);
@@ -122,9 +137,17 @@ export default function CpwdPricesPage() {
                   <span>No feed table yet. Seed it to create the table and load the verified Delhi-NCR base (Oct 2012) and Dec 2025 circular.</span>
                 </div>
               )}
-              <div className="mt-3">
-                <Button onClick={seed} disabled={busy}>{status.ready ? 'Re-seed verified rows' : 'Create table & seed'}</Button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button onClick={fetchNsr} disabled={busy}>
+                  <Database className="h-4 w-4 mr-1.5" /> Auto-import from NSRCivil (all months)
+                </Button>
+                <Button variant="outline" onClick={seed} disabled={busy}>{status.ready ? 'Re-seed 2 verified rows' : 'Create table & seed'}</Button>
               </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Auto-import pulls the full Delhi-NCR monthly history (2018 onward) that NSRCivil aggregates
+                from the CPWD circulars — including the older base months a contract&apos;s tender date needs.
+                NSRCivil is a third party; verify against the official CPWD circular before a real claim.
+              </p>
             </CardContent>
           </Card>
 

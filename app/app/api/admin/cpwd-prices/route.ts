@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const body = await request.json().catch(() => ({}));
-  const action = body?.action === 'rows' ? 'rows' : 'seed';
+  const action = ['rows', 'fetch-nsr'].includes(body?.action) ? body.action : 'seed';
   const s = await appSchema();
 
   try {
@@ -111,6 +111,19 @@ export async function POST(request: NextRequest) {
     if (action === 'seed') {
       const written = await upsertRows(s, CPWD_SEED_ROWS as any);
       return NextResponse.json({ written, loaded: await loadedSummary(s), message: `Seeded ${written} verified rows (Delhi NCR).` });
+    }
+
+    if (action === 'fetch-nsr') {
+      // Auto-import the monthly history NSRCivil aggregates from the CPWD circulars.
+      const { fetchCpwd10caFromNsr } = await import('@/lib/cpwd-price-fetcher');
+      const rows = await fetchCpwd10caFromNsr();
+      const written = await upsertRows(s, rows as any);
+      const months = Array.from(new Set(rows.map(r => r.month))).sort();
+      return NextResponse.json({
+        written,
+        loaded: await loadedSummary(s),
+        message: `Imported ${written} rows across ${months.length} months (${months[0]} → ${months[months.length - 1]}) from NSRCivil. Verify against the official CPWD circular before a real claim.`,
+      });
     }
 
     // action 'rows' — upsert a submitted month's prices.
