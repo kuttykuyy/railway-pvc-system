@@ -4,6 +4,9 @@ import { validateAdminAccess } from '@/lib/role-auth';
 
 export const dynamic = 'force-dynamic';
 
+// How many stuck users a drill-down returns at most, newest first.
+const STUCK_LIST_CAP = 500;
+
 /**
  * User-movement funnel for contractor signups — the ordered journey from "signed up"
  * to "paid", each stage a strict subset of the one before, so the drop-off between any
@@ -29,6 +32,56 @@ export async function GET(request: NextRequest) {
     const paidTopup = {
       creditTransactions: { some: { type: 'add', reason: { contains: 'payment', mode: 'insensitive' as const } } },
     };
+
+    // Drill-down: the actual people stuck AT a stage — reached the previous milestone
+    // but not the next — so an admin can see who to nudge and, from the columns, why.
+    const stuck = request.nextUrl.searchParams.get('stuck');
+    if (stuck) {
+      const stuckWhere: Record<string, any> = {
+        // Signed up but never verified → cannot even log in.
+        'unverified':  { ...base, emailVerified: null },
+        // Verified, but never created a contract.
+        'no-contract': { ...base, ...verified, contracts: { none: {} } },
+        // Has a contract, but no bill on any of them (never uploaded/entered a bill).
+        'no-bill':     { ...base, ...verified, contracts: { some: {} }, NOT: { ...hasBill } },
+        // Billed, but never paid for credits through a gateway.
+        'no-payment':  { ...base, ...verified, ...hasBill, NOT: { ...paidTopup } },
+      }[stuck];
+
+      if (!stuckWhere) {
+        return NextResponse.json({ error: 'Unknown stage' }, { status: 400 });
+      }
+
+      const users = await prisma.user.findMany({
+        where: stuckWhere,
+        orderBy: { createdAt: 'desc' },
+        take: STUCK_LIST_CAP,
+        select: {
+          id: true, name: true, email: true, phone: true, companyName: true,
+          createdAt: true, lastLoginAt: true, emailVerified: true,
+          _count: { select: { contracts: true } },
+        },
+      });
+
+      const totalStuck = await prisma.user.count({ where: stuckWhere });
+      return NextResponse.json({
+        stuck,
+        total: totalStuck,
+        returned: users.length,
+        capped: totalStuck > STUCK_LIST_CAP,
+        users: users.map(u => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          phone: u.phone,
+          companyName: u.companyName,
+          createdAt: u.createdAt,
+          lastLoginAt: u.lastLoginAt,
+          verified: u.emailVerified != null,
+          contracts: u._count.contracts,
+        })),
+      });
+    }
 
     const [total, reachedVerified, reachedContract, reachedBill, reachedPaid, last7d] = await Promise.all([
       // Signed up.

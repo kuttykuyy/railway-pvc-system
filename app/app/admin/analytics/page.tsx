@@ -15,8 +15,9 @@ const WeeklyTrendChart = dynamic(
   () => import('@/components/admin/analytics-charts').then(m => m.WeeklyTrendChart),
   { ssr: false, loading: () => <div className="h-[300px] w-full animate-pulse rounded bg-slate-100" /> },
 );
-import { TrendingUp, Users, IndianRupee, Activity } from 'lucide-react';
+import { TrendingUp, Users, IndianRupee, Activity, X, Phone, Mail } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface AnalyticsData {
   summary: {
@@ -62,6 +63,26 @@ interface ActivationData {
   funnel: Array<{ key: string; label: string; count: number }>;
 }
 
+interface StuckUser {
+  id: string;
+  name: string | null;
+  email: string;
+  phone: string | null;
+  companyName: string | null;
+  createdAt: string;
+  lastLoginAt: string | null;
+  verified: boolean;
+  contracts: number;
+}
+
+interface StuckData {
+  stuck: string;
+  total: number;
+  returned: number;
+  capped: boolean;
+  users: StuckUser[];
+}
+
 export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [activation, setActivation] = useState<ActivationData | null>(null);
@@ -75,6 +96,39 @@ export default function AnalyticsPage() {
       .then(d => { if (d && !d.error) setActivation(d); })
       .catch(() => {});
   }, []);
+
+  // Drill-down: who is stuck at a funnel stage. Clicking a bar shows the users who
+  // reached it but not the next step — the ones to follow up with.
+  const [stuck, setStuck] = useState<StuckData | null>(null);
+  const [stuckStage, setStuckStage] = useState<{ key: string; title: string } | null>(null);
+  const [stuckLoading, setStuckLoading] = useState(false);
+
+  // Each funnel stage → the "stuck here" bucket (reached this, not the next) and a
+  // plain-words heading. The last stage has no next step, so it isn't clickable.
+  const STAGE_STUCK: Record<string, { key: string; title: string }> = {
+    signup: { key: 'unverified', title: 'Signed up but never verified their email' },
+    verified: { key: 'no-contract', title: 'Verified but never created a contract' },
+    contract: { key: 'no-bill', title: 'Created a contract but never added a bill' },
+    bill: { key: 'no-payment', title: 'Billed but never paid for credits' },
+  };
+
+  const openStuck = async (stageKey: string) => {
+    const map = STAGE_STUCK[stageKey];
+    if (!map) return;
+    setStuckStage(map);
+    setStuck(null);
+    setStuckLoading(true);
+    try {
+      const res = await fetch(`/api/admin/analytics/activation?stuck=${map.key}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Could not load the list');
+      setStuck(body);
+    } catch {
+      setStuck({ stuck: map.key, total: 0, returned: 0, capped: false, users: [] });
+    } finally {
+      setStuckLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -205,6 +259,11 @@ export default function AnalyticsPage() {
                       const stepPct = prev && prev > 0 ? Math.round((st.count / prev) * 1000) / 10 : null;
                       const lost = prev === null ? 0 : prev - st.count;
                       const isPaid = st.key === 'paid';
+                      // Users who reached this stage but not the next — the ones stuck here.
+                      const nextCount = f[i + 1]?.count;
+                      const stuckHere = nextCount == null ? 0 : st.count - nextCount;
+                      const canDrill = !!STAGE_STUCK[st.key] && stuckHere > 0;
+                      const Bar: any = canDrill ? 'button' : 'div';
                       return (
                         <div key={st.key}>
                           {i > 0 && (
@@ -213,7 +272,12 @@ export default function AnalyticsPage() {
                               <span>{stepPct}% continue</span>
                             </div>
                           )}
-                          <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                          <Bar
+                            {...(canDrill ? { type: 'button', onClick: () => openStuck(st.key) } : {})}
+                            className={`relative w-full text-left overflow-hidden rounded-lg border border-slate-200 bg-slate-50 block ${
+                              canDrill ? 'cursor-pointer hover:border-emerald-300 hover:ring-1 hover:ring-emerald-200 transition' : ''
+                            }`}
+                          >
                             {/* The funnel bar: width = share of the top of the funnel. */}
                             <div
                               className={`h-12 ${isPaid ? 'bg-emerald-500' : 'bg-emerald-200'} transition-all`}
@@ -221,12 +285,19 @@ export default function AnalyticsPage() {
                             />
                             <div className="absolute inset-0 flex items-center justify-between px-3">
                               <span className="text-sm font-medium text-slate-800">{st.label}</span>
-                              <span className="text-sm tabular-nums text-slate-700">
-                                <span className="font-bold">{st.count.toLocaleString('en-IN')}</span>
-                                <span className="ml-1.5 text-xs text-slate-500">{Math.round(ofSignup * 10) / 10}%</span>
+                              <span className="flex items-center gap-2 text-sm tabular-nums text-slate-700">
+                                {canDrill && (
+                                  <span className="hidden sm:inline text-[11px] font-medium text-emerald-700">
+                                    {stuckHere.toLocaleString('en-IN')} stuck · view →
+                                  </span>
+                                )}
+                                <span>
+                                  <span className="font-bold">{st.count.toLocaleString('en-IN')}</span>
+                                  <span className="ml-1.5 text-xs text-slate-500">{Math.round(ofSignup * 10) / 10}%</span>
+                                </span>
                               </span>
                             </div>
-                          </div>
+                          </Bar>
                         </div>
                       );
                     })}
@@ -237,11 +308,88 @@ export default function AnalyticsPage() {
                       {' '}— {worst.lost.toLocaleString('en-IN')} users lost ({worst.fromPct}% of that step). Fixing it recovers the most.
                     </p>
                   )}
+                  <p className="mt-2 text-xs text-slate-400">Click any stage to see the people stuck there and follow up.</p>
                 </>
               );
             })()}
           </CardContent>
         </Card>
+      )}
+
+      {/* Stuck-users drill-down — who reached a stage but not the next. */}
+      {stuckStage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 sm:p-8 overflow-y-auto"
+          onClick={() => setStuckStage(null)}
+        >
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mt-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">{stuckStage.title}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {stuckLoading ? 'Loading…' : stuck
+                    ? `${stuck.total.toLocaleString('en-IN')} user${stuck.total === 1 ? '' : 's'}${stuck.capped ? ` · showing the ${stuck.returned} newest` : ''}`
+                    : ''}
+                </p>
+              </div>
+              <button onClick={() => setStuckStage(null)} className="text-slate-400 hover:text-slate-700 shrink-0"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="p-0 max-h-[70vh] overflow-y-auto">
+              {stuckLoading && <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>}
+              {!stuckLoading && stuck && (
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-xs text-slate-500 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-2 font-medium">User</th>
+                      <th className="px-4 py-2 font-medium">Contact</th>
+                      <th className="px-4 py-2 font-medium whitespace-nowrap">Signed up</th>
+                      <th className="px-4 py-2 font-medium whitespace-nowrap">Last login</th>
+                      <th className="px-4 py-2 font-medium">Verified</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {stuck.users.map(u => {
+                      const days = Math.floor((Date.now() - new Date(u.createdAt).getTime()) / 86400000);
+                      return (
+                        <tr key={u.id} className="align-top">
+                          <td className="px-4 py-2">
+                            <div className="font-medium text-slate-800">{u.name || '—'}</div>
+                            {u.companyName && <div className="text-xs text-slate-500">{u.companyName}</div>}
+                          </td>
+                          <td className="px-4 py-2">
+                            <a href={`mailto:${u.email}`} className="flex items-center gap-1.5 text-slate-700 hover:text-emerald-700">
+                              <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" />{u.email}
+                            </a>
+                            {u.phone && (
+                              <a href={`tel:${u.phone}`} className="flex items-center gap-1.5 text-slate-500 hover:text-emerald-700 mt-0.5">
+                                <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />{u.phone}
+                              </a>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-slate-600">
+                            {format(new Date(u.createdAt), 'dd MMM yyyy')}
+                            <span className="block text-[11px] text-slate-400">{days === 0 ? 'today' : `${days}d ago`}</span>
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-slate-600">
+                            {u.lastLoginAt ? format(new Date(u.lastLoginAt), 'dd MMM yyyy') : <span className="text-slate-400">never</span>}
+                          </td>
+                          <td className="px-4 py-2">
+                            {u.verified
+                              ? <span className="text-emerald-700 text-xs font-medium">Yes</span>
+                              : <span className="text-red-600 text-xs font-medium">No</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {stuck.users.length === 0 && (
+                      <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-500">Nobody is stuck at this stage.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Summary Cards */}
