@@ -6,9 +6,11 @@
  * missing was the other half. They were told "Request sent — we'll look at it" and then
  * heard nothing, ever, because there was no way to reply from inside the app at all.
  *
- * Almost every answer is one of two, so both are written out ready. The interesting case
- * is the second: a scanned bill is never going to be readable, and the honest reply is
- * not "we are working on it" but "here is the spreadsheet, you can do it now".
+ * Almost every answer is one of a few, so they are written out ready. The interesting
+ * ones are the last two: a no-text PDF is never going to be readable as it stands, and the
+ * honest reply is not "we are working on it" but either "download the real file from
+ * IRWCMS" (when the bill exists there digitally) or "here is the spreadsheet, you can do
+ * it now" (when all they have is a scan on paper).
  *
  * The stamps live in the failure row's own error text — appended, the same trick the
  * review request uses — so there is no column to ship and no migration to wait for.
@@ -41,6 +43,20 @@ export const REPLY_TEMPLATES: ReplyTemplate[] = [
       + 'so it should go through now.\n\n'
       + 'Please upload the same PDF again on the Create Bill page. Nothing was charged for '
       + 'the attempt that failed.',
+  },
+  {
+    key: 'irwcms',
+    label: 'Download the PDF from IRWCMS',
+    subject: 'Your bill needs the original PDF — IR-PVC',
+    body:
+      'Thank you for sending this one over. This PDF has no readable text in it — the '
+      + 'numbers are part of a picture, not text — so the reader has nothing to work with. '
+      + 'This usually happens when a bill is printed to PDF, screenshotted, or scanned.\n\n'
+      + 'The quick fix: open the bill in IRWCMS and download the original PDF using its own '
+      + 'download / save option, then upload that file. That version has real text in it and '
+      + 'goes through straight away.\n\n'
+      + 'Please do not re-print, screenshot, or scan it first — that turns the text back into '
+      + 'a picture. Nothing was charged for the attempt that failed.',
   },
   {
     key: 'scan',
