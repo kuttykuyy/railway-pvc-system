@@ -85,6 +85,12 @@ const DEFAULT_SETTINGS = [
     value: '5',
     description: 'Maximum number of contracts a Railway Official free account can create in total. Set to 0 for unlimited.',
     dataType: 'number'
+  },
+  {
+    key: 'OCR_FALLBACK_ENABLED',
+    value: 'false',
+    description: 'PROTOTYPE. When a bill PDF has no readable text (Print-to-PDF, screenshot, or scan), read the page images with AI instead of rejecting it. The result is a draft the user must review. Off by default while accuracy and cost are measured.',
+    dataType: 'boolean'
   }
 ];
 

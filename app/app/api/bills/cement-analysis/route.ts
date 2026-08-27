@@ -1548,6 +1548,44 @@ ${markdownPart}
   );
 }
 
+/**
+ * OCR fallback: read a no-text-layer bill from its page images and produce the same
+ * ExtractedBillDetails shape as the text extractor, so the rest of the flow is unchanged.
+ *
+ * Reuses finalizeExtractedBillDetails, but with an empty source string and no markdown
+ * parts: the markdown-based reconciliation targets (printed Bill Amount / Total) cannot
+ * exist for an image, so reconciliation falls back to the model's own Schedule Summary.
+ * That is a weaker check than the text path's deterministic printed total, which is why
+ * the caller must treat the result as a draft to review and it stays flag-gated.
+ */
+async function extractBillDetailsWithVision(file: File, contractId?: string): Promise<ExtractedBillDetails> {
+  const apiKey = process.env.ABACUSAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('AI extraction is not configured. Missing ABACUSAI_API_KEY.');
+  }
+
+  let contractDescription = '';
+  if (contractId) {
+    try {
+      const contract = await prisma.contract.findUnique({
+        where: { id: contractId },
+        select: { workDescription: true },
+      });
+      if (contract) contractDescription = contract.workDescription;
+    } catch (e) {
+      console.error('[cement-analysis] vision: error loading contract description:', e);
+    }
+  }
+
+  const { extractBillJsonWithVision } = await import('@/lib/ai/bill-vision-extractor');
+  const pdfBytes = new Uint8Array(await file.arrayBuffer());
+  const { parsed } = await extractBillJsonWithVision(pdfBytes, file.name || 'bill.pdf', apiKey);
+
+  // One vision call returns the whole bill, so it is a single "part". No markdown source
+  // and no AI text-correction passes (those re-read markdown that does not exist here).
+  return finalizeExtractedBillDetails([parsed], '', contractDescription, apiKey, [], false);
+}
+
 async function finalizeExtractedBillDetails(
   parsedParts: any[],
   billMarkdown: string,
@@ -1985,14 +2023,53 @@ export async function POST(request: NextRequest) {
           // honest way through and it is offered on the failure screen.
           const { isNotIrepsError } = await import('@/lib/ireps-direct-pdf-parser');
           if (isNotIrepsError(parseErr)) {
-            await recordParseFailure({
-              userEmail: user?.email || null,
-              fileName: file.name || null,
-              error: 'NOT AN IREPS PDF (no AI retry attempted) — ' + directError,
-              pdfBuffer: directBuffer,
-            });
-            throw parseErr;
-          }
+            // No text layer at all — Print-to-PDF, a screenshot or a scan. The OCR
+            // fallback (PROTOTYPE, flag-gated, off by default) reads the pages as images.
+            // It is a DRAFT: with no text there is no deterministic printed total to
+            // check, only the model's own Schedule Summary, so the person must review it.
+            const { getAdminSetting } = await import('@/lib/admin-settings');
+            const ocrEnabled = await getAdminSetting('OCR_FALLBACK_ENABLED', false);
+            if (ocrEnabled && process.env.ABACUSAI_API_KEY) {
+              try {
+                const ocrDetails = await extractBillDetailsWithVision(file, contractId);
+                ocrDetails.warnings = [
+                  ...(ocrDetails.warnings || []),
+                  ocrDetails.amountsReconciled
+                    ? 'Read from a picture: this PDF had no readable text, so the AI read the numbers off '
+                      + "the page images. Its item total matches the bill's own Schedule Summary — but a "
+                      + 'picture can be misread, so CHECK EVERY figure below before creating the bill.'
+                    : "Read from a picture, NOT verified: this PDF had no readable text and the AI's item "
+                      + "total did NOT match the bill's own Schedule Summary. Treat every figure below as a "
+                      + 'rough draft and correct it against the bill before creating it.',
+                ];
+                await recordParseFailure({
+                  userEmail: user?.email || null,
+                  fileName: file.name || null,
+                  error: `RESCUED BY OCR (prototype, reconciled=${ocrDetails.amountsReconciled}) — no text layer; `
+                    + 'exact reader said: ' + directError,
+                  pdfBuffer: directBuffer,
+                });
+                billDetails = ocrDetails;
+                aiRescued = true;
+              } catch (ocrErr: any) {
+                await recordParseFailure({
+                  userEmail: user?.email || null,
+                  fileName: file.name || null,
+                  error: 'OCR FALLBACK FAILED — ' + String(ocrErr?.message || ocrErr) + ' | exact reader: ' + directError,
+                  pdfBuffer: directBuffer,
+                });
+                throw parseErr;
+              }
+            } else {
+              await recordParseFailure({
+                userEmail: user?.email || null,
+                fileName: file.name || null,
+                error: 'NOT AN IREPS PDF (no AI retry attempted) — ' + directError,
+                pdfBuffer: directBuffer,
+              });
+              throw parseErr;
+            }
+          } else {
           // The AI reader gets one automatic try — FREE, because the exact reader's
           // gap is our fault, not the user's. Its answer is accepted only when its own
           // reconciliation holds: item total equal to the bill's printed total, the
@@ -2029,6 +2106,7 @@ export async function POST(request: NextRequest) {
               pdfBuffer: directBuffer,
             });
             throw parseErr;
+          }
           }
         }
         if (!aiRescued) {
