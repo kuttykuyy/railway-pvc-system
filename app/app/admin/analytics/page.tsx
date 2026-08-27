@@ -59,12 +59,7 @@ const COLORS = ['#10b981', '#10b981', '#ec4899', '#f59e0b', '#10b981', '#06b6d4'
 interface ActivationData {
   total: number;
   last7d: number;
-  stages: {
-    unverified: { count: number; pct: number };
-    verifiedNoContract: { count: number; pct: number };
-    contractNoBill: { count: number; pct: number };
-    active: { count: number; pct: number };
-  };
+  funnel: Array<{ key: string; label: string; count: number }>;
 }
 
 export default function AnalyticsPage() {
@@ -179,45 +174,67 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Activation Funnel — where new users get stuck */}
-      {activation && (
+      {/* User-movement funnel — the journey from signup to paying, and where it leaks */}
+      {activation && activation.funnel.length > 0 && (
         <Card className="border-emerald-200">
           <CardHeader>
-            <CardTitle>New-User Activation</CardTitle>
+            <CardTitle>User Movement Funnel</CardTitle>
             <CardDescription>
-              Where contractor signups get stuck between joining and creating a bill.
+              How contractor signups move from joining to paying, and where they drop off.
               {' '}{activation.total.toLocaleString('en-IN')} total · {activation.last7d.toLocaleString('en-IN')} in the last 7 days.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {(() => {
-              const s = activation.stages;
-              const stuck = [
-                { key: 'unverified', label: 'Never verified email', ...s.unverified, tone: 'bg-red-50 text-red-700 border-red-200' },
-                { key: 'noContract', label: 'Verified, no contract', ...s.verifiedNoContract, tone: 'bg-amber-50 text-amber-700 border-amber-200' },
-                { key: 'noBill', label: 'Contract, but no bill', ...s.contractNoBill, tone: 'bg-amber-50 text-amber-700 border-amber-200' },
-              ];
-              const biggest = [...stuck].sort((a, b) => b.count - a.count)[0];
+              const f = activation.funnel;
+              const top = f[0]?.count || 0;
+              // The step where the most users are lost, so it can be called out.
+              let worst = { label: '', lost: 0, fromPct: 0 };
+              f.forEach((st, i) => {
+                if (i === 0) return;
+                const lost = f[i - 1].count - st.count;
+                const fromPct = f[i - 1].count > 0 ? Math.round((lost / f[i - 1].count) * 1000) / 10 : 0;
+                if (lost > worst.lost) worst = { label: `${f[i - 1].label} → ${st.label}`, lost, fromPct };
+              });
               return (
                 <>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    {stuck.map((st) => (
-                      <div key={st.key} className={`rounded-lg border p-3 ${st.tone}`}>
-                        <div className="text-2xl font-bold">{st.count.toLocaleString('en-IN')}</div>
-                        <div className="text-xs font-medium mt-0.5">{st.label}</div>
-                        <div className="text-[11px] opacity-70">{st.pct}% of signups</div>
-                      </div>
-                    ))}
-                    <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-green-700">
-                      <div className="text-2xl font-bold">{s.active.count.toLocaleString('en-IN')}</div>
-                      <div className="text-xs font-medium mt-0.5">Active (made a bill)</div>
-                      <div className="text-[11px] opacity-70">{s.active.pct}% of signups</div>
-                    </div>
+                  <div className="space-y-2">
+                    {f.map((st, i) => {
+                      const ofSignup = top > 0 ? (st.count / top) * 100 : 0;
+                      const prev = i === 0 ? null : f[i - 1].count;
+                      const stepPct = prev && prev > 0 ? Math.round((st.count / prev) * 1000) / 10 : null;
+                      const lost = prev === null ? 0 : prev - st.count;
+                      const isPaid = st.key === 'paid';
+                      return (
+                        <div key={st.key}>
+                          {i > 0 && (
+                            <div className="flex items-center justify-end gap-2 pr-1 py-0.5 text-[11px] text-slate-400">
+                              {lost > 0 && <span className="text-red-500">−{lost.toLocaleString('en-IN')} dropped</span>}
+                              <span>{stepPct}% continue</span>
+                            </div>
+                          )}
+                          <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                            {/* The funnel bar: width = share of the top of the funnel. */}
+                            <div
+                              className={`h-12 ${isPaid ? 'bg-emerald-500' : 'bg-emerald-200'} transition-all`}
+                              style={{ width: `${Math.max(ofSignup, 3)}%` }}
+                            />
+                            <div className="absolute inset-0 flex items-center justify-between px-3">
+                              <span className="text-sm font-medium text-slate-800">{st.label}</span>
+                              <span className="text-sm tabular-nums text-slate-700">
+                                <span className="font-bold">{st.count.toLocaleString('en-IN')}</span>
+                                <span className="ml-1.5 text-xs text-slate-500">{Math.round(ofSignup * 10) / 10}%</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {biggest && biggest.count > 0 && (
+                  {worst.lost > 0 && (
                     <p className="mt-3 text-sm text-slate-600">
-                      Biggest drop-off: <span className="font-semibold text-slate-800">{biggest.label.toLowerCase()}</span>
-                      {' '}({biggest.count.toLocaleString('en-IN')} users, {biggest.pct}%). Fixing this stage will recover the most users.
+                      Biggest leak: <span className="font-semibold text-slate-800">{worst.label.toLowerCase()}</span>
+                      {' '}— {worst.lost.toLocaleString('en-IN')} users lost ({worst.fromPct}% of that step). Fixing it recovers the most.
                     </p>
                   )}
                 </>

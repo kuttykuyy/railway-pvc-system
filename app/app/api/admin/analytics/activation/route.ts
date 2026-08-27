@@ -5,9 +5,14 @@ import { validateAdminAccess } from '@/lib/role-auth';
 export const dynamic = 'force-dynamic';
 
 /**
- * Activation funnel for contractor signups — shows exactly where new users get
- * stuck between "signed up" and "created a bill", so the biggest drop-off is
- * visible instead of guessed at.
+ * User-movement funnel for contractor signups — the ordered journey from "signed up"
+ * to "paid", each stage a strict subset of the one before, so the drop-off between any
+ * two steps is exactly the users who reached the first and not the next. Shows where
+ * people fall out instead of guessing.
+ *
+ * "Paid" is a credit top-up written by the payment path (a type:'add' credit whose
+ * reason names the gateway order), scoped to users who already billed — admin credit
+ * grants use type:'add' too, but with a different reason, and are not counted.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -16,40 +21,41 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: message || 'Admin access required' }, { status: 403 });
     }
 
-    // Focus on real customer accounts (contractors), not admins/officials.
+    // Real customer accounts (contractors), not admins/officials.
     const base = { role: 'contractor' as const };
     const verified = { emailVerified: { not: null } };
+    const hasBill = { contracts: { some: { bills: { some: {} } } } };
+    // A genuine gateway top-up, not an admin grant (see the note above).
+    const paidTopup = {
+      creditTransactions: { some: { type: 'add', reason: { contains: 'payment', mode: 'insensitive' as const } } },
+    };
 
-    const [total, unverified, verifiedNoContract, contractNoBill, active, last7d] = await Promise.all([
+    const [total, reachedVerified, reachedContract, reachedBill, reachedPaid, last7d] = await Promise.all([
+      // Signed up.
       prisma.user.count({ where: base }),
-      // Signed up but never verified their email → cannot log in / use the app.
-      prisma.user.count({ where: { ...base, emailVerified: null } }),
-      // Verified but never created a contract.
-      prisma.user.count({ where: { ...base, ...verified, contracts: { none: {} } } }),
-      // Verified, has a contract, but no bill on any of them.
-      prisma.user.count({
-        where: {
-          AND: [base, verified, { contracts: { some: {} } }, { contracts: { none: { bills: { some: {} } } } }],
-        },
-      }),
-      // Activated: verified with at least one bill.
-      prisma.user.count({ where: { ...base, ...verified, contracts: { some: { bills: { some: {} } } } } }),
-      // Signups in the last 7 days (context on how fresh the stuck users are).
+      // Verified their email → can actually log in and use the app.
+      prisma.user.count({ where: { ...base, ...verified } }),
+      // Verified and created at least one contract.
+      prisma.user.count({ where: { ...base, ...verified, contracts: { some: {} } } }),
+      // …and put a bill on one of them.
+      prisma.user.count({ where: { ...base, ...verified, ...hasBill } }),
+      // …and paid for credits through a gateway.
+      prisma.user.count({ where: { ...base, ...verified, ...hasBill, ...paidTopup } }),
+      // Signups in the last 7 days — context on how fresh the stuck users are.
       prisma.user.count({ where: { ...base, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } }),
     ]);
 
-    const pct = (n: number) => (total > 0 ? Math.round((n / total) * 1000) / 10 : 0);
+    // Ordered, monotonically-decreasing reached-counts. The page turns these into
+    // step conversions and drop-offs so the shape stays a single source of truth.
+    const funnel = [
+      { key: 'signup', label: 'Signed up', count: total },
+      { key: 'verified', label: 'Verified email', count: reachedVerified },
+      { key: 'contract', label: 'Created a contract', count: reachedContract },
+      { key: 'bill', label: 'Created a bill', count: reachedBill },
+      { key: 'paid', label: 'Paid for credits', count: reachedPaid },
+    ];
 
-    return NextResponse.json({
-      total,
-      last7d,
-      stages: {
-        unverified: { count: unverified, pct: pct(unverified) },
-        verifiedNoContract: { count: verifiedNoContract, pct: pct(verifiedNoContract) },
-        contractNoBill: { count: contractNoBill, pct: pct(contractNoBill) },
-        active: { count: active, pct: pct(active) },
-      },
-    });
+    return NextResponse.json({ total, last7d, funnel });
   } catch (error) {
     console.error('activation analytics error:', error);
     return NextResponse.json({ error: 'Failed to load activation funnel' }, { status: 500 });
