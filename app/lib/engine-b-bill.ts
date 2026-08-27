@@ -89,12 +89,12 @@ export interface EngineBBillResult {
   baseMonth: string;
   billMonth: string;
   totalVariation: number;
-  breakdown: ReturnType<typeof computeCpwd10ca>['lines'];
+  breakdown: Array<ReturnType<typeof computeCpwd10ca>['lines'][number] & { baseMonthUsed: string | null; currentMonthUsed: string | null }>;
   flags: Array<{ code: string; reason: string }>;
   excluded: readonly string[];
   /** 10CC (labour/materials/POL) total; 0 when the contract has no Schedule-E config. */
   cpwd10ccTotal: number;
-  cpwd10ccBreakdown: Cpwd10ccResultLine[];
+  cpwd10ccBreakdown: Array<Cpwd10ccResultLine & { baseMonthUsed: string | null; currentMonthUsed: string | null }>;
   /** 10CA + 10CC — the CPWD price variation for the bill. */
   combinedTotal: number;
   /** Why 10CC was skipped or its eligibility unverified, if applicable. */
@@ -127,11 +127,19 @@ export async function computeAndStoreEngineB(bill: BillForEngineB, region: strin
   const lines = buildEngineBLines(tonnages, prices as any);
   const result = computeCpwd10ca(lines);
 
+  // Which month's circular each material's base/current price actually came from — so the
+  // card can show it and warn when the feed fell back to a stale month.
+  const monthsByMaterial = new Map(priceRows.map(p => [p.material, { baseMonthUsed: p.baseMonthUsed, currentMonthUsed: p.currentMonthUsed }]));
+  const caBreakdown = result.lines.map(l => {
+    const m = monthsByMaterial.get(l.material === 'cement' ? 'cement-opc' : (l.material as any));
+    return { ...l, baseMonthUsed: m?.baseMonthUsed ?? null, currentMonthUsed: m?.currentMonthUsed ?? null };
+  });
+
   // ── 10CC: labour + other materials + POL, on the WPI/CPI indices, with the 0.85 haircut.
   // Runs only when the contract carries Schedule-E percentages; otherwise it is 0 and the
   // CPWD total is 10CA alone. Real CPWD escalation is 10CA + 10CC added.
   let cpwd10ccTotal = 0;
-  let cpwd10ccLines: Cpwd10ccResultLine[] = [];
+  let cpwd10ccLines: Array<Cpwd10ccResultLine & { baseMonthUsed: string | null; currentMonthUsed: string | null }> = [];
   let cpwd10ccNote: string | null = null;
   try {
     const { readCpwd10ccSchedule } = await import('./pvc-scheme');
@@ -158,7 +166,11 @@ export async function computeAndStoreEngineB(bill: BillForEngineB, region: strin
           ],
         });
         cpwd10ccTotal = r10cc.totalVariation;
-        cpwd10ccLines = r10cc.lines;
+        cpwd10ccLines = r10cc.lines.map(l => ({
+          ...l,
+          baseMonthUsed: idx[l.key]?.baseMonthUsed ?? null,
+          currentMonthUsed: idx[l.key]?.currentMonthUsed ?? null,
+        }));
       }
       // Not eligible → 10CA only; cpwd10ccNote explains why on the card and statement.
     }
@@ -182,7 +194,7 @@ export async function computeAndStoreEngineB(bill: BillForEngineB, region: strin
          "excluded"=EXCLUDED."excluded","cpwd10ccTotal"=EXCLUDED."cpwd10ccTotal","cpwd10ccBreakdown"=EXCLUDED."cpwd10ccBreakdown",
          "combinedTotal"=EXCLUDED."combinedTotal","cpwd10ccNote"=EXCLUDED."cpwd10ccNote","updatedAt"=CURRENT_TIMESTAMP`,
       bill.id, region, baseMonth, billMonth, result.totalVariation,
-      JSON.stringify(result.lines), JSON.stringify(tonnages.flags), JSON.stringify(result.excluded),
+      JSON.stringify(caBreakdown), JSON.stringify(tonnages.flags), JSON.stringify(result.excluded),
       cpwd10ccTotal, JSON.stringify(cpwd10ccLines), combinedTotal, cpwd10ccNote,
     );
   } catch (error) {
@@ -196,7 +208,7 @@ export async function computeAndStoreEngineB(bill: BillForEngineB, region: strin
     baseMonth,
     billMonth,
     totalVariation: result.totalVariation,
-    breakdown: result.lines,
+    breakdown: caBreakdown,
     flags: tonnages.flags,
     excluded: result.excluded,
     cpwd10ccTotal,

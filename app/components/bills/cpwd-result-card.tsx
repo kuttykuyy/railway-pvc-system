@@ -10,8 +10,8 @@ import { Boxes, AlertTriangle, FileDown } from 'lucide-react';
  * nothing for a Railway bill (or one not computed), so it is safe to drop onto any bill.
  */
 
-interface Line { label: string; unit: string; quantity: number; basePrice: number; currentPrice: number; priceDelta: number; variation: number }
-interface CcLine { label: string; percent: number; baseIndex: number; currentIndex: number; indexRatio: number; variation: number }
+interface Line { label: string; unit: string; quantity: number; basePrice: number; currentPrice: number; priceDelta: number; variation: number; baseMonthUsed: string | null; currentMonthUsed: string | null }
+interface CcLine { label: string; percent: number; baseIndex: number; currentIndex: number; indexRatio: number; variation: number; baseMonthUsed: string | null; currentMonthUsed: string | null }
 interface Data { present: boolean; region: string | null; baseMonth: string; billMonth: string; totalVariation: number; breakdown: Line[]; flags: Array<{ code: string; reason: string }>; excluded: string[]; cpwd10ccTotal: number; cpwd10ccBreakdown: CcLine[]; combinedTotal: number; cpwd10ccNote: string | null }
 
 const rupee = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
@@ -30,6 +30,20 @@ export function CpwdResultCard({ billId }: { billId: string }) {
   }, [billId]);
 
   if (!data) return null;
+
+  // A price/index is a fallback when the month it came from is not the month asked for
+  // (the tender month for the base, the bill month for the current). null = no data at all.
+  const isFallback = (used: string | null, target: string) => used == null || used !== target;
+  const monthNote = (base: string | null, cur: string | null) => {
+    const warn = isFallback(base, data.baseMonth) || isFallback(cur, data.billMonth);
+    return (
+      <span className={`block text-[10px] font-normal ${warn ? 'text-amber-700' : 'text-slate-400'}`}>
+        base {base || '—'} · now {cur || '—'}{warn ? ' ⚠' : ''}
+      </span>
+    );
+  };
+  const anyFallback = [...data.breakdown, ...data.cpwd10ccBreakdown]
+    .some(l => isFallback(l.baseMonthUsed, data.baseMonth) || isFallback(l.currentMonthUsed, data.billMonth));
 
   return (
     <Card className="border-emerald-200">
@@ -51,6 +65,15 @@ export function CpwdResultCard({ billId }: { billId: string }) {
         </div>
       </CardHeader>
       <CardContent>
+        {anyFallback && (
+          <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
+            <span>
+              Some prices/indices came from an <strong>earlier month</strong> than asked for (tender base {data.baseMonth},
+              bill {data.billMonth}) — marked ⚠ below. Load the exact CPWD circular / index months before relying on these figures.
+            </span>
+          </div>
+        )}
         <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
@@ -66,7 +89,7 @@ export function CpwdResultCard({ billId }: { billId: string }) {
             <tbody className="divide-y tabular-nums">
               {data.breakdown.map((l, i) => (
                 <tr key={i}>
-                  <td className="px-3 py-2 font-medium text-slate-700">{l.label}</td>
+                  <td className="px-3 py-2 font-medium text-slate-700">{l.label}{monthNote(l.baseMonthUsed, l.currentMonthUsed)}</td>
                   <td className="px-3 py-2 text-right text-slate-600">{qty(l.quantity)} {l.unit}</td>
                   <td className="px-3 py-2 text-right text-slate-500">{rupee(l.basePrice)}</td>
                   <td className="px-3 py-2 text-right text-slate-500">{rupee(l.currentPrice)}</td>
@@ -117,7 +140,7 @@ export function CpwdResultCard({ billId }: { billId: string }) {
                 <tbody className="divide-y tabular-nums">
                   {data.cpwd10ccBreakdown.map((l, i) => (
                     <tr key={i}>
-                      <td className="px-3 py-2 font-medium text-slate-700">{l.label}</td>
+                      <td className="px-3 py-2 font-medium text-slate-700">{l.label}{monthNote(l.baseMonthUsed, l.currentMonthUsed)}</td>
                       <td className="px-3 py-2 text-right text-slate-500">{l.percent}%</td>
                       <td className="px-3 py-2 text-right text-slate-500">{l.baseIndex || '—'}</td>
                       <td className="px-3 py-2 text-right text-slate-500">{l.currentIndex ? l.currentIndex.toFixed(1) : '—'}</td>
