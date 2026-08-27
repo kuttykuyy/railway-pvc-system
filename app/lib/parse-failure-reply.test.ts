@@ -5,12 +5,18 @@ import {
 } from './parse-failure-reply';
 
 describe('REPLY_TEMPLATES', () => {
-  it('offers the two answers nearly every case needs', () => {
-    expect(REPLY_TEMPLATES.map(t => t.key)).toEqual(['fixed', 'scan']);
+  it('offers the answers nearly every case needs', () => {
+    expect(REPLY_TEMPLATES.map(t => t.key)).toEqual(['fixed', 'irwcms', 'scan']);
     for (const template of REPLY_TEMPLATES) {
       expect(template.subject.length).toBeGreaterThan(10);
       expect(template.body.length).toBeGreaterThan(80);
     }
+  });
+
+  it('sends a no-text PDF to the original IRWCMS download', () => {
+    const irwcms = REPLY_TEMPLATES.find(t => t.key === 'irwcms')!;
+    expect(irwcms.body).toMatch(/IRWCMS/);
+    expect(irwcms.body).toMatch(/no readable text|not text/i);
   });
 
   it('sends someone with a scan to the spreadsheet, by name', () => {
