@@ -609,9 +609,15 @@ export function isNotIrepsError(error: unknown): boolean {
 export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<DeterministicBillDetails> {
   const pages = await extractPositionedPdfPages(pdfBuffer);
   if (!pages.length || pages.reduce((sum, page) => sum + page.items.length, 0) < 20) {
+    // No text layer at all. The usual cause is not a scanner: it is a file made with
+    // "Print to PDF", a screenshot, or a photo/scan — each turns the numbers into a
+    // picture with nothing to read. Name those so the fix (download from IREPS) is clear,
+    // rather than claiming it is a scan, which misdiagnoses the common Print-to-PDF case.
     throw notIrepsError(
-      'This looks like a scanned copy — the pages are images with no readable text, so the amounts cannot be extracted. '
-      + 'Please upload the digitally-generated IREPS PDF (downloaded from IREPS) instead of a scanned or photographed copy.',
+      'This PDF has no readable text — the numbers are a picture, not text, so the amounts cannot be extracted. '
+      + 'This usually means it was made with "Print to PDF", a screenshot, or a scan/photo. '
+      + 'Please download the original PDF directly from IREPS using its own Save/Download button, '
+      + 'and upload that (do not re-print, screenshot, or scan it).',
     );
   }
 
