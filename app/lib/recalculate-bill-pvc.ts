@@ -44,6 +44,13 @@ export async function recalculateBillPvc(billId: string) {
     throw new BillNotFoundError('Bill not found');
   }
 
+  // The engine fork. Every contract resolves to the Railway Clause 46A engine today, so
+  // this is a no-op that simply proves the seam: a future scheme (e.g. CPWD 10CA) branches
+  // here instead of anywhere inside the Railway maths below. An unbuilt scheme fails loudly.
+  const { resolvePvcScheme, assertSchemeImplemented } = await import('./pvc-scheme');
+  const pvcScheme = resolvePvcScheme(bill.contract as any);
+  assertSchemeImplemented(pvcScheme);
+
   const classificationPolicy = await resolveBillClassificationPolicy(
     bill.contract.workDescription,
     bill.classificationEntries,
