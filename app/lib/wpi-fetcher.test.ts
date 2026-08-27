@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { WPI_MAPPINGS, findWPIDataForIndex, type WPIDataRow } from './wpi-fetcher';
+import { WPI_MAPPINGS, findWPIDataForIndex, parseWPIExcelData, type WPIDataRow } from './wpi-fetcher';
+
+describe('parseWPIExcelData — new-series text month headers', () => {
+  // The 202608 workbook ships month headers as text ("Apr-26" …), not Excel serials.
+  // Reading only serials/Dates found no month columns and every value came back N/A.
+  const data: any[][] = [
+    ['Level', 'Commodity Name', 'Commodity Code', 'Commodity Weight', 'Apr-26', 'May-26', 'Jun-26', 'Jul-26'],
+    ['ALL', 'All Commodities', '1000000000', 100, 109, 110.1, 110.2, 110],
+  ];
+
+  it('detects the text month columns and reads values', () => {
+    const rows = parseWPIExcelData(data);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].series).toBe('new');
+  });
+
+  it('keeps only the months the new series owns (>= May 2026), dropping the recomputed back-series', () => {
+    const [r] = parseWPIExcelData(data);
+    const months = r.monthlyValues.map(v => v.month.toISOString().slice(0, 7));
+    expect(months).toEqual(['2026-05', '2026-06', '2026-07']); // Apr-26 dropped
+    expect(r.monthlyValues.find(v => v.month.toISOString().slice(0, 7) === '2026-07')?.value).toBe(110);
+  });
+});
 
 /**
  * Rows copied from the real new-series workbook (wpi_monthly_index_202607.xlsx, base
