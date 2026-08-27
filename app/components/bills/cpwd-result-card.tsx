@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Boxes, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Boxes, AlertTriangle, FileDown } from 'lucide-react';
 
 /**
  * The CPWD 10CA (Engine B) result on a bill page. Fetches the stored result and renders
@@ -32,12 +33,21 @@ export function CpwdResultCard({ billId }: { billId: string }) {
   return (
     <Card className="border-emerald-200">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Boxes className="h-5 w-5 text-emerald-700" /> CPWD Clause 10CA — price variation
-        </CardTitle>
-        <p className="text-xs text-slate-500">
-          Region {data.region || '—'} · base {data.baseMonth} → bill {data.billMonth}. Quantity of each material × its price movement.
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Boxes className="h-5 w-5 text-emerald-700" /> CPWD Clause 10CA — price variation
+            </CardTitle>
+            <p className="text-xs text-slate-500 mt-1">
+              Region {data.region || '—'} · base {data.baseMonth} → bill {data.billMonth}. Quantity of each material × its price movement.
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <a href={`/api/bills/${billId}/cpwd-10ca-report`} target="_blank" rel="noopener noreferrer">
+              <FileDown className="h-4 w-4 mr-1.5" /> Statement
+            </a>
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto rounded-lg border border-slate-200">
