@@ -14,7 +14,7 @@ import { WPI_NEW_SERIES_FROM } from './wpi-series';
 // took a new code; "Explosive" became "Explosives & Defense Ammunition" under a new
 // group). `code`/`wpiName` identify the row in old-series workbooks, `newCode`/
 // `newWpiName` in new-series ones — verified against the July 2026 workbook itself.
-export const WPI_MAPPINGS: Record<string, { code: string; name: string; wpiName: string; newCode: string; newWpiName: string }> = {
+export const WPI_MAPPINGS: Record<string, { code: string; name: string; wpiName: string; newCode: string; newWpiName: string; newComposite?: string[] }> = {
   'RBI Cement': {
     code: '1313050000',
     name: 'RBI Cement',
@@ -78,28 +78,28 @@ export const WPI_MAPPINGS: Record<string, { code: string; name: string; wpiName:
     newCode: '1314010019',
     newWpiName: 'Hot-Rolled Structural Angles, Shapes, Sections, Beams, Channels, and Girders of Iron and Non-Alloy Steel'
   },
-  // Clause 46A.9(3): all types and sizes of plates — the sub-group 'e. Mild Steel - Flat
-  // products', which exists in the old series and carries the whole flat-products basket.
+  // Clause 46A.9(3): all types and sizes of plates — the old sub-group 'e. Mild Steel -
+  // Flat products' (1314050000), which carried the whole flat-products basket.
   //
-  // It has NO new-series equivalent, and the empty newCode is deliberate. The 2022-23
-  // rebase abolished the sub-group: (N) Basic Metals now holds only 'a. basic iron and
-  // steel', 'b. precious and non-ferrous' and 'c. casting'. The nearest surviving row,
-  // item 1314010029 'Mild steel (MS) flats & sheets', carries a weight of 0.00115
-  // against the old sub-group's whole basket and moves the other way (93.8 -> 109.9 over
-  // Apr 2023 - Jun 2026, while every bar and section row fell). It is a different thing
-  // wearing a similar name, and substituting it would misprice every plate item — and,
-  // through 46A.9(4)'s average of the three, every other section too.
+  // The 2022-23 rebase abolished that single sub-group and scattered flat products across
+  // several items. No ONE new item is a fair stand-in — item 1314010029 alone carries a
+  // weight of 0.00115 and moves opposite to real plate steel, so substituting it would
+  // misprice every plate item (and, via 46A.9(4)'s average, other sections too).
   //
-  // In practice this bites only from May 2026, since the old series runs to April 2026
-  // and a pre-2022 contract's quarters up to then are all published on it. A new-series
-  // import will report this index as not found, which is the honest outcome: it says so
-  // rather than filling the column with the wrong commodity.
+  // The faithful replacement is therefore a COMPOSITE: the weight-weighted average of the
+  // mild-steel flat-rolled items — HR coils/sheets/strips, HR plates, CR coils/sheets/
+  // strips, cold-finished flat-rolled, and MS flats & sheets. Weights are read from the
+  // workbook itself (each item's own weight), so the dominant HR coils drive it just as
+  // they dominate the old aggregate. Coated (GP/GC) and stainless are excluded — the old
+  // index was mild-steel flat products, not coated or alloy. Built only from new-series
+  // rows (>= May 2026); an old-series import still matches the single 1314050000 row.
   'WPI Steel Flat Products': {
     code: '1314050000',
     name: 'WPI Steel Flat Products',
     wpiName: 'e. Mild Steel - Flat products',
     newCode: '',
-    newWpiName: 'no new-series equivalent'
+    newWpiName: 'mild-steel flat products (composite)',
+    newComposite: ['1314010010', '1314010011', '1314010012', '1314010020', '1314010029'],
   }
 
   // Clause 46A.9(4) — any other section — is not an index at all. It is the average of
@@ -222,14 +222,61 @@ export function parseWPIExcelData(data: any[][]): WPIDataRow[] {
   return result;
 }
 
+/**
+ * Build a synthetic row for a composite index — the weight-weighted average, month by
+ * month, of its member new-series rows. Each member's own workbook weight is the weight;
+ * a month is included when at least one member carries it. Used for WPI Steel Flat
+ * Products, which the new series has no single row for. Returns null if no member is found.
+ */
+function buildCompositeRow(memberCodes: string[], newRows: WPIDataRow[]): WPIDataRow | null {
+  const members = newRows.filter(r => memberCodes.includes(r.commCode) && r.commWeight > 0);
+  if (members.length === 0) return null;
+
+  // month → { weightedSum, weight }
+  const acc = new Map<number, { ws: number; w: number }>();
+  for (const m of members) {
+    for (const mv of m.monthlyValues) {
+      const key = mv.month.getTime();
+      const cur = acc.get(key) || { ws: 0, w: 0 };
+      cur.ws += mv.value * m.commWeight;
+      cur.w += m.commWeight;
+      acc.set(key, cur);
+    }
+  }
+  const monthlyValues = [...acc.entries()]
+    .filter(([, v]) => v.w > 0)
+    .map(([month, v]) => ({ month: new Date(month), value: Math.round((v.ws / v.w) * 10) / 10 }))
+    .sort((a, b) => a.month.getTime() - b.month.getTime());
+  if (monthlyValues.length === 0) return null;
+
+  return {
+    series: 'new',
+    commCode: 'COMPOSITE',
+    commName: 'Mild-steel flat products (composite)',
+    commWeight: members.reduce((s, m) => s + m.commWeight, 0),
+    monthlyValues,
+  };
+}
+
 // Find matching WPI data for our indices
 export function findWPIDataForIndex(
-  indexName: string, 
+  indexName: string,
   wpiData: WPIDataRow[]
 ): WPIDataRow | null {
   const mapping = WPI_MAPPINGS[indexName];
   if (!mapping) return null;
-  
+
+  // A new-series index with no single equivalent is a composite: average its member rows.
+  // Only when new-series data is present — an old-series import still uses the single code
+  // below (the old sub-group row exists there), so historical imports are unchanged.
+  if (mapping.newComposite) {
+    const newRows = wpiData.filter(r => r.series === 'new');
+    if (newRows.length > 0) {
+      const composite = buildCompositeRow(mapping.newComposite, newRows);
+      if (composite) return composite;
+    }
+  }
+
   // A code only means anything within its own series: the 2022-23 rebase reassigned
   // codes, and our OLD machinery code now belongs to a different commodity (metallurgy
   // machinery) in the new basket. Matching either code blindly picks that wrong row —

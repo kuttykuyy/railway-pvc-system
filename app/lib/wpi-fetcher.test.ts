@@ -72,13 +72,15 @@ describe('pre-2022 GCC index mappings', () => {
     expect(match?.commCode).toBe('1314010019');
   });
 
-  it('finds nothing for plates in the new series rather than taking a lookalike', () => {
-    // The 2022-23 rebase abolished the 'Mild Steel - Flat products' sub-group the clause
-    // names. Item 1314010029 'Mild steel (MS) flats & sheets' is in NEW_SERIES above and
-    // must NOT be picked up: it carries 0.00115 of the basket against the old sub-group's
-    // whole one, and rose while every bar and section row fell.
+  it('builds a composite for plates in the new series (the sub-group was abolished)', () => {
+    // The 2022-23 rebase abolished the single 'Mild Steel - Flat products' sub-group, so
+    // there is no one newCode. The faithful replacement is a weight-weighted composite of
+    // the mild-steel flat-rolled items (see newComposite) — never the lone 1314010029,
+    // which carries 0.00115 of the basket and moved opposite to real plate steel.
     expect(WPI_MAPPINGS['WPI Steel Flat Products'].newCode).toBe('');
-    expect(findWPIDataForIndex('WPI Steel Flat Products', NEW_SERIES)).toBeNull();
+    expect(WPI_MAPPINGS['WPI Steel Flat Products'].newComposite).toContain('1314010010');
+    const hit = findWPIDataForIndex('WPI Steel Flat Products', NEW_SERIES);
+    expect(hit?.commCode).toBe('COMPOSITE');
   });
 
   it('has no mapping for other sections, because it is an average and not an index', () => {
@@ -136,5 +138,33 @@ describe('the old 2011-12 series, which pre-2022 contracts are based on', () => 
     expect(WPI_MAPPINGS['RBI Cement'].newCode).toBe('1313050000');
     expect(WPI_MAPPINGS['RBI Plant Machinery'].newCode).toBe('1318120000');
     expect(WPI_MAPPINGS['RBI Explosives'].newCode).toBe('1315040001');
+  });
+});
+
+describe('WPI Steel Flat Products composite (new series)', () => {
+  const M = new Date(Date.UTC(2026, 4, 1)); // May 2026
+  const nrow = (commCode: string, commWeight: number, value: number): WPIDataRow => ({
+    series: 'new', commCode, commName: commCode, commWeight, monthlyValues: [{ month: M, value }],
+  });
+
+  it('is the weight-weighted average of its member items, ignoring non-members', () => {
+    const rows: WPIDataRow[] = [
+      nrow('1314010010', 2, 100),  // HR coils
+      nrow('1314010011', 1, 130),  // HR plates
+      nrow('1314010014', 5, 999),  // MS bars — NOT a flat product, must be excluded
+    ];
+    const hit = findWPIDataForIndex('WPI Steel Flat Products', rows);
+    expect(hit?.commCode).toBe('COMPOSITE');
+    // (2×100 + 1×130) / 3 = 110 ; the 999 bars row is not a member
+    expect(hit?.monthlyValues[0].value).toBe(110);
+  });
+
+  it('still matches the single old-series row when the data is old-series', () => {
+    const oldRow: WPIDataRow = {
+      series: 'old', commCode: '1314050000', commName: 'e. Mild Steel - Flat products',
+      commWeight: 1, monthlyValues: [{ month: new Date(Date.UTC(2025, 0, 1)), value: 150 }],
+    };
+    const hit = findWPIDataForIndex('WPI Steel Flat Products', [oldRow]);
+    expect(hit?.commCode).toBe('1314050000');
   });
 });
