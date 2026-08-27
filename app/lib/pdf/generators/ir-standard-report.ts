@@ -1802,6 +1802,22 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       const isProvCell = (n: string, mk: string) => provLookup.get(n)?.has(mk) === true;
       const isBorrowCell = (n: string, mk: string) => borrowLookup.get(n)?.has(mk) === true;
 
+      // Keep this historical table consistent with the Index Values table above. That
+      // table shows the WPI-bridged monthly figures (a new-series month converted to the
+      // base month's series with the linking factor), but this one was built from the raw
+      // published values. Across a base-year break — e.g. May 2026, the first month of the
+      // new WPI series — the two tables then disagree on that month and this table's
+      // "[USED]" average mixes two series, reading as a price fall that never happened.
+      // Overlay the bridged monthly values for the affected quarter so both tables, and
+      // this average, agree with what the PVC actually used. Older months are all on the
+      // base's own series, so their raw values already equal the bridged ones.
+      for (const qa of affectedAverages) {
+        for (const mv of (qa.monthlyValues || [])) {
+          if (!histLookup.has(qa.indexName)) histLookup.set(qa.indexName, new Map());
+          histLookup.get(qa.indexName)!.set(mv.month, mv.value);
+        }
+      }
+
       // Build base values from quarterlyAverages
       const baseValLookup = new Map(affectedAverages.map(qa => [qa.indexName, qa.baseValue]));
 
@@ -2233,6 +2249,16 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       for (const d of steelHist) {
         if (!steelLookup.has(d.indexName)) steelLookup.set(d.indexName, new Map());
         steelLookup.get(d.indexName)!.set(d.month, d.value);
+      }
+      // Same consistency overlay as the main historical table: show the bridged monthly
+      // values so the months displayed here agree with the (bridged) Quarter Average row
+      // below across a WPI base-year change. A no-op for indices that were not bridged.
+      for (const qa of quarterlyAverages) {
+        if (!usedSteelIndexNames.includes(qa.indexName)) continue;
+        for (const mv of (qa.monthlyValues || [])) {
+          if (!steelLookup.has(qa.indexName)) steelLookup.set(qa.indexName, new Map());
+          steelLookup.get(qa.indexName)!.set(mv.month, mv.value);
+        }
       }
       const steelBaseLookup = new Map(quarterlyAverages.map(qa => [qa.indexName, qa.baseValue]));
       const steelAvgLookup = new Map(quarterlyAverages.map(qa => [qa.indexName, qa.average]));
