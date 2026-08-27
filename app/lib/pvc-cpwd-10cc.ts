@@ -78,6 +78,28 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
 
 /**
+ * Whether 10CC applies: the contract's stipulated completion period must EXCEED the
+ * threshold (default 12 months). A contract at or below gets 10CA only. When the period is
+ * unknown, it is not gated out — 10CC runs but the note says eligibility was not verified,
+ * so the figure is never silently dropped or silently allowed.
+ */
+export function cpwd10ccEligibility(
+  completionMonths: number | null | undefined,
+  thresholdMonths: number,
+): { eligible: boolean; note: string | null } {
+  if (!finite(completionMonths)) {
+    return { eligible: true, note: `10CC eligibility not verified — the contract's completion period is not set (threshold is over ${thresholdMonths} months).` };
+  }
+  if (completionMonths > thresholdMonths) {
+    return { eligible: true, note: null };
+  }
+  return {
+    eligible: false,
+    note: `10CC not applicable: the ${completionMonths}-month completion period does not exceed the ${thresholdMonths}-month threshold. Only 10CA materials are priced.`,
+  };
+}
+
+/**
  * Compute the 10CC variation. A component with a non-positive base index (so its ratio is
  * undefined) contributes zero rather than throwing — a missing base index must not blow up
  * a bill — but the line is still returned so the gap is visible.

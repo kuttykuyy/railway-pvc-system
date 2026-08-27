@@ -24,7 +24,7 @@ interface BillForEngineB {
   /** Gross value of work done in this bill — the base 10CC's haircut applies to. */
   billAmount: number;
   dateOfMeasurement: Date;
-  contract: { baseMonth: Date };
+  contract: { baseMonth: Date; completionPeriodMonths?: number | null };
   classificationEntries: EngineBEntry[];
 }
 
@@ -78,7 +78,8 @@ async function ensureResultTable(s: string): Promise<void> {
   await prisma.$executeRawUnsafe(`ALTER TABLE "${s}"."cpwd_10ca_calculations"
     ADD COLUMN IF NOT EXISTS "cpwd10ccTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS "cpwd10ccBreakdown" JSONB NOT NULL DEFAULT '[]',
-    ADD COLUMN IF NOT EXISTS "combinedTotal" DOUBLE PRECISION NOT NULL DEFAULT 0`);
+    ADD COLUMN IF NOT EXISTS "combinedTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS "cpwd10ccNote" TEXT`);
 }
 
 export interface EngineBBillResult {
@@ -96,6 +97,8 @@ export interface EngineBBillResult {
   cpwd10ccBreakdown: Cpwd10ccResultLine[];
   /** 10CA + 10CC — the CPWD price variation for the bill. */
   combinedTotal: number;
+  /** Why 10CC was skipped or its eligibility unverified, if applicable. */
+  cpwd10ccNote: string | null;
 }
 
 export async function computeAndStoreEngineB(bill: BillForEngineB, region: string | null): Promise<EngineBBillResult> {
@@ -129,25 +132,35 @@ export async function computeAndStoreEngineB(bill: BillForEngineB, region: strin
   // CPWD total is 10CA alone. Real CPWD escalation is 10CA + 10CC added.
   let cpwd10ccTotal = 0;
   let cpwd10ccLines: Cpwd10ccResultLine[] = [];
+  let cpwd10ccNote: string | null = null;
   try {
     const { readCpwd10ccSchedule } = await import('./pvc-scheme');
     const schedule = await readCpwd10ccSchedule(bill.contractId);
     if (schedule) {
-      const { getCpwd10ccIndices } = await import('./cpwd-10cc-indices');
-      const idx = await getCpwd10ccIndices(baseMonth, billMonth);
-      const r10cc = computeCpwd10cc({
-        workValue: Number(bill.billAmount) || 0,
-        haircut: schedule.haircut,
-        departmentalMaterial: schedule.departmentalMaterial,
-        fixedChargeServices: schedule.fixedChargeServices,
-        components: [
-          { key: 'labour', percent: schedule.labour, baseIndex: idx.labour.base ?? 0, currentIndex: idx.labour.current ?? 0 },
-          { key: 'materials', percent: schedule.materials, baseIndex: idx.materials.base ?? 0, currentIndex: idx.materials.current ?? 0 },
-          { key: 'pol', percent: schedule.pol, baseIndex: idx.pol.base ?? 0, currentIndex: idx.pol.current ?? 0 },
-        ],
-      });
-      cpwd10ccTotal = r10cc.totalVariation;
-      cpwd10ccLines = r10cc.lines;
+      // Eligibility gate: 10CC applies only when completion exceeds the threshold.
+      const { getAdminSetting } = await import('./admin-settings');
+      const { cpwd10ccEligibility } = await import('./pvc-cpwd-10cc');
+      const threshold = Number(await getAdminSetting('CPWD_10CC_THRESHOLD_MONTHS', 12)) || 12;
+      const elig = cpwd10ccEligibility(bill.contract.completionPeriodMonths, threshold);
+      cpwd10ccNote = elig.note;
+      if (elig.eligible) {
+        const { getCpwd10ccIndices } = await import('./cpwd-10cc-indices');
+        const idx = await getCpwd10ccIndices(baseMonth, billMonth);
+        const r10cc = computeCpwd10cc({
+          workValue: Number(bill.billAmount) || 0,
+          haircut: schedule.haircut,
+          departmentalMaterial: schedule.departmentalMaterial,
+          fixedChargeServices: schedule.fixedChargeServices,
+          components: [
+            { key: 'labour', percent: schedule.labour, baseIndex: idx.labour.base ?? 0, currentIndex: idx.labour.current ?? 0 },
+            { key: 'materials', percent: schedule.materials, baseIndex: idx.materials.base ?? 0, currentIndex: idx.materials.current ?? 0 },
+            { key: 'pol', percent: schedule.pol, baseIndex: idx.pol.base ?? 0, currentIndex: idx.pol.current ?? 0 },
+          ],
+        });
+        cpwd10ccTotal = r10cc.totalVariation;
+        cpwd10ccLines = r10cc.lines;
+      }
+      // Not eligible → 10CA only; cpwd10ccNote explains why on the card and statement.
     }
   } catch (error) {
     console.error('[engine-b] 10CC computation failed (10CA still stored):', error);
@@ -161,16 +174,16 @@ export async function computeAndStoreEngineB(bill: BillForEngineB, region: strin
     await ensureResultTable(s);
     await prisma.$executeRawUnsafe(
       `INSERT INTO "${s}"."cpwd_10ca_calculations"
-         ("billId","region","baseMonth","billMonth","totalVariation","breakdown","flags","excluded","cpwd10ccTotal","cpwd10ccBreakdown","combinedTotal")
-       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10::jsonb,$11)
+         ("billId","region","baseMonth","billMonth","totalVariation","breakdown","flags","excluded","cpwd10ccTotal","cpwd10ccBreakdown","combinedTotal","cpwd10ccNote")
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10::jsonb,$11,$12)
        ON CONFLICT ("billId") DO UPDATE SET
          "region"=EXCLUDED."region","baseMonth"=EXCLUDED."baseMonth","billMonth"=EXCLUDED."billMonth",
          "totalVariation"=EXCLUDED."totalVariation","breakdown"=EXCLUDED."breakdown","flags"=EXCLUDED."flags",
          "excluded"=EXCLUDED."excluded","cpwd10ccTotal"=EXCLUDED."cpwd10ccTotal","cpwd10ccBreakdown"=EXCLUDED."cpwd10ccBreakdown",
-         "combinedTotal"=EXCLUDED."combinedTotal","updatedAt"=CURRENT_TIMESTAMP`,
+         "combinedTotal"=EXCLUDED."combinedTotal","cpwd10ccNote"=EXCLUDED."cpwd10ccNote","updatedAt"=CURRENT_TIMESTAMP`,
       bill.id, region, baseMonth, billMonth, result.totalVariation,
       JSON.stringify(result.lines), JSON.stringify(tonnages.flags), JSON.stringify(result.excluded),
-      cpwd10ccTotal, JSON.stringify(cpwd10ccLines), combinedTotal,
+      cpwd10ccTotal, JSON.stringify(cpwd10ccLines), combinedTotal, cpwd10ccNote,
     );
   } catch (error) {
     console.error('[engine-b] could not store CPWD result:', error);
@@ -189,5 +202,6 @@ export async function computeAndStoreEngineB(bill: BillForEngineB, region: strin
     cpwd10ccTotal,
     cpwd10ccBreakdown: cpwd10ccLines,
     combinedTotal,
+    cpwd10ccNote,
   };
 }

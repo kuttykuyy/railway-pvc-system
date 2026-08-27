@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeCpwd10cc, CPWD_10CC_DEFAULT_HAIRCUT } from './pvc-cpwd-10cc';
+import { computeCpwd10cc, CPWD_10CC_DEFAULT_HAIRCUT, cpwd10ccEligibility } from './pvc-cpwd-10cc';
 
 describe('computeCpwd10cc', () => {
   it('applies the 15% haircut and prices each component on its index ratio', () => {
@@ -71,5 +71,31 @@ describe('computeCpwd10cc', () => {
     });
     expect(r.escalableBase).toBe(0);
     expect(r.totalVariation).toBe(0);
+  });
+});
+
+describe('cpwd10ccEligibility', () => {
+  it('is eligible only when completion EXCEEDS the threshold', () => {
+    expect(cpwd10ccEligibility(18, 12).eligible).toBe(true);
+    expect(cpwd10ccEligibility(13, 12).eligible).toBe(true);
+    expect(cpwd10ccEligibility(12, 12).eligible).toBe(false); // "exceeds", so 12 is out
+    expect(cpwd10ccEligibility(6, 12).eligible).toBe(false);
+  });
+
+  it('gives a reason when it is not eligible', () => {
+    const r = cpwd10ccEligibility(6, 12);
+    expect(r.note).toMatch(/6-month/);
+    expect(r.note).toMatch(/12-month threshold/);
+  });
+
+  it('does not gate out an unknown completion period, but says so', () => {
+    const r = cpwd10ccEligibility(null, 12);
+    expect(r.eligible).toBe(true);
+    expect(r.note).toMatch(/not verified/i);
+  });
+
+  it('respects a different threshold (e.g. 6)', () => {
+    expect(cpwd10ccEligibility(9, 6).eligible).toBe(true);
+    expect(cpwd10ccEligibility(6, 6).eligible).toBe(false);
   });
 });

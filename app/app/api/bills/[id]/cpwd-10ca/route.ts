@@ -26,7 +26,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       `SELECT "billId","region","baseMonth","billMonth","totalVariation","breakdown","flags","excluded",
               COALESCE("cpwd10ccTotal",0) AS "cpwd10ccTotal",
               COALESCE("cpwd10ccBreakdown",'[]'::jsonb) AS "cpwd10ccBreakdown",
-              COALESCE("combinedTotal","totalVariation") AS "combinedTotal"
+              COALESCE("combinedTotal","totalVariation") AS "combinedTotal",
+              "cpwd10ccNote"
        FROM ${table} WHERE "billId" = $1 LIMIT 1`,
       id,
     );
@@ -44,6 +45,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       cpwd10ccTotal: Number(row.cpwd10ccTotal),
       cpwd10ccBreakdown: row.cpwd10ccBreakdown || [],
       combinedTotal: Number(row.combinedTotal),
+      cpwd10ccNote: row.cpwd10ccNote || null,
     });
   } catch {
     // Table not created yet (no CPWD bill has ever computed) → nothing to show.

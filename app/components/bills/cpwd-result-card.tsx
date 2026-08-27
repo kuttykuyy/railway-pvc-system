@@ -12,7 +12,7 @@ import { Boxes, AlertTriangle, FileDown } from 'lucide-react';
 
 interface Line { label: string; unit: string; quantity: number; basePrice: number; currentPrice: number; priceDelta: number; variation: number }
 interface CcLine { label: string; percent: number; baseIndex: number; currentIndex: number; indexRatio: number; variation: number }
-interface Data { present: boolean; region: string | null; baseMonth: string; billMonth: string; totalVariation: number; breakdown: Line[]; flags: Array<{ code: string; reason: string }>; excluded: string[]; cpwd10ccTotal: number; cpwd10ccBreakdown: CcLine[]; combinedTotal: number }
+interface Data { present: boolean; region: string | null; baseMonth: string; billMonth: string; totalVariation: number; breakdown: Line[]; flags: Array<{ code: string; reason: string }>; excluded: string[]; cpwd10ccTotal: number; cpwd10ccBreakdown: CcLine[]; combinedTotal: number; cpwd10ccNote: string | null }
 
 const rupee = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 const qty = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 3 });
@@ -131,6 +131,14 @@ export function CpwdResultCard({ billId }: { billId: string }) {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* 10CC eligibility note (skipped / unverified). */}
+        {data.cpwd10ccNote && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-slate-400" />
+            <span>{data.cpwd10ccNote}</span>
           </div>
         )}
 
