@@ -27,7 +27,7 @@ interface PriceRow { region: string; month: string; material: string; price: num
 interface Status {
   rows?: PriceRow[];
   ready: boolean;
-  loaded: { rows: number; regions: string[]; latestMonth: string | null };
+  loaded: { rows: number; regions: string[]; latestMonth: string | null; lastRefreshed?: string | null };
   message: string;
 }
 
@@ -132,6 +132,11 @@ export default function CpwdPricesPage() {
                   <span className="font-semibold">{status.loaded.rows.toLocaleString('en-IN')}</span> rows ·
                   regions: {status.loaded.regions.join(', ') || '—'} ·
                   latest month: {status.loaded.latestMonth || '—'}
+                  <span className="block text-xs text-slate-400 mt-0.5">
+                    Last refreshed: {status.loaded.lastRefreshed
+                      ? new Date(status.loaded.lastRefreshed).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+                      : '—'} · auto-refreshes weekly from NSRCivil
+                  </span>
                 </div>
               ) : (
                 <div className="flex items-start gap-2 text-sm text-amber-800">

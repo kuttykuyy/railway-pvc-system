@@ -64,7 +64,15 @@ async function loadedSummary(s: string): Promise<{ rows: number; regions: string
   const latest = await prisma.$queryRawUnsafe<Array<{ month: string }>>(
     `SELECT MAX("month") AS month FROM "${s}"."cpwd_material_prices"`,
   );
-  return { rows: Number(count), regions: regions.map(r => r.region), latestMonth: latest[0]?.month || null };
+  const refreshed = await prisma.$queryRawUnsafe<Array<{ ts: Date | null }>>(
+    `SELECT MAX("updatedAt") AS ts FROM "${s}"."cpwd_material_prices"`,
+  );
+  return {
+    rows: Number(count),
+    regions: regions.map(r => r.region),
+    latestMonth: latest[0]?.month || null,
+    lastRefreshed: refreshed[0]?.ts ? new Date(refreshed[0].ts).toISOString() : null,
+  };
 }
 
 async function upsertRows(s: string, rows: Array<{ region: string; material: string; month: string; price: number; aipi: number | null }>): Promise<number> {
