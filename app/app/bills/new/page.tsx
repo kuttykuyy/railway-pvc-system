@@ -3073,7 +3073,7 @@ function NewBillPageContent() {
                             <div className="flex justify-between text-slate-500"><span>{hi ? '+ स्टील/सीमेंट (अलग दर)' : '+ Steel/cement (own rate)'}</span><span className="font-semibold">{inr(sc.keptSeparatePvc)}</span></div>
                           )}
                           <div className="flex justify-between border-t border-slate-100 pt-1 font-bold text-slate-800"><span>{hi ? 'कुल' : 'Total'}</span><span>{inr(best.totalPvc)}</span></div>
-                          <p className="text-[11px] text-slate-400 pt-1">{hi ? `${best.code} इस काम के सामान्य वर्गों में सबसे ज़्यादा देने वाला है।` : `${best.code} is the best-paying general class for this type of work.`}</p>
+                          <p className="text-[11px] text-slate-400 pt-1">{hi ? `${best.code} = "सभी मदें" वर्ग — सारे सामान्य काम को एक ही वर्ग में गिनता है (स्टील/सीमेंट सप्लाई अलग)।` : `${best.code} = the "All items" class — it prices all general work as one class (steel & cement supply stay separate).`}</p>
                         </div>
                       </details>
 

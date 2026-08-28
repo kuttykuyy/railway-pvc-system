@@ -197,10 +197,16 @@ export async function POST(request: NextRequest) {
           },
           orderBy: { code: 'asc' },
         });
-        const candidates = groupClasses.filter(c => {
+        const generalClasses = groupClasses.filter(c => {
           const suffix = String(c.code || '').trim().slice(-1).toUpperCase();
           return suffix !== 'B' && suffix !== 'C';
         });
+        // The genuine "treat all general work as ONE class" is the group's "All items"
+        // (…A) class — NOT whichever specific class pays most. A specific-nature class like
+        // 5E (Fabrication & Erection) must never be forced onto items that are not that
+        // nature: doing so mis-applies its steel/fabrication treatment to plain general work.
+        const allItemsClass = generalClasses.find(c => String(c.code || '').trim().slice(-1).toUpperCase() === 'A');
+        const candidates = allItemsClass ? [allItemsClass] : generalClasses; // fallback only if no …A class exists
         const keptSeparatePvc = steelSupplyKeptPvc + cementSupplyKeptPvc;
         const scored = [] as Array<any>;
         for (const c of candidates) {
