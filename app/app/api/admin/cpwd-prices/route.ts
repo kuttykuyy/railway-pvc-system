@@ -89,10 +89,19 @@ export async function GET() {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const s = await appSchema();
   const ready = await tableExists(s);
+  // The actual loaded rows so the admin can browse them, newest month first.
+  let rows: Array<{ region: string; month: string; material: string; price: number; aipi: number | null }> = [];
+  if (ready) {
+    const raw = await prisma.$queryRawUnsafe<Array<{ region: string; month: string; material: string; price: number; aipi: number | null }>>(
+      `SELECT "region","month","material","price","aipi" FROM "${s}"."cpwd_material_prices" ORDER BY "region", "month" DESC, "material"`,
+    );
+    rows = raw.map(r => ({ ...r, price: Number(r.price), aipi: r.aipi == null ? null : Number(r.aipi) }));
+  }
   return NextResponse.json({
     ready,
     materials: CPWD_MATERIALS,
     loaded: ready ? await loadedSummary(s) : { rows: 0, regions: [], latestMonth: null },
+    rows,
     message: ready ? 'Feed table exists.' : 'No feed table yet. Seed it to create and load the verified Delhi-NCR data.',
   });
 }

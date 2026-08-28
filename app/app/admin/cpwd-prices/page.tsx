@@ -23,7 +23,9 @@ const MATERIALS: Array<{ key: string; label: string; unit: string }> = [
   { key: 'diesel', label: 'Diesel (POL)', unit: 'litre' },
 ];
 
+interface PriceRow { region: string; month: string; material: string; price: number; aipi: number | null }
 interface Status {
+  rows?: PriceRow[];
   ready: boolean;
   loaded: { rows: number; regions: string[]; latestMonth: string | null };
   message: string;
@@ -150,6 +152,57 @@ export default function CpwdPricesPage() {
               </p>
             </CardContent>
           </Card>
+
+          {/* Browse the loaded prices — one row per month, newest first. */}
+          {status.ready && (status.rows?.length || 0) > 0 && (() => {
+            // Pivot rows into region+month → material → price.
+            const byKey = new Map<string, Record<string, number>>();
+            for (const r of status.rows!) {
+              const k = `${r.region}|${r.month}`;
+              const cur = byKey.get(k) || {};
+              cur[r.material] = r.price;
+              byKey.set(k, cur);
+            }
+            const keys = Array.from(byKey.keys());
+            return (
+              <Card>
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2"><Database className="h-4 w-4" /> Loaded prices ({keys.length} months)</CardTitle>
+                  <CardDescription>Every month in the feed, newest first. Prices ₹/MT (cement &amp; steel), ₹/litre (diesel).</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto max-h-[28rem] overflow-y-auto">
+                    <table className="w-full text-sm tabular-nums">
+                      <thead className="bg-slate-50 text-left text-xs text-slate-500 sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Region</th>
+                          <th className="px-3 py-2 font-medium">Month</th>
+                          {MATERIALS.map(m => <th key={m.key} className="px-3 py-2 font-medium text-right whitespace-nowrap">{m.label}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {keys.map(k => {
+                          const [region, month] = k.split('|');
+                          const cells = byKey.get(k)!;
+                          return (
+                            <tr key={k}>
+                              <td className="px-3 py-1.5 text-slate-500 uppercase">{region}</td>
+                              <td className="px-3 py-1.5 font-medium text-slate-700">{month}</td>
+                              {MATERIALS.map(m => (
+                                <td key={m.key} className="px-3 py-1.5 text-right text-slate-600">
+                                  {cells[m.key] != null ? `₹${cells[m.key].toLocaleString('en-IN')}` : '—'}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           <Card>
             <CardHeader className="py-3">
