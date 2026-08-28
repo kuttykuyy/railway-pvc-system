@@ -10,8 +10,9 @@ import type { Language } from './translations';
  * user always wins (see the provider's setLanguageAuto).
  */
 
-/** Zones in the Hindi heartland (UP, Bihar, Rajasthan, MP, Chhattisgarh, Delhi). */
-const HINDI_ZONES = new Set(['NR', 'NCR', 'NER', 'NWR', 'WCR', 'ECR', 'SECR']);
+/** Zones defaulting to Hindi — the Hindi heartland (UP, Bihar, Rajasthan, MP, Chhattisgarh,
+ *  Delhi) plus Central (CR) and Western (WR), where Hindi is the common working language. */
+const HINDI_ZONES = new Set(['NR', 'NCR', 'NER', 'NWR', 'WCR', 'ECR', 'SECR', 'CR', 'WR']);
 
 /** CPWD regions whose city is Hindi-speaking. */
 const HINDI_CPWD_REGIONS = new Set([
