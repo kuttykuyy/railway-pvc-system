@@ -95,6 +95,18 @@ export async function POST(request: NextRequest) {
     let labourPvc = 0, plantPvc = 0, fuelPvc = 0, materialsPvc = 0;
     let cementPvc = 0, steelPvc = 0, explosivesPvc = 0, totalPvc = 0;
 
+    // Classification code for each entry, so steel-supply (…B) and cement-supply (…C)
+    // items can be kept OUT of the single-classification comparison below — an "A" class
+    // (e.g. 1A = "all items EXCLUDING 1B/1C") must never swallow the steel/cement supply.
+    const entrySubIds = [...new Set(classificationEntries.map((e: any) => e.subClassificationId).filter(Boolean))] as string[];
+    const codeRows = entrySubIds.length > 0
+      ? await prisma.subClassification.findMany({ where: { id: { in: entrySubIds } }, select: { id: true, code: true } })
+      : [];
+    const codeBySubId = new Map(codeRows.map(r => [r.id, r.code]));
+    // Kept-separate (steel/cement supply) totals, and the collapsible general amount.
+    let steelSupplyKeptPvc = 0, cementSupplyKeptPvc = 0;
+    let steelSupplyAmount = 0, cementSupplyAmount = 0, generalCollapsibleAmount = 0;
+
     for (const entry of classificationEntries) {
       const hasAmount = entry.amount !== '' && entry.amount !== null && entry.amount !== undefined && parseFloat(entry.amount) > 0;
       if (!hasAmount || (!entry.subClassificationId && !entry.classificationId)) continue;
@@ -122,6 +134,11 @@ export async function POST(request: NextRequest) {
       explosivesPvc += pvc.explosivesPvc;
       totalPvc += pvc.totalPvc;
 
+      const amt = parseFloat(entry.amount);
+      const suffix = String(codeBySubId.get(entry.subClassificationId) || '').trim().slice(-1).toUpperCase();
+      if (suffix === 'B') { steelSupplyKeptPvc += pvc.totalPvc; steelSupplyAmount += amt; }
+      else if (suffix === 'C') { cementSupplyKeptPvc += pvc.totalPvc; cementSupplyAmount += amt; }
+      else { generalCollapsibleAmount += amt; }
     }
 
     // Previous cumulative PVC (for new bill display)
@@ -158,19 +175,20 @@ export async function POST(request: NextRequest) {
 
     // Single-classification comparison (TRANSPARENCY / what-if — NOT the tender method).
     // The per-item split above is the GCC-2022 46A.6 method (classification fixed per BoQ
-    // item by the tender). Here we also show: if the WHOLE billed amount were priced under
-    // ONE classification, which sub-category of the work's main group would pay most? Shown
-    // so the user can see the gap; it never auto-applies. See lib/classification-pvc.ts.
+    // item by the tender). Here we also show: if the GENERAL portion of the bill were priced
+    // under ONE classification, which sub-category pays most? STEEL SUPPLY (…B) and CEMENT
+    // SUPPLY (…C) are kept OUT of the collapse and stay on their own classification — an
+    // "A" class literally means "excluding 1B/1C", so folding steel/cement into it would be
+    // wrong and would hide the steel index movement. Shown for transparency; never applies.
     let singleClassification: any = null;
     try {
-      const wholeAmount = classificationEntries.reduce(
-        (sum: number, e: any) => sum + (parseFloat(e.amount) > 0 ? parseFloat(e.amount) : 0), 0,
-      );
-      if (wholeAmount > 0) {
+      if (generalCollapsibleAmount > 0) {
         const { inferMainClassification } = await import('@/lib/work-classification');
         const { calculateDynamicClassificationPvc } = await import('@/lib/pvc-calculations');
         const main = inferMainClassification(contract.workDescription || '');
-        const candidates = await prisma.subClassification.findMany({
+        // Candidate single classifications: the GENERAL sub-categories of the work's main
+        // group — never the steel-supply (…B) or cement-supply (…C) codes (filtered below).
+        const groupClasses = await prisma.subClassification.findMany({
           where: { isActive: true, code: { startsWith: main.code } },
           select: {
             id: true, code: true, name: true, groupId: true,
@@ -179,11 +197,18 @@ export async function POST(request: NextRequest) {
           },
           orderBy: { code: 'asc' },
         });
+        const candidates = groupClasses.filter(c => {
+          const suffix = String(c.code || '').trim().slice(-1).toUpperCase();
+          return suffix !== 'B' && suffix !== 'C';
+        });
+        const keptSeparatePvc = steelSupplyKeptPvc + cementSupplyKeptPvc;
         const scored = [] as Array<any>;
         for (const c of candidates) {
-          const pvc = await calculateDynamicClassificationPvc(wholeAmount, quarterlyAverages, c.code, extractedSteelTypes);
+          // Apply the single class ONLY to the general (collapsible) amount…
+          const pvc = await calculateDynamicClassificationPvc(generalCollapsibleAmount, quarterlyAverages, c.code, extractedSteelTypes);
           if (!pvc.isProcessingFee) {
-            scored.push({ ...c, totalPvc: pvc.totalPvc });
+            // …then add back steel/cement supply, kept on their own classification.
+            scored.push({ ...c, generalPvc: pvc.totalPvc, totalPvc: pvc.totalPvc + keptSeparatePvc });
           }
         }
         scored.sort((a, b) => b.totalPvc - a.totalPvc);
@@ -191,8 +216,12 @@ export async function POST(request: NextRequest) {
           singleClassification = {
             mainCode: main.code,
             mainLabel: main.label,
-            wholeAmount,
-            currentTotalPvc: totalPvc,        // the per-item (compliant) total, for the UI
+            currentTotalPvc: totalPvc,          // the per-item (compliant) total, for the UI
+            generalAmount: generalCollapsibleAmount,
+            // What is held out of the collapse and why the single figure isn't a free lunch.
+            steelSupply: { amount: steelSupplyAmount, keptPvc: steelSupplyKeptPvc },
+            cementSupply: { amount: cementSupplyAmount, keptPvc: cementSupplyKeptPvc },
+            keptSeparatePvc,
             best: scored[0],
             all: scored,
           };

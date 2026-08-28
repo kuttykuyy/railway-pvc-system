@@ -1263,17 +1263,26 @@ function NewBillPageContent() {
     await handleSubmit();
   };
 
-  // Comparison "what-if": collapse the whole bill onto ONE classification (the chosen
-  // sub-category), replacing the per-item split. This is NOT the tender-compliant method
-  // (46A.6 fixes classification per BoQ item), so it's a deliberate user choice — we close
-  // the preview and drop them back on the form with a single entry to review before saving.
+  // Comparison "what-if": collapse only the GENERAL items onto ONE classification, while
+  // steel-supply (…B) and cement-supply (…C) entries stay on their own classification —
+  // an "A" class excludes 1B/1C, so steel/cement must never be folded in. This is NOT the
+  // tender-compliant method (46A.6 fixes classification per BoQ item), so it's a deliberate
+  // user choice; we close the preview and drop them back on the form to review before saving.
+  const entrySuffix = (e: ClassificationEntry) =>
+    String(e.subClassification?.code || '').trim().slice(-1).toUpperCase();
   const applySingleClassification = (sc: any) => {
     if (!sc?.id) return;
-    const wholeAmount = previewResult?.singleClassification?.wholeAmount
-      ?? classificationEntries.reduce((sum, e) => {
-        const amt = e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount;
-        return sum + amt;
-      }, 0);
+    const amtOf = (e: ClassificationEntry) =>
+      e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount;
+    // Keep steel-supply / cement-supply entries; collapse everything else.
+    const keptEntries = classificationEntries.filter(e => entrySuffix(e) === 'B' || entrySuffix(e) === 'C');
+    const generalAmount = classificationEntries
+      .filter(e => entrySuffix(e) !== 'B' && entrySuffix(e) !== 'C')
+      .reduce((sum, e) => sum + amtOf(e), 0);
+    if (generalAmount <= 0) {
+      toast.error('No general items to switch — the whole bill is steel/cement supply.');
+      return;
+    }
     const singleEntry: ClassificationEntry = {
       subClassificationId: sc.id,
       subClassification: {
@@ -1282,14 +1291,18 @@ function NewBillPageContent() {
         plantMachinery: sc.plantMachinery, fuel: sc.fuel,
         otherMaterials: sc.otherMaterials, explosives: sc.explosives,
       },
-      amount: wholeAmount,
-      description: `Whole bill under ${sc.code}`,
+      amount: generalAmount,
+      description: `General items under ${sc.code}`,
       manualClassification: true,
     };
-    setClassificationEntries([singleEntry]);
+    setClassificationEntries([singleEntry, ...keptEntries]);
     setShowPreviewModal(false);
     setPreviewResult(null);
-    toast.success(`Switched to single classification ${sc.code}. Review, then Preview/Save.`);
+    toast.success(
+      keptEntries.length > 0
+        ? `General items → ${sc.code}; steel/cement kept separate. Review, then Preview/Save.`
+        : `General items → ${sc.code}. Review, then Preview/Save.`,
+    );
   };
 
   // If the save ends without navigating away — insufficient credit, a validation
@@ -2931,9 +2944,9 @@ function NewBillPageContent() {
       {/* Preview Modal */}
       {showPreviewModal && previewResult && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden my-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden my-4">
             {/* SAMPLE watermark header */}
-            <div className="relative bg-gradient-to-r from-emerald-600 to-emerald-600 px-6 py-5 text-white">
+            <div className="relative bg-gradient-to-r from-emerald-600 to-emerald-600 px-6 py-5 text-white flex-shrink-0">
               <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none select-none">
                 <span className="text-6xl font-black tracking-widest rotate-[-20deg] text-white">{language === 'hi' ? 'नमूना' : 'SAMPLE'}</span>
               </div>
@@ -2949,7 +2962,7 @@ function NewBillPageContent() {
               </div>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="p-6 space-y-5 flex-1 overflow-y-auto min-h-0">
               {/* Total PVC */}
               <div className="text-center py-4 bg-emerald-50 rounded-xl border border-emerald-100">
                 <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wider mb-1">{language === 'hi' ? 'कुल पीवीसी राशि' : 'Total PVC Amount'}</p>
@@ -2992,6 +3005,10 @@ function NewBillPageContent() {
                 const best = sc.best;
                 const diff = (best.totalPvc ?? 0) - current;
                 const singleHigher = diff > 0.005;
+                const inr = (v: number) => `₹${(Number(v) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+                const steelAmt = sc.steelSupply?.amount || 0;
+                const cementAmt = sc.cementSupply?.amount || 0;
+                const heldOut = steelAmt > 0 || cementAmt > 0;
                 return (
                   <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 space-y-3">
                     <div className="flex items-center justify-between">
@@ -3007,22 +3024,44 @@ function NewBillPageContent() {
                           <span className="text-slate-700 font-medium">{language === 'hi' ? 'वर्तमान (प्रति-मद)' : 'Current (per-item)'}</span>
                           <span className="ml-2 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">{language === 'hi' ? 'निविदा विधि 46A.6' : 'tender method · 46A.6'}</span>
                         </div>
-                        <span className="font-bold text-slate-900 whitespace-nowrap">₹{current.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                        <span className="font-bold text-slate-900 whitespace-nowrap">{inr(current)}</span>
                       </div>
                       {/* Best single classification — what-if */}
-                      <div className="flex items-center justify-between px-3 py-2 bg-white rounded-lg border border-indigo-200">
-                        <div className="min-w-0">
-                          <span className="text-slate-700 font-medium">{language === 'hi' ? 'एकल वर्गीकरण' : 'Single class.'} {best.code}</span>
-                          <span className="ml-1 text-xs text-slate-400 truncate">{best.name}</span>
+                      <div className="px-3 py-2 bg-white rounded-lg border border-indigo-200">
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0">
+                            <span className="text-slate-700 font-medium">{language === 'hi' ? 'एकल वर्गीकरण' : 'Single class.'} {best.code}</span>
+                            <span className="ml-1 text-xs text-slate-400 truncate">{best.name}</span>
+                          </div>
+                          <span className="font-bold text-indigo-700 whitespace-nowrap">{inr(best.totalPvc)}</span>
                         </div>
-                        <span className="font-bold text-indigo-700 whitespace-nowrap">₹{(best.totalPvc ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                        {/* WHY this figure — how it is built */}
+                        <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                          {best.code} {language === 'hi' ? 'सामान्य कार्य' : 'on general work'} {inr(sc.generalAmount)} = {inr(best.generalPvc)}
+                          {heldOut && (<> {' + '}{language === 'hi' ? 'स्टील/सीमेंट अलग रखा' : 'steel/cement kept'} {inr(sc.keptSeparatePvc)}</>)}
+                        </p>
                       </div>
                     </div>
+
+                    {/* Steel / cement held OUT of the single collapse — the point you raised */}
+                    {heldOut && (
+                      <div className="text-[11px] leading-relaxed text-slate-600 bg-white/70 border border-slate-200 rounded-lg px-2.5 py-1.5 space-y-0.5">
+                        <p className="font-semibold text-slate-700">{language === 'hi' ? 'अलग रखा गया (एकल में शामिल नहीं):' : 'Kept separate (not folded into the single):'}</p>
+                        {steelAmt > 0 && (
+                          <p>• {language === 'hi' ? 'स्टील सप्लाई' : 'Steel supply'} {inr(steelAmt)} → PVC {inr(sc.steelSupply.keptPvc)}</p>
+                        )}
+                        {cementAmt > 0 && (
+                          <p>• {language === 'hi' ? 'सीमेंट सप्लाई' : 'Cement supply'} {inr(cementAmt)} → PVC {inr(sc.cementSupply.keptPvc)}</p>
+                        )}
+                        <p className="text-slate-400">{language === 'hi' ? 'एक "A" वर्ग में 1B/1C शामिल नहीं होता, इसलिए स्टील/सीमेंट अपने वर्ग पर रहते हैं।' : 'An "A" class excludes 1B/1C, so steel & cement stay on their own classification.'}</p>
+                      </div>
+                    )}
+
                     <p className="text-xs text-slate-600">
                       {singleHigher
                         ? (language === 'hi'
-                            ? `एकल वर्गीकरण ${best.code} ₹${Math.abs(diff).toLocaleString('en-IN', { maximumFractionDigits: 0 })} अधिक देता है।`
-                            : `Single classification ${best.code} gives ₹${Math.abs(diff).toLocaleString('en-IN', { maximumFractionDigits: 0 })} more.`)
+                            ? `${best.code} सामान्य कार्य के लिए सबसे अधिक भुगतान करता है — ₹${Math.abs(diff).toLocaleString('en-IN', { maximumFractionDigits: 0 })} अधिक।`
+                            : `${best.code} pays the most for the general work — ${inr(Math.abs(diff))} more.`)
                         : (language === 'hi'
                             ? 'वर्तमान प्रति-मद विधि अधिक या समान देती है।'
                             : 'The current per-item method gives more or the same.')}
@@ -3038,7 +3077,7 @@ function NewBillPageContent() {
                         onClick={() => applySingleClassification(best)}
                         className="w-full text-sm font-semibold text-indigo-700 border border-indigo-300 rounded-lg py-2 hover:bg-indigo-100 transition-colors"
                       >
-                        {language === 'hi' ? `पूरे बिल के लिए ${best.code} उपयोग करें` : `Use ${best.code} for the whole bill`}
+                        {language === 'hi' ? `सामान्य मदों के लिए ${best.code} उपयोग करें` : `Use ${best.code} for the general items`}
                       </button>
                     )}
                   </div>
@@ -3077,7 +3116,7 @@ function NewBillPageContent() {
               </p>
             </div>
 
-            <div className="flex gap-3 px-6 pb-6">
+            <div className="flex gap-3 px-6 py-4 flex-shrink-0 border-t border-slate-100 bg-white">
               <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setShowPreviewModal(false)}>
                 {language === 'hi' ? 'बिल संपादित करें' : 'Edit Bill'}
               </Button>
