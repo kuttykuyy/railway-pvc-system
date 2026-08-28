@@ -12,6 +12,7 @@
 
 import { prisma } from './db';
 import { getBaseMonth } from './pvc-calculations';
+import { inferMainClassification } from './work-classification';
 
 export type CheckTone = 'ok' | 'attention' | 'info';
 
@@ -46,6 +47,7 @@ export async function buildAccountsChecklist(billId: string): Promise<ChecklistI
         select: {
           agreementNo: true, baseMonth: true, dateOfOpening: true, contractValue: true,
           fuelPriceType: true, isExtended: true, extensionType: true, originalCompletionDate: true,
+          workDescription: true,
         },
       },
       pvcCalculation: true,
@@ -96,7 +98,7 @@ export async function buildAccountsChecklist(billId: string): Promise<ChecklistI
 
   // 4. Classification split — what the PVC was actually computed on.
   const entryTotal = bill.classificationEntries.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-  const codes = [...new Set(bill.classificationEntries.map((e) => e.subClassification?.code).filter(Boolean))];
+  const codes = [...new Set(bill.classificationEntries.map((e) => e.subClassification?.code).filter(Boolean))] as string[];
   const splitMatches = Math.abs(entryTotal - bill.grossBillAmount) < 1;
   items.push({
     key: 'classification',
@@ -106,6 +108,27 @@ export async function buildAccountsChecklist(billId: string): Promise<ChecklistI
       ? 'Ties to the gross bill amount.'
       : `Does not tie to the gross bill of ${money(bill.grossBillAmount)} — difference ${money(entryTotal - bill.grossBillAmount)}.`,
     tone: splitMatches ? 'ok' : 'attention',
+  });
+
+  // 4b. Classification matches the NATURE of the work (GCC 46A.6). The classification is
+  // fixed by the tender per BoQ item — it is not a payout choice. Flag any code that does
+  // not belong to the main group the work description implies, so a bill that was collapsed
+  // onto a higher-paying single classification (or otherwise mis-classified) is caught here
+  // rather than passed. See the transparency-only rule in lib/classification-pvc.ts.
+  const requiredMain = inferMainClassification(bill.contract.workDescription || '');
+  const outOfGroup = codes.filter((c) => !String(c).startsWith(requiredMain.code));
+  const singleCollapsed = codes.length === 1 && bill.classificationEntries.length === 1;
+  const classMismatch = outOfGroup.length > 0;
+  items.push({
+    key: 'classification_nature',
+    label: 'Classification matches the work (GCC 46A.6)',
+    value: `Work implies main group ${requiredMain.code} — ${requiredMain.label}. Bill uses: ${codes.join(', ') || '—'}`,
+    note: classMismatch
+      ? `These codes are outside main group ${requiredMain.code}: ${outOfGroup.join(', ')}. Classification is fixed by the tender per item — verify against the tender, not the payout.`
+      : singleCollapsed
+        ? 'Whole bill is one classification. Confirm the tender really classifies all items this way (46A.6 is per BoQ item).'
+        : 'All codes belong to the work\'s main group.',
+    tone: classMismatch ? 'attention' : singleCollapsed ? 'attention' : 'ok',
   });
 
   // 5. Railway-supplied material, which GCC 46A excludes from W.
