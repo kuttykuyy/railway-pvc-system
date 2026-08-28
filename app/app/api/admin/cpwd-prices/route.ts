@@ -54,7 +54,7 @@ async function createTable(s: string): Promise<void> {
   );
 }
 
-async function loadedSummary(s: string): Promise<{ rows: number; regions: string[]; latestMonth: string | null }> {
+async function loadedSummary(s: string): Promise<{ rows: number; regions: string[]; latestMonth: string | null; lastRefreshed: string | null }> {
   const [{ count }] = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
     `SELECT COUNT(*) AS count FROM "${s}"."cpwd_material_prices"`,
   );
