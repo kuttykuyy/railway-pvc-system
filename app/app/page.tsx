@@ -15,13 +15,10 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Footer } from '@/components/footer';
-import { useSiteMode } from '@/components/site-mode-provider';
 
 export default function HomePage() {
   const router = useRouter();
   const { status } = useSession();
-  const siteMode = useSiteMode();
-  const brandName = siteMode === 'cpwd' ? 'CPWD-PVC' : 'IR-PVC';
   const [mounted, setMounted] = useState(false);
   const [pricing, setPricing] = useState({ billCost: 199, aiBillCost: 499 });
 
@@ -44,7 +41,7 @@ export default function HomePage() {
       <div className="flex items-center justify-center min-h-screen bg-white">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto" />
-          <p className="text-slate-500 font-medium tracking-wide">Loading {brandName}...</p>
+          <p className="text-slate-500 font-medium tracking-wide">Loading IR-PVC...</p>
         </div>
       </div>
     );

@@ -6,7 +6,6 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import { BillDetailClient } from './bill-detail-client';
-import { CpwdResultCard } from '@/components/bills/cpwd-result-card';
 import { ZoneLanguage } from '@/components/i18n/zone-language';
 import { getQuarterlyAverages } from '@/lib/db-utils';
 import { checkUserBillAccess } from '@/lib/permissions';
@@ -344,8 +343,6 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
       {/* Default the UI language from this bill's zone (Hindi-belt → Hindi), unless the
           user has explicitly chosen a language. */}
       <ZoneLanguage zone={bill.zone} />
-      {/* Renders itself only for a CPWD 10CA bill; nothing for a Railway bill. */}
-      <div className="mb-4"><CpwdResultCard billId={bill.id} /></div>
       <BillDetailClient
         bill={JSON.parse(JSON.stringify(bill))}
         user={JSON.parse(JSON.stringify(user))}

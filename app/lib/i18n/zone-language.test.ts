@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultLanguageForZone, defaultLanguageForCpwdRegion } from './zone-language';
+import { defaultLanguageForZone } from './zone-language';
 
 describe('defaultLanguageForZone', () => {
   it('defaults Hindi-belt and western/central railway zones to Hindi', () => {
@@ -18,16 +18,5 @@ describe('defaultLanguageForZone', () => {
     expect(defaultLanguageForZone(' ncr ')).toBe('hi');
     expect(defaultLanguageForZone(null)).toBe('en');
     expect(defaultLanguageForZone('')).toBe('en');
-  });
-});
-
-describe('defaultLanguageForCpwdRegion', () => {
-  it('maps Hindi-city regions to Hindi', () => {
-    expect(defaultLanguageForCpwdRegion('delhi-ncr')).toBe('hi');
-    expect(defaultLanguageForCpwdRegion('Lucknow')).toBe('hi');
-  });
-  it('maps other regions to English', () => {
-    expect(defaultLanguageForCpwdRegion('chennai')).toBe('en');
-    expect(defaultLanguageForCpwdRegion(null)).toBe('en');
   });
 });

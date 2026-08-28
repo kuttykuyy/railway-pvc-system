@@ -132,27 +132,7 @@ export async function GET(request: NextRequest) {
       console.warn(`[contracts] list capped: returned ${CONTRACT_LIST_CAP} of ${total}`);
     }
 
-    // pvcScheme lives in a raw-SQL column (not the Prisma model), so attach it here so the
-    // list can separate CPWD contracts from Railway ones. Any read error just leaves every
-    // contract as the Railway default — the list never breaks over this.
-    let contractsWithScheme: any[] = contracts;
-    try {
-      const ids = contracts.map(c => c.id);
-      if (ids.length > 0) {
-        const { schemaQualified } = await import('@/lib/db-schema');
-        const table = await schemaQualified('contracts');
-        const rows = await prisma.$queryRawUnsafe<Array<{ id: string; pvcScheme: string | null }>>(
-          `SELECT "id", "pvcScheme" FROM ${table} WHERE "id" = ANY($1::text[])`,
-          ids,
-        );
-        const schemeById = new Map(rows.map(r => [r.id, r.pvcScheme]));
-        contractsWithScheme = contracts.map(c => ({ ...c, pvcScheme: schemeById.get(c.id) || 'railway-46a' }));
-      }
-    } catch (e) {
-      console.error('[contracts] could not attach pvcScheme:', e);
-    }
-
-    return NextResponse.json(contractsWithScheme, {
+    return NextResponse.json(contracts, {
       headers: {
         'X-Total-Count': String(total),
         'X-Returned-Count': String(contracts.length),
@@ -216,11 +196,6 @@ export async function POST(request: NextRequest) {
       schedules,
       rebatePercentage,
       fuelPriceType,
-      pvcScheme,
-      cpwdRegion,
-      cpwd10ccLabour,
-      cpwd10ccMaterials,
-      cpwd10ccPol
     } = body;
 
     // Set up from an LOA, before an agreement exists: the LOA number stands in as the
@@ -374,14 +349,6 @@ export async function POST(request: NextRequest) {
     if (body.uploadedDocumentId) {
       const { linkUploadedDocument } = await import('@/lib/uploaded-documents');
       await linkUploadedDocument(body.uploadedDocumentId, { contractId: contract.id, userId: user.id });
-    }
-
-    // Pricing scheme lives in raw-SQL columns (not the Prisma model). Only write when CPWD
-    // is chosen — a Railway contract is the default and needs no row touched.
-    if (pvcScheme === 'cpwd-10ca') {
-      const { writeContractScheme, writeCpwd10ccSchedule, buildCpwd10ccSchedule } = await import('@/lib/pvc-scheme');
-      await writeContractScheme(contract.id, 'cpwd-10ca', cpwdRegion || null);
-      await writeCpwd10ccSchedule(contract.id, buildCpwd10ccSchedule(cpwd10ccLabour, cpwd10ccMaterials, cpwd10ccPol));
     }
 
     return NextResponse.json(contract);

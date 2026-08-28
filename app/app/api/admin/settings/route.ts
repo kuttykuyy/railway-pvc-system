@@ -91,12 +91,6 @@ const DEFAULT_SETTINGS = [
     value: 'false',
     description: 'PROTOTYPE. When a bill PDF has no readable text (Print-to-PDF, screenshot, or scan), read the page images with AI instead of rejecting it. The result is a draft the user must review. Off by default while accuracy and cost are measured.',
     dataType: 'boolean'
-  },
-  {
-    key: 'CPWD_10CC_THRESHOLD_MONTHS',
-    value: '12',
-    description: 'CPWD Clause 10CC applies only when a contract\'s stipulated completion period EXCEEDS this many months. Default 12 (current practice); older sources say 6 — confirm against the live CPWD GCC-2020 before relying on it. Contracts at or below this get 10CA only.',
-    dataType: 'number'
   }
 ];
 

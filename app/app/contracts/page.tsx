@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSiteMode } from '@/components/site-mode-provider';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import {
@@ -83,8 +82,6 @@ interface Contract {
   contractValue: number | null;
   tenderAdvertisedValue: number | null;
   pvcApplicable: boolean;
-  /** "railway-46a" (default) or "cpwd-10ca" — the pricing scheme. */
-  pvcScheme?: string;
 }
 
 interface Bill {
@@ -301,14 +298,6 @@ export default function ContractsPage() {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState('');
-  const siteMode = useSiteMode();
-  const [schemeFilter, setSchemeFilter] = useState<'all' | 'railway' | 'cpwd'>('all');
-  // Honour a ?scheme= link, and default to CPWD on the CPWD site (client-only; no Suspense).
-  useEffect(() => {
-    const s = new URLSearchParams(window.location.search).get('scheme');
-    if (s === 'cpwd' || s === 'railway') setSchemeFilter(s);
-    else if (siteMode === 'cpwd') setSchemeFilter('cpwd');
-  }, [siteMode]);
   const [roContractQuota, setRoContractQuota] = useState<{ applicable: boolean; contracts?: { allowed: boolean; used: number; limit: number; remaining: number } } | null>(null);
 
   const [quotaRequestSent, setQuotaRequestSent] = useState(false);
@@ -366,12 +355,6 @@ export default function ContractsPage() {
 
   const filtered = useMemo(() => {
     let list = [...contracts];
-    if (schemeFilter !== 'all') {
-      // CPWD contracts carry pvcScheme 'cpwd-10ca'; everything else is the Railway engine.
-      list = list.filter((c) =>
-        schemeFilter === 'cpwd' ? c.pvcScheme === 'cpwd-10ca' : (c.pvcScheme || 'railway-46a') !== 'cpwd-10ca'
-      );
-    }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((c) =>
@@ -398,10 +381,7 @@ export default function ContractsPage() {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
     return list;
-  }, [contracts, search, sortBy, statusFilter, schemeFilter]);
-
-  // Only offer the Railway/CPWD split when there is actually a CPWD contract to separate.
-  const hasCpwd = useMemo(() => contracts.some((c) => c.pvcScheme === 'cpwd-10ca'), [contracts]);
+  }, [contracts, search, sortBy, statusFilter]);
 
   const stats = useMemo(() => {
     const active = contracts.filter((c) => c._count.bills > 0).length;
@@ -560,27 +540,6 @@ export default function ContractsPage() {
         </div>
       )}
 
-      {/* ── Scheme tabs (only when CPWD contracts exist) ───────────────────── */}
-      {hasCpwd && (
-        <div className="mt-5 inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
-          {([
-            { key: 'all', label: 'All' },
-            { key: 'railway', label: 'Railway' },
-            { key: 'cpwd', label: 'CPWD' },
-          ] as const).map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setSchemeFilter(t.key)}
-              className={`px-4 py-1.5 text-sm font-medium rounded-md transition ${
-                schemeFilter === t.key ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* ── Search + filters ────────────────────────────────────────────── */}
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
@@ -731,11 +690,6 @@ export default function ContractsPage() {
                       </Link>
                       <StatusBadge contract={contract} />
                       <CreatedViaBadge createdVia={contract.createdVia} />
-                      {contract.pvcScheme === 'cpwd-10ca' && (
-                        <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
-                          CPWD 10CA
-                        </span>
-                      )}
                     </div>
                     <p className="mt-1 line-clamp-1 text-sm text-slate-500">{contract.workDescription}</p>
                   </div>

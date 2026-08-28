@@ -1,7 +1,6 @@
 
 'use client';
 
-import { useSiteMode } from '@/components/site-mode-provider';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +32,6 @@ interface Contract {
   agreementNo: string;
   contractorName: string;
   contractorPhone?: string | null;
-  pvcScheme?: string;
   workDescription: string;
   isExtended: boolean;
   extensionType: string | null;
@@ -192,14 +190,6 @@ export default function BillsPage() {
   const [selectedContract, setSelectedContract] = useState<string>(stored.selectedContract ?? 'all');
   const [selectedQuarter, setSelectedQuarter] = useState<string>(stored.selectedQuarter ?? 'all');
   const [indicesTypeFilter, setIndicesTypeFilter] = useState<string>(stored.indicesTypeFilter ?? 'all'); // 'all', 'provisional', 'final'
-  const siteMode = useSiteMode();
-  const [schemeFilter, setSchemeFilter] = useState<'all' | 'railway' | 'cpwd'>('all');
-  // Honour a ?scheme= link, and default to CPWD on the CPWD site (client-only; no Suspense).
-  useEffect(() => {
-    const s = new URLSearchParams(window.location.search).get('scheme');
-    if (s === 'cpwd' || s === 'railway') setSchemeFilter(s);
-    else if (siteMode === 'cpwd') setSchemeFilter('cpwd');
-  }, [siteMode]);
   const [dateFrom, setDateFrom] = useState(stored.dateFrom ?? '');
   const [dateTo, setDateTo] = useState(stored.dateTo ?? '');
   const [minAmount, setMinAmount] = useState(stored.minAmount ?? '');
@@ -266,7 +256,7 @@ export default function BillsPage() {
 
   useEffect(() => {
     applyFilters();
-  }, [bills, contracts, searchTerm, selectedContract, schemeFilter, selectedQuarter, indicesTypeFilter, dateFrom, dateTo, minAmount, maxAmount, sortBy, sortOrder]);
+  }, [bills, contracts, searchTerm, selectedContract, selectedQuarter, indicesTypeFilter, dateFrom, dateTo, minAmount, maxAmount, sortBy, sortOrder]);
 
   // Remember the filter so coming back from a bill lands on the same list.
   useEffect(() => {
@@ -537,14 +527,6 @@ export default function BillsPage() {
     // Contract filter
     if (selectedContract !== 'all') {
       filtered = filtered.filter(bill => bill.contractId === selectedContract);
-    }
-
-    // Scheme filter — separate CPWD bills from Railway ones (a bill's scheme is its
-    // contract's). pvcScheme comes from the contracts list, which carries it.
-    if (schemeFilter !== 'all') {
-      const cpwdIds = new Set(contracts.filter(c => c.pvcScheme === 'cpwd-10ca').map(c => c.id));
-      filtered = filtered.filter(bill =>
-        schemeFilter === 'cpwd' ? cpwdIds.has(bill.contractId) : !cpwdIds.has(bill.contractId));
     }
 
     // Quarter filter
@@ -1174,10 +1156,6 @@ export default function BillsPage() {
   // Get unique quarters from bills for filter dropdown
   const uniqueQuarters = Array.from(new Set(bills.map(bill => bill.quarter))).sort();
 
-  // Which contracts are on the CPWD scheme, so bills can be separated / badged.
-  const cpwdContractIds = new Set(contracts.filter(c => c.pvcScheme === 'cpwd-10ca').map(c => c.id));
-  const hasCpwd = cpwdContractIds.size > 0;
-
   if (loading) {
     return (
       <div className="space-y-6 px-4 sm:px-0 animate-pulse">
@@ -1511,34 +1489,13 @@ export default function BillsPage() {
             </div>
           </div>
 
-          {/* Scheme tabs — only when there are CPWD bills to separate. */}
-          {hasCpwd && (
-            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 mb-3">
-              {([
-                { key: 'all', label: 'All' },
-                { key: 'railway', label: 'Railway' },
-                { key: 'cpwd', label: 'CPWD' },
-              ] as const).map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setSchemeFilter(tab.key)}
-                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition ${
-                    schemeFilter === tab.key ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          )}
-
           {/* Filter Summary Banner - Clean slate style */}
           <div className="text-xs font-medium text-slate-500 bg-slate-50 border border-slate-150 p-4 rounded-xl">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <span>
                 Showing <span className="font-bold text-slate-900">{filteredBills.length}</span> of{' '}
                 <span className="font-bold text-slate-900">{bills.length}</span> bills
-                {(searchTerm || selectedContract !== 'all' || schemeFilter !== 'all' || selectedQuarter !== 'all' || indicesTypeFilter !== 'all' || dateFrom || dateTo || minAmount || maxAmount) &&
+                {(searchTerm || selectedContract !== 'all' || selectedQuarter !== 'all' || indicesTypeFilter !== 'all' || dateFrom || dateTo || minAmount || maxAmount) &&
                   ' (filtered)'
                 }
               </span>
@@ -1816,9 +1773,6 @@ export default function BillsPage() {
                       <td className="px-4 py-3 min-w-[180px] max-w-[250px]">
                         <div className="text-sm font-medium text-gray-900 truncate flex items-center gap-1.5" title={bill.contract?.agreementNo}>
                           <span className="truncate">{bill.contract?.agreementNo}</span>
-                          {cpwdContractIds.has(bill.contractId) && (
-                            <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">CPWD</span>
-                          )}
                         </div>
                         <div className="text-xs text-gray-600 truncate mt-0.5" title={bill.contract?.contractorName}>
                           {bill.contract?.contractorName}

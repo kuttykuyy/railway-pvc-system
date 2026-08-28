@@ -24,7 +24,6 @@ import {
 } from '@/lib/validation';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { useLanguage } from './i18n-provider';
-import { useSiteMode } from './site-mode-provider';
 import { normalizeSchedules, emptySchedule, type ContractSchedule } from '@/lib/contract-schedules';
 import { shortScheduleName } from '@/lib/bill-schedule-matching';
 
@@ -47,14 +46,6 @@ interface ContractFormProps {
     coveringLetterDesignation?: string;
     /** "four_city_avg" (PPAC average) or "zone_city" (the zone's own city). */
     fuelPriceType?: string;
-    /** "railway-46a" (default) or "cpwd-10ca" — which pricing engine. */
-    pvcScheme?: string;
-    /** For CPWD 10CA: which region's base-price circular applies. */
-    cpwdRegion?: string;
-    /** CPWD 10CC Schedule-E percentages (labour / other materials / POL). */
-    cpwd10ccLabour?: number;
-    cpwd10ccMaterials?: number;
-    cpwd10ccPol?: number;
     /** Legacy string[] or the newer ContractSchedule[]; both are read. */
     schedules?: unknown;
   };
@@ -74,7 +65,6 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
   // Horizontal tabs: the form is split into sections shown one at a time.
   const [activeTab, setActiveTab] = useState('basic');
   const { t, language } = useLanguage();
-  const siteMode = useSiteMode();
   const [formData, setFormData] = useState({
     agreementNo: initialData?.agreementNo || '',
     loaNo: initialData?.loaNo || '',
@@ -94,13 +84,6 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     // Which diesel price this agreement's PVC uses; bills inherit it. New contracts
     // default to the zone's own city — the basis most railways here actually direct.
     fuelPriceType: initialData?.fuelPriceType || 'zone_city',
-    // Which pricing engine. Every contract is Railway 46A unless deliberately set to CPWD.
-    pvcScheme: initialData?.pvcScheme || (siteMode === 'cpwd' ? 'cpwd-10ca' : 'railway-46a'),
-    cpwdRegion: initialData?.cpwdRegion || '',
-    // CPWD 10CC Schedule-E percentages (blank = 10CC not computed, 10CA only).
-    cpwd10ccLabour: initialData?.cpwd10ccLabour != null ? String(initialData.cpwd10ccLabour) : '',
-    cpwd10ccMaterials: initialData?.cpwd10ccMaterials != null ? String(initialData.cpwd10ccMaterials) : '',
-    cpwd10ccPol: initialData?.cpwd10ccPol != null ? String(initialData.cpwd10ccPol) : ''
   });
 
   const [schedules, setSchedules] = useState<ContractSchedule[]>(normalizeSchedules(initialData?.schedules));
@@ -480,9 +463,6 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     }
   };
 
-  // CPWD 10CA contracts don't use the Railway-specific inputs (fuel basis, the
-  // 46A.1 railway-supplied-material exclusion), so those are hidden by scheme.
-  const isCpwdScheme = formData.pvcScheme === 'cpwd-10ca';
   // Tab definitions for the horizontal section navigation.
   const TABS = [
     { id: 'basic', label: t('form.contract.basic_info'), icon: FileText, color: 'blue' },
@@ -490,8 +470,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     { id: 'timeline', label: t('form.contract.timeline'), icon: Clock, color: 'purple' },
     { id: 'schedules', label: t('form.contract.schedules'), icon: ListOrdered, color: 'violet' },
     { id: 'covering-letter', label: t('form.contract.covering_letter'), icon: Mail, color: 'teal' },
-    // The Railway-supplied-material tab (GCC 46A.1) applies only to Railway 46A contracts.
-    ...(isCpwdScheme ? [] : [{ id: 'materials', label: language === 'hi' ? 'रेलवे सामग्री' : 'Railway Materials', icon: Package, color: 'orange' }]),
+    { id: 'materials', label: language === 'hi' ? 'रेलवे सामग्री' : 'Railway Materials', icon: Package, color: 'orange' },
   ];
   const activeIndex = Math.max(0, TABS.findIndex(tb => tb.id === activeTab));
   const panelCls = (id: string) =>
@@ -740,80 +719,6 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
               </div>
             </div>
 
-            {/* Pricing scheme — which price-variation engine prices this contract. Default is
-                the Railway Clause 46A engine; CPWD 10CA is the star-rate/quantity engine. */}
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold text-slate-700">Pricing scheme</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {[
-                  { value: 'railway-46a', title: 'Indian Railways — Clause 46A', desc: 'Index-ratio on WPI/CPI, quarterly. The standard for every Railway contract.' },
-                  { value: 'cpwd-10ca', title: 'CPWD — Clause 10CA', desc: 'Star-rate: quantity of material × price movement, on CPWD monthly base prices.' },
-                ].map(opt => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, pvcScheme: opt.value }))}
-                    className={`text-left rounded-xl border px-4 py-3 transition-all ${
-                      formData.pvcScheme === opt.value
-                        ? 'border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300'
-                        : 'border-slate-200 bg-slate-50/50 hover:bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <span className={`block text-sm font-semibold ${formData.pvcScheme === opt.value ? 'text-emerald-800' : 'text-slate-700'}`}>
-                      {opt.title}
-                    </span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{opt.desc}</span>
-                  </button>
-                ))}
-              </div>
-              {formData.pvcScheme === 'cpwd-10ca' && (
-                <div className="mt-2 space-y-1.5 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
-                  <Label htmlFor="cpwdRegion" className="text-sm font-semibold text-amber-900">CPWD region</Label>
-                  <Input
-                    id="cpwdRegion"
-                    value={formData.cpwdRegion}
-                    onChange={e => setFormData(prev => ({ ...prev, cpwdRegion: e.target.value }))}
-                    placeholder="e.g. delhi-ncr"
-                    className="bg-white"
-                  />
-                  <p className="text-xs text-amber-800 leading-relaxed">
-                    Which region&apos;s CPWD monthly base-price circular applies. The base month is the
-                    tender-receipt month. Load its prices under Admin → Rates &amp; indices → CPWD 10CA prices.
-                  </p>
-
-                  <div className="pt-2 mt-2 border-t border-amber-200">
-                    <Label className="text-sm font-semibold text-amber-900">Clause 10CC — Schedule E percentages</Label>
-                    <p className="text-xs text-amber-800 mt-0.5 mb-2 leading-relaxed">
-                      Labour, other materials and POL as a % of the work value (from the tender&apos;s Schedule E).
-                      Leave blank to price 10CA materials only. 10CC runs on WPI/CPI with a 15% haircut.
-                    </p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {([
-                        { key: 'cpwd10ccLabour', label: 'Labour %' },
-                        { key: 'cpwd10ccMaterials', label: 'Materials %' },
-                        { key: 'cpwd10ccPol', label: 'POL %' },
-                      ] as const).map(f => (
-                        <div key={f.key} className="space-y-1">
-                          <Label htmlFor={f.key} className="text-xs text-amber-900">{f.label}</Label>
-                          <Input
-                            id={f.key}
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="100"
-                            value={(formData as any)[f.key]}
-                            onChange={e => setFormData(prev => ({ ...prev, [f.key]: e.target.value }))}
-                            placeholder="e.g. 25"
-                            className="bg-white"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -915,9 +820,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
             </div>
 
             {/* Fuel price basis — set once per agreement; every bill inherits it. Railways
-                differ: some direct the PPAC four-city average, others the zone's own city.
-                Railway 46A only — CPWD prices diesel through its own base-price circular. */}
-            {!isCpwdScheme && (
+                differ: some direct the PPAC four-city average, others the zone's own city. */}
             <div className="space-y-2">
               <Label className="text-sm font-semibold text-slate-700">Fuel price basis</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -946,7 +849,6 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 Chosen once for the whole agreement — new bills use it automatically, so you won&apos;t be asked per bill.
               </p>
             </div>
-            )}
 
             {/* PVC Eligibility Status */}
             {pvcEligibility && (
@@ -1198,8 +1100,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
           </div>
         </div>
 
-        {/* Railway Materials & Compliance Section — Railway 46A only (GCC 46A.1) */}
-        {!isCpwdScheme && (
+        {/* Railway Materials & Compliance Section */}
         <div className={panelCls('materials')}>
           <div className="space-y-4">
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mb-4">
@@ -1250,7 +1151,6 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
             </div>
           </div>
         </div>
-        )}
       </div>
 
       {/* Tab step navigation */}

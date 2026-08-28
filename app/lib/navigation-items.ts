@@ -21,10 +21,6 @@ export interface NavItem {
   icon: any;
   /** Admins (and superadmins) only. */
   adminOnly?: boolean;
-  /** Railway-specific — hidden on the CPWD site (cpwd.irpvc.in). */
-  railwayOnly?: boolean;
-  /** CPWD-specific — the standalone CPWD shortcuts, redundant on the CPWD site itself. */
-  cpwdShortcut?: boolean;
   /** The executive side — railway officials. */
   railwayOfficialOnly?: boolean;
   /** The accounts / audit office. */
@@ -56,14 +52,8 @@ export const WORK_ITEMS: NavItem[] = [
   { name: 'Bill Approvals', href: '/approvals', icon: CheckSquare, railwayOfficialOnly: true },
   { name: 'Accounts / Audit', href: '/accounts', icon: CheckSquare, accountsOfficialOnly: true },
   { name: 'Abstract of Bills', href: '/reports/abstract', icon: Calculator, adminOnly: false },
-  { name: 'Tendering Estimator', href: '/tendering-estimator', icon: BarChart3, adminOnly: false, railwayOnly: true },
+  { name: 'Tendering Estimator', href: '/tendering-estimator', icon: BarChart3, adminOnly: false },
   { name: 'Refer & Earn', href: '/referrals', icon: Gift, adminOnly: false },
-  // CPWD (Clause 10CA/10CC) — a distinct home for the second pricing scheme, linking to
-  // the contract and bill lists pre-filtered to CPWD. Admin-gated while CPWD is piloted;
-  // widen (drop adminOnly) once CPWD contractors are onboarded. Marked cpwdShortcut so the
-  // CPWD site itself (where everything is already CPWD) hides these as redundant.
-  { name: 'CPWD Contracts', href: '/contracts?scheme=cpwd', icon: Building2, adminOnly: true, section: 'CPWD', cpwdShortcut: true },
-  { name: 'CPWD Bills', href: '/bills?scheme=cpwd', icon: FileText, adminOnly: true, section: 'CPWD', cpwdShortcut: true },
 ];
 
 /**
@@ -74,7 +64,7 @@ export const REFERENCE_ITEMS: NavItem[] = [
   { name: 'Price Indices', href: '/indices/view', icon: LineChart, adminOnly: false },
   // The two-upload walkthrough. In the main menu for every role, so a person who is
   // stuck mid-way can find it without leaving the page they are stuck on.
-  { name: 'How it works', href: '/how-it-works', icon: PlayCircle, adminOnly: false, railwayOnly: true },
+  { name: 'How it works', href: '/how-it-works', icon: PlayCircle, adminOnly: false },
 ];
 
 /**
