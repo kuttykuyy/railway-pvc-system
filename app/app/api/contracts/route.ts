@@ -131,7 +131,28 @@ export async function GET(request: NextRequest) {
     if (total > CONTRACT_LIST_CAP) {
       console.warn(`[contracts] list capped: returned ${CONTRACT_LIST_CAP} of ${total}`);
     }
-    return NextResponse.json(contracts, {
+
+    // pvcScheme lives in a raw-SQL column (not the Prisma model), so attach it here so the
+    // list can separate CPWD contracts from Railway ones. Any read error just leaves every
+    // contract as the Railway default — the list never breaks over this.
+    let contractsWithScheme: any[] = contracts;
+    try {
+      const ids = contracts.map(c => c.id);
+      if (ids.length > 0) {
+        const { schemaQualified } = await import('@/lib/db-schema');
+        const table = await schemaQualified('contracts');
+        const rows = await prisma.$queryRawUnsafe<Array<{ id: string; pvcScheme: string | null }>>(
+          `SELECT "id", "pvcScheme" FROM ${table} WHERE "id" = ANY($1::text[])`,
+          ids,
+        );
+        const schemeById = new Map(rows.map(r => [r.id, r.pvcScheme]));
+        contractsWithScheme = contracts.map(c => ({ ...c, pvcScheme: schemeById.get(c.id) || 'railway-46a' }));
+      }
+    } catch (e) {
+      console.error('[contracts] could not attach pvcScheme:', e);
+    }
+
+    return NextResponse.json(contractsWithScheme, {
       headers: {
         'X-Total-Count': String(total),
         'X-Returned-Count': String(contracts.length),

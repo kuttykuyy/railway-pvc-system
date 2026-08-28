@@ -21,6 +21,7 @@ import { FirstBillFreeTag } from '@/components/billing/first-bill-free-tag';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { checkUserContractAccess } from '@/lib/permissions';
+import { ZoneLanguage } from '@/components/i18n/zone-language';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,6 +85,8 @@ export default async function ContractDetailPage({ params }: Props) {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+      {/* Default the UI language from this contract's zone, unless the user chose one. */}
+      <ZoneLanguage zone={administeringZone} />
 
       {/* Header: a document title with its facts, and one primary action. Six equal
           buttons beside the title used to leave the page with no obvious next step and
