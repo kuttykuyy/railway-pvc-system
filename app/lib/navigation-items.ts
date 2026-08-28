@@ -54,6 +54,11 @@ export const WORK_ITEMS: NavItem[] = [
   { name: 'Abstract of Bills', href: '/reports/abstract', icon: Calculator, adminOnly: false },
   { name: 'Tendering Estimator', href: '/tendering-estimator', icon: BarChart3, adminOnly: false },
   { name: 'Refer & Earn', href: '/referrals', icon: Gift, adminOnly: false },
+  // CPWD (Clause 10CA/10CC) — a distinct home for the second pricing scheme, linking to
+  // the contract and bill lists pre-filtered to CPWD. Admin-gated while CPWD is piloted;
+  // widen (drop adminOnly) once CPWD contractors are onboarded.
+  { name: 'CPWD Contracts', href: '/contracts?scheme=cpwd', icon: Building2, adminOnly: true, section: 'CPWD' },
+  { name: 'CPWD Bills', href: '/bills?scheme=cpwd', icon: FileText, adminOnly: true, section: 'CPWD' },
 ];
 
 /**

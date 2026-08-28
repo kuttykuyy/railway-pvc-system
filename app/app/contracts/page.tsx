@@ -301,6 +301,11 @@ export default function ContractsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState('');
   const [schemeFilter, setSchemeFilter] = useState<'all' | 'railway' | 'cpwd'>('all');
+  // Honour a ?scheme= link from the sidebar's CPWD section (client-only; no Suspense needed).
+  useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get('scheme');
+    if (s === 'cpwd' || s === 'railway') setSchemeFilter(s);
+  }, []);
   const [roContractQuota, setRoContractQuota] = useState<{ applicable: boolean; contracts?: { allowed: boolean; used: number; limit: number; remaining: number } } | null>(null);
 
   const [quotaRequestSent, setQuotaRequestSent] = useState(false);

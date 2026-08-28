@@ -192,6 +192,11 @@ export default function BillsPage() {
   const [selectedQuarter, setSelectedQuarter] = useState<string>(stored.selectedQuarter ?? 'all');
   const [indicesTypeFilter, setIndicesTypeFilter] = useState<string>(stored.indicesTypeFilter ?? 'all'); // 'all', 'provisional', 'final'
   const [schemeFilter, setSchemeFilter] = useState<'all' | 'railway' | 'cpwd'>('all');
+  // Honour a ?scheme= link from the sidebar's CPWD section (client-only; no Suspense needed).
+  useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get('scheme');
+    if (s === 'cpwd' || s === 'railway') setSchemeFilter(s);
+  }, []);
   const [dateFrom, setDateFrom] = useState(stored.dateFrom ?? '');
   const [dateTo, setDateTo] = useState(stored.dateTo ?? '');
   const [minAmount, setMinAmount] = useState(stored.minAmount ?? '');
