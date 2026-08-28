@@ -123,15 +123,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'fetch-nsr') {
-      // Auto-import the monthly history NSRCivil aggregates from the CPWD circulars.
-      const { fetchCpwd10caFromNsr } = await import('@/lib/cpwd-price-fetcher');
-      const rows = await fetchCpwd10caFromNsr();
-      const written = await upsertRows(s, rows as any);
-      const months = Array.from(new Set(rows.map(r => r.month))).sort();
+      // Same shared importer the scheduled cron uses, so button and cron never diverge.
+      const { importCpwd10caFromNsr } = await import('@/lib/cpwd-price-import');
+      const r = await importCpwd10caFromNsr();
       return NextResponse.json({
-        written,
+        written: r.written,
         loaded: await loadedSummary(s),
-        message: `Imported ${written} rows across ${months.length} months (${months[0]} → ${months[months.length - 1]}) from NSRCivil. Verify against the official CPWD circular before a real claim.`,
+        message: `Imported ${r.written} rows across ${r.months} months (latest ${r.latestMonth})`
+          + (r.newMonths.length ? `, ${r.newMonths.length} new` : '')
+          + '. Verify against the official CPWD circular before a real claim.',
       });
     }
 

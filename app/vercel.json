@@ -5,6 +5,10 @@
       "schedule": "0 5 * * *"
     },
     {
+      "path": "/api/cron/cpwd-prices-import",
+      "schedule": "0 5 * * 1"
+    },
+    {
       "path": "/api/cron/labour-import",
       "schedule": "15 5 * * *"
     },
