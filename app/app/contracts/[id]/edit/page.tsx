@@ -6,6 +6,8 @@ import { prisma } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import ContractForm from '@/components/contract-form';
 import { format } from 'date-fns';
+import { getAdministeringZone } from '@/lib/jurisdiction';
+import { ZoneLanguage } from '@/components/i18n/zone-language';
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,7 @@ export default async function EditContractPage({ params }: EditContractPageProps
   const { readContractScheme, readCpwd10ccSchedule } = await import('@/lib/pvc-scheme');
   const { scheme: pvcScheme, region: cpwdRegion } = await readContractScheme(id);
   const schedule10cc = await readCpwd10ccSchedule(id);
+  const zone = await getAdministeringZone(id);
 
   const formData = {
     agreementNo: contract.agreementNo,
@@ -53,6 +56,8 @@ export default async function EditContractPage({ params }: EditContractPageProps
 
   return (
     <div className="space-y-6">
+      {/* Default the form's language from this contract's zone (Hindi-belt → Hindi). */}
+      <ZoneLanguage zone={zone} />
       <div className="flex items-center gap-4">
         <BackButton href={`/contracts/${contract.id}`} label="Back to Contract" variant="outline" />
         <div>

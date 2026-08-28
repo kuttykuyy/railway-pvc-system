@@ -51,6 +51,7 @@ import { InsufficientCreditDialog } from '@/components/ui/insufficient-credit-di
 import { BillPdfCementAnalyzer, type AppliedExtractionContext, type CementAnalysisData, type ExtractedBillItem } from '@/components/bills/bill-pdf-cement-analyzer';
 import { AddExtensionDialog, type ExtensionRequired } from '@/components/contracts/add-extension-dialog';
 import { useLanguage } from '@/components/i18n-provider';
+import { defaultLanguageForZone } from '@/lib/i18n/zone-language';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { scheduleNames, normalizeSchedules } from '@/lib/contract-schedules';
 import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr-cement-calculator';
@@ -152,7 +153,7 @@ function classificationEntryKey(entry: ClassificationEntry): string {
 function NewBillPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { t, language } = useLanguage();
+  const { t, language, setLanguageAuto } = useLanguage();
   const preselectedContractId = searchParams?.get('contractId');
 
   /**
@@ -345,6 +346,13 @@ function NewBillPageContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedContract?.agreementNo, formData.zone]);
+
+  // Default the form language from the bill's zone (Hindi-belt → Hindi), unless the user
+  // has explicitly chosen a language.
+  useEffect(() => {
+    if (formData.zone) setLanguageAuto(defaultLanguageForZone(formData.zone));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.zone]);
 
   useEffect(() => {
     selectedContractIdRef.current = formData.contractId || '';
