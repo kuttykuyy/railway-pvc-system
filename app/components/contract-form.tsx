@@ -480,6 +480,9 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     }
   };
 
+  // CPWD 10CA contracts don't use the Railway-specific inputs (fuel basis, the
+  // 46A.1 railway-supplied-material exclusion), so those are hidden by scheme.
+  const isCpwdScheme = formData.pvcScheme === 'cpwd-10ca';
   // Tab definitions for the horizontal section navigation.
   const TABS = [
     { id: 'basic', label: t('form.contract.basic_info'), icon: FileText, color: 'blue' },
@@ -487,7 +490,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     { id: 'timeline', label: t('form.contract.timeline'), icon: Clock, color: 'purple' },
     { id: 'schedules', label: t('form.contract.schedules'), icon: ListOrdered, color: 'violet' },
     { id: 'covering-letter', label: t('form.contract.covering_letter'), icon: Mail, color: 'teal' },
-    { id: 'materials', label: language === 'hi' ? 'रेलवे सामग्री' : 'Railway Materials', icon: Package, color: 'orange' },
+    // The Railway-supplied-material tab (GCC 46A.1) applies only to Railway 46A contracts.
+    ...(isCpwdScheme ? [] : [{ id: 'materials', label: language === 'hi' ? 'रेलवे सामग्री' : 'Railway Materials', icon: Package, color: 'orange' }]),
   ];
   const activeIndex = Math.max(0, TABS.findIndex(tb => tb.id === activeTab));
   const panelCls = (id: string) =>
@@ -911,7 +915,9 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
             </div>
 
             {/* Fuel price basis — set once per agreement; every bill inherits it. Railways
-                differ: some direct the PPAC four-city average, others the zone's own city. */}
+                differ: some direct the PPAC four-city average, others the zone's own city.
+                Railway 46A only — CPWD prices diesel through its own base-price circular. */}
+            {!isCpwdScheme && (
             <div className="space-y-2">
               <Label className="text-sm font-semibold text-slate-700">Fuel price basis</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -940,6 +946,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
                 Chosen once for the whole agreement — new bills use it automatically, so you won&apos;t be asked per bill.
               </p>
             </div>
+            )}
 
             {/* PVC Eligibility Status */}
             {pvcEligibility && (
@@ -1191,7 +1198,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
           </div>
         </div>
 
-        {/* Railway Materials & Compliance Section */}
+        {/* Railway Materials & Compliance Section — Railway 46A only (GCC 46A.1) */}
+        {!isCpwdScheme && (
         <div className={panelCls('materials')}>
           <div className="space-y-4">
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 mb-4">
@@ -1242,6 +1250,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Tab step navigation */}
