@@ -22,7 +22,28 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
-export const metadata: Metadata = {
+// The CPWD subdomain serves the same app; its browser-tab title, SEO and share
+// cards must read CPWD, not "Indian Railway". Only the brand-facing strings change —
+// everything structural (icons, canonical, robots, verification) is shared.
+export async function generateMetadata(): Promise<Metadata> {
+  const siteMode = siteModeFromHost((await headers()).get('host'));
+  const isCpwd = siteMode === 'cpwd';
+
+  const brand = isCpwd ? 'CPWD-PVC' : 'IR-PVC';
+  const titleDefault = isCpwd
+    ? 'CPWD-PVC - CPWD Price Variation Calculator (Clause 10CA & 10CC)'
+    : 'IR-PVC - Indian Railway Price Variation Clause Calculator | irpvc.in';
+  const ogTitle = isCpwd
+    ? 'CPWD-PVC - CPWD Price Variation Calculator (Clause 10CA & 10CC)'
+    : 'IR-PVC - Indian Railway Price Variation Clause Calculator';
+  const description = isCpwd
+    ? 'Price Variation Clause calculator for CPWD works contracts. Compute Clause 10CA (materials) and 10CC (labour/POL) escalation, track CPWD star rates and indices, and generate compliant statements.'
+    : 'Complete PVC (Price Variation Clause) calculation system for Indian Railway contracts. Automate bill generation, track price indices, manage contracts, and generate compliant reports as per GCC norms. Trusted by railway contractors across India.';
+  const ogDescription = isCpwd
+    ? 'Compute CPWD Clause 10CA & 10CC price variation, track star rates and indices, and generate compliant statements.'
+    : 'Automate PVC calculations for Indian Railway contracts. Manage bills, track indices, and generate GCC-compliant reports. Trusted by railway contractors across India.';
+
+  return {
   // www: the bare domain 307-redirects here, so canonical and Open Graph URLs built
   // from this base must name the address that actually serves the page.
   metadataBase: new URL('https://www.irpvc.in'),
@@ -31,11 +52,22 @@ export const metadata: Metadata = {
   // addresses for one page and nothing from us saying which to keep.
   alternates: { canonical: './' },
   title: {
-    default: 'IR-PVC - Indian Railway Price Variation Clause Calculator | irpvc.in',
-    template: '%s | IR-PVC'
+    default: titleDefault,
+    template: `%s | ${brand}`
   },
-  description: 'Complete PVC (Price Variation Clause) calculation system for Indian Railway contracts. Automate bill generation, track price indices, manage contracts, and generate compliant reports as per GCC norms. Trusted by railway contractors across India.',
-  keywords: [
+  description,
+  keywords: isCpwd ? [
+    'CPWD PVC Calculator',
+    'CPWD Price Variation Clause',
+    'Clause 10CA Calculator',
+    'Clause 10CC Calculator',
+    'CPWD Star Rate Escalation',
+    'CPWD Works Contract Management',
+    'Price Adjustment Calculator India',
+    'CPWD-PVC System',
+    'Automated PVC Calculator',
+    'Construction Price Variation India',
+  ] : [
     'Indian Railway PVC Calculator',
     'Price Variation Clause India',
     'Railway Contract Management System',
@@ -56,9 +88,9 @@ export const metadata: Metadata = {
   authors: [{ name: 'Southern Railway Contractors Association - Tiruchirappalli Division' }],
   creator: 'Southern Railway Contractors Association - Tiruchirappalli Division',
   publisher: 'Southern Railway Contractors Association - Tiruchirappalli Division',
-  applicationName: 'IR-PVC',
+  applicationName: brand,
   category: 'Business Software',
-  classification: 'Railway Contract Management',
+  classification: isCpwd ? 'CPWD Contract Management' : 'Railway Contract Management',
   robots: {
     index: true,
     follow: true,
@@ -73,23 +105,23 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_IN',
-    url: 'https://irpvc.in',
-    title: 'IR-PVC - Indian Railway Price Variation Clause Calculator',
-    description: 'Automate PVC calculations for Indian Railway contracts. Manage bills, track indices, and generate GCC-compliant reports. Trusted by railway contractors across India.',
-    siteName: 'IR-PVC',
+    url: isCpwd ? 'https://cpwd.irpvc.in' : 'https://irpvc.in',
+    title: ogTitle,
+    description: ogDescription,
+    siteName: brand,
     images: [
       {
         url: 'https://irpvc.in/icons/icon-512x512.png',
         width: 512,
         height: 512,
-        alt: 'IR-PVC - Railway PVC Calculator System',
+        alt: isCpwd ? 'CPWD-PVC - CPWD PVC Calculator System' : 'IR-PVC - Railway PVC Calculator System',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'IR-PVC - Indian Railway Price Variation Clause Calculator',
-    description: 'Automate PVC calculations for Indian Railway contracts. Manage bills, track indices, and generate GCC-compliant reports.',
+    title: ogTitle,
+    description: ogDescription,
     images: ['https://irpvc.in/icons/icon-512x512.png'],
     creator: '@irpvc',
     site: '@irpvc',
@@ -98,7 +130,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'IR-PVC',
+    title: brand,
   },
   formatDetection: {
     telephone: false,
@@ -122,13 +154,14 @@ export const metadata: Metadata = {
     'mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-status-bar-style': 'default',
-    'apple-mobile-web-app-title': 'Railway PVC',
-    'application-name': 'Railway PVC',
+    'apple-mobile-web-app-title': brand,
+    'application-name': brand,
     'msapplication-TileColor': '#059669',
     'msapplication-TileImage': '/icons/icon-144x144.png',
     'theme-color': '#059669',
   },
-};
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: '#059669',
