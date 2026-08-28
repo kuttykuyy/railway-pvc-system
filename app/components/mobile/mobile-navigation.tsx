@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getClientRoleInfo } from '@/lib/role-auth-client';
+import { useSiteMode } from '@/components/site-mode-provider';
 import { WORK_ITEMS, REFERENCE_ITEMS, ACCOUNT_ITEMS, ADMIN_ITEMS, QUICK_ACTIONS } from '@/lib/navigation-items';
 import { useLanguage } from '../i18n-provider';
 
@@ -59,6 +60,8 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
   
   const { isAdmin, isRailwayOfficial, isAccountsOfficial, role } = getClientRoleInfo(session);
   const { language, setLanguage, t } = useLanguage();
+  const siteMode = useSiteMode();
+  const brandName = siteMode === 'cpwd' ? 'CPWD-PVC' : 'IR-PVC';
   
   // Get role display label
   const getRoleLabel = (role: string) => {
@@ -125,6 +128,8 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
       if ((item as any).adminOnly && !isAdmin) return false;
       if ((item as any).railwayOfficialOnly && !isRailwayOfficial) return false;
       if ((item as any).accountsOfficialOnly && !isAccountsOfficial) return false;
+      // On the CPWD site, hide Railway-only screens and the redundant CPWD shortcuts.
+      if (siteMode === 'cpwd' && ((item as any).railwayOnly || (item as any).cpwdShortcut)) return false;
       return true;
     })
   })).filter(section => section.items.length > 0);
@@ -149,7 +154,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
       <SheetHeader className="px-6 py-5 bg-gradient-to-br from-emerald-600 to-emerald-700 text-white">
         <div className="flex items-center justify-between">
           <SheetTitle className="text-left text-white text-xl font-bold">
-            IR-PVC
+            {brandName}
           </SheetTitle>
           <div className="flex items-center space-x-1 bg-white/10 rounded-lg p-0.5 border border-white/20">
             <button
@@ -296,7 +301,7 @@ export default function MobileNavigation({ asSheet = false }: MobileNavigationPr
             <Link href={session?.user ? '/dashboard' : '/'} className="flex items-center space-x-2">
               <img src="/logo.png" alt="IR-PVC logo" className="h-8 w-auto object-contain" />
               <h1 className="text-lg font-bold bg-gradient-to-r from-emerald-600 to-emerald-800 bg-clip-text text-transparent">
-                IR-PVC
+                {brandName}
               </h1>
             </Link>
           </div>

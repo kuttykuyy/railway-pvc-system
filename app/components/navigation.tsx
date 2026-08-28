@@ -16,6 +16,7 @@ import {
 import { RazorpayTopupDialog } from '@/components/ui/razorpay-topup-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { getClientRoleInfo } from '@/lib/role-auth-client';
+import { useSiteMode } from '@/components/site-mode-provider';
 import { useLanguage } from './i18n-provider';
 import { 
   Building2,
@@ -128,6 +129,8 @@ export default function Navigation() {
 
   // Get user role information
   const { isAdmin, isRailwayOfficial, isAccountsOfficial, role } = getClientRoleInfo(session);
+  const siteMode = useSiteMode();
+  const brandName = siteMode === 'cpwd' ? 'CPWD-PVC' : 'IR-PVC';
 
   // Fetch credit balance and static billing settings
   useEffect(() => {
@@ -199,6 +202,10 @@ export default function Navigation() {
   };
   
   // Filter standalone navigation items based on user role
+  // On the CPWD site, hide Railway-only screens and the redundant CPWD shortcuts.
+  const hiddenForMode = (item: any): boolean =>
+    siteMode === 'cpwd' && (item.railwayOnly || item.cpwdShortcut);
+
   const filteredStandaloneItems = useMemo(() => {
     return standaloneNavItems.filter(item => {
       // Admin-only items
@@ -206,9 +213,10 @@ export default function Navigation() {
       // Railway official-only items
       if ((item as any).railwayOfficialOnly && !isRailwayOfficial) return false;
       if ((item as any).accountsOfficialOnly && !isAccountsOfficial) return false;
+      if (hiddenForMode(item)) return false;
       return true;
     });
-  }, [isAdmin, isRailwayOfficial, isAccountsOfficial]);
+  }, [isAdmin, isRailwayOfficial, isAccountsOfficial, siteMode]);
 
   // Filter navigation groups and items based on user role
   const filteredNavGroups = useMemo(() => {
@@ -220,10 +228,11 @@ export default function Navigation() {
         // Railway official-only items
         if ((item as any).railwayOfficialOnly && !isRailwayOfficial) return false;
       if ((item as any).accountsOfficialOnly && !isAccountsOfficial) return false;
+        if (hiddenForMode(item)) return false;
         return true;
       })
     })).filter(group => group.items.length > 0);
-  }, [isAdmin, isRailwayOfficial, isAccountsOfficial]);
+  }, [isAdmin, isRailwayOfficial, isAccountsOfficial, siteMode]);
 
   // Helper function to check if current path is in group
   const isGroupActive = (group: typeof navigationGroups[0]) => {
@@ -247,11 +256,11 @@ export default function Navigation() {
             />
             <div className="flex flex-col">
               <span className="text-lg sm:text-xl font-bold text-emerald-600 hidden sm:block leading-tight tracking-tight">
-                IR-PVC
+                {brandName}
               </span>
 
               <span className="text-sm font-bold text-emerald-600 block sm:hidden">
-                IR-PVC
+                {brandName}
               </span>
             </div>
           </Link>
