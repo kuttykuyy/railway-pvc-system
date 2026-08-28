@@ -1,6 +1,7 @@
 
 'use client';
 
+import { useSiteMode } from '@/components/site-mode-provider';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -191,12 +192,14 @@ export default function BillsPage() {
   const [selectedContract, setSelectedContract] = useState<string>(stored.selectedContract ?? 'all');
   const [selectedQuarter, setSelectedQuarter] = useState<string>(stored.selectedQuarter ?? 'all');
   const [indicesTypeFilter, setIndicesTypeFilter] = useState<string>(stored.indicesTypeFilter ?? 'all'); // 'all', 'provisional', 'final'
+  const siteMode = useSiteMode();
   const [schemeFilter, setSchemeFilter] = useState<'all' | 'railway' | 'cpwd'>('all');
-  // Honour a ?scheme= link from the sidebar's CPWD section (client-only; no Suspense needed).
+  // Honour a ?scheme= link, and default to CPWD on the CPWD site (client-only; no Suspense).
   useEffect(() => {
     const s = new URLSearchParams(window.location.search).get('scheme');
     if (s === 'cpwd' || s === 'railway') setSchemeFilter(s);
-  }, []);
+    else if (siteMode === 'cpwd') setSchemeFilter('cpwd');
+  }, [siteMode]);
   const [dateFrom, setDateFrom] = useState(stored.dateFrom ?? '');
   const [dateTo, setDateTo] = useState(stored.dateTo ?? '');
   const [minAmount, setMinAmount] = useState(stored.minAmount ?? '');

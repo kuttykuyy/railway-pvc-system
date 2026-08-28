@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSiteMode } from '@/components/site-mode-provider';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import {
@@ -300,12 +301,14 @@ export default function ContractsPage() {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState('');
+  const siteMode = useSiteMode();
   const [schemeFilter, setSchemeFilter] = useState<'all' | 'railway' | 'cpwd'>('all');
-  // Honour a ?scheme= link from the sidebar's CPWD section (client-only; no Suspense needed).
+  // Honour a ?scheme= link, and default to CPWD on the CPWD site (client-only; no Suspense).
   useEffect(() => {
     const s = new URLSearchParams(window.location.search).get('scheme');
     if (s === 'cpwd' || s === 'railway') setSchemeFilter(s);
-  }, []);
+    else if (siteMode === 'cpwd') setSchemeFilter('cpwd');
+  }, [siteMode]);
   const [roContractQuota, setRoContractQuota] = useState<{ applicable: boolean; contracts?: { allowed: boolean; used: number; limit: number; remaining: number } } | null>(null);
 
   const [quotaRequestSent, setQuotaRequestSent] = useState(false);

@@ -10,6 +10,8 @@ import ErrorBoundary from '@/components/error-boundary';
 import ChunkErrorHandler from '@/components/chunk-error-handler';
 import { SessionTimeoutWarning } from '@/components/session-timeout-warning';
 import StructuredData from '@/components/structured-data';
+import { headers } from 'next/headers';
+import { siteModeFromHost } from '@/lib/site-mode';
 import LayoutWrapper from '@/components/layout-wrapper';
 import Script from 'next/script';
 
@@ -137,11 +139,13 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // The CPWD subdomain (cpwd.irpvc.in) serves the same app in CPWD mode.
+  const siteMode = siteModeFromHost((await headers()).get('host'));
   return (
     <html lang="en">
       <head>
@@ -155,7 +159,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <ErrorBoundary>
-          <Providers>
+          <Providers siteMode={siteMode}>
             <ThemeProvider
               attribute="class"
               defaultTheme="light"

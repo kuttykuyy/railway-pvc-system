@@ -24,6 +24,7 @@ import {
 } from '@/lib/validation';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { useLanguage } from './i18n-provider';
+import { useSiteMode } from './site-mode-provider';
 import { normalizeSchedules, emptySchedule, type ContractSchedule } from '@/lib/contract-schedules';
 import { shortScheduleName } from '@/lib/bill-schedule-matching';
 
@@ -73,6 +74,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
   // Horizontal tabs: the form is split into sections shown one at a time.
   const [activeTab, setActiveTab] = useState('basic');
   const { t, language } = useLanguage();
+  const siteMode = useSiteMode();
   const [formData, setFormData] = useState({
     agreementNo: initialData?.agreementNo || '',
     loaNo: initialData?.loaNo || '',
@@ -93,7 +95,7 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
     // default to the zone's own city — the basis most railways here actually direct.
     fuelPriceType: initialData?.fuelPriceType || 'zone_city',
     // Which pricing engine. Every contract is Railway 46A unless deliberately set to CPWD.
-    pvcScheme: initialData?.pvcScheme || 'railway-46a',
+    pvcScheme: initialData?.pvcScheme || (siteMode === 'cpwd' ? 'cpwd-10ca' : 'railway-46a'),
     cpwdRegion: initialData?.cpwdRegion || '',
     // CPWD 10CC Schedule-E percentages (blank = 10CC not computed, 10CA only).
     cpwd10ccLabour: initialData?.cpwd10ccLabour != null ? String(initialData.cpwd10ccLabour) : '',

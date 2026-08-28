@@ -163,6 +163,36 @@ export const authOptions: NextAuthOptions = {
     maxAge: 3 * 24 * 60 * 60, // 3 days
     updateAge: 24 * 60 * 60, // refresh at most once per day
   },
+  // Shared login across subdomains (irpvc.in + cpwd.irpvc.in). OPT-IN via COOKIE_DOMAIN
+  // (set it to ".irpvc.in" in production): the auth cookies are then scoped to the parent
+  // domain so a session on one host is recognised on the other. Left unset, NextAuth's
+  // host-only defaults apply and NOTHING changes — so deploying this is safe on its own.
+  // NOTE: turning it on re-scopes the cookies, so existing users sign in once more.
+  ...(process.env.COOKIE_DOMAIN
+    ? {
+        cookies: {
+          sessionToken: {
+            name: process.env.NODE_ENV === 'production' ? '__Secure-next-auth.session-token' : 'next-auth.session-token',
+            options: {
+              httpOnly: true,
+              sameSite: 'lax' as const,
+              path: '/',
+              secure: process.env.NODE_ENV === 'production',
+              domain: process.env.COOKIE_DOMAIN,
+            },
+          },
+          callbackUrl: {
+            name: process.env.NODE_ENV === 'production' ? '__Secure-next-auth.callback-url' : 'next-auth.callback-url',
+            options: { sameSite: 'lax' as const, path: '/', secure: process.env.NODE_ENV === 'production', domain: process.env.COOKIE_DOMAIN },
+          },
+          csrfToken: {
+            // __Host- forbids a Domain, so use the plain name when sharing across subdomains.
+            name: 'next-auth.csrf-token',
+            options: { httpOnly: true, sameSite: 'lax' as const, path: '/', secure: process.env.NODE_ENV === 'production', domain: process.env.COOKIE_DOMAIN },
+          },
+        },
+      }
+    : {}),
   callbacks: {
     async signIn({ user, account, profile }) {
       // Check email verification for credentials provider
