@@ -155,12 +155,12 @@ export default function CpwdPricesPage() {
 
           {/* Browse the loaded prices — one row per month, newest first. */}
           {status.ready && (status.rows?.length || 0) > 0 && (() => {
-            // Pivot rows into region+month → material → price.
-            const byKey = new Map<string, Record<string, number>>();
+            // Pivot rows into region+month → material → { price, aipi }.
+            const byKey = new Map<string, Record<string, { price: number; aipi: number | null }>>();
             for (const r of status.rows!) {
               const k = `${r.region}|${r.month}`;
               const cur = byKey.get(k) || {};
-              cur[r.material] = r.price;
+              cur[r.material] = { price: r.price, aipi: r.aipi };
               byKey.set(k, cur);
             }
             const keys = Array.from(byKey.keys());
@@ -177,7 +177,7 @@ export default function CpwdPricesPage() {
                         <tr>
                           <th className="px-3 py-2 font-medium">Region</th>
                           <th className="px-3 py-2 font-medium">Month</th>
-                          {MATERIALS.map(m => <th key={m.key} className="px-3 py-2 font-medium text-right whitespace-nowrap">{m.label}</th>)}
+                          {MATERIALS.map(m => <th key={m.key} className="px-3 py-2 font-medium text-right whitespace-nowrap">{m.label} <span className="font-normal text-slate-400">₹ · AIPI</span></th>)}
                         </tr>
                       </thead>
                       <tbody className="divide-y">
@@ -188,11 +188,19 @@ export default function CpwdPricesPage() {
                             <tr key={k}>
                               <td className="px-3 py-1.5 text-slate-500 uppercase">{region}</td>
                               <td className="px-3 py-1.5 font-medium text-slate-700">{month}</td>
-                              {MATERIALS.map(m => (
-                                <td key={m.key} className="px-3 py-1.5 text-right text-slate-600">
-                                  {cells[m.key] != null ? `₹${cells[m.key].toLocaleString('en-IN')}` : '—'}
-                                </td>
-                              ))}
+                              {MATERIALS.map(m => {
+                                const c = cells[m.key];
+                                return (
+                                  <td key={m.key} className="px-3 py-1.5 text-right text-slate-600 whitespace-nowrap">
+                                    {c ? (
+                                      <>
+                                        ₹{c.price.toLocaleString('en-IN')}
+                                        <span className="ml-1 text-xs text-slate-400">{c.aipi != null ? c.aipi.toFixed(2) : '—'}</span>
+                                      </>
+                                    ) : '—'}
+                                  </td>
+                                );
+                              })}
                             </tr>
                           );
                         })}
