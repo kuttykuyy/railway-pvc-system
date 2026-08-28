@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
         extensionType: true,
         originalCompletionDate: true,
         userId: true,
+        workDescription: true,
       },
     });
     if (!contract) return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
@@ -155,10 +156,57 @@ export async function POST(request: NextRequest) {
     const isFirstBill = isFreeTrial;
     const billCost = isFreeRole ? 0 : isFreeTrial ? 0 : fullCost;
 
+    // Single-classification comparison (TRANSPARENCY / what-if — NOT the tender method).
+    // The per-item split above is the GCC-2022 46A.6 method (classification fixed per BoQ
+    // item by the tender). Here we also show: if the WHOLE billed amount were priced under
+    // ONE classification, which sub-category of the work's main group would pay most? Shown
+    // so the user can see the gap; it never auto-applies. See lib/classification-pvc.ts.
+    let singleClassification: any = null;
+    try {
+      const wholeAmount = classificationEntries.reduce(
+        (sum: number, e: any) => sum + (parseFloat(e.amount) > 0 ? parseFloat(e.amount) : 0), 0,
+      );
+      if (wholeAmount > 0) {
+        const { inferMainClassification } = await import('@/lib/work-classification');
+        const { calculateDynamicClassificationPvc } = await import('@/lib/pvc-calculations');
+        const main = inferMainClassification(contract.workDescription || '');
+        const candidates = await prisma.subClassification.findMany({
+          where: { isActive: true, code: { startsWith: main.code } },
+          select: {
+            id: true, code: true, name: true, groupId: true,
+            fixed: true, labour: true, steel: true, cement: true,
+            plantMachinery: true, fuel: true, otherMaterials: true, explosives: true,
+          },
+          orderBy: { code: 'asc' },
+        });
+        const scored = [] as Array<any>;
+        for (const c of candidates) {
+          const pvc = await calculateDynamicClassificationPvc(wholeAmount, quarterlyAverages, c.code, extractedSteelTypes);
+          if (!pvc.isProcessingFee) {
+            scored.push({ ...c, totalPvc: pvc.totalPvc });
+          }
+        }
+        scored.sort((a, b) => b.totalPvc - a.totalPvc);
+        if (scored.length > 0) {
+          singleClassification = {
+            mainCode: main.code,
+            mainLabel: main.label,
+            wholeAmount,
+            currentTotalPvc: totalPvc,        // the per-item (compliant) total, for the UI
+            best: scored[0],
+            all: scored,
+          };
+        }
+      }
+    } catch (cmpErr) {
+      console.error('Single-classification comparison failed (non-fatal):', cmpErr);
+    }
+
     return NextResponse.json({
       quarter,
       isProvisional,
       totalPvc,
+      singleClassification,
       cumulativePvc: previousCumulativePvc + totalPvc,
       previousCumulativePvc,
       components: { labourPvc, plantPvc, fuelPvc, materialsPvc, cementPvc, steelPvc, explosivesPvc },

@@ -1263,6 +1263,35 @@ function NewBillPageContent() {
     await handleSubmit();
   };
 
+  // Comparison "what-if": collapse the whole bill onto ONE classification (the chosen
+  // sub-category), replacing the per-item split. This is NOT the tender-compliant method
+  // (46A.6 fixes classification per BoQ item), so it's a deliberate user choice — we close
+  // the preview and drop them back on the form with a single entry to review before saving.
+  const applySingleClassification = (sc: any) => {
+    if (!sc?.id) return;
+    const wholeAmount = previewResult?.singleClassification?.wholeAmount
+      ?? classificationEntries.reduce((sum, e) => {
+        const amt = e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount;
+        return sum + amt;
+      }, 0);
+    const singleEntry: ClassificationEntry = {
+      subClassificationId: sc.id,
+      subClassification: {
+        id: sc.id, code: sc.code, name: sc.name, groupId: sc.groupId,
+        fixed: sc.fixed, labour: sc.labour, steel: sc.steel, cement: sc.cement,
+        plantMachinery: sc.plantMachinery, fuel: sc.fuel,
+        otherMaterials: sc.otherMaterials, explosives: sc.explosives,
+      },
+      amount: wholeAmount,
+      description: `Whole bill under ${sc.code}`,
+      manualClassification: true,
+    };
+    setClassificationEntries([singleEntry]);
+    setShowPreviewModal(false);
+    setPreviewResult(null);
+    toast.success(`Switched to single classification ${sc.code}. Review, then Preview/Save.`);
+  };
+
   // If the save ends without navigating away — insufficient credit, a validation
   // refusal, a server error — the cover lifts so the form can say what went wrong.
   // Success never reaches this: it redirects first.
@@ -2955,6 +2984,66 @@ function NewBillPageContent() {
                   ))}
                 </div>
               </div>
+
+              {/* Single-classification comparison (transparency / what-if) */}
+              {previewResult.singleClassification?.best && (() => {
+                const sc = previewResult.singleClassification;
+                const current = sc.currentTotalPvc ?? previewResult.totalPvc ?? 0;
+                const best = sc.best;
+                const diff = (best.totalPvc ?? 0) - current;
+                const singleHigher = diff > 0.005;
+                return (
+                  <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold text-indigo-800 uppercase tracking-wider">
+                        {language === 'hi' ? 'तुलना: एकल वर्गीकरण' : 'Compare: single classification'}
+                      </p>
+                      <span className="text-[10px] font-semibold text-indigo-500">{language === 'hi' ? 'केवल जानकारी' : 'what-if'}</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 text-sm">
+                      {/* Current per-item — the compliant method */}
+                      <div className="flex items-center justify-between px-3 py-2 bg-white rounded-lg border border-emerald-200">
+                        <div className="min-w-0">
+                          <span className="text-slate-700 font-medium">{language === 'hi' ? 'वर्तमान (प्रति-मद)' : 'Current (per-item)'}</span>
+                          <span className="ml-2 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">{language === 'hi' ? 'निविदा विधि 46A.6' : 'tender method · 46A.6'}</span>
+                        </div>
+                        <span className="font-bold text-slate-900 whitespace-nowrap">₹{current.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                      </div>
+                      {/* Best single classification — what-if */}
+                      <div className="flex items-center justify-between px-3 py-2 bg-white rounded-lg border border-indigo-200">
+                        <div className="min-w-0">
+                          <span className="text-slate-700 font-medium">{language === 'hi' ? 'एकल वर्गीकरण' : 'Single class.'} {best.code}</span>
+                          <span className="ml-1 text-xs text-slate-400 truncate">{best.name}</span>
+                        </div>
+                        <span className="font-bold text-indigo-700 whitespace-nowrap">₹{(best.totalPvc ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-600">
+                      {singleHigher
+                        ? (language === 'hi'
+                            ? `एकल वर्गीकरण ${best.code} ₹${Math.abs(diff).toLocaleString('en-IN', { maximumFractionDigits: 0 })} अधिक देता है।`
+                            : `Single classification ${best.code} gives ₹${Math.abs(diff).toLocaleString('en-IN', { maximumFractionDigits: 0 })} more.`)
+                        : (language === 'hi'
+                            ? 'वर्तमान प्रति-मद विधि अधिक या समान देती है।'
+                            : 'The current per-item method gives more or the same.')}
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                      ⚠ {language === 'hi'
+                        ? 'GCC 46A.6 के अनुसार वर्गीकरण निविदा द्वारा प्रति-मद तय होता है। एकल वर्गीकरण केवल तभी उपयोग करें जब यह वास्तव में लागू हो।'
+                        : 'Under GCC 46A.6 the classification is fixed per BoQ item by the tender. Use a single classification only if it genuinely applies to this contract.'}
+                    </p>
+                    {singleHigher && (
+                      <button
+                        type="button"
+                        onClick={() => applySingleClassification(best)}
+                        className="w-full text-sm font-semibold text-indigo-700 border border-indigo-300 rounded-lg py-2 hover:bg-indigo-100 transition-colors"
+                      >
+                        {language === 'hi' ? `पूरे बिल के लिए ${best.code} उपयोग करें` : `Use ${best.code} for the whole bill`}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* First bill pricing CTA */}
               <div className={`rounded-xl p-4 border ${previewResult.isFirstBill ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
