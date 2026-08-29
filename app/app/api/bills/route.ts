@@ -65,8 +65,12 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const contractId = searchParams.get('contractId');
         
-        // Get pagination parameters
-        const { page, limit, skip } = getPaginationParams(request);
+        // Get pagination parameters. The bills page requests ?limit=1000 and treats the
+        // response as the complete set (it filters and sorts client-side) — the shared
+        // helper's default cap of 100 silently truncated it to the 100 most-recently-
+        // MEASURED bills, so a freshly created bill with an older measurement date
+        // vanished from the list while showing on its contract page.
+        const { page, limit, skip } = getPaginationParams(request, 1000);
         
         // Who may see what, as a condition the database applies while it pages — not a
         // list of every accessible id brought into memory first. null = admin, no filter.
@@ -104,7 +108,11 @@ export async function GET(request: NextRequest) {
           prisma.bill.count({ where: billsWhere }),
           prisma.bill.findMany({
             where: billsWhere,
-            orderBy: { dateOfMeasurement: 'desc' },
+            // createdAt, not measurement date: if the set ever exceeds the page size,
+            // the newest-CREATED bills must be the ones that survive — a bill created
+            // today with an old measurement date used to fall off the page entirely.
+            // The client re-sorts however the user asks.
+            orderBy: { createdAt: 'desc' },
             skip,
             take: limit,
             include: {
