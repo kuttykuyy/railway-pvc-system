@@ -178,6 +178,10 @@ Respond in JSON format with the following structure:
 }
 
 **IMPORTANT INSTRUCTIONS**:
+- STEEL sub-classes: **…B** ("supply of Steel") is ONLY TMT/reinforcement steel supply —
+  never mild/structural steel (bolts, angles, channels, plates, rails, sections) and
+  never items that also FIX/fabricate/erect the steel; those are **…D** ("Fabrication &
+  Erection including Steel Supply"). **…E** is erection with railway-supplied steel.
 - Extract all dates in YYYY-MM-DD format
 - Extract all amounts as numbers without currency symbols or commas
 - Include all items found in the bill, even if quantity is 0

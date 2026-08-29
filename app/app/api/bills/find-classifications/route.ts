@@ -286,6 +286,20 @@ If the item is NOT a dedicated component, follow this two-stage process:
 - Match the item number to the appropriate subclassification under the identified classification
 - The subclassification should match the schedule/item number pattern
 
+**STEEL SUB-CLASSIFICATION RULE (…B vs …D vs …E) — MANDATORY**:
+- Sub-classification **B** ("Items for supply of Steel") is ONLY for TMT / reinforcement
+  steel SUPPLY (bars for RCC). NEVER use B for mild steel, structural steel, bolts,
+  holding-down bolts, angles, channels, plates, rails or sections — and NEVER when the
+  item includes fixing, fabrication or erection of the steel.
+- Sub-classification **D** ("Fabrication & Erection including Steel Supply") is for
+  NON-TMT steel: mild/structural steel items (bolts, anchor/holding-down bolts, angles,
+  channels, plates, gantry rails, sections) supplied AND fixed/fabricated/erected by the
+  contractor. "Providing and fixing mild steel …" is D, not B.
+- Sub-classification **E** ("Fabrication & Erection excluding Steel Supply") is for
+  fixing/erection where the steel is railway-supplied (free issue).
+- Never move an item between B/D/E because one pays more — the choice follows ONLY from
+  what the steel is (TMT vs other) and who supplies it.
+
 **MATCHING CRITERIA**:
 For each relevant classification:
 1. Calculate a match score (0-100) based on:
