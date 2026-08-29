@@ -69,10 +69,27 @@ export async function buildAccountsChecklist(billId: string): Promise<ChecklistI
     label: 'Base month',
     value: `${monthYear(bill.contract.baseMonth)} (tender closing ${day(bill.contract.dateOfOpening)})`,
     note: baseMatches
-      ? 'Month before the tender closing date, as GCC 46A requires.'
-      : 'Does NOT sit one month before the recorded closing date — check the tender papers.',
+      ? 'Month before the tender closing date, as GCC 46A requires. If the tender was NEGOTIATED, the base month must be the month of negotiation instead (MoR, Mar 1988) — CAG found Rs 20+ crore excess where the opening month was used after negotiation (Report 5/2021, para 3.1.5.1).'
+      : 'Does NOT sit one month before the recorded closing date — check the tender papers. If the tender was negotiated, the negotiation month governs (MoR, Mar 1988).',
     tone: baseMatches ? 'ok' : 'attention',
   });
+
+  // 1b. Extra (non-schedule) items take their OWN base month — the month the competent
+  // authority approved their operation, not the tender month (CR clarification,
+  // Dec 2013; CAG Report 5/2021 para 3.1.5.2 found excess where the tender month was
+  // used). The app prices them off the contract base month, so a bill that carries
+  // them needs the officer's eye.
+  const extraItems = Array.isArray(bill.nonScheduleItems) ? (bill.nonScheduleItems as any[]) : [];
+  if (extraItems.length > 0) {
+    const extraTotal = extraItems.reduce((sum, it: any) => sum + (Number(it?.amount) || 0), 0);
+    items.push({
+      key: 'extra_items_base',
+      label: 'Extra (non-schedule) items — base month',
+      value: `${extraItems.length} extra item(s), ${money(extraTotal)}`,
+      note: 'PVC on an extra item should use the month its operation was ADMINISTRATIVELY APPROVED as base month, not the tender month. Verify against the approval; the statement prices them off the contract base month.',
+      tone: 'attention',
+    });
+  }
 
   // 2. Quarter and measurement date.
   items.push({
@@ -162,6 +179,33 @@ export async function buildAccountsChecklist(billId: string): Promise<ChecklistI
       : 'Cannot be checked from the app; verify against the agreement.',
     tone: value === 0 ? 'attention' : value >= 20000000 ? 'ok' : 'attention',
   });
+
+  // 7b. Value of work done vs the contract value — the inflated-bill catch. CAG found
+  // Rs 9.54 crore paid on PVC bills whose gross value of work was inflated (by exactly
+  // Rs 10 crore per bill) and passed unnoticed (Report 5/2021 para 3.1.6.3, NFR). The
+  // running total of billed work materially above the agreement value is the visible
+  // symptom, so it is surfaced here rather than assumed checked.
+  try {
+    const billedAgg = await prisma.bill.aggregate({
+      where: { contractId: bill.contractId },
+      _sum: { grossBillAmount: true },
+    });
+    const billedToDate = Number(billedAgg._sum.grossBillAmount) || 0;
+    if (value > 0 && billedToDate > 0) {
+      // Variations legitimately push work beyond the agreement value; 125% is the
+      // customary vitiation threshold, so only a clear overshoot is flagged.
+      const over = billedToDate > value * 1.25;
+      items.push({
+        key: 'billed_vs_contract',
+        label: 'Work billed vs contract value',
+        value: `${money(billedToDate)} billed to date against agreement value ${money(value)}`,
+        note: over
+          ? 'Billed value exceeds 125% of the agreement value — confirm sanctioned variations cover it. CAG para 3.1.6.3 records PVC paid on inflated work values that vetting missed.'
+          : 'Within the agreement value plus the customary variation margin.',
+        tone: over ? 'attention' : 'ok',
+      });
+    }
+  } catch { /* the checklist must never fail over this */ }
 
   // 8. Cumulative carried forward from the previous bill.
   items.push({
