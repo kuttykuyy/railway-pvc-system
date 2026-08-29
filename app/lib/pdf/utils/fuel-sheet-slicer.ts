@@ -55,6 +55,16 @@ export async function sliceFuelSheetByMonths(
       (globalThis as any).ImageData = (canvas as any).ImageData;
       (globalThis as any).Path2D = (canvas as any).Path2D;
     }
+    // Pre-load the worker module by a LITERAL specifier and hand it to pdfjs, the same
+    // way lib/pdf-text-parser.ts does. Without this, pdfjs "fake worker" resolves the
+    // sibling pdf.worker.mjs with a dynamic import that Vercel's file tracing cannot
+    // see — the file is absent from the deployed function and slicing fails with
+    // "Cannot find module .../pdf.worker.mjs" on routes that don't also load the parser.
+    if (!(globalThis as any).pdfjsWorker) {
+      try {
+        (globalThis as any).pdfjsWorker = await import('pdfjs-dist/legacy/build/pdf.worker.mjs');
+      } catch { /* fall through — pdfjs will try its own resolution */ }
+    }
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const loadingTask = pdfjs.getDocument({ data: pdfBytes.slice(), useSystemFonts: true });
     const textDoc = await loadingTask.promise;
