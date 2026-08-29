@@ -135,7 +135,7 @@ export default function BulkBillCreationPage() {
   const [globalFuelPriceType, setGlobalFuelPriceType] = useState<string>('four_city_avg');
   // Per-row PVC preview, keyed by row id. The single-bill form has always been able to
   // show the PVC before saving; entering bills in bulk meant committing them unseen.
-  const [previews, setPreviews] = useState<Record<string, { totalPvc: number; quarter: string; isProvisional: boolean } | { error: string }>>({});
+  const [previews, setPreviews] = useState<Record<string, { totalPvc: number; quarter: string; isProvisional: boolean; single?: any } | { error: string }>>({});
   const [previewingRows, setPreviewingRows] = useState(false);
   // Opens the PDF analyzer's file picker from the sticky bar, so the analyzer stays the
   // single place that knows how to take a bill PDF.
@@ -302,7 +302,7 @@ export default function BulkBillCreationPage() {
           setPreviews(prev => ({
             ...prev,
             [row.id]: res.ok
-              ? { totalPvc: Number(data.totalPvc) || 0, quarter: data.quarter, isProvisional: !!data.isProvisional }
+              ? { totalPvc: Number(data.totalPvc) || 0, quarter: data.quarter, isProvisional: !!data.isProvisional, single: data.singleClassification || null }
               : { error: data.error || 'Preview failed' },
           }));
         } catch {
@@ -369,6 +369,47 @@ export default function BulkBillCreationPage() {
 
   const updateClassificationEntries = (billId: string, entries: ClassificationEntry[]) => {
     setBillRows((prev) => prev.map((row) => row.id === billId ? { ...row, classificationEntries: entries } : row));
+  };
+
+  // Rebuild ONE bill's entries grouped under a single "All items" class (from the
+  // preview comparison): general items collapse into one entry of that class, while
+  // steel (…B/…D, or steel-majority typed) and cement (…C) entries are kept untouched —
+  // the same split the comparison priced. The stale preview for the row is cleared so
+  // the shown PVC can't belong to the old entries.
+  const groupRowUnderClass = (rowId: string, best: any) => {
+    const row = billRows.find(r => r.id === rowId);
+    if (!row || !best?.id) return;
+    const allSubs = classificationGroups.flatMap(g => g.subClassifications);
+    const subOf = (e: ClassificationEntry) => allSubs.find(s => s.id === e.subClassificationId);
+    const suffixOf = (e: ClassificationEntry) => String(subOf(e)?.code || '').trim().slice(-1).toUpperCase();
+    const isSteelEntry = (e: ClassificationEntry) => {
+      const s = suffixOf(e);
+      if (s === 'B' || s === 'D') return true;
+      const types = Array.isArray(e.steelTypes) ? e.steelTypes : [];
+      return types.length > 0 && ((subOf(e) as any)?.steel ?? 0) >= 50;
+    };
+    const kept = row.classificationEntries.filter(e => isSteelEntry(e) || (suffixOf(e) === 'C' && !isSteelEntry(e)));
+    const generalAmount = row.classificationEntries
+      .filter(e => !kept.includes(e))
+      .reduce((sum, e) => sum + parseAmount(e.amount), 0);
+    if (generalAmount <= 0) {
+      toast.error('Nothing to group — every item on this bill is steel or cement supply.');
+      return;
+    }
+    const groupedEntry: ClassificationEntry = {
+      subClassificationId: best.id,
+      subClassification: {
+        id: best.id, code: best.code, name: best.name, groupId: best.groupId,
+        fixed: best.fixed, labour: best.labour, steel: best.steel, cement: best.cement,
+        plantMachinery: best.plantMachinery, fuel: best.fuel,
+        otherMaterials: best.otherMaterials, explosives: best.explosives,
+      } as any,
+      amount: generalAmount,
+      description: `General items grouped under ${best.code}`,
+    };
+    updateClassificationEntries(rowId, [groupedEntry, ...kept]);
+    setPreviews(prev => { const next = { ...prev }; delete next[rowId]; return next; });
+    toast.success(`Bill ${row.billNo || rowId}: general items grouped under ${best.code}. Preview again to see the new PVC.`);
   };
 
   const getEditingBill = () => billRows.find(row => row.id === editingBillId);
@@ -1092,6 +1133,36 @@ export default function BulkBillCreationPage() {
                           </div>
                         </div>
                       </div>
+
+                      {/* One-line comparison from the preview: item-by-item vs grouped under
+                          one class, with a per-bill Group action. Steel/cement stay separate. */}
+                      {preview && !('error' in preview) && (preview as any).single?.best && (() => {
+                        const s = (preview as any).single;
+                        const grouped = Number(s.best.total) || 0;
+                        const diff = grouped - preview.totalPvc;
+                        return (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-2 text-[11px]">
+                            <span className="text-slate-600">
+                              Grouped under <b>{s.best.code}</b>: <b className={diff > 0.005 ? 'text-indigo-700' : 'text-slate-700'}>₹{formatAmount(grouped)}</b>
+                              <span className="text-slate-400"> ({diff >= 0 ? '+' : '−'}₹{formatAmount(Math.abs(diff))} vs item-by-item)</span>
+                            </span>
+                            {(s.candidates?.length ?? 0) > 1 && (
+                              <span className="text-slate-400">tried: {s.candidates.map((c: any) => `${c.code} ₹${formatAmount(c.total)}`).join(' · ')}</span>
+                            )}
+                            {s.composite && (
+                              <span className="text-amber-700">composite work — item-by-item is the compliant method</span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => groupRowUnderClass(row.id, s.best)}
+                              disabled={isSaving}
+                              className="ml-auto rounded border border-indigo-300 px-2 py-0.5 font-semibold text-indigo-700 hover:bg-indigo-50"
+                            >
+                              Group under {s.best.code}
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}
