@@ -59,6 +59,17 @@ export interface SimpleSummaryInput {
 const inr = (v: number) =>
   `${(v ?? 0) < 0 ? '-' : ''}Rs ${Math.abs(Number(v) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+// The PDF font (standard helvetica) cannot render the Rupee sign or the Unicode minus,
+// and an un-renderable glyph makes jsPDF space the whole run out and overflow the cell.
+// Checklist text comes from the on-screen audit list (which uses ₹), so sanitise it here.
+function pdfSafe(s: unknown): string {
+  return String(s ?? '')
+    .replace(/₹/g, 'Rs ')   // ₹
+    .replace(/−/g, '-')      // − (Unicode minus)
+    .replace(/–|—/g, '-') // – — (en/em dash)
+    .replace(/[^\x00-\xff]/g, ''); // drop anything else the WinAnsi font lacks
+}
+
 function amountInWords(num: number): string {
   if (!num) return 'Zero Only';
   const neg = num < 0;
@@ -97,7 +108,7 @@ export function generateSimpleSummaryReport(input: SimpleSummaryInput): Uint8Arr
 
   // ── Header ──────────────────────────────────────────────────────────────
   pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(...ink);
-  pdf.text(input.organizationName || 'INDIAN RAILWAY', W / 2, y, { align: 'center' }); y += 6;
+  pdf.text(pdfSafe(input.organizationName) || 'INDIAN RAILWAY', W / 2, y, { align: 'center' }); y += 6;
   pdf.setFontSize(11); pdf.setTextColor(...green);
   pdf.text('Price Variation (PVC) — Plain Summary', W / 2, y, { align: 'center' }); y += 5;
   pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...grey);
@@ -114,9 +125,9 @@ export function generateSimpleSummaryReport(input: SimpleSummaryInput): Uint8Arr
   autoTable(pdf, {
     startY: y,
     body: [
-      [{ content: 'Work:', styles: { fontStyle: 'bold' as const, textColor: ink } }, { content: input.workDescription || '-', colSpan: 3 }],
-      lv('Agreement No.:', input.agreementNo || '-', 'Contractor:', input.contractorName || '-'),
-      lv('Bill No.:', input.billNo || '-', 'PVC No.:', input.pvcNumber || 'Not assigned'),
+      [{ content: 'Work:', styles: { fontStyle: 'bold' as const, textColor: ink } }, { content: pdfSafe(input.workDescription) || '-', colSpan: 3 }],
+      lv('Agreement No.:', pdfSafe(input.agreementNo) || '-', 'Contractor:', pdfSafe(input.contractorName) || '-'),
+      lv('Bill No.:', pdfSafe(input.billNo) || '-', 'PVC No.:', pdfSafe(input.pvcNumber) || 'Not assigned'),
       lv('Measured on:', format(input.dateOfMeasurement, 'dd MMM yyyy'), 'Quarter:', input.quarter || '-'),
       lv('Base month:', format(input.baseMonth, 'MMM yyyy'), 'Indices:', input.isProvisional ? 'PROVISIONAL (may change)' : 'Final'),
       lv('Bill value (W):', inr(input.billAmount), 'GST:', 'Included in the value'),
@@ -185,7 +196,7 @@ export function generateSimpleSummaryReport(input: SimpleSummaryInput): Uint8Arr
   pdf.text('What to check before passing', mL, y); y += 1.5;
   const checkBody = (input.checklist || []).map((c) => {
     const mark = c.tone === 'attention' ? 'CHECK' : c.tone === 'ok' ? 'OK' : 'i';
-    return [mark, c.label, c.value];
+    return [mark, pdfSafe(c.label), pdfSafe(c.value)];
   });
   autoTable(pdf, {
     startY: y + 2,
@@ -238,7 +249,7 @@ export function generateSimpleSummaryReport(input: SimpleSummaryInput): Uint8Arr
       startY: y2,
       head: [['Category', 'Name', 'Labour', 'Steel', 'Cement', 'Fuel', 'P&M', 'Other', 'Fixed']],
       body: classes.map((c) => [
-        c.code, c.name,
+        pdfSafe(c.code), pdfSafe(c.name),
         `${c.labour}%`, `${c.steel}%`, `${c.cement}%`, `${c.fuel}%`,
         `${c.plantMachinery}%`, `${c.otherMaterials}%`, `${c.fixed}%`,
       ]),
