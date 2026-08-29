@@ -5,6 +5,8 @@ import { prisma } from '@/lib/db';
 import { checkUserBillAccess } from '@/lib/permissions';
 import { buildAccountsChecklist } from '@/lib/accounts-checklist';
 import { generateSimpleSummaryReport } from '@/lib/pdf/generators/simple-summary-report';
+import { getQuarterlyAverages } from '@/lib/db-utils';
+import { format } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +31,16 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       where: { id },
       include: {
         pvcCalculation: true,
+        classificationEntries: {
+          include: {
+            subClassification: {
+              select: {
+                code: true, name: true, labour: true, steel: true, cement: true, fuel: true,
+                plantMachinery: true, otherMaterials: true, explosives: true, fixed: true,
+              },
+            },
+          },
+        },
         contract: {
           select: {
             agreementNo: true, contractorName: true, workDescription: true, baseMonth: true,
@@ -49,6 +61,36 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       + (pvc.dedicatedSteelTmtBarsPvc || 0) + (pvc.dedicatedSteelAngleChannelPvc || 0)
       + (pvc.dedicatedSteelPlatesPvc || 0) + (pvc.dedicatedSteelOtherSectionsPvc || 0);
     const cement = (pvc.cementPvc || 0) + (pvc.dedicatedCementPvc || 0);
+
+    // The distinct classifications used on this bill, with their fixed component %s.
+    const byCode = new Map<string, any>();
+    for (const e of bill.classificationEntries) {
+      const s = e.subClassification;
+      if (s?.code && !byCode.has(s.code)) byCode.set(s.code, s);
+    }
+    const classesUsed = [...byCode.values()].map((s) => ({
+      code: s.code, name: s.name,
+      labour: s.labour, steel: s.steel, cement: s.cement, fuel: s.fuel,
+      plantMachinery: s.plantMachinery, otherMaterials: s.otherMaterials, explosives: s.explosives, fixed: s.fixed,
+    }));
+
+    // A worked example on one real component (labour), so the method is followable once.
+    let workedExample: any = undefined;
+    try {
+      const baseMonth = new Date(bill.contract.baseMonth);
+      const [labourAvg] = await getQuarterlyAverages(bill.quarter, ['Labour'], baseMonth, 'auto');
+      if (labourAvg && labourAvg.baseValue > 0) {
+        workedExample = {
+          component: 'Labour',
+          baseMonthLabel: format(baseMonth, 'MMM yyyy'),
+          baseIndex: labourAvg.baseValue,
+          quarter: bill.quarter || '-',
+          currentIndex: labourAvg.average,
+        };
+      }
+    } catch (e) {
+      console.error('simple-report worked example failed (non-fatal):', e);
+    }
 
     const bytes = generateSimpleSummaryReport({
       organizationName: bill.contract.user?.reportHeaderText || 'INDIAN RAILWAY',
@@ -75,6 +117,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       previousCumulativePvc: pvc.previousPvcTotal || 0,
       cumulativePvc: pvc.cumulativePvc || 0,
       checklist,
+      classesUsed,
+      workedExample,
     });
 
     const safeBillNo = String(bill.billNo || id).replace(/[^A-Za-z0-9-]+/g, '_');

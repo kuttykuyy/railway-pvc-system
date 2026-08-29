@@ -40,6 +40,20 @@ export interface SimpleSummaryInput {
   cumulativePvc: number;
   /** The accounts checklist, so "what to check" reads the same as the audit screen. */
   checklist: ChecklistItem[];
+  /** The classifications actually used on this bill, with their fixed component %s. */
+  classesUsed?: Array<{
+    code: string; name: string;
+    labour: number; steel: number; cement: number; fuel: number;
+    plantMachinery: number; otherMaterials: number; explosives: number; fixed: number;
+  }>;
+  /** One component worked end-to-end, so the officer can follow the mechanism once. */
+  workedExample?: {
+    component: string;      // e.g. "Labour"
+    baseMonthLabel: string; // e.g. "Apr 2025"
+    baseIndex: number;
+    quarter: string;
+    currentIndex: number;
+  };
 }
 
 const inr = (v: number) =>
@@ -198,6 +212,86 @@ export function generateSimpleSummaryReport(input: SimpleSummaryInput): Uint8Arr
   const foot = 'This is a plain summary to help you read the claim quickly. "CHECK" marks an item to look at closely — it is not a rejection. The binding figure and the full month-by-month working are in the detailed PVC statement.';
   const footLines = pdf.splitTextToSize(foot, cW);
   pdf.text(footLines, mL, y);
+  pdf.setFontSize(7); pdf.setTextColor(...grey); pdf.setFont('helvetica', 'normal');
+  pdf.text('See page 2 for how the classification and the calculation work.', W / 2, 292, { align: 'center' });
+
+  // ═══════════════════ PAGE 2 — HOW IT WORKS ═══════════════════════════════
+  pdf.addPage();
+  let y2 = 16;
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(...ink);
+  pdf.text('How the classification and calculation work', W / 2, y2, { align: 'center' }); y2 += 5;
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...grey);
+  pdf.text('Plain explanation of the method behind the figure on page 1.', W / 2, y2, { align: 'center' }); y2 += 4;
+  pdf.setDrawColor(...green); pdf.setLineWidth(0.5); pdf.line(mL, y2, W - mR, y2); y2 += 7;
+
+  // ── 1. Classification ──────────────────────────────────────────────────
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...ink);
+  pdf.text('1.  How each item of work is classified', mL, y2); y2 += 5;
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.4); pdf.setTextColor(...grey);
+  const clsText = 'Every item of work is put into a category by its nature — earthwork, concrete, steel supply, and so on (from its DSR / schedule item). Each category has FIXED percentage shares saying how much of that work is labour, steel, cement, fuel, machinery and other materials. These shares come from the GCC Clause 46A table set by the tender — they are not chosen bill by bill. PVC is worked out on those shares. The categories used on this bill are below.';
+  const clsLines = pdf.splitTextToSize(clsText, cW);
+  pdf.text(clsLines, mL, y2); y2 += clsLines.length * 3.7 + 3;
+
+  const classes = input.classesUsed || [];
+  if (classes.length > 0) {
+    autoTable(pdf, {
+      startY: y2,
+      head: [['Category', 'Name', 'Labour', 'Steel', 'Cement', 'Fuel', 'P&M', 'Other', 'Fixed']],
+      body: classes.map((c) => [
+        c.code, c.name,
+        `${c.labour}%`, `${c.steel}%`, `${c.cement}%`, `${c.fuel}%`,
+        `${c.plantMachinery}%`, `${c.otherMaterials}%`, `${c.fixed}%`,
+      ]),
+      theme: 'grid',
+      headStyles: { fillColor: [243, 244, 246], textColor: ink, fontStyle: 'bold', fontSize: 7.5 },
+      styles: { fontSize: 7.5, cellPadding: { top: 1.2, bottom: 1.2, left: 2, right: 2 }, textColor: ink },
+      columnStyles: {
+        0: { cellWidth: 16, fontStyle: 'bold' }, 1: { cellWidth: cW - 16 - 6 * 16.7 },
+        2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' },
+        5: { halign: 'center' }, 6: { halign: 'center' }, 7: { halign: 'center' }, 8: { halign: 'center' },
+      },
+      margin: { left: mL, right: mR },
+    });
+    y2 = (pdf as any).lastAutoTable.finalY + 2;
+    pdf.setFont('helvetica', 'italic'); pdf.setFontSize(7); pdf.setTextColor(...grey);
+    pdf.text('"Fixed" is the non-escalable part (overhead & profit) that PVC never pays on.', mL, y2 + 3);
+    y2 += 8;
+  }
+
+  // ── 2. The calculation ─────────────────────────────────────────────────
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...ink);
+  pdf.text('2.  How the PVC amount is calculated', mL, y2); y2 += 5;
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.4); pdf.setTextColor(...grey);
+  const calcText = 'For each cost part, the bill value is multiplied by that part\'s share and by how much its published price index has moved since the base month. The index movement is (this quarter\'s index minus the base-month index) divided by the base-month index. In short:';
+  const calcLines = pdf.splitTextToSize(calcText, cW);
+  pdf.text(calcLines, mL, y2); y2 += calcLines.length * 3.7 + 3;
+
+  // Formula box
+  pdf.setFillColor(243, 244, 246); pdf.roundedRect(mL, y2, cW, 10, 1.5, 1.5, 'F');
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(...ink);
+  pdf.text('PVC for a part  =  Bill value  x  part\'s %  x  (index now - index at base)  /  index at base', W / 2, y2 + 6.3, { align: 'center' });
+  y2 += 14;
+
+  // Worked example
+  const ex = input.workedExample;
+  if (ex && ex.baseIndex > 0) {
+    const movePct = ((ex.currentIndex - ex.baseIndex) / ex.baseIndex) * 100;
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.6); pdf.setTextColor(...green);
+    pdf.text(`Worked example — the ${ex.component} part`, mL, y2); y2 += 4.5;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.4); pdf.setTextColor(...grey);
+    const exText = `The ${ex.component.toLowerCase()} price index was ${ex.baseIndex.toFixed(1)} in the base month (${ex.baseMonthLabel}) and averaged ${ex.currentIndex.toFixed(1)} in this quarter (${ex.quarter}) — a change of ${movePct >= 0 ? '+' : ''}${movePct.toFixed(1)}%. So every rupee of ${ex.component.toLowerCase()} value in the bill is paid ${movePct >= 0 ? '+' : ''}${movePct.toFixed(1)}% more (or less). The same is done for steel, cement, fuel and each other part, each on its OWN index; the parts are then added up to give the total on page 1.`;
+    const exLines = pdf.splitTextToSize(exText, cW);
+    pdf.text(exLines, mL, y2); y2 += exLines.length * 3.7 + 4;
+  }
+
+  // Steel / cement note
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...ink);
+  const stText = 'Steel and cement supply items are handled on their own price index (steel by its type — TMT, structural, plates or other — and cement on the cement index), not lumped with the general work. A rising index pays more; a falling index reduces the claim (which is why a part can be a minus figure).';
+  const stLines = pdf.splitTextToSize(stText, cW);
+  pdf.text(stLines, mL, y2); y2 += stLines.length * 3.7 + 4;
+
+  pdf.setFont('helvetica', 'italic'); pdf.setFontSize(7.2); pdf.setTextColor(...grey);
+  pdf.text('The month-by-month index values behind every part are listed in the detailed PVC statement.', mL, y2);
 
   return new Uint8Array(pdf.output('arraybuffer'));
 }
