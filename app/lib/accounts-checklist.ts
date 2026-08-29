@@ -12,7 +12,7 @@
 
 import { prisma } from './db';
 import { getBaseMonth } from './pvc-calculations';
-import { inferMainClassification } from './work-classification';
+import { inferMainClassification, looksCompositeWork } from './work-classification';
 
 export type CheckTone = 'ok' | 'attention' | 'info';
 
@@ -131,21 +131,32 @@ export async function buildAccountsChecklist(billId: string): Promise<ChecklistI
   // fixed by the tender per BoQ item — it is not a payout choice. Flag any code that does
   // not belong to the main group the work description implies, so a bill that was collapsed
   // onto a higher-paying single classification (or otherwise mis-classified) is caught here
-  // rather than passed. See the transparency-only rule in lib/classification-pvc.ts.
+  // rather than passed. EXCEPTION — a COMPOSITE work (one agreement enumerating several
+  // sub-works: "(i) roof renewal … (vi) class room conversion", or one whose name puts
+  // several groups in scope) has no single main group: items spanning groups is its
+  // correct shape, and flagging them made every composite bill read as suspect.
   const requiredMain = inferMainClassification(bill.contract.workDescription || '');
+  const composite = looksCompositeWork(bill.contract.workDescription || '');
+  const isComposite = composite.isComposite || !!requiredMain.isMultiScope;
   const outOfGroup = codes.filter((c) => !String(c).startsWith(requiredMain.code));
   const singleCollapsed = codes.length === 1 && bill.classificationEntries.length === 1;
-  const classMismatch = outOfGroup.length > 0;
+  const classMismatch = !isComposite && outOfGroup.length > 0;
   items.push({
     key: 'classification_nature',
     label: 'Classification matches the work (GCC 46A.6)',
-    value: `Work implies main group ${requiredMain.code} — ${requiredMain.label}. Bill uses: ${codes.join(', ') || '—'}`,
-    note: classMismatch
-      ? `These codes are outside main group ${requiredMain.code}: ${outOfGroup.join(', ')}. Classification is fixed by the tender per item — verify against the tender, not the payout.`
-      : singleCollapsed
-        ? 'Whole bill is one classification. Confirm the tender really classifies all items this way (46A.6 is per BoQ item).'
-        : 'All codes belong to the work\'s main group.',
-    tone: classMismatch ? 'attention' : singleCollapsed ? 'attention' : 'ok',
+    value: isComposite
+      ? `Composite work${composite.subWorkCount >= 2 ? ` (${composite.subWorkCount} sub-works)` : ''}. Bill uses: ${codes.join(', ') || '—'}`
+      : `Work implies main group ${requiredMain.code} — ${requiredMain.label}. Bill uses: ${codes.join(', ') || '—'}`,
+    note: isComposite
+      ? (singleCollapsed
+          ? 'A composite work priced under ONE classification — that cannot fit every sub-work. Check each item against its own sub-work.'
+          : 'Several sub-works in one agreement, so items rightly span groups — each item takes the class of ITS sub-work (roofing → Buildings, track → its group, steel supply → …B). Verify each against its schedule, not against one main group.')
+      : classMismatch
+        ? `These codes are outside main group ${requiredMain.code}: ${outOfGroup.join(', ')}. Classification is fixed by the tender per item — verify against the tender, not the payout.`
+        : singleCollapsed
+          ? 'Whole bill is one classification. Confirm the tender really classifies all items this way (46A.6 is per BoQ item).'
+          : 'All codes belong to the work\'s main group.',
+    tone: classMismatch ? 'attention' : singleCollapsed ? 'attention' : isComposite ? 'info' : 'ok',
   });
 
   // 5. Railway-supplied material, which GCC 46A excludes from W.

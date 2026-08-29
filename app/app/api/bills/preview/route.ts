@@ -205,9 +205,11 @@ export async function POST(request: NextRequest) {
     let singleClassification: any = null;
     try {
       if (generalAmount > 0) {
-        const { inferMainClassification } = await import('@/lib/work-classification');
+        const { inferMainClassification, looksCompositeWork } = await import('@/lib/work-classification');
         const { calculateDynamicClassificationPvc } = await import('@/lib/pvc-calculations');
         const main = inferMainClassification(contract.workDescription || '');
+        const compositeInfo = looksCompositeWork(contract.workDescription || '');
+        const isCompositeWork = compositeInfo.isComposite || !!main.isMultiScope;
         const groupClasses = await prisma.subClassification.findMany({
           where: { isActive: true, code: { startsWith: main.code } },
           select: {
@@ -227,6 +229,9 @@ export async function POST(request: NextRequest) {
             singleClassification = {
               mainCode: main.code,
               mainLabel: main.label,
+              // A composite work (several enumerated sub-works) has no single class that
+              // fits every item — the card says so instead of implying 5A is an option.
+              composite: isCompositeWork ? { subWorkCount: compositeInfo.subWorkCount } : null,
               generalAmount,
               // Supply items pulled out and priced on their own class, same either way:
               steel: {

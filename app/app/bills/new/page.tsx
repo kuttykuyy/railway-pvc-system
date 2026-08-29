@@ -3082,11 +3082,15 @@ function NewBillPageContent() {
                         </div>
                       </details>
 
-                      {/* Compliance reminder */}
+                      {/* Compliance reminder — stronger when the work is composite */}
                       <p className="text-[11px] leading-relaxed text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                        ⚠ {hi
-                          ? `निविदा हर मद का वर्ग तय करती है (GCC 46A.6)। ${best.code} केवल जानकारी के लिए है — बदलने से पहले पक्का करें कि यह सचमुच लागू होता है।`
-                          : `The tender fixes each item's classification (GCC 46A.6). ${best.code} is shown for information only — confirm it genuinely applies before changing anything.`}
+                        ⚠ {sc.composite
+                          ? (hi
+                              ? `यह एक संयुक्त कार्य है (${sc.composite.subWorkCount || 'कई'} उप-कार्य) — कोई एक वर्ग सभी उप-कार्यों पर लागू नहीं हो सकता। हर मद अलग ही एकमात्र सही तरीका है; ${best.code} केवल जानकारी के लिए है।`
+                              : `This is a COMPOSITE work (${sc.composite.subWorkCount || 'several'} sub-works) — no single class can fit every sub-work. Item by item is the only compliant method; ${best.code} is shown for information only.`)
+                          : (hi
+                              ? `निविदा हर मद का वर्ग तय करती है (GCC 46A.6)। ${best.code} केवल जानकारी के लिए है — बदलने से पहले पक्का करें कि यह सचमुच लागू होता है।`
+                              : `The tender fixes each item's classification (GCC 46A.6). ${best.code} is shown for information only — confirm it genuinely applies before changing anything.`)}
                       </p>
                     </div>
                   </div>

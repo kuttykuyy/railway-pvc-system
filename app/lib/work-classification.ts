@@ -199,6 +199,23 @@ export function inferMainClassification(workDescription: string): MainWorkClassi
   };
 }
 
+/**
+ * Whether the Name of Work is a COMPOSITE work — one agreement enumerating several
+ * distinct sub-works, e.g. "(i) Renewal of roof … (ii) Renewal of crane gantry rails …
+ * (vi) Conversion of class room". Such an agreement has no single main group: each
+ * schedule item rightly takes the class of ITS OWN sub-work (roofing → Buildings,
+ * track renewal → its group, steel supply → …B), so items spanning groups is the
+ * expected shape, not a red flag. Detected by the enumeration itself — two or more
+ * "(i)/(ii)…" or "1)/2)…" markers — which is stronger evidence than keyword scoring.
+ */
+export function looksCompositeWork(workDescription: string): { isComposite: boolean; subWorkCount: number } {
+  const text = String(workDescription || '');
+  const roman = text.match(/\((?:i|ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii)\)/gi) || [];
+  const numeric = text.match(/(?:^|[\s,])\(?\d{1,2}\)[\s.]/g) || [];
+  const count = Math.max(new Set(roman.map(m => m.toLowerCase())).size, new Set(numeric).size);
+  return { isComposite: count >= 2, subWorkCount: count };
+}
+
 export function classificationCodeMatchesWork(subClassificationCode: string, workDescription: string): boolean {
   return String(subClassificationCode || '').trim().startsWith(inferMainClassification(workDescription).code);
 }
