@@ -1012,10 +1012,29 @@ async function buildIrReport(o: {
       (e: any) => (Array.isArray(e.steelTypes) && e.steelTypes.length > 0) || (e.subClassification?.steel ?? 0) > 0,
     );
 
+    // The JPC steel sheets are a paid annex (Rs 500 once per bill, charged on the
+    // website's single report). The bot never charges, so it must not be the free way
+    // around that: the Telegram report goes out WITHOUT the steel sheets — unless this
+    // bill was already paid for on the website (matched by contract + bill number),
+    // in which case they ride along exactly as they would there. Any lookup failure
+    // (e.g. the pending-DB column not applied yet) counts as unpaid — free beats
+    // handing out the paid annex blind.
+    let jpcPaid = false;
+    if (hasSteel) {
+      try {
+        const billsTable = await (await import('./db-schema')).schemaQualified('bills');
+        const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+          `SELECT id FROM ${billsTable} WHERE "contractId" = $1 AND "billNo" = $2 AND "jpcDocsPurchasedAt" IS NOT NULL LIMIT 1`,
+          contract.id, o.billNo,
+        );
+        jpcPaid = rows.length > 0;
+      } catch { /* treat as unpaid */ }
+    }
+
     const withDocs = await embedComponentIndicesRange(new Uint8Array(statementBytes), {
       startDate: baseMonth,
       endDate: new Date(o.measurementDate),
-      componentTypes: hasSteel ? undefined : NON_STEEL,
+      componentTypes: hasSteel && jpcPaid ? undefined : NON_STEEL,
     });
     return Buffer.from(withDocs);
   } catch (err) {
