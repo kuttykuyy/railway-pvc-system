@@ -2966,6 +2966,10 @@ function NewBillPageContent() {
                 const singleGeneral = best.generalPvc ?? 0;
                 const steel = sc.steel?.pvc ?? 0;
                 const hasSteel = Math.abs(steel) > 0.5;
+                const steelTmt = sc.steel?.tmt?.pvc ?? 0;
+                const hasTmt = Math.abs(steelTmt) > 0.5 || (sc.steel?.tmt?.amount ?? 0) > 0.5;
+                const steelOther = sc.steel?.other?.pvc ?? 0;
+                const hasOtherSteel = Math.abs(steelOther) > 0.5 || (sc.steel?.other?.amount ?? 0) > 0.5;
                 const cement = sc.cement?.pvc ?? 0;
                 const hasCement = Math.abs(cement) > 0.5;
                 const currentTotal = sc.current?.total ?? (currentGeneral + steel + cement);
@@ -3016,12 +3020,13 @@ function NewBillPageContent() {
                           : (hi ? `आपके बिल में ${inr(Math.abs(diff))} ज़्यादा मिलता है — यही रखें` : `Your bill pays ${inr(Math.abs(diff))} more — keep it as it is`)}
                       </div>
 
-                      {/* Why steel/cement don't move the comparison — one plain sentence */}
+                      {/* Why steel/cement don't move the comparison — one plain sentence,
+                          with steel named by its two natures (TMT vs other-than-TMT). */}
                       {(hasSteel || hasCement) && (
                         <p className="text-[11px] leading-relaxed text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2">
                           {hi
-                            ? <>{hasSteel && <>स्टील मदें ({inr(steel)}) </>}{hasSteel && hasCement && 'और '}{hasCement && <>सीमेंट मदें ({inr(cement)}) </>}दोनों तरीकों में एक जैसी हैं — ये हमेशा अपने ही इंडेक्स पर अलग गिनी जाती हैं। फ़र्क़ सिर्फ़ बाकी मदों से आता है।</>
-                            : <>{hasSteel && <>Steel items ({inr(steel)}) </>}{hasSteel && hasCement && 'and '}{hasCement && <>cement items ({inr(cement)}) </>}are the same in both — they are always priced separately on their own index. The difference comes only from the other items.</>}
+                            ? <>{hasTmt && <>TMT स्टील ({inr(steelTmt)}) </>}{hasTmt && (hasOtherSteel || hasCement) && '· '}{hasOtherSteel && <>अन्य स्टील — स्ट्रक्चरल ({inr(steelOther)}) </>}{hasOtherSteel && hasCement && '· '}{hasCement && <>सीमेंट ({inr(cement)}) </>}दोनों तरीकों में एक जैसे हैं — ये हमेशा अपने ही इंडेक्स पर अलग गिने जाते हैं। फ़र्क़ सिर्फ़ बाकी मदों से आता है।</>
+                            : <>{hasTmt && <>TMT steel ({inr(steelTmt)}) </>}{hasTmt && (hasOtherSteel || hasCement) && '· '}{hasOtherSteel && <>other steel — structural ({inr(steelOther)}) </>}{hasOtherSteel && hasCement && '· '}{hasCement && <>cement ({inr(cement)}) </>}are the same in both — each is always priced separately on its own index. The difference comes only from the other items.</>}
                         </p>
                       )}
 
@@ -3045,11 +3050,18 @@ function NewBillPageContent() {
                                 <td className="text-right font-semibold">{inr(currentGeneral)}</td>
                                 <td className="text-right font-semibold text-indigo-700">{inr(singleGeneral)}</td>
                               </tr>
-                              {hasSteel && (
+                              {hasTmt && (
                                 <tr className="text-amber-700">
-                                  <td className="py-1">{hi ? 'स्टील मदें (अलग, समान)' : 'Steel items (separate, same)'}</td>
-                                  <td className="text-right font-semibold">{inr(steel)}</td>
-                                  <td className="text-right font-semibold">{inr(steel)}</td>
+                                  <td className="py-1">{hi ? 'TMT स्टील — …B (अलग, समान)' : 'TMT steel — …B (separate, same)'}</td>
+                                  <td className="text-right font-semibold">{inr(steelTmt)}</td>
+                                  <td className="text-right font-semibold">{inr(steelTmt)}</td>
+                                </tr>
+                              )}
+                              {hasOtherSteel && (
+                                <tr className="text-amber-700">
+                                  <td className="py-1">{hi ? 'अन्य स्टील — स्ट्रक्चरल …D (अलग, समान)' : 'Other steel — structural …D (separate, same)'}</td>
+                                  <td className="text-right font-semibold">{inr(steelOther)}</td>
+                                  <td className="text-right font-semibold">{inr(steelOther)}</td>
                                 </tr>
                               )}
                               {hasCement && (

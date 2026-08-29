@@ -107,7 +107,11 @@ export async function POST(request: NextRequest) {
     ]);
     const codeBySubId = new Map(subRows.map(r => [r.id, r.code]));
     const codeByLegacyId = new Map(legacyRows.map(r => [r.id, r.code]));
-    let steelSupplyPvc = 0, steelSupplyAmount = 0;   // …B entries — the separate steel line
+    // Steel splits into its two natures: TMT (…B reinforcement supply, or entries whose
+    // steel types are TMT only) and OTHER-THAN-TMT (…D fabrication & erection, or
+    // structural/plates/sections types). Both stay out of the general comparison.
+    let steelTmtPvc = 0, steelTmtAmount = 0;
+    let steelOtherPvc = 0, steelOtherAmount = 0;
     let cementSupplyPvc = 0, cementSupplyAmount = 0; // …C entries — the separate cement line
     let generalPvc = 0, generalAmount = 0;           // everything else (compared below)
 
@@ -148,7 +152,14 @@ export async function POST(request: NextRequest) {
       const ownSteelTypes = Array.isArray(entry.steelTypes) ? entry.steelTypes : [];
       const isSteelItem = ownSteelTypes.length > 0 || suffix === 'B' || suffix === 'D';
       const isCementItem = !isSteelItem && (suffix === 'C');
-      if (isSteelItem) { steelSupplyPvc += pvc.totalPvc; steelSupplyAmount += amt; }
+      // TMT vs other-than-TMT: …B is TMT by definition; a typed entry is TMT only when
+      // every type on it is TMT; …D and anything structural/plates/sections is "other".
+      const isTmt = suffix === 'B'
+        || (suffix !== 'D' && ownSteelTypes.length > 0 && ownSteelTypes.every((t: any) => String(t).toUpperCase() === 'TMT'));
+      if (isSteelItem) {
+        if (isTmt) { steelTmtPvc += pvc.totalPvc; steelTmtAmount += amt; }
+        else { steelOtherPvc += pvc.totalPvc; steelOtherAmount += amt; }
+      }
       else if (isCementItem) { cementSupplyPvc += pvc.totalPvc; cementSupplyAmount += amt; }
       else { generalPvc += pvc.totalPvc; generalAmount += amt; }
     }
@@ -218,7 +229,11 @@ export async function POST(request: NextRequest) {
               mainLabel: main.label,
               generalAmount,
               // Supply items pulled out and priced on their own class, same either way:
-              steel: { pvc: steelSupplyPvc, amount: steelSupplyAmount },     // …B, 85% steel
+              steel: {
+                pvc: steelTmtPvc + steelOtherPvc, amount: steelTmtAmount + steelOtherAmount,
+                tmt: { pvc: steelTmtPvc, amount: steelTmtAmount },       // …B / TMT-typed
+                other: { pvc: steelOtherPvc, amount: steelOtherAmount }, // …D / structural
+              },
               cement: { pvc: cementSupplyPvc, amount: cementSupplyAmount },  // …C, cement supply
               current: { general: generalPvc, total: totalPvc },
               best: {
@@ -227,7 +242,7 @@ export async function POST(request: NextRequest) {
                 plantMachinery: allItemsClass.plantMachinery, fuel: allItemsClass.fuel,
                 otherMaterials: allItemsClass.otherMaterials, explosives: allItemsClass.explosives,
                 generalPvc: single.totalPvc,
-                total: single.totalPvc + steelSupplyPvc + cementSupplyPvc,
+                total: single.totalPvc + steelTmtPvc + steelOtherPvc + cementSupplyPvc,
               },
             };
           }
