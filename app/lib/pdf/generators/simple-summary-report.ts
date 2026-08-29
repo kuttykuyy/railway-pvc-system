@@ -269,6 +269,18 @@ export function generateSimpleSummaryReport(input: SimpleSummaryInput): Uint8Arr
     y2 += 8;
   }
 
+  // Why item-by-item (the question the department user asks). Set the font size BEFORE
+  // measuring, so the wrap width matches what is actually drawn (else it overflows).
+  const whyText = 'Why item by item? Because each item has a different cost make-up — earthwork is mostly labour and machinery, a steel item is mostly steel, concrete carries cement. Pricing every item on its own category means each is escalated only on the indices that actually drive its cost, so the contractor is neither over-paid nor under-paid. Treating the whole bill as one category would apply a single average mix to work that is not average, giving the wrong figure. GCC Clause 46A.6 also fixes the classification per item through the tender — it is not a bill-by-bill choice.';
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.2);
+  const whyLines = pdf.splitTextToSize(whyText, cW - 6);
+  const whyH = whyLines.length * 3.6 + 5;
+  pdf.setFillColor(239, 246, 255); pdf.setDrawColor(191, 219, 254); pdf.setLineWidth(0.3);
+  pdf.roundedRect(mL, y2, cW, whyH, 1.5, 1.5, 'FD');
+  pdf.setTextColor(30, 58, 138);
+  pdf.text(whyLines, mL + 3, y2 + 4.5);
+  y2 += whyH + 6;
+
   // ── 2. The calculation ─────────────────────────────────────────────────
   pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...ink);
   pdf.text('2.  How the PVC amount is calculated', mL, y2); y2 += 5;
