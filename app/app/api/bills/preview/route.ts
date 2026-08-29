@@ -213,8 +213,8 @@ export async function POST(request: NextRequest) {
         const main = inferMainClassification(contract.workDescription || '');
         const compositeInfo = looksCompositeWork(contract.workDescription || '');
         const isCompositeWork = compositeInfo.isComposite || !!main.isMultiScope;
-        const groupClasses = await prisma.subClassification.findMany({
-          where: { isActive: true, code: { startsWith: main.code } },
+        const allClasses = await prisma.subClassification.findMany({
+          where: { isActive: true },
           select: {
             id: true, code: true, name: true, groupId: true,
             fixed: true, labour: true, steel: true, cement: true,
@@ -222,13 +222,37 @@ export async function POST(request: NextRequest) {
           },
           orderBy: { code: 'asc' },
         });
-        // The single class = the group's "All items" (…A) class — the genuine "treat all
-        // the general work as one class", never a specific-nature class picked for payout.
-        const allItemsClass = groupClasses.find(c => String(c.code || '').trim().slice(-1).toUpperCase() === 'A');
-        if (allItemsClass) {
+        // Candidate SINGLE classes = each group's "All items" (…A) class — the genuine
+        // "treat all the general work as one class", never a specific-nature class picked
+        // for payout. A single-scope work has ONE candidate (its own group's …A). A
+        // COMPOSITE work spans groups, so every group its general items actually use is an
+        // equally arguable single class — try each and show the HIGHEST-paying one.
+        const candidateDigits = new Set<string>([String(main.code).charAt(0)]);
+        if (isCompositeWork) {
+          for (const e of classificationEntries) {
+            const c = String(codeBySubId.get(e.subClassificationId) || codeByLegacyId.get(e.classificationId) || '').trim();
+            const suf = c.slice(-1).toUpperCase();
+            if (suf === 'B' || suf === 'C' || suf === 'D') continue; // supply/steel classes are never single-class candidates
+            const d = c.charAt(0);
+            if (/[1-9]/.test(d)) candidateDigits.add(d);
+          }
+        }
+        const candidateClasses = [...candidateDigits]
+          .map(d => allClasses.find(c => String(c.code).trim().toUpperCase() === `${d}A`)
+            || allClasses.find(c => String(c.code).trim() === d))
+          .filter((c): c is NonNullable<typeof c> => !!c);
+        const scored: any[] = [];
+        for (const cls of candidateClasses) {
           // Apply the …A class to the general amount only (steel supply already pulled out).
-          const single = await calculateDynamicClassificationPvc(generalAmount, quarterlyAverages, allItemsClass.code, extractedSteelTypes);
-          if (!single.isProcessingFee) {
+          const r = await calculateDynamicClassificationPvc(generalAmount, quarterlyAverages, cls.code, extractedSteelTypes);
+          if (!r.isProcessingFee) scored.push({ cls, generalPvc: r.totalPvc });
+        }
+        scored.sort((a, b) => b.generalPvc - a.generalPvc);
+        const winner = scored[0];
+        if (winner) {
+          const allItemsClass = winner.cls;
+          const single = { totalPvc: winner.generalPvc };
+          {
             singleClassification = {
               mainCode: main.code,
               mainLabel: main.label,
@@ -252,6 +276,12 @@ export async function POST(request: NextRequest) {
                 generalPvc: single.totalPvc,
                 total: single.totalPvc + steelTmtPvc + steelOtherPvc + cementSupplyPvc,
               },
+              // Every candidate tried (composite work: one per group its items span),
+              // highest first — the card lists them so the pick is visible, not implied.
+              candidates: scored.map((s) => ({
+                code: s.cls.code, name: s.cls.name,
+                total: s.generalPvc + steelTmtPvc + steelOtherPvc + cementSupplyPvc,
+              })),
             };
           }
         }

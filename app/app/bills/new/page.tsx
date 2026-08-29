@@ -3004,13 +3004,23 @@ function NewBillPageContent() {
                         <span className="text-lg font-black text-slate-900 whitespace-nowrap">{inr(currentTotal)}</span>
                       </div>
 
-                      {/* Option B — grouped under one class (FULL total) */}
-                      <div className="flex items-center justify-between px-3 py-2.5 bg-white rounded-lg border border-slate-200">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-800">{hi ? `अगर सब ${best.code} वर्ग में होता` : `If grouped under one class (${best.code})`}</p>
-                          <p className="text-[11px] text-slate-400 truncate">{best.name}</p>
+                      {/* Option B — grouped under one class (FULL total). On a composite
+                          work every group its items span was tried; the best is shown. */}
+                      <div className="px-3 py-2.5 bg-white rounded-lg border border-slate-200">
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-800">{hi ? `अगर सब ${best.code} वर्ग में होता` : `If grouped under one class (${best.code})`}</p>
+                            <p className="text-[11px] text-slate-400 truncate">{best.name}</p>
+                          </div>
+                          <span className="text-lg font-black text-indigo-700 whitespace-nowrap">{inr(bestTotal)}</span>
                         </div>
-                        <span className="text-lg font-black text-indigo-700 whitespace-nowrap">{inr(bestTotal)}</span>
+                        {(sc.candidates?.length ?? 0) > 1 && (
+                          <p className="text-[11px] text-indigo-500 mt-1">
+                            {hi ? 'हर संभावित वर्ग आज़माया गया — ' : 'every possible group tried — '}
+                            {sc.candidates.map((c: any) => `${c.code} ${inr(c.total)}`).join(' · ')}
+                            {hi ? ' — सबसे ज़्यादा दिखाया गया' : ' — highest shown'}
+                          </p>
+                        )}
                       </div>
 
                       {/* Headline answer — full-bill difference */}
