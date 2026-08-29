@@ -2965,6 +2965,8 @@ function NewBillPageContent() {
                 const singleGeneral = best.generalPvc ?? 0;
                 const steel = sc.steel?.pvc ?? 0;
                 const hasSteel = Math.abs(steel) > 0.5;
+                const cement = sc.cement?.pvc ?? 0;
+                const hasCement = Math.abs(cement) > 0.5;
                 const diff = singleGeneral - currentGeneral;
                 const singleHigher = diff > 0.005;
                 const inr = (v: number) => `₹${(Number(v) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
@@ -3022,6 +3024,17 @@ function NewBillPageContent() {
                         </div>
                       )}
 
+                      {/* Cement — its own line, dropped out of the comparison */}
+                      {hasCement && (
+                        <div className="flex items-center justify-between px-3 py-2 bg-sky-50 border border-sky-200 rounded-lg">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-sky-900">{hi ? 'सीमेंट सप्लाई मदें (अलग)' : 'Cement-supply items (separate)'}</p>
+                            <p className="text-[11px] text-sky-700">{hi ? '…C वर्ग पर — दोनों तरीकों में एक जैसा' : 'priced on the …C items — the same either way'}</p>
+                          </div>
+                          <span className="text-base font-bold text-sky-900 whitespace-nowrap">{inr(cement)}</span>
+                        </div>
+                      )}
+
                       {/* How the totals add up */}
                       <details className="text-xs text-slate-600 bg-white rounded-lg border border-slate-200">
                         <summary className="cursor-pointer select-none px-3 py-2 font-medium text-slate-700">
@@ -3031,8 +3044,9 @@ function NewBillPageContent() {
                           <div className="flex justify-between"><span>{hi ? 'हर मद अलग (गैर-स्टील)' : 'Item by item (general)'}</span><span className="font-semibold">{inr(currentGeneral)}</span></div>
                           <div className="flex justify-between"><span>{best.code} {hi ? '(सामान्य)' : '(general)'}</span><span className="font-semibold">{inr(singleGeneral)}</span></div>
                           {hasSteel && <div className="flex justify-between text-amber-700"><span>{hi ? '+ स्टील (अलग)' : '+ Steel supply (85%)'}</span><span className="font-semibold">{inr(steel)}</span></div>}
-                          <div className="flex justify-between border-t border-slate-100 pt-1 font-bold text-slate-800"><span>{hi ? 'हर मद अलग — कुल' : 'Item by item — total'}</span><span>{inr(sc.current?.total ?? (currentGeneral + steel))}</span></div>
-                          <div className="flex justify-between font-bold text-indigo-700"><span>{best.code} — {hi ? 'कुल' : 'total'}</span><span>{inr(best.total ?? (singleGeneral + steel))}</span></div>
+                          {hasCement && <div className="flex justify-between text-sky-700"><span>{hi ? '+ सीमेंट सप्लाई' : '+ Cement supply'}</span><span className="font-semibold">{inr(cement)}</span></div>}
+                          <div className="flex justify-between border-t border-slate-100 pt-1 font-bold text-slate-800"><span>{hi ? 'हर मद अलग — कुल' : 'Item by item — total'}</span><span>{inr(sc.current?.total ?? (currentGeneral + steel + cement))}</span></div>
+                          <div className="flex justify-between font-bold text-indigo-700"><span>{best.code} — {hi ? 'कुल' : 'total'}</span><span>{inr(best.total ?? (singleGeneral + steel + cement))}</span></div>
                           <p className="text-[11px] text-slate-400 pt-1">{hi ? `${best.code} = "सभी मदें" वर्ग। स्टील अलग रखा गया, इसलिए तुलना सिर्फ़ गैर-स्टील की है।` : `${best.code} = the "All items" class. Steel-supply items are kept out, so the comparison is general work only.`}</p>
                         </div>
                       </details>

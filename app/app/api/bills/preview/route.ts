@@ -108,6 +108,7 @@ export async function POST(request: NextRequest) {
     const codeBySubId = new Map(subRows.map(r => [r.id, r.code]));
     const codeByLegacyId = new Map(legacyRows.map(r => [r.id, r.code]));
     let steelSupplyPvc = 0, steelSupplyAmount = 0;   // …B entries — the separate steel line
+    let cementSupplyPvc = 0, cementSupplyAmount = 0; // …C entries — the separate cement line
     let generalPvc = 0, generalAmount = 0;           // everything else (compared below)
 
     for (const entry of classificationEntries) {
@@ -139,7 +140,9 @@ export async function POST(request: NextRequest) {
 
       const amt = parseFloat(entry.amount);
       const code = String(codeBySubId.get(entry.subClassificationId) || codeByLegacyId.get(entry.classificationId) || '').trim().toUpperCase();
-      if (code.slice(-1) === 'B') { steelSupplyPvc += pvc.totalPvc; steelSupplyAmount += amt; }
+      const suffix = code.slice(-1);
+      if (suffix === 'B') { steelSupplyPvc += pvc.totalPvc; steelSupplyAmount += amt; }
+      else if (suffix === 'C') { cementSupplyPvc += pvc.totalPvc; cementSupplyAmount += amt; }
       else { generalPvc += pvc.totalPvc; generalAmount += amt; }
     }
 
@@ -207,8 +210,9 @@ export async function POST(request: NextRequest) {
               mainCode: main.code,
               mainLabel: main.label,
               generalAmount,
-              // The steel-supply (…B) line — priced at 85% on those items, same either way.
-              steel: { pvc: steelSupplyPvc, amount: steelSupplyAmount },
+              // Supply items pulled out and priced on their own class, same either way:
+              steel: { pvc: steelSupplyPvc, amount: steelSupplyAmount },     // …B, 85% steel
+              cement: { pvc: cementSupplyPvc, amount: cementSupplyAmount },  // …C, cement supply
               current: { general: generalPvc, total: totalPvc },
               best: {
                 id: allItemsClass.id, code: allItemsClass.code, name: allItemsClass.name, groupId: allItemsClass.groupId,
@@ -216,7 +220,7 @@ export async function POST(request: NextRequest) {
                 plantMachinery: allItemsClass.plantMachinery, fuel: allItemsClass.fuel,
                 otherMaterials: allItemsClass.otherMaterials, explosives: allItemsClass.explosives,
                 generalPvc: single.totalPvc,
-                total: single.totalPvc + steelSupplyPvc,
+                total: single.totalPvc + steelSupplyPvc + cementSupplyPvc,
               },
             };
           }
