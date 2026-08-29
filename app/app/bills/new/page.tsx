@@ -1296,12 +1296,23 @@ function NewBillPageContent() {
     });
     if (changed === 0) {
       toast.error('Nothing to group — every item is steel or cement supply.');
-      return;
+      return 0;
     }
     setClassificationEntries(next);
+    return changed;
+  };
+
+  // The preview footer's second create path: reclassify the general items to the shown
+  // class, close the preview, and go straight into the same confirm dialog the ordinary
+  // create uses — one decision, one click, no re-preview loop. (The confirm step also
+  // guarantees React has flushed the reclassified entries before handleSubmit reads them.)
+  const handleCreateGrouped = (bestCls: any) => {
+    const changed = applyGroupedClassification(bestCls);
+    if (!changed) return;
     setShowPreviewModal(false);
     setPreviewResult(null);
-    toast.success(`${changed} general item(s) reclassified to ${bestCls.code} — item details and justifications kept; steel/cement untouched. Review, then Preview and Save.`);
+    toast(`${changed} general item(s) reclassified to ${bestCls.code} — confirm to create.`, { icon: '🗂️', duration: 5000 });
+    setShowConfirmDialog(true);
   };
 
   // If the save ends without navigating away — insufficient credit, a validation
@@ -3147,22 +3158,6 @@ function NewBillPageContent() {
                               : `The tender fixes each item's classification (GCC 46A.6). ${best.code} is shown for information only — confirm it genuinely applies before changing anything.`)}
                       </p>
 
-                      {/* Deliberate switch: rebuild the bill grouped under the shown class.
-                          General items collapse into one entry; steel/cement stay as-is. */}
-                      <button
-                        type="button"
-                        onClick={() => applyGroupedClassification(best)}
-                        className="w-full text-sm font-bold text-indigo-700 border-2 border-indigo-300 bg-white rounded-lg py-2.5 hover:bg-indigo-50 transition-colors"
-                      >
-                        {hi
-                          ? `बिल को ${best.code} वर्ग में समूहित करें (स्टील/सीमेंट अलग रहेंगे)`
-                          : `Group this bill under ${best.code} (steel/cement stay separate)`}
-                      </button>
-                      <p className="text-[10.5px] text-slate-400 text-center -mt-1">
-                        {hi
-                          ? 'यह मदों को बदल देगा — सहेजने से पहले जाँचें। निविदा से मेल न खाने पर ऑडिट में CHECK लगेगा।'
-                          : 'This rewrites the entries — review before saving. If it does not match the tender, the audit checklist will flag it.'}
-                      </p>
                     </div>
                   </div>
                 );
@@ -3200,19 +3195,35 @@ function NewBillPageContent() {
               </p>
             </div>
 
-            <div className="flex gap-3 px-6 py-4 flex-shrink-0 border-t border-slate-100 bg-white">
-              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setShowPreviewModal(false)}>
-                {language === 'hi' ? 'बिल संपादित करें' : 'Edit Bill'}
+            {/* The decision lives HERE, beside both figures: create item-by-item (the
+                tender method, primary), or create grouped under the best-matching class
+                (secondary) — one click either way, no group→re-preview loop. */}
+            <div className="flex flex-col sm:flex-row gap-2.5 px-6 py-4 flex-shrink-0 border-t border-slate-100 bg-white">
+              <Button variant="outline" className="rounded-xl sm:w-32" onClick={() => setShowPreviewModal(false)}>
+                {language === 'hi' ? 'संपादित करें' : 'Edit Bill'}
               </Button>
               <Button
                 className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
                 onClick={() => { setShowPreviewModal(false); (document.querySelector('form') as HTMLFormElement)?.requestSubmit(); }}
               >
                 <Save className="h-4 w-4 mr-2" />
-                {previewResult.isFirstBill 
-                  ? (language === 'hi' ? 'मुफ़्त परीक्षण बिल बनाएं' : 'Create Free Trial Bill') 
-                  : (language === 'hi' ? 'बिल बनाएं' : 'Create Bill')}
+                {(previewResult.isFirstBill
+                  ? (language === 'hi' ? 'बनाएं — हर मद अलग' : 'Create — item by item')
+                  : (language === 'hi' ? 'बनाएं — हर मद अलग' : 'Create — item by item'))
+                  + ` · ₹${Number(previewResult.totalPvc ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
               </Button>
+              {previewResult.singleClassification?.best && (
+                <Button
+                  variant="outline"
+                  className="flex-1 rounded-xl border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-semibold"
+                  onClick={() => handleCreateGrouped(previewResult.singleClassification.best)}
+                >
+                  {(language === 'hi'
+                    ? `बनाएं — ${previewResult.singleClassification.best.code} में समूहित`
+                    : `Create grouped under ${previewResult.singleClassification.best.code}`)
+                    + ` · ₹${Number(previewResult.singleClassification.best.total ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+                </Button>
+              )}
             </div>
           </div>
         </div>
