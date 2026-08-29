@@ -1098,6 +1098,70 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
       }
 
+      // Prepend the plain 2-page summary so the report OPENS with an easy read for the
+      // department user (summary + how-it-works), then the full detailed statement behind
+      // it. Non-fatal: a failure just leaves the statement without the summary in front.
+      try {
+        const pc: any = bill.pvcCalculation;
+        if (pc) {
+          const { buildAccountsChecklist } = await import('@/lib/accounts-checklist');
+          const { generateSimpleSummaryReport } = await import('@/lib/pdf/generators/simple-summary-report');
+          const checklist = (await buildAccountsChecklist(bill.id)) || [];
+          const steelSum = (pc.steelPvc || 0) + (pc.dedicatedSteelPvc || 0)
+            + (pc.dedicatedSteelTmtBarsPvc || 0) + (pc.dedicatedSteelAngleChannelPvc || 0)
+            + (pc.dedicatedSteelPlatesPvc || 0) + (pc.dedicatedSteelOtherSectionsPvc || 0);
+          const cementSum = (pc.cementPvc || 0) + (pc.dedicatedCementPvc || 0);
+          const byCode = new Map<string, any>();
+          for (const e of (bill.classificationEntries || [])) {
+            const s: any = e.subClassification;
+            if (s?.code && !byCode.has(s.code)) byCode.set(s.code, s);
+          }
+          const classesUsed = [...byCode.values()].map((s: any) => ({
+            code: s.code, name: s.name, labour: s.labour, steel: s.steel, cement: s.cement,
+            fuel: s.fuel, plantMachinery: s.plantMachinery, otherMaterials: s.otherMaterials,
+            explosives: s.explosives, fixed: s.fixed,
+          }));
+          const labourQa = (irQuarterlyAverages as any[]).find((q) => q.indexName === 'Labour');
+          const workedExample = labourQa && labourQa.baseValue > 0 ? {
+            component: 'Labour', baseMonthLabel: format(baseMonth, 'MMM yyyy'),
+            baseIndex: labourQa.baseValue, quarter: bill.quarter || '-', currentIndex: labourQa.average,
+          } : undefined;
+          const summaryBytes = generateSimpleSummaryReport({
+            organizationName: brandingSettings.reportHeaderText || 'INDIAN RAILWAY',
+            workDescription: bill.contract.workDescription || '-',
+            agreementNo: bill.contract.agreementNo || '-',
+            contractorName: bill.contract.contractorName || '-',
+            billNo: bill.billNo || '-',
+            pvcNumber: bill.pvcNumber,
+            dateOfMeasurement: new Date(bill.dateOfMeasurement),
+            quarter: bill.quarter || '-',
+            baseMonth,
+            billAmount: Number(bill.grossBillAmount) || 0,
+            isProvisional: indicesStatusForIR.isProvisional,
+            components: {
+              labour: pc.labourPvc || 0, plantMachinery: pc.plantMachineryPvc || 0,
+              fuelPower: pc.fuelPowerPvc || 0, cement: cementSum, steel: steelSum,
+              otherMaterials: pc.otherMaterialsPvc || 0, explosives: pc.explosivesPvc || 0,
+            },
+            thisBillPvc: pc.totalPvc || 0,
+            previousCumulativePvc: cumulativeSummary?.previousPvcTotal ?? 0,
+            cumulativePvc: pc.cumulativePvc || 0,
+            checklist,
+            classesUsed,
+            workedExample,
+          });
+          const merged = await PDFDocument.create();
+          for (const src of [new Uint8Array(summaryBytes), irFinalBytes]) {
+            const doc = await PDFDocument.load(src);
+            const pages = await merged.copyPages(doc, doc.getPageIndices());
+            for (const p of pages) merged.addPage(p);
+          }
+          irFinalBytes = await merged.save();
+        }
+      } catch (err) {
+        console.error('IR PDF: could not prepend plain summary:', err);
+      }
+
       if (includeAbstract) {
         try {
           const { generateAbstractPdf } = await import('@/lib/pdf/generators/abstract-report');
