@@ -114,6 +114,7 @@ export async function POST(request: NextRequest) {
     let steelOtherPvc = 0, steelOtherAmount = 0;
     let cementSupplyPvc = 0, cementSupplyAmount = 0; // …C entries — the separate cement line
     let generalPvc = 0, generalAmount = 0;           // everything else (compared below)
+    const generalByDigit: Record<string, number> = {}; // general value per main group
 
     for (const entry of classificationEntries) {
       const hasAmount = entry.amount !== '' && entry.amount !== null && entry.amount !== undefined && parseFloat(entry.amount) > 0;
@@ -164,7 +165,14 @@ export async function POST(request: NextRequest) {
         else { steelOtherPvc += pvc.totalPvc; steelOtherAmount += amt; }
       }
       else if (isCementItem) { cementSupplyPvc += pvc.totalPvc; cementSupplyAmount += amt; }
-      else { generalPvc += pvc.totalPvc; generalAmount += amt; }
+      else {
+        generalPvc += pvc.totalPvc; generalAmount += amt;
+        // How much of the general value sits in each main group — the MATCH evidence the
+        // guideline shows beside each single-class candidate, so the pick is by fit,
+        // never by payout.
+        const d0 = code.charAt(0);
+        if (/[1-9]/.test(d0)) generalByDigit[d0] = (generalByDigit[d0] || 0) + amt;
+      }
     }
 
     // Previous cumulative PVC (for new bill display)
@@ -278,10 +286,23 @@ export async function POST(request: NextRequest) {
               },
               // Every candidate tried (composite work: one per group its items span),
               // highest first — the card lists them so the pick is visible, not implied.
+              // matchPct = share of the general value already classified in that group:
+              // the guideline's evidence that a single class FITS, separate from payout.
               candidates: scored.map((s) => ({
                 code: s.cls.code, name: s.cls.name,
                 total: s.generalPvc + steelTmtPvc + steelOtherPvc + cementSupplyPvc,
+                matchPct: Math.round(((generalByDigit[String(s.cls.code).charAt(0)] || 0) / generalAmount) * 100),
               })),
+              // The guideline the card prints: pick by MATCH, not payout.
+              guideline: (() => {
+                const entries = Object.entries(generalByDigit).sort((a, b) => b[1] - a[1]);
+                const top = entries[0];
+                return top ? {
+                  bestMatchDigit: top[0],
+                  bestMatchPct: Math.round((top[1] / generalAmount) * 100),
+                  inferredDigit: String(main.code).charAt(0),
+                } : null;
+              })(),
             };
           }
         }

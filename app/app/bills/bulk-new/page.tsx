@@ -1147,7 +1147,10 @@ export default function BulkBillCreationPage() {
                               <span className="text-slate-400"> ({diff >= 0 ? '+' : '−'}₹{formatAmount(Math.abs(diff))} vs item-by-item)</span>
                             </span>
                             {(s.candidates?.length ?? 0) > 1 && (
-                              <span className="text-slate-400">tried: {s.candidates.map((c: any) => `${c.code} ₹${formatAmount(c.total)}`).join(' · ')}</span>
+                              <span className="text-slate-400">tried: {s.candidates.map((c: any) => `${c.code} ₹${formatAmount(c.total)}${Number.isFinite(c.matchPct) ? ` (fits ${c.matchPct}%)` : ''}`).join(' · ')}</span>
+                            )}
+                            {s.guideline && (
+                              <span className="text-slate-500">guideline: pick by match — group <b>{s.guideline.bestMatchDigit}</b> holds {s.guideline.bestMatchPct}% of this bill&apos;s general work</span>
                             )}
                             {s.composite && (
                               <span className="text-amber-700">composite work — item-by-item is the compliant method</span>

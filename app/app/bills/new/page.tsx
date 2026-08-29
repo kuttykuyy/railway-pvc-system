@@ -3064,8 +3064,15 @@ function NewBillPageContent() {
                         {(sc.candidates?.length ?? 0) > 1 && (
                           <p className="text-[11px] text-indigo-500 mt-1">
                             {hi ? 'हर संभावित वर्ग आज़माया गया — ' : 'every possible group tried — '}
-                            {sc.candidates.map((c: any) => `${c.code} ${inr(c.total)}`).join(' · ')}
+                            {sc.candidates.map((c: any) => `${c.code} ${inr(c.total)}${Number.isFinite(c.matchPct) ? ` (${hi ? 'मेल' : 'fits'} ${c.matchPct}%)` : ''}`).join(' · ')}
                             {hi ? ' — सबसे ज़्यादा दिखाया गया' : ' — highest shown'}
+                          </p>
+                        )}
+                        {sc.guideline && (
+                          <p className="text-[11px] text-slate-500 mt-1">
+                            {hi
+                              ? <>दिशानिर्देश: वर्ग <b>भुगतान से नहीं, मेल से</b> चुनें — इस बिल के सामान्य काम का सबसे बड़ा हिस्सा ({sc.guideline.bestMatchPct}%) समूह <b>{sc.guideline.bestMatchDigit}</b> में है{sc.guideline.inferredDigit !== sc.guideline.bestMatchDigit ? <>, जबकि कार्य का नाम समूह {sc.guideline.inferredDigit} की ओर इशारा करता है</> : null}। जो वर्ग मदों से मेल नहीं खाता, ऑडिट में CHECK लगेगा।</>
+                              : <>Guideline: pick a group by <b>match, not payout</b> — the largest share of this bill&apos;s general work ({sc.guideline.bestMatchPct}%) sits in group <b>{sc.guideline.bestMatchDigit}</b>{sc.guideline.inferredDigit !== sc.guideline.bestMatchDigit ? <>, while the Name of Work points to group {sc.guideline.inferredDigit}</> : null}. A class that doesn&apos;t match the items will be flagged in audit.</>}
                           </p>
                         )}
                       </div>
