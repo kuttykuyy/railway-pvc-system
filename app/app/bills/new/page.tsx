@@ -1280,34 +1280,38 @@ function NewBillPageContent() {
     if (!bestCls?.id) return;
     const amtOf = (e: ClassificationEntry) =>
       e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount;
-    const kept = classificationEntries.filter(e => isSteelEntryFn(e) || (entrySuffixOf(e) === 'C' && !isSteelEntryFn(e)));
-    const generalAmount = classificationEntries
-      .filter(e => !kept.includes(e))
-      .reduce((sum, e) => sum + amtOf(e), 0);
-    if (generalAmount <= 0) {
+    // RECLASSIFY each general entry to the chosen class rather than collapsing them into
+    // one line: every item keeps its description, item numbers, item rows and AI
+    // justification (with a note of the switch), so Section D of the statement still
+    // shows the full per-item record. Collapsing threw all of that away.
+    const isKept = (e: ClassificationEntry) => isSteelEntryFn(e) || (entrySuffixOf(e) === 'C' && !isSteelEntryFn(e));
+    let changed = 0;
+    const next = classificationEntries.map(e => {
+      if (isKept(e) || amtOf(e) === 0) return e;
+      const origCode = e.subClassification?.code;
+      changed++;
+      const note = `[Grouped under ${bestCls.code} by user for single-class pricing; original classification ${origCode || '—'}.]`;
+      return {
+        ...e,
+        subClassificationId: bestCls.id,
+        subClassification: {
+          id: bestCls.id, code: bestCls.code, name: bestCls.name, groupId: bestCls.groupId,
+          fixed: bestCls.fixed, labour: bestCls.labour, steel: bestCls.steel, cement: bestCls.cement,
+          plantMachinery: bestCls.plantMachinery, fuel: bestCls.fuel,
+          otherMaterials: bestCls.otherMaterials, explosives: bestCls.explosives,
+        },
+        manualClassification: true,
+        classificationJustification: `${(e.classificationJustification || '').trim()} ${note}`.trim(),
+      };
+    });
+    if (changed === 0) {
       toast.error('Nothing to group — every item is steel or cement supply.');
       return;
     }
-    const groupedEntry: ClassificationEntry = {
-      subClassificationId: bestCls.id,
-      subClassification: {
-        id: bestCls.id, code: bestCls.code, name: bestCls.name, groupId: bestCls.groupId,
-        fixed: bestCls.fixed, labour: bestCls.labour, steel: bestCls.steel, cement: bestCls.cement,
-        plantMachinery: bestCls.plantMachinery, fuel: bestCls.fuel,
-        otherMaterials: bestCls.otherMaterials, explosives: bestCls.explosives,
-      },
-      amount: generalAmount,
-      description: `General items grouped under ${bestCls.code}`,
-      manualClassification: true,
-    };
-    setClassificationEntries([groupedEntry, ...kept]);
+    setClassificationEntries(next);
     setShowPreviewModal(false);
     setPreviewResult(null);
-    toast.success(
-      kept.length > 0
-        ? `General items grouped under ${bestCls.code}; steel/cement kept separate. Review, then Preview and Save.`
-        : `All items grouped under ${bestCls.code}. Review, then Preview and Save.`,
-    );
+    toast.success(`${changed} general item(s) reclassified to ${bestCls.code} — item details and justifications kept; steel/cement untouched. Review, then Preview and Save.`);
   };
 
   // If the save ends without navigating away — insufficient credit, a validation

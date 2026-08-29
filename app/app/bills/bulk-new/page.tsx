@@ -388,28 +388,34 @@ export default function BulkBillCreationPage() {
       const types = Array.isArray(e.steelTypes) ? e.steelTypes : [];
       return types.length > 0 && ((subOf(e) as any)?.steel ?? 0) >= 50;
     };
-    const kept = row.classificationEntries.filter(e => isSteelEntry(e) || (suffixOf(e) === 'C' && !isSteelEntry(e)));
-    const generalAmount = row.classificationEntries
-      .filter(e => !kept.includes(e))
-      .reduce((sum, e) => sum + parseAmount(e.amount), 0);
-    if (generalAmount <= 0) {
+    // RECLASSIFY each general entry rather than collapsing: descriptions, item rows and
+    // AI justifications survive (with a note), so the statement's Section D stays full.
+    const isKept = (e: ClassificationEntry) => isSteelEntry(e) || (suffixOf(e) === 'C' && !isSteelEntry(e));
+    let changed = 0;
+    const next = row.classificationEntries.map(e => {
+      if (isKept(e) || parseAmount(e.amount) === 0) return e;
+      const origCode = subOf(e)?.code;
+      changed++;
+      const note = `[Grouped under ${best.code} by user for single-class pricing; original classification ${origCode || '—'}.]`;
+      return {
+        ...e,
+        subClassificationId: best.id,
+        subClassification: {
+          id: best.id, code: best.code, name: best.name, groupId: best.groupId,
+          fixed: best.fixed, labour: best.labour, steel: best.steel, cement: best.cement,
+          plantMachinery: best.plantMachinery, fuel: best.fuel,
+          otherMaterials: best.otherMaterials, explosives: best.explosives,
+        } as any,
+        classificationJustification: `${(e.classificationJustification || '').trim()} ${note}`.trim(),
+      };
+    });
+    if (changed === 0) {
       toast.error('Nothing to group — every item on this bill is steel or cement supply.');
       return;
     }
-    const groupedEntry: ClassificationEntry = {
-      subClassificationId: best.id,
-      subClassification: {
-        id: best.id, code: best.code, name: best.name, groupId: best.groupId,
-        fixed: best.fixed, labour: best.labour, steel: best.steel, cement: best.cement,
-        plantMachinery: best.plantMachinery, fuel: best.fuel,
-        otherMaterials: best.otherMaterials, explosives: best.explosives,
-      } as any,
-      amount: generalAmount,
-      description: `General items grouped under ${best.code}`,
-    };
-    updateClassificationEntries(rowId, [groupedEntry, ...kept]);
-    setPreviews(prev => { const next = { ...prev }; delete next[rowId]; return next; });
-    toast.success(`Bill ${row.billNo || rowId}: general items grouped under ${best.code}. Preview again to see the new PVC.`);
+    updateClassificationEntries(rowId, next);
+    setPreviews(prev => { const nxt = { ...prev }; delete nxt[rowId]; return nxt; });
+    toast.success(`Bill ${row.billNo || rowId}: ${changed} general item(s) reclassified to ${best.code} — details kept. Preview again to see the new PVC.`);
   };
 
   const getEditingBill = () => billRows.find(row => row.id === editingBillId);

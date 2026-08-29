@@ -618,6 +618,72 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   const totalPct = allComponents.reduce((s, c) => s + c.pct, 0);
   const totalCompAmt = allComponents.reduce((s, c) => s + billAmount * c.pct, 0);
 
+  // ── Per-classification computation (Sections C and G print one block per class) ──
+  // The combined table above prices the bill on WEIGHTED percentages — a blend that
+  // belongs to no class in the 46A.6 table, so an officer could not verify a single row
+  // against the GCC. Each class below is computed on ITS OWN tabled percentages and its
+  // own value, which is how the engine actually works and what the tender fixes.
+  const idxMapForBasis = new Map(quarterlyAverages.map(q => [q.indexName, q]));
+  const perClassComp: Array<{
+    code: string; name: string; amount: number;
+    rows: Array<{ name: string; pct: number; base: number; avg: number; variation: number; pvcAmt: number }>;
+    subtotal: number;
+  }> = (() => {
+    const byCode = new Map<string, { code: string; name: string; amount: number; comps: any; steelTypes: Set<string> }>();
+    for (const e of entries) {
+      const sub: any = (e as any).subClassification;
+      const amt = Number(e.amount) || 0;
+      if (!sub?.code || !amt) continue;
+      const key = String(sub.code).toUpperCase();
+      let g = byCode.get(key);
+      if (!g) {
+        g = {
+          code: key, name: sub.name || '', amount: 0, steelTypes: new Set<string>(),
+          comps: {
+            labour: sub.labour || 0, plantMachinery: sub.plantMachinery || 0, fuel: sub.fuel || 0,
+            cement: sub.cement || 0, steel: sub.steel || 0, otherMaterials: sub.otherMaterials || 0,
+            explosives: sub.explosives || 0,
+          },
+        };
+        byCode.set(key, g);
+      }
+      g.amount += amt;
+      for (const t of (e.steelTypes || [])) g.steelTypes.add(String(t));
+    }
+    const compDefs: Array<[string, string, number, number, number]> = [
+      ['labour', 'Labour', labourBase, labourAvg, labourVar],
+      ['plantMachinery', 'Plant & Machinery', plantBase, plantAvg, plantVar],
+      ['fuel', 'Fuel / Power', fuelBase, fuelAvg, fuelVar],
+      ['cement', 'Cement', cemBase, cemAvg, cemVar],
+      ['otherMaterials', 'Other Materials', otherBase, otherAvg, otherVar],
+      ['explosives', 'Explosives', explBase, explAvg, explVar],
+    ];
+    return [...byCode.values()].sort((a, b) => a.code.localeCompare(b.code)).map(g => {
+      const rows: Array<{ name: string; pct: number; base: number; avg: number; variation: number; pvcAmt: number }> = [];
+      for (const [key, label, base, avg, variation] of compDefs) {
+        const pct = Number(g.comps[key]) || 0;
+        if (pct <= 0 || base <= 0) continue;
+        rows.push({ name: label, pct, base, avg, variation, pvcAmt: g.amount * (pct / 100) * variation });
+      }
+      // Steel on the class's own nature: …B = TMT, …D = the non-TMT categories, else the
+      // categories its entries carry — the same rule the engine prices with.
+      const steelPctCls = Number(g.comps.steel) || 0;
+      if (steelPctCls > 0) {
+        const clsTypes = defaultSteelTypesForClass(g.code, [...g.steelTypes]);
+        const basis = resolveSteelIndexBasis(idxMapForBasis, clsTypes);
+        if (basis && basis.baseValue > 0) {
+          rows.push({
+            name: 'Steel' + (basis.usedDefault ? ' (average of all four)' : ` (${basis.indexNames.map(shortSteel).join(', ')})`),
+            pct: steelPctCls, base: basis.baseValue, avg: basis.averageValue, variation: basis.variation,
+            pvcAmt: g.amount * (steelPctCls / 100) * basis.variation,
+          });
+        }
+      }
+      return { code: g.code, name: g.name, amount: g.amount, rows, subtotal: rows.reduce((s, r) => s + r.pvcAmt, 0) };
+    }).filter(g => g.rows.length > 0);
+  })();
+  const perClassSum = perClassComp.reduce((s, g) => s + g.subtotal, 0);
+
   const tableHead = [[
     'Sl.',
     'Component',
@@ -661,6 +727,63 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     '', '', '',
     fmt(totalPvcAmt),
   ]);
+
+  // ── C.1: one block per classification, verifiable line by line against the 46A.6
+  // table. This is the primary computation; the weighted table below is the summary.
+  if (perClassComp.length > 0) {
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('C.1  COMPUTATION BY CLASSIFICATION — each class priced on its own tabled percentages', mL, y);
+    y += 4;
+    const clsBody: any[] = [];
+    for (const g of perClassComp) {
+      clsBody.push([{ content: `${g.code} — ${g.name}     Value of work: ${fmtMoney(g.amount)}`, colSpan: 8, styles: { fontStyle: 'bold' as const, fillColor: [232, 238, 247] as [number, number, number], halign: 'left' as const } }]);
+      g.rows.forEach((r, i) => clsBody.push([
+        i + 1, r.name, r.pct.toFixed(2) + '%', fmt(g.amount * (r.pct / 100)),
+        fmtIdx(r.base), fmtIdx(r.avg), fmtVariation(r.variation), fmt(r.pvcAmt),
+      ]));
+      clsBody.push([
+        { content: `Subtotal — ${g.code}`, colSpan: 7, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [246, 248, 251] as [number, number, number] } },
+        { content: fmt(g.subtotal), styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [246, 248, 251] as [number, number, number] } },
+      ]);
+    }
+    clsBody.push([
+      { content: 'SUM OF CLASSIFICATION BLOCKS', colSpan: 7, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [220, 220, 220] as [number, number, number] } },
+      { content: fmt(perClassSum), styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [220, 220, 220] as [number, number, number] } },
+    ]);
+    autoTable(pdf, {
+      startY: y,
+      head: tableHead,
+      body: clsBody,
+      theme: 'grid',
+      headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center', valign: 'middle', cellPadding: 2.5 },
+      bodyStyles: { fontSize: 8.5, cellPadding: { top: 2, right: 3, bottom: 2, left: 3 }, textColor: [0, 0, 0], valign: 'middle' },
+      styles: { lineColor: [180, 180, 180], lineWidth: 0.3, font: 'helvetica', overflow: 'linebreak' },
+      margin: { left: mL, right: mR },
+      tableWidth: contentW,
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' }, 1: { cellWidth: 60, halign: 'left' },
+        2: { cellWidth: 24, halign: 'center' }, 3: { cellWidth: 45, halign: 'right' },
+        4: { cellWidth: 26, halign: 'center' }, 5: { cellWidth: 38, halign: 'center' },
+        6: { cellWidth: 28, halign: 'center' }, 7: { cellWidth: 42, halign: 'right' },
+      },
+    });
+    y = (pdf as any).lastAutoTable.finalY + 3;
+    if (Math.abs(perClassSum - totalPvcAmt) > 1) {
+      pdf.setFontSize(7.5);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setTextColor(80, 80, 80);
+      pdf.text(`Balance ${fmtMoney(totalPvcAmt - perClassSum)} is the dedicated cement / steel escalation — worked in Section G.`, mL, y);
+      pdf.setTextColor(0, 0, 0);
+      y += 5;
+    }
+    ensureSpace(30);
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('C.2  SUMMARY — ALL CLASSIFICATIONS COMBINED (weighted percentages)', mL, y);
+    y += 4;
+    pdf.setFont('helvetica', 'normal');
+  }
 
   // Total column width available for PVC table: 273mm
   // Columns: Sl(10) + Component(40) + %Age(22) + CompAmt(35) + I0(22) + I1(30) + Var(26) + PVCAmt(36) = 221
@@ -1544,18 +1667,42 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       'Statutory Escalate Formula',
       'Escalation Amt (Rs.)',
     ]];
-    const escBody: any[] = allComponents.map(c => {
-      const amt = billAmount * c.pct;
-      return [
-        c.name,
-        (c.pct * 100).toFixed(2) + '%',
-        fmt(amt),
-        fmtIdx(c.base),
-        fmtIdx(c.avg),
-        `${fmt(amt)} x [(${fmtIdx(c.avg)} - ${fmtIdx(c.base)}) / ${fmtIdx(c.base)}]`,
-        fmt(c.pvcAmt),
-      ];
-    });
+    // One block per classification (mirrors C.1): the formula an officer checks is the
+    // class's OWN value x its OWN tabled percentage — the weighted blend belonged to no
+    // class and could not be verified against 46A.6. Falls back to the combined rows only
+    // when no entry carries a classification.
+    const escBody: any[] = perClassComp.length > 0
+      ? perClassComp.flatMap(g => ([
+          [{ content: `${g.code} — ${g.name}     Value of work: ${fmtMoney(g.amount)}`, colSpan: 7, styles: { fontStyle: 'bold' as const, fillColor: [232, 238, 247] as [number, number, number], halign: 'left' as const } }],
+          ...g.rows.map(r => {
+            const amt = g.amount * (r.pct / 100);
+            return [
+              r.name,
+              r.pct.toFixed(2) + '%',
+              fmt(amt),
+              fmtIdx(r.base),
+              fmtIdx(r.avg),
+              `${fmt(amt)} x [(${fmtIdx(r.avg)} - ${fmtIdx(r.base)}) / ${fmtIdx(r.base)}]`,
+              fmt(r.pvcAmt),
+            ];
+          }),
+          [
+            { content: `Subtotal — ${g.code}`, colSpan: 6, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [246, 248, 251] as [number, number, number] } },
+            { content: fmt(g.subtotal), styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [246, 248, 251] as [number, number, number] } },
+          ],
+        ]))
+      : allComponents.map(c => {
+          const amt = billAmount * c.pct;
+          return [
+            c.name,
+            (c.pct * 100).toFixed(2) + '%',
+            fmt(amt),
+            fmtIdx(c.base),
+            fmtIdx(c.avg),
+            `${fmt(amt)} x [(${fmtIdx(c.avg)} - ${fmtIdx(c.base)}) / ${fmtIdx(c.base)}]`,
+            fmt(c.pvcAmt),
+          ];
+        });
 
     // Dedicated cement / steel rows use the 85% escalation factor and their own
     // dedicated amounts / section indices.
