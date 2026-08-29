@@ -727,6 +727,32 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
     }
   };
 
+  // One-page plain-language summary for the department (accounts / executive) user.
+  const handleDownloadSummary = async () => {
+    try {
+      setIsDownloading(true);
+      const response = await fetch(`/api/bills/${bill.id}/simple-report`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to generate summary');
+      }
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `PVC_Summary_${bill.billNo.replace(/\//g, '_')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+      toast({ title: 'Downloaded', description: 'Plain one-page summary downloaded.' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.message || 'Failed to download summary.', variant: 'destructive' });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const grandTotalCalculated = calculateTotalPvc(bill.classificationEntries, bill.pvcCalculation, indicesData, bill);
   const isPvcNegative = grandTotalCalculated < 0;
 
@@ -795,6 +821,17 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
           >
             <Download size={16} className={isDownloading ? 'animate-bounce' : 'text-slate-500'} />
             {isDownloading ? 'Building...' : 'Download PDF'}
+          </Button>
+
+          <Button
+            variant="outline"
+            className="gap-2 rounded-xl h-11 border-emerald-200 text-emerald-700 hover:bg-emerald-50 shadow-sm"
+            onClick={handleDownloadSummary}
+            disabled={isDownloading}
+            title="A one-page plain-language summary for the department/accounts user"
+          >
+            <FileText size={16} className="text-emerald-600" />
+            1-page summary
           </Button>
 
           <Button 
