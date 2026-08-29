@@ -142,10 +142,11 @@ export async function POST(request: NextRequest) {
       const code = String(codeBySubId.get(entry.subClassificationId) || codeByLegacyId.get(entry.classificationId) || '').trim().toUpperCase();
       const suffix = code.slice(-1);
       // A STEEL item is one you tagged with a steel type (TMT / Structural / Plates / Other)
-      // — that is how steel is matched — OR a steel-supply (…B) class. A CEMENT item is a
-      // cement-supply (…C) class or one carrying dedicated cement value. Both are pulled out.
+      // — that is how steel is matched — OR a steel class: …B (TMT reinforcement supply)
+      // or …D (fabrication & erection — the other-than-TMT structural steel). A CEMENT
+      // item is a cement-supply (…C) class. All are pulled out of the general comparison.
       const ownSteelTypes = Array.isArray(entry.steelTypes) ? entry.steelTypes : [];
-      const isSteelItem = ownSteelTypes.length > 0 || suffix === 'B';
+      const isSteelItem = ownSteelTypes.length > 0 || suffix === 'B' || suffix === 'D';
       const isCementItem = !isSteelItem && (suffix === 'C');
       if (isSteelItem) { steelSupplyPvc += pvc.totalPvc; steelSupplyAmount += amt; }
       else if (isCementItem) { cementSupplyPvc += pvc.totalPvc; cementSupplyAmount += amt; }

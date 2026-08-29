@@ -10,7 +10,7 @@ import { format } from 'date-fns';
 import type { SteelBreakdownSection } from '@/lib/jpc-items';
 import { findSubWorkRates } from '@/lib/contract-schedules';
 import { resolvePre2022Setup } from '@/lib/pre2022-contract';
-import { resolveSteelIndexBasis } from '@/lib/pvc-calculations';
+import { resolveSteelIndexBasis, defaultSteelTypesForClass } from '@/lib/pvc-calculations';
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -327,7 +327,14 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   };
   const usedSteelPositions = new Set<number>();
   for (const entry of entries) {
-    for (const steelType of (Array.isArray(entry.steelTypes) ? entry.steelTypes : [])) {
+    // The same class-nature default the calculation applies (…B = TMT only,
+    // …D = the non-TMT structural categories), so the statement prints the basis
+    // the money was actually worked out from.
+    const entryTypes = defaultSteelTypesForClass(
+      (entry as any).subClassification?.code,
+      Array.isArray(entry.steelTypes) ? entry.steelTypes : null,
+    ) || [];
+    for (const steelType of entryTypes) {
       const position = STEEL_TYPE_INDEX_POSITION[String(steelType).toUpperCase()];
       if (position !== undefined) usedSteelPositions.add(position);
     }

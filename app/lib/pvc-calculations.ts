@@ -211,6 +211,30 @@ export interface SteelIndexBasis {
  * Sections alone, because 46A.9(1) defines Other Sections as the mean of the other
  * three. Worth knowing when reading a statement that says "average of all four".
  */
+/**
+ * The steel nature each GCC sub-class is used with, applied when an entry recorded no
+ * steel categories of its own:
+ *
+ *  - …B (supply of steel) is used only for REINFORCEMENT — TMT bars. Its steel is
+ *    priced on the TMT index, never the average of all four.
+ *  - …D (fabrication & erection including steel supply) is the OTHER-THAN-TMT steel —
+ *    structural angles/channels, plates and sections.
+ *
+ * Explicit categories on the entry always win; this only replaces the
+ * average-all-four fallback with the class's own nature. Used by the calculation and
+ * by the statement that prints it, so the two cannot diverge.
+ */
+export function defaultSteelTypesForClass(
+  classCode: string | null | undefined,
+  steelTypes?: string[] | null,
+): string[] | null {
+  if (steelTypes && steelTypes.length > 0) return steelTypes;
+  const suffix = String(classCode || '').trim().slice(-1).toUpperCase();
+  if (suffix === 'B') return ['TMT'];
+  if (suffix === 'D') return ['ANGLE_CHANNEL', 'PLATES', 'OTHER_SECTIONS'];
+  return steelTypes ?? null;
+}
+
 export function resolveSteelIndexBasis(
   indexMap: Map<string, SteelIndexRow>,
   steelTypes?: string[] | null,
@@ -874,8 +898,11 @@ export async function calculateClassificationEntryPvc(
     ? calculatePvcComponent(entry.amount, cementAvg.average, cementAvg.baseValue, cementPct)
     : 0;
   
-  // For steel: the entry's categories, or each row's own when they differ.
-  const steelPvc = calculateSteelPvc(entry.amount, indexMap, steelPct, entry.steelTypes, entry.itemRows);
+  // For steel: the entry's categories, or each row's own when they differ. An entry
+  // with none recorded takes its class's steel nature (…B = TMT reinforcement only,
+  // …D = the non-TMT structural categories) instead of the average of all four.
+  const steelTypesForEntry = defaultSteelTypesForClass(subClassCode, entry.steelTypes);
+  const steelPvc = calculateSteelPvc(entry.amount, indexMap, steelPct, steelTypesForEntry ?? undefined, entry.itemRows);
   
   const explosivesAvg = indexMap.get('RBI Explosives');
   const explosivesPvc = (explosivesAvg && components.explosives > 0)
