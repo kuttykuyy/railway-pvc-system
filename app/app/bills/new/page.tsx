@@ -1394,7 +1394,11 @@ function NewBillPageContent() {
     // twice — two POSTs, a duplicate bill, and past the trial a double charge.
     if (isSaving) return;
     if (cementCostPending) {
-      toast.error('Apply the derived cement cost (enter the rate settings and apply) before creating the bill.');
+      // Inline error too, not only the corner toast — this silent-looking refusal was
+      // read as "Create did nothing" (nothing reached the server, no bill appeared).
+      const msg = 'The bill was NOT created: the derived cement cost is waiting to be applied. Find the cement-cost panel on this form, apply (or dismiss) it, then press Create again.';
+      setError(msg);
+      toast.error(msg, { duration: 9000 });
       return;
     }
     setSaving(true);
