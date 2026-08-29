@@ -295,6 +295,45 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* --- THE CAG NUMBERS — why getting PVC right matters --- */}
+      <section className="w-full py-24 bg-slate-900 text-white">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+          <div className="max-w-3xl">
+            <p className="text-emerald-400 font-semibold uppercase tracking-widest text-sm mb-4">Why it matters</p>
+            <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tight">
+              The CAG found <span className="text-emerald-400">₹1,172 crore</span> in wrong PVC payments.
+            </h2>
+            <p className="mt-6 text-xl text-slate-300 font-light leading-relaxed">
+              Auditing 886 Railway works contracts, the Comptroller &amp; Auditor General found excess and short
+              payments of price variation across every zone — from wrong base months to wrong component
+              percentages. These are exactly the errors IR-PVC computes out of existence.
+            </p>
+          </div>
+          <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { amount: '₹20.26 cr', finding: 'excess paid from the wrong base month after tender negotiations', guard: 'Base month is derived and checked on every bill' },
+              { amount: '₹206.88 cr', finding: 'avoidable PVC paid during extended contract periods', guard: '17-A / 17-B extension rules applied automatically' },
+              { amount: '₹11.10 cr', finding: 'excess from wrong formulas, percentages and indices', guard: 'Fixed GCC 46A tables and published indices — nothing typed by hand' },
+              { amount: '66 contracts', finding: 'computed PVC on the wrong quarter', guard: 'The quarter is calculated from the base month, never chosen' },
+            ].map((item) => (
+              <div key={item.amount} className="rounded-2xl bg-slate-800/60 border border-slate-700/60 p-6">
+                <p className="text-3xl font-black text-emerald-400">{item.amount}</p>
+                <p className="mt-2 text-sm text-slate-300 leading-relaxed">{item.finding}</p>
+                <p className="mt-4 text-sm text-white font-medium flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                  {item.guard}
+                </p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-10 text-xs text-slate-500">
+            Source: Comptroller &amp; Auditor General of India, Report No. 5 of 2021 (Railways), Chapter 3, paras 3.1.5–3.1.6
+            — audit of Price Variation in Works Contracts, 2016-17 to 2018-19. Figures are the CAG&apos;s; IR-PVC is an
+            independent tool and is not endorsed by the CAG.
+          </p>
+        </div>
+      </section>
+
       {/* --- TUTORIAL VIDEOS --- */}
       <section id="tutorials" className="w-full py-24 bg-slate-50 border-y border-slate-100">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
