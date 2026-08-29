@@ -1263,48 +1263,6 @@ function NewBillPageContent() {
     await handleSubmit();
   };
 
-  // Comparison "what-if": collapse only the GENERAL items onto ONE classification, while
-  // steel-supply (…B) and cement-supply (…C) entries stay on their own classification —
-  // an "A" class excludes 1B/1C, so steel/cement must never be folded in. This is NOT the
-  // tender-compliant method (46A.6 fixes classification per BoQ item), so it's a deliberate
-  // user choice; we close the preview and drop them back on the form to review before saving.
-  const entrySuffix = (e: ClassificationEntry) =>
-    String(e.subClassification?.code || '').trim().slice(-1).toUpperCase();
-  const applySingleClassification = (sc: any) => {
-    if (!sc?.id) return;
-    const amtOf = (e: ClassificationEntry) =>
-      e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount;
-    // Keep steel-supply / cement-supply entries; collapse everything else.
-    const keptEntries = classificationEntries.filter(e => entrySuffix(e) === 'B' || entrySuffix(e) === 'C');
-    const generalAmount = classificationEntries
-      .filter(e => entrySuffix(e) !== 'B' && entrySuffix(e) !== 'C')
-      .reduce((sum, e) => sum + amtOf(e), 0);
-    if (generalAmount <= 0) {
-      toast.error('No general items to switch — the whole bill is steel/cement supply.');
-      return;
-    }
-    const singleEntry: ClassificationEntry = {
-      subClassificationId: sc.id,
-      subClassification: {
-        id: sc.id, code: sc.code, name: sc.name, groupId: sc.groupId,
-        fixed: sc.fixed, labour: sc.labour, steel: sc.steel, cement: sc.cement,
-        plantMachinery: sc.plantMachinery, fuel: sc.fuel,
-        otherMaterials: sc.otherMaterials, explosives: sc.explosives,
-      },
-      amount: generalAmount,
-      description: `General items under ${sc.code}`,
-      manualClassification: true,
-    };
-    setClassificationEntries([singleEntry, ...keptEntries]);
-    setShowPreviewModal(false);
-    setPreviewResult(null);
-    toast.success(
-      keptEntries.length > 0
-        ? `General items → ${sc.code}; steel/cement kept separate. Review, then Preview/Save.`
-        : `General items → ${sc.code}. Review, then Preview/Save.`,
-    );
-  };
-
   // If the save ends without navigating away — insufficient credit, a validation
   // refusal, a server error — the cover lifts so the form can say what went wrong.
   // Success never reaches this: it redirects first.
@@ -2998,21 +2956,22 @@ function NewBillPageContent() {
                 </div>
               </div>
 
-              {/* Single-classification comparison (transparency / what-if) */}
+              {/* Non-steel classification comparison (transparency / what-if). Steel is
+                  dropped out of both sides and shown on its own line. */}
               {previewResult.singleClassification?.best && (() => {
                 const sc = previewResult.singleClassification;
-                const current = sc.currentTotalPvc ?? previewResult.totalPvc ?? 0;
+                const currentNonSteel = sc.current?.nonSteel ?? 0;
                 const best = sc.best;
-                const diff = (best.totalPvc ?? 0) - current;
+                const singleNonSteel = best.nonSteelPvc ?? 0;
+                const steel = sc.steelPvc ?? 0;
+                const hasSteel = Math.abs(steel) > 0.5;
+                const diff = singleNonSteel - currentNonSteel;
                 const singleHigher = diff > 0.005;
                 const inr = (v: number) => `₹${(Number(v) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-                const steelAmt = sc.steelSupply?.amount || 0;
-                const cementAmt = sc.cementSupply?.amount || 0;
-                const heldOut = steelAmt > 0 || cementAmt > 0;
                 const hi = language === 'hi';
                 return (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
-                    {/* Title — plain question */}
+                    {/* Title */}
                     <div className="px-4 py-2.5 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
                       <p className="text-sm font-bold text-slate-700">
                         {hi ? 'कौन-सा तरीका ज़्यादा देता है?' : 'Which way pays more?'}
@@ -3022,77 +2981,68 @@ function NewBillPageContent() {
 
                     <div className="p-4 space-y-3">
                       <p className="text-xs text-slate-500">
-                        {hi ? 'इस बिल के सामान्य काम को गिनने के दो तरीके:' : 'Two ways to price the general work in this bill:'}
+                        {hi
+                          ? 'गैर-स्टील काम की तुलना (स्टील अलग से नीचे गिना गया है):'
+                          : 'Comparing the non-steel work (steel is priced separately, below):'}
                       </p>
 
-                      {/* Option A — item by item (current) */}
+                      {/* Option A — item by item (current), non-steel */}
                       <div className="flex items-center justify-between px-3 py-2.5 bg-white rounded-lg border-2 border-emerald-300">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-800">{hi ? 'हर मद अलग (अभी)' : 'Item by item (now)'}</p>
                           <p className="text-[11px] text-emerald-700">{hi ? '✓ सही तरीका — निविदा के अनुसार' : '✓ correct method — as per tender'}</p>
                         </div>
-                        <span className="text-lg font-black text-slate-900 whitespace-nowrap">{inr(current)}</span>
+                        <span className="text-lg font-black text-slate-900 whitespace-nowrap">{inr(currentNonSteel)}</span>
                       </div>
 
-                      {/* Option B — all as one class */}
+                      {/* Option B — all as the "All items" class, non-steel */}
                       <div className="flex items-center justify-between px-3 py-2.5 bg-white rounded-lg border border-slate-200">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-800">{hi ? `सब एक वर्ग में: ${best.code}` : `All as one class: ${best.code}`}</p>
                           <p className="text-[11px] text-slate-400 truncate">{best.name}</p>
                         </div>
-                        <span className="text-lg font-black text-indigo-700 whitespace-nowrap">{inr(best.totalPvc)}</span>
+                        <span className="text-lg font-black text-indigo-700 whitespace-nowrap">{inr(singleNonSteel)}</span>
                       </div>
 
-                      {/* Headline answer */}
+                      {/* Headline answer (non-steel only) */}
                       <div className={`rounded-lg px-3 py-2.5 text-center font-bold ${singleHigher ? 'bg-indigo-600 text-white' : 'bg-emerald-600 text-white'}`}>
                         {singleHigher
-                          ? (hi ? `${best.code} में ${inr(Math.abs(diff))} ज़्यादा मिलता है` : `${best.code} pays ${inr(Math.abs(diff))} more`)
+                          ? (hi ? `${best.code} में ${inr(Math.abs(diff))} ज़्यादा (गैर-स्टील)` : `${best.code} pays ${inr(Math.abs(diff))} more (non-steel)`)
                           : (hi ? 'आपका मौजूदा तरीका ही ज़्यादा (या बराबर) देता है' : 'Your current method already pays more (or the same)')}
                       </div>
 
-                      {/* Steel / cement — one plain line */}
-                      {heldOut && (
-                        <p className="text-[11px] leading-relaxed text-slate-500 flex gap-1.5">
-                          <span>ℹ</span>
-                          <span>
-                            {hi
-                              ? `स्टील/सीमेंट सप्लाई (${inr(steelAmt + cementAmt)}) दोनों तरीकों में अपनी अलग दर पर गिना जाता है — यह तुलना में शामिल नहीं है।`
-                              : `Steel & cement supply (${inr(steelAmt + cementAmt)}) are priced on their own rate in both ways — they are not part of this comparison.`}
-                          </span>
-                        </p>
+                      {/* Steel — its own line, dropped out of the comparison */}
+                      {hasSteel && (
+                        <div className="flex items-center justify-between px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-amber-900">{hi ? 'स्टील (अलग से)' : 'Steel (priced separately)'}</p>
+                            <p className="text-[11px] text-amber-700">{hi ? 'स्टील मदों पर — दोनों तरीकों में एक जैसा' : 'on the steel items — the same either way'}</p>
+                          </div>
+                          <span className="text-base font-bold text-amber-900 whitespace-nowrap">{inr(steel)}</span>
+                        </div>
                       )}
 
-                      {/* Expandable working */}
+                      {/* How the totals add up */}
                       <details className="text-xs text-slate-600 bg-white rounded-lg border border-slate-200">
                         <summary className="cursor-pointer select-none px-3 py-2 font-medium text-slate-700">
-                          {hi ? `${best.code} का ${inr(best.totalPvc)} कैसे बना?` : `How is ${best.code}'s ${inr(best.totalPvc)} worked out?`}
+                          {hi ? 'पूरा जोड़ कैसे बनता है?' : 'How do the full totals add up?'}
                         </summary>
                         <div className="px-3 pb-3 pt-1 space-y-1 border-t border-slate-100">
-                          <div className="flex justify-between"><span>{hi ? 'सामान्य काम' : 'General work'} {inr(sc.generalAmount)} → {best.code}</span><span className="font-semibold">{inr(best.generalPvc)}</span></div>
-                          {heldOut && (
-                            <div className="flex justify-between text-slate-500"><span>{hi ? '+ स्टील/सीमेंट (अलग दर)' : '+ Steel/cement (own rate)'}</span><span className="font-semibold">{inr(sc.keptSeparatePvc)}</span></div>
-                          )}
-                          <div className="flex justify-between border-t border-slate-100 pt-1 font-bold text-slate-800"><span>{hi ? 'कुल' : 'Total'}</span><span>{inr(best.totalPvc)}</span></div>
-                          <p className="text-[11px] text-slate-400 pt-1">{hi ? `${best.code} = "सभी मदें" वर्ग — सारे सामान्य काम को एक ही वर्ग में गिनता है (स्टील/सीमेंट सप्लाई अलग)।` : `${best.code} = the "All items" class — it prices all general work as one class (steel & cement supply stay separate).`}</p>
+                          <div className="flex justify-between"><span>{hi ? 'हर मद अलग (गैर-स्टील)' : 'Item by item (non-steel)'}</span><span className="font-semibold">{inr(currentNonSteel)}</span></div>
+                          <div className="flex justify-between"><span>{best.code} {hi ? '(गैर-स्टील)' : '(non-steel)'}</span><span className="font-semibold">{inr(singleNonSteel)}</span></div>
+                          {hasSteel && <div className="flex justify-between text-amber-700"><span>{hi ? '+ स्टील (अलग)' : '+ Steel (separate)'}</span><span className="font-semibold">{inr(steel)}</span></div>}
+                          <div className="flex justify-between border-t border-slate-100 pt-1 font-bold text-slate-800"><span>{hi ? 'हर मद अलग — कुल' : 'Item by item — total'}</span><span>{inr(sc.current?.total ?? (currentNonSteel + steel))}</span></div>
+                          <div className="flex justify-between font-bold text-indigo-700"><span>{best.code} — {hi ? 'कुल' : 'total'}</span><span>{inr(best.total ?? (singleNonSteel + steel))}</span></div>
+                          <p className="text-[11px] text-slate-400 pt-1">{hi ? `${best.code} = "सभी मदें" वर्ग। स्टील अलग रखा गया, इसलिए तुलना सिर्फ़ गैर-स्टील की है।` : `${best.code} = the "All items" class. Steel is kept out, so the comparison is non-steel only.`}</p>
                         </div>
                       </details>
 
-                      {/* Compliance reminder — plain */}
+                      {/* Compliance reminder */}
                       <p className="text-[11px] leading-relaxed text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                         ⚠ {hi
-                          ? `निविदा हर मद का वर्ग तय करती है (GCC 46A.6)। ${best.code} तभी चुनें जब यह सचमुच सभी सामान्य मदों पर लागू हो — वरना ऑडिट में पकड़ा जाएगा।`
-                          : `The tender fixes each item's classification (GCC 46A.6). Only switch to ${best.code} if it genuinely fits all the general items — otherwise the audit office will flag it.`}
+                          ? `निविदा हर मद का वर्ग तय करती है (GCC 46A.6)। ${best.code} केवल जानकारी के लिए है — बदलने से पहले पक्का करें कि यह सचमुच लागू होता है।`
+                          : `The tender fixes each item's classification (GCC 46A.6). ${best.code} is shown for information only — confirm it genuinely applies before changing anything.`}
                       </p>
-
-                      {singleHigher && (
-                        <button
-                          type="button"
-                          onClick={() => applySingleClassification(best)}
-                          className="w-full text-sm font-bold text-white bg-indigo-600 rounded-lg py-2.5 hover:bg-indigo-700 transition-colors"
-                        >
-                          {hi ? `सामान्य मदों को ${best.code} में बदलें` : `Switch general items to ${best.code}`}
-                        </button>
-                      )}
                     </div>
                   </div>
                 );
