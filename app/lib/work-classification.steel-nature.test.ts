@@ -1,0 +1,35 @@
+import { describe, expect, it } from 'vitest';
+import { enforceSteelSubclassNature } from './work-classification';
+
+/**
+ * The deterministic B→D guard, tested against the three REAL items an AI run put in 5B:
+ * DSR 5.22.6 (TMT reinforcement — B is right) and DSR 10.2 / 10.19 (structural trusses
+ * and MS holding-down bolts — must be D).
+ */
+describe('enforceSteelSubclassNature', () => {
+  it('keeps genuine TMT reinforcement supply in …B (DSR 5.22.6)', () => {
+    expect(enforceSteelSubclassNature('5B',
+      'Supply and fixing of TMT steel reinforcement bars for RCC work including straightening, cutting, bending, placing in position and binding')).toBe('5B');
+  });
+
+  it('moves structural steel work to …D (DSR 10.2)', () => {
+    expect(enforceSteelSubclassNature('5B',
+      'Structural steel work in built-up sections, trusses and framed work, including cutting, hoisting, fixing in position')).toBe('5D');
+  });
+
+  it('moves mild steel holding-down bolts to …D (DSR 10.19)', () => {
+    expect(enforceSteelSubclassNature('5B',
+      'Providing and fixing mild steel round holding down bolts with nuts and washers')).toBe('5D');
+  });
+
+  it('never touches non-B codes or steel-free items', () => {
+    expect(enforceSteelSubclassNature('5A', 'Structural steel trusses')).toBe('5A');
+    expect(enforceSteelSubclassNature('5D', 'MS bolts')).toBe('5D');
+    expect(enforceSteelSubclassNature('5B', 'Supplying steel for the work')).toBe('5B'); // no non-TMT evidence
+    expect(enforceSteelSubclassNature('', 'anything')).toBe('');
+  });
+
+  it('works for any group digit', () => {
+    expect(enforceSteelSubclassNature('1B', 'Fabrication and erection of MS angles and channels')).toBe('1D');
+  });
+});

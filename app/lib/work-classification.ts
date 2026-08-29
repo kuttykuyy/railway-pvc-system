@@ -216,6 +216,27 @@ export function looksCompositeWork(workDescription: string): { isComposite: bool
   return { isComposite: count >= 2, subWorkCount: count };
 }
 
+/**
+ * DETERMINISTIC steel-nature guard for AI-picked sub-classes: …B ("supply of Steel") is
+ * only for TMT / reinforcement supply, while mild/structural steel — bolts, angles,
+ * channels, plates, built-up sections, trusses, rails — supplied and fixed belongs to
+ * …D ("Fabrication & Erection including Steel Supply"). The AI prompts carry this rule,
+ * but a prompt is a request and the model drifts (real bills came back with MS
+ * holding-down bolts and structural trusses in 5B); this function is the enforcement.
+ * Only ever moves B → D on non-TMT evidence; a pure TMT item, or one with no steel
+ * wording at all, keeps its code.
+ */
+const TMT_NATURE = /\btmt\b|re-?inforc|\bhysd\b|deformed\s+bars?|fe[\s-]?(415|500|550)|cold\s+twisted|\brcc\b|r\.c\.c/i;
+const NON_TMT_NATURE = /mild\s+steel|\bm\.?s\.?\s+(?:round|flat|angle|channel|plate|section|bolt|rod|bar)|structural\s+steel|built-?up\s+section|truss|girder|\bangles?\b|\bchannels?\b|chequered|\bplates?\b|holding[\s-]?down|anchor\s+bolt|\bbolts?\b|gantry|crane\s+rail|\brails?\b|fabricat|erect/i;
+export function enforceSteelSubclassNature(subCode: string | null | undefined, itemDescription: string | null | undefined): string {
+  const code = String(subCode || '').trim().toUpperCase();
+  if (!code.endsWith('B')) return code;
+  const text = String(itemDescription || '');
+  if (!NON_TMT_NATURE.test(text)) return code;           // no non-TMT evidence — B stands
+  if (TMT_NATURE.test(text) && !/mild\s+steel|structural\s+steel/i.test(text)) return code; // genuinely TMT
+  return `${code.slice(0, -1)}D`;
+}
+
 export function classificationCodeMatchesWork(subClassificationCode: string, workDescription: string): boolean {
   return String(subClassificationCode || '').trim().startsWith(inferMainClassification(workDescription).code);
 }

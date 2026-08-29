@@ -14,6 +14,7 @@
 
 import { scheduleNames } from './contract-schedules';
 import { matchExtractedSchedule, scheduleWorkName } from './bill-schedule-matching';
+import { enforceSteelSubclassNature } from './work-classification';
 
 export interface ExtractedSubClassification {
   id: string;
@@ -130,12 +131,21 @@ function steelCategoriesOf(item: {
 }
 
 export function findSubClassificationForExtractedItem(
-  item: { suggestedClassificationCode?: string | null },
+  item: { suggestedClassificationCode?: string | null; description?: string | null },
   classificationGroups: ExtractedClassificationGroup[],
 ): ExtractedSubClassification | null {
-  const code = (item.suggestedClassificationCode || '').trim().toUpperCase();
+  let code = (item.suggestedClassificationCode || '').trim().toUpperCase();
   if (!code) return null;
   const allSubs = classificationGroups.flatMap((group) => group.subClassifications || []);
+
+  // The deterministic steel-nature guard: an AI pick of …B for a non-TMT item (MS
+  // bolts, structural trusses — real cases) is corrected to …D here, where every
+  // extracted item passes, instead of hoping the prompt was obeyed. Falls back to the
+  // AI's code when the group has no …D class.
+  const corrected = enforceSteelSubclassNature(code, item.description);
+  if (corrected !== code && allSubs.some((sub) => sub.code.toUpperCase() === corrected)) {
+    code = corrected;
+  }
 
   const exact = allSubs.find((sub) => sub.code.toUpperCase() === code);
   if (exact) return exact;
