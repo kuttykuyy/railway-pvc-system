@@ -376,9 +376,10 @@ export default function BulkBillCreationPage() {
   // steel (…B/…D, or steel-majority typed) and cement (…C) entries are kept untouched —
   // the same split the comparison priced. The stale preview for the row is cleared so
   // the shown PVC can't belong to the old entries.
-  const groupRowUnderClass = (rowId: string, best: any) => {
-    const row = billRows.find(r => r.id === rowId);
-    if (!row || !best?.id) return;
+  // RECLASSIFY each general entry rather than collapsing: descriptions, item rows and
+  // AI justifications survive (with a note), so the statement's Section D stays full.
+  const buildGroupedEntriesForRow = (row: BillRow, best: any): ClassificationEntry[] | null => {
+    if (!best?.id) return null;
     const allSubs = classificationGroups.flatMap(g => g.subClassifications);
     const subOf = (e: ClassificationEntry) => allSubs.find(s => s.id === e.subClassificationId);
     const suffixOf = (e: ClassificationEntry) => String(subOf(e)?.code || '').trim().slice(-1).toUpperCase();
@@ -388,8 +389,6 @@ export default function BulkBillCreationPage() {
       const types = Array.isArray(e.steelTypes) ? e.steelTypes : [];
       return types.length > 0 && ((subOf(e) as any)?.steel ?? 0) >= 50;
     };
-    // RECLASSIFY each general entry rather than collapsing: descriptions, item rows and
-    // AI justifications survive (with a note), so the statement's Section D stays full.
     const isKept = (e: ClassificationEntry) => isSteelEntry(e) || (suffixOf(e) === 'C' && !isSteelEntry(e));
     let changed = 0;
     const next = row.classificationEntries.map(e => {
@@ -409,13 +408,44 @@ export default function BulkBillCreationPage() {
         classificationJustification: `${(e.classificationJustification || '').trim()} ${note}`.trim(),
       };
     });
-    if (changed === 0) {
+    return changed > 0 ? next : null;
+  };
+
+  const groupRowUnderClass = (rowId: string, best: any) => {
+    const row = billRows.find(r => r.id === rowId);
+    if (!row) return;
+    const next = buildGroupedEntriesForRow(row, best);
+    if (!next) {
       toast.error('Nothing to group — every item on this bill is steel or cement supply.');
       return;
     }
     updateClassificationEntries(rowId, next);
     setPreviews(prev => { const nxt = { ...prev }; delete nxt[rowId]; return nxt; });
-    toast.success(`Bill ${row.billNo || rowId}: ${changed} general item(s) reclassified to ${best.code} — details kept. Preview again to see the new PVC.`);
+    toast.success(`Bill ${row.billNo || rowId}: general items reclassified to ${best.code} — details kept. Preview again to see the new PVC.`);
+  };
+
+  // The single-bill flow's decision step, for the batch: Create runs the previews, then a
+  // review modal lets each bill choose its method (item-by-item default, or grouped under
+  // its best-matching class), and one confirm saves them all.
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [methodChoices, setMethodChoices] = useState<Record<string, 'item' | 'grouped'>>({});
+  const handleProcessClick = async () => {
+    const validationError = validateBills();
+    if (validationError) { toast.error(validationError); return; }
+    await previewAllRows();
+    setMethodChoices(Object.fromEntries(billRows.map(row => [row.id, 'item' as const])));
+    setReviewOpen(true);
+  };
+  const handleConfirmCreate = () => {
+    const finalRows = billRows.map(row => {
+      if (methodChoices[row.id] !== 'grouped') return row;
+      const best = (previews[row.id] as any)?.single?.best;
+      const next = best ? buildGroupedEntriesForRow(row, best) : null;
+      return next ? { ...row, classificationEntries: next } : row;
+    });
+    setBillRows(finalRows);
+    setReviewOpen(false);
+    handleSubmit(finalRows);
   };
 
   const getEditingBill = () => billRows.find(row => row.id === editingBillId);
@@ -730,16 +760,19 @@ export default function BulkBillCreationPage() {
     return null;
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (rowsOverride?: BillRow[]) => {
     const validationError = validateBills();
     if (validationError) { toast.error(validationError); return; }
+    // The review modal hands its final rows directly — state updates are async and
+    // would not be visible to this call yet.
+    const rowsToSave = rowsOverride ?? billRows;
 
     try {
       setIsSaving(true);
 
       const payload = {
         contractId: selectedContract!.id,
-        bills: billRows.map((row) => {
+        bills: rowsToSave.map((row) => {
           const classificationTotal = getClassificationTotal(row);
           return {
             billNo: row.billNo.trim(),
@@ -1206,9 +1239,9 @@ export default function BulkBillCreationPage() {
                 </div>
                 <div className="flex gap-3">
                   <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSaving}>Cancel</Button>
-                  <Button onClick={handleSubmit} disabled={isSaving}>
-                    {isSaving ? (
-                      <><LoadingSpinner className="mr-2" />Creating...</>
+                  <Button onClick={handleProcessClick} disabled={isSaving || previewingRows}>
+                    {isSaving || previewingRows ? (
+                      <><LoadingSpinner className="mr-2" />{previewingRows ? 'Calculating…' : 'Creating...'}</>
                     ) : (
                       <><Save className="h-4 w-4 mr-2" />Create {billRows.length} Bill{billRows.length > 1 ? 's' : ''}</>
                     )}
@@ -1356,6 +1389,69 @@ export default function BulkBillCreationPage() {
         info={extensionInfo}
         onSaved={() => { setExtensionInfo(null); handleSubmit(); }}
       />
+
+      {/* Review before create — the single-bill decision step, per batch row: each bill
+          picks item-by-item (default, tender method) or grouped under its best class. */}
+      {reviewOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden my-4">
+            <div className="px-6 py-4 bg-emerald-600 text-white flex-shrink-0">
+              <h2 className="text-lg font-black">Review before creating {billRows.length} bill{billRows.length > 1 ? 's' : ''}</h2>
+              <p className="text-emerald-100 text-xs mt-0.5">Each bill: item by item (✓ tender method) or grouped under its best-matching class. Steel/cement stay separate either way.</p>
+            </div>
+            <div className="p-4 space-y-2 flex-1 overflow-y-auto min-h-0">
+              {billRows.map((row) => {
+                const preview = previews[row.id];
+                const ok = preview && !('error' in preview);
+                const single = ok ? (preview as any).single : null;
+                const itemTotal = ok ? (preview as any).totalPvc : null;
+                const choice = methodChoices[row.id] || 'item';
+                return (
+                  <div key={row.id} className="rounded-lg border border-slate-200 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-slate-800 truncate">{row.billNo || '(no bill no)'}</span>
+                      {!ok && <span className="text-xs text-red-600">{preview && 'error' in preview ? preview.error : 'no preview'}</span>}
+                    </div>
+                    {ok && (
+                      <div className="mt-2 flex flex-col sm:flex-row gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setMethodChoices(prev => ({ ...prev, [row.id]: 'item' }))}
+                          className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm ${choice === 'item' ? 'border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300' : 'border-slate-200 hover:bg-slate-50'}`}
+                        >
+                          <span className="font-semibold">Item by item</span>
+                          <span className="text-[11px] text-emerald-700 block">✓ tender method</span>
+                          <span className="font-bold">₹{Number(itemTotal ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                        </button>
+                        {single?.best ? (
+                          <button
+                            type="button"
+                            onClick={() => setMethodChoices(prev => ({ ...prev, [row.id]: 'grouped' }))}
+                            className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm ${choice === 'grouped' ? 'border-indigo-400 bg-indigo-50 ring-1 ring-indigo-300' : 'border-slate-200 hover:bg-slate-50'}`}
+                          >
+                            <span className="font-semibold">Grouped under {single.best.code}</span>
+                            <span className="text-[11px] text-slate-500 block">{single.composite ? 'composite work — item-wise is compliant' : single.best.name}</span>
+                            <span className="font-bold text-indigo-700">₹{Number(single.best.total ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                          </button>
+                        ) : (
+                          <div className="flex-1 rounded-lg border border-slate-100 px-3 py-2 text-[11px] text-slate-400">No single-class option for this bill</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex gap-2.5 px-6 py-4 flex-shrink-0 border-t border-slate-100 bg-white">
+              <Button variant="outline" className="rounded-xl" onClick={() => setReviewOpen(false)}>Back</Button>
+              <Button className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={handleConfirmCreate} disabled={isSaving}>
+                <Save className="h-4 w-4 mr-2" />
+                Create {billRows.length} bill{billRows.length > 1 ? 's' : ''}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
