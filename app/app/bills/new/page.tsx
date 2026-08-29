@@ -1263,6 +1263,53 @@ function NewBillPageContent() {
     await handleSubmit();
   };
 
+  // Rebuild the bill grouped under ONE class: the general items collapse into a single
+  // entry of the chosen "All items" (…A) class, while steel (…B/…D, or steel-majority
+  // typed) and cement (…C) entries are KEPT untouched — mirroring exactly how the
+  // comparison priced it. A deliberate user choice from the comparison card; the audit
+  // checklist will still flag a composite work collapsed onto one class for confirmation.
+  const entrySuffixOf = (e: ClassificationEntry) =>
+    String(e.subClassification?.code || '').trim().slice(-1).toUpperCase();
+  const isSteelEntryFn = (e: ClassificationEntry) => {
+    const s = entrySuffixOf(e);
+    if (s === 'B' || s === 'D') return true;
+    const types = Array.isArray(e.steelTypes) ? e.steelTypes : [];
+    return types.length > 0 && (e.subClassification?.steel ?? 0) >= 50;
+  };
+  const applyGroupedClassification = (bestCls: any) => {
+    if (!bestCls?.id) return;
+    const amtOf = (e: ClassificationEntry) =>
+      e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount;
+    const kept = classificationEntries.filter(e => isSteelEntryFn(e) || (entrySuffixOf(e) === 'C' && !isSteelEntryFn(e)));
+    const generalAmount = classificationEntries
+      .filter(e => !kept.includes(e))
+      .reduce((sum, e) => sum + amtOf(e), 0);
+    if (generalAmount <= 0) {
+      toast.error('Nothing to group — every item is steel or cement supply.');
+      return;
+    }
+    const groupedEntry: ClassificationEntry = {
+      subClassificationId: bestCls.id,
+      subClassification: {
+        id: bestCls.id, code: bestCls.code, name: bestCls.name, groupId: bestCls.groupId,
+        fixed: bestCls.fixed, labour: bestCls.labour, steel: bestCls.steel, cement: bestCls.cement,
+        plantMachinery: bestCls.plantMachinery, fuel: bestCls.fuel,
+        otherMaterials: bestCls.otherMaterials, explosives: bestCls.explosives,
+      },
+      amount: generalAmount,
+      description: `General items grouped under ${bestCls.code}`,
+      manualClassification: true,
+    };
+    setClassificationEntries([groupedEntry, ...kept]);
+    setShowPreviewModal(false);
+    setPreviewResult(null);
+    toast.success(
+      kept.length > 0
+        ? `General items grouped under ${bestCls.code}; steel/cement kept separate. Review, then Preview and Save.`
+        : `All items grouped under ${bestCls.code}. Review, then Preview and Save.`,
+    );
+  };
+
   // If the save ends without navigating away — insufficient credit, a validation
   // refusal, a server error — the cover lifts so the form can say what went wrong.
   // Success never reaches this: it redirects first.
@@ -3101,6 +3148,23 @@ function NewBillPageContent() {
                           : (hi
                               ? `निविदा हर मद का वर्ग तय करती है (GCC 46A.6)। ${best.code} केवल जानकारी के लिए है — बदलने से पहले पक्का करें कि यह सचमुच लागू होता है।`
                               : `The tender fixes each item's classification (GCC 46A.6). ${best.code} is shown for information only — confirm it genuinely applies before changing anything.`)}
+                      </p>
+
+                      {/* Deliberate switch: rebuild the bill grouped under the shown class.
+                          General items collapse into one entry; steel/cement stay as-is. */}
+                      <button
+                        type="button"
+                        onClick={() => applyGroupedClassification(best)}
+                        className="w-full text-sm font-bold text-indigo-700 border-2 border-indigo-300 bg-white rounded-lg py-2.5 hover:bg-indigo-50 transition-colors"
+                      >
+                        {hi
+                          ? `बिल को ${best.code} वर्ग में समूहित करें (स्टील/सीमेंट अलग रहेंगे)`
+                          : `Group this bill under ${best.code} (steel/cement stay separate)`}
+                      </button>
+                      <p className="text-[10.5px] text-slate-400 text-center -mt-1">
+                        {hi
+                          ? 'यह मदों को बदल देगा — सहेजने से पहले जाँचें। निविदा से मेल न खाने पर ऑडिट में CHECK लगेगा।'
+                          : 'This rewrites the entries — review before saving. If it does not match the tender, the audit checklist will flag it.'}
                       </p>
                     </div>
                   </div>
