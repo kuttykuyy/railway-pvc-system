@@ -16,7 +16,7 @@ import { CreatedViaBadge } from '@/components/ui/created-via-badge';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { toISTDate } from '@/lib/ist-utils';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { TableSkeleton } from '@/components/ui/skeletons/table-skeleton';
 import { CardGridSkeleton } from '@/components/ui/skeletons/card-skeleton';
@@ -156,6 +156,9 @@ export default function BillsPage() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [filteredBills, setFilteredBills] = useState<Bill[]>([]);
   const [billGroups, setBillGroups] = useState<BillGroup[]>([]);
+  // Client-side pagination over the grouped list — batches stay whole on a page.
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [selectedBills, setSelectedBills] = useState<string[]>([]);
@@ -415,37 +418,26 @@ export default function BillsPage() {
     }
   };
 
-  // Check delete permissions for all bills
+  // Check delete permissions for all bills — ONE batch call. This used to fire one
+  // request per bill in parallel (~30 lambdas per list render, each holding a pooler
+  // connection), which helped exhaust the database pooler's client-connection cap.
   const checkDeletePermissions = async () => {
     try {
       const billIds = bills.map(bill => bill.id);
-      
-      // Check permissions for each bill individually
-      const results = await Promise.all(
-        billIds.map(async (billId) => {
-          try {
-            const response = await fetch('/api/bills/can-delete', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ billId })
-            });
-            
-            if (response.ok) {
-              const data = await response.json();
-              return { billId, allowed: data.allowed };
-            }
-            return { billId, allowed: false };
-          } catch {
-            return { billId, allowed: false };
-          }
-        })
-      );
-
-      const deletableIds = new Set(
-        results.filter(r => r.allowed).map(r => r.billId)
-      );
-      
-      setDeletableBillIds(deletableIds);
+      if (billIds.length === 0) { setDeletableBillIds(new Set()); return; }
+      const response = await fetch('/api/bills/can-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ billIds })
+      });
+      if (!response.ok) { setDeletableBillIds(new Set()); return; }
+      const data = await response.json();
+      if (data.allowed) {
+        setDeletableBillIds(new Set(billIds));
+        return;
+      }
+      const disallowed = new Set<string>(Array.isArray(data.disallowedBillIds) ? data.disallowedBillIds : billIds);
+      setDeletableBillIds(new Set(billIds.filter(id => !disallowed.has(id))));
     } catch (error) {
       console.error('Error checking delete permissions:', error);
       // On error, assume no bills are deletable
@@ -672,7 +664,16 @@ export default function BillsPage() {
     }
     
     setBillGroups(groups);
+    // A changed filter or sort produces a new list — always land back on page 1 of it.
+    setCurrentPage(1);
   }, [filteredBills, billTypeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(billGroups.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const pagedGroups = useMemo(
+    () => billGroups.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [billGroups, safePage, pageSize],
+  );
 
   const toggleBatchExpansion = (batchId: string) => {
     setExpandedBatches(prev => {
@@ -1215,6 +1216,31 @@ export default function BillsPage() {
     );
   }
 
+  // Shared pagination bar — rendered under both the table and the card list.
+  const paginationBar = billGroups.length > 10 ? (
+    <div className="flex flex-wrap items-center justify-between gap-3 px-1 py-3">
+      <p className="text-sm text-slate-500 tabular-nums">
+        Showing {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, billGroups.length)} of {billGroups.length}
+      </p>
+      <div className="flex items-center gap-2">
+        <select
+          value={pageSize}
+          onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+          className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-600"
+        >
+          {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n} / page</option>)}
+        </select>
+        <Button variant="outline" size="sm" className="h-8 rounded-lg" disabled={safePage <= 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>
+          Prev
+        </Button>
+        <span className="text-sm text-slate-600 tabular-nums">Page {safePage} / {totalPages}</span>
+        <Button variant="outline" size="sm" className="h-8 rounded-lg" disabled={safePage >= totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>
+          Next
+        </Button>
+      </div>
+    </div>
+  ) : null;
+
   const totalBillAmount = filteredBills.reduce((sum, bill) => sum + bill.billAmount, 0);
   const totalPvcAmount = filteredBills.reduce((sum, bill) => 
     sum + (bill.pvcCalculation?.totalPvc || 0), 0);
@@ -1753,7 +1779,7 @@ export default function BillsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {billGroups.flatMap((group, groupIndex) => {
+                  {pagedGroups.flatMap((group, groupIndex) => {
                     if (group.type === 'single') {
                       const bill = group.bills[0];
                       return [(
@@ -2070,6 +2096,7 @@ export default function BillsPage() {
                 </tbody>
               </table>
             </div>
+            {paginationBar}
           </CardContent>
         </Card>
       ) : (
@@ -2097,7 +2124,7 @@ export default function BillsPage() {
             </Card>
           )}
 
-          {billGroups.flatMap((group, groupIndex) => {
+          {pagedGroups.flatMap((group, groupIndex) => {
             if (group.type === 'single') {
               const bill = group.bills[0];
               return [(
@@ -2652,6 +2679,7 @@ export default function BillsPage() {
               )];
             }
           })}
+          {paginationBar}
         </div>
       )}
 

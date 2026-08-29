@@ -114,7 +114,7 @@ export async function canUserDeleteBills(
   userId: string,
   billIds: string[],
   userRole: string
-): Promise<{ allowed: boolean; reason?: string; disallowedBills?: string[] }> {
+): Promise<{ allowed: boolean; reason?: string; disallowedBills?: string[]; disallowedBillIds?: string[] }> {
   try {
     // Get all bills with their contracts
     const bills = await prisma.bill.findMany({
@@ -136,15 +136,25 @@ export async function canUserDeleteBills(
 
     // Same two rules as the single delete: own bills only, and nothing already
     // approved or passed — those are records other people signed.
-    const disallowedBills = bills
-      .filter(bill => bill.contract.userId !== userId || bill.status === 'approved' || bill.status === 'passed')
-      .map(bill => bill.billNo);
+    const disallowed = bills
+      .filter(bill => bill.contract.userId !== userId || bill.status === 'approved' || bill.status === 'passed');
+    const disallowedBills = disallowed.map(bill => bill.billNo);
+    // Ids too (billNo is for the human-readable reason): the bills page maps deletability
+    // per row from ONE batch call instead of one request per bill — that per-row fan-out
+    // fired ~30 parallel lambdas per list render and helped exhaust the pooler's
+    // client-connection cap. Ids requested but not found count as disallowed.
+    const foundIds = new Set(bills.map(bill => bill.id));
+    const disallowedBillIds = [
+      ...disallowed.map(bill => bill.id),
+      ...billIds.filter(id => !foundIds.has(id)),
+    ];
     return {
-      allowed: disallowedBills.length === 0,
+      allowed: disallowedBillIds.length === 0,
       reason: disallowedBills.length > 0
         ? `You can only delete your own, not-yet-approved bills. Cannot delete: ${disallowedBills.join(', ')}`
         : undefined,
-      disallowedBills
+      disallowedBills,
+      disallowedBillIds
     };
   } catch (error) {
     console.error('Error checking bulk bill deletion permission:', error);
