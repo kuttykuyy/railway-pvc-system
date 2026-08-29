@@ -94,7 +94,21 @@ export async function POST(request: NextRequest) {
     const { calculateClassificationEntryPvc, getClassificationComponents } = await import('@/lib/pvc-calculations');
     let labourPvc = 0, plantPvc = 0, fuelPvc = 0, materialsPvc = 0;
     let cementPvc = 0, steelPvc = 0, explosivesPvc = 0, totalPvc = 0;
-    let billedAmount = 0;
+
+    // Classification code for every entry — from BOTH the sub-classification and the legacy
+    // classification tables, so a steel-supply (…B) entry is recognised whichever field it
+    // uses. Steel items ARE the …B entries (priced at their 85% steel-supply rate); they are
+    // pulled out as the separate "steel" line and dropped from the general comparison below.
+    const subIds = [...new Set(classificationEntries.map((e: any) => e.subClassificationId).filter(Boolean))] as string[];
+    const legacyIds = [...new Set(classificationEntries.map((e: any) => e.classificationId).filter(Boolean))] as string[];
+    const [subRows, legacyRows] = await Promise.all([
+      subIds.length ? prisma.subClassification.findMany({ where: { id: { in: subIds } }, select: { id: true, code: true } }) : Promise.resolve([]),
+      legacyIds.length ? prisma.classification.findMany({ where: { id: { in: legacyIds } }, select: { id: true, code: true } }) : Promise.resolve([]),
+    ]);
+    const codeBySubId = new Map(subRows.map(r => [r.id, r.code]));
+    const codeByLegacyId = new Map(legacyRows.map(r => [r.id, r.code]));
+    let steelSupplyPvc = 0, steelSupplyAmount = 0;   // …B entries — the separate steel line
+    let generalPvc = 0, generalAmount = 0;           // everything else (compared below)
 
     for (const entry of classificationEntries) {
       const hasAmount = entry.amount !== '' && entry.amount !== null && entry.amount !== undefined && parseFloat(entry.amount) > 0;
@@ -122,7 +136,11 @@ export async function POST(request: NextRequest) {
       steelPvc += pvc.steelPvc;
       explosivesPvc += pvc.explosivesPvc;
       totalPvc += pvc.totalPvc;
-      billedAmount += parseFloat(entry.amount);
+
+      const amt = parseFloat(entry.amount);
+      const code = String(codeBySubId.get(entry.subClassificationId) || codeByLegacyId.get(entry.classificationId) || '').trim().toUpperCase();
+      if (code.slice(-1) === 'B') { steelSupplyPvc += pvc.totalPvc; steelSupplyAmount += amt; }
+      else { generalPvc += pvc.totalPvc; generalAmount += amt; }
     }
 
     // Previous cumulative PVC (for new bill display)
@@ -159,14 +177,13 @@ export async function POST(request: NextRequest) {
 
     // Single-classification comparison (TRANSPARENCY / what-if — NOT the tender method).
     // The per-item split above is the GCC-2022 46A.6 method (classification fixed per BoQ
-    // item by the tender). Here we also show: if all the work were priced under ONE class
-    // (the group's "All items" …A class), how does the NON-STEEL PVC compare?
-    // STEEL IS DROPPED OUT of both sides and shown once, on its own line: steel is priced on
-    // the steel items themselves (found by DSR item/description) and is the same either way,
-    // so it must not swing the comparison. The comparison is therefore non-steel only.
+    // item by the tender). Here we compare the GENERAL (non-steel-supply) work two ways:
+    // priced item-by-item vs priced under ONE class (the group's "All items" …A class).
+    // STEEL = the steel-supply (…B) items, priced at their own 85% steel-supply rate. It is
+    // pulled out as its own line (same either way) and never swings the comparison.
     let singleClassification: any = null;
     try {
-      if (billedAmount > 0) {
+      if (generalAmount > 0) {
         const { inferMainClassification } = await import('@/lib/work-classification');
         const { calculateDynamicClassificationPvc } = await import('@/lib/pvc-calculations');
         const main = inferMainClassification(contract.workDescription || '');
@@ -179,28 +196,27 @@ export async function POST(request: NextRequest) {
           },
           orderBy: { code: 'asc' },
         });
-        // The single class = the group's "All items" (…A) class — the genuine "treat the
-        // whole work as one class", never a specific-nature class (…D/…E fabrication) picked
-        // for payout. …B/…C are supply classes, not candidates.
+        // The single class = the group's "All items" (…A) class — the genuine "treat all
+        // the general work as one class", never a specific-nature class picked for payout.
         const allItemsClass = groupClasses.find(c => String(c.code || '').trim().slice(-1).toUpperCase() === 'A');
         if (allItemsClass) {
-          const single = await calculateDynamicClassificationPvc(billedAmount, quarterlyAverages, allItemsClass.code, extractedSteelTypes);
+          // Apply the …A class to the general amount only (steel supply already pulled out).
+          const single = await calculateDynamicClassificationPvc(generalAmount, quarterlyAverages, allItemsClass.code, extractedSteelTypes);
           if (!single.isProcessingFee) {
-            const singleNonSteel = single.totalPvc - single.steelPvc;   // drop steel out
-            const currentNonSteel = totalPvc - steelPvc;                 // drop steel out
             singleClassification = {
               mainCode: main.code,
               mainLabel: main.label,
-              billedAmount,
-              steelPvc,                        // the separate steel line (same on both sides)
-              current: { total: totalPvc, nonSteel: currentNonSteel },
+              generalAmount,
+              // The steel-supply (…B) line — priced at 85% on those items, same either way.
+              steel: { pvc: steelSupplyPvc, amount: steelSupplyAmount },
+              current: { general: generalPvc, total: totalPvc },
               best: {
                 id: allItemsClass.id, code: allItemsClass.code, name: allItemsClass.name, groupId: allItemsClass.groupId,
                 fixed: allItemsClass.fixed, labour: allItemsClass.labour, steel: allItemsClass.steel, cement: allItemsClass.cement,
                 plantMachinery: allItemsClass.plantMachinery, fuel: allItemsClass.fuel,
                 otherMaterials: allItemsClass.otherMaterials, explosives: allItemsClass.explosives,
-                nonSteelPvc: singleNonSteel,
-                total: singleNonSteel + steelPvc,
+                generalPvc: single.totalPvc,
+                total: single.totalPvc + steelSupplyPvc,
               },
             };
           }

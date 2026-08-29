@@ -2960,12 +2960,12 @@ function NewBillPageContent() {
                   dropped out of both sides and shown on its own line. */}
               {previewResult.singleClassification?.best && (() => {
                 const sc = previewResult.singleClassification;
-                const currentNonSteel = sc.current?.nonSteel ?? 0;
+                const currentGeneral = sc.current?.general ?? 0;
                 const best = sc.best;
-                const singleNonSteel = best.nonSteelPvc ?? 0;
-                const steel = sc.steelPvc ?? 0;
+                const singleGeneral = best.generalPvc ?? 0;
+                const steel = sc.steel?.pvc ?? 0;
                 const hasSteel = Math.abs(steel) > 0.5;
-                const diff = singleNonSteel - currentNonSteel;
+                const diff = singleGeneral - currentGeneral;
                 const singleHigher = diff > 0.005;
                 const inr = (v: number) => `₹${(Number(v) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
                 const hi = language === 'hi';
@@ -2982,8 +2982,8 @@ function NewBillPageContent() {
                     <div className="p-4 space-y-3">
                       <p className="text-xs text-slate-500">
                         {hi
-                          ? 'गैर-स्टील काम की तुलना (स्टील अलग से नीचे गिना गया है):'
-                          : 'Comparing the non-steel work (steel is priced separately, below):'}
+                          ? 'सामान्य काम की तुलना (स्टील सप्लाई मदें अलग से नीचे गिनी गई हैं):'
+                          : 'Comparing the general work (steel-supply items are priced separately, below):'}
                       </p>
 
                       {/* Option A — item by item (current), non-steel */}
@@ -2992,7 +2992,7 @@ function NewBillPageContent() {
                           <p className="text-sm font-semibold text-slate-800">{hi ? 'हर मद अलग (अभी)' : 'Item by item (now)'}</p>
                           <p className="text-[11px] text-emerald-700">{hi ? '✓ सही तरीका — निविदा के अनुसार' : '✓ correct method — as per tender'}</p>
                         </div>
-                        <span className="text-lg font-black text-slate-900 whitespace-nowrap">{inr(currentNonSteel)}</span>
+                        <span className="text-lg font-black text-slate-900 whitespace-nowrap">{inr(currentGeneral)}</span>
                       </div>
 
                       {/* Option B — all as the "All items" class, non-steel */}
@@ -3001,13 +3001,13 @@ function NewBillPageContent() {
                           <p className="text-sm font-semibold text-slate-800">{hi ? `सब एक वर्ग में: ${best.code}` : `All as one class: ${best.code}`}</p>
                           <p className="text-[11px] text-slate-400 truncate">{best.name}</p>
                         </div>
-                        <span className="text-lg font-black text-indigo-700 whitespace-nowrap">{inr(singleNonSteel)}</span>
+                        <span className="text-lg font-black text-indigo-700 whitespace-nowrap">{inr(singleGeneral)}</span>
                       </div>
 
                       {/* Headline answer (non-steel only) */}
                       <div className={`rounded-lg px-3 py-2.5 text-center font-bold ${singleHigher ? 'bg-indigo-600 text-white' : 'bg-emerald-600 text-white'}`}>
                         {singleHigher
-                          ? (hi ? `${best.code} में ${inr(Math.abs(diff))} ज़्यादा (गैर-स्टील)` : `${best.code} pays ${inr(Math.abs(diff))} more (non-steel)`)
+                          ? (hi ? `${best.code} में ${inr(Math.abs(diff))} ज़्यादा (सामान्य काम)` : `${best.code} pays ${inr(Math.abs(diff))} more (general work)`)
                           : (hi ? 'आपका मौजूदा तरीका ही ज़्यादा (या बराबर) देता है' : 'Your current method already pays more (or the same)')}
                       </div>
 
@@ -3015,8 +3015,8 @@ function NewBillPageContent() {
                       {hasSteel && (
                         <div className="flex items-center justify-between px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-amber-900">{hi ? 'स्टील (अलग से)' : 'Steel (priced separately)'}</p>
-                            <p className="text-[11px] text-amber-700">{hi ? 'स्टील मदों पर — दोनों तरीकों में एक जैसा' : 'on the steel items — the same either way'}</p>
+                            <p className="text-sm font-semibold text-amber-900">{hi ? 'स्टील सप्लाई मदें (अलग)' : 'Steel-supply items (separate)'}</p>
+                            <p className="text-[11px] text-amber-700">{hi ? '…B वर्ग पर 85% स्टील — दोनों तरीकों में एक जैसा' : 'priced at 85% on the …B items — the same either way'}</p>
                           </div>
                           <span className="text-base font-bold text-amber-900 whitespace-nowrap">{inr(steel)}</span>
                         </div>
@@ -3028,12 +3028,12 @@ function NewBillPageContent() {
                           {hi ? 'पूरा जोड़ कैसे बनता है?' : 'How do the full totals add up?'}
                         </summary>
                         <div className="px-3 pb-3 pt-1 space-y-1 border-t border-slate-100">
-                          <div className="flex justify-between"><span>{hi ? 'हर मद अलग (गैर-स्टील)' : 'Item by item (non-steel)'}</span><span className="font-semibold">{inr(currentNonSteel)}</span></div>
-                          <div className="flex justify-between"><span>{best.code} {hi ? '(गैर-स्टील)' : '(non-steel)'}</span><span className="font-semibold">{inr(singleNonSteel)}</span></div>
-                          {hasSteel && <div className="flex justify-between text-amber-700"><span>{hi ? '+ स्टील (अलग)' : '+ Steel (separate)'}</span><span className="font-semibold">{inr(steel)}</span></div>}
-                          <div className="flex justify-between border-t border-slate-100 pt-1 font-bold text-slate-800"><span>{hi ? 'हर मद अलग — कुल' : 'Item by item — total'}</span><span>{inr(sc.current?.total ?? (currentNonSteel + steel))}</span></div>
-                          <div className="flex justify-between font-bold text-indigo-700"><span>{best.code} — {hi ? 'कुल' : 'total'}</span><span>{inr(best.total ?? (singleNonSteel + steel))}</span></div>
-                          <p className="text-[11px] text-slate-400 pt-1">{hi ? `${best.code} = "सभी मदें" वर्ग। स्टील अलग रखा गया, इसलिए तुलना सिर्फ़ गैर-स्टील की है।` : `${best.code} = the "All items" class. Steel is kept out, so the comparison is non-steel only.`}</p>
+                          <div className="flex justify-between"><span>{hi ? 'हर मद अलग (गैर-स्टील)' : 'Item by item (general)'}</span><span className="font-semibold">{inr(currentGeneral)}</span></div>
+                          <div className="flex justify-between"><span>{best.code} {hi ? '(सामान्य)' : '(general)'}</span><span className="font-semibold">{inr(singleGeneral)}</span></div>
+                          {hasSteel && <div className="flex justify-between text-amber-700"><span>{hi ? '+ स्टील (अलग)' : '+ Steel supply (85%)'}</span><span className="font-semibold">{inr(steel)}</span></div>}
+                          <div className="flex justify-between border-t border-slate-100 pt-1 font-bold text-slate-800"><span>{hi ? 'हर मद अलग — कुल' : 'Item by item — total'}</span><span>{inr(sc.current?.total ?? (currentGeneral + steel))}</span></div>
+                          <div className="flex justify-between font-bold text-indigo-700"><span>{best.code} — {hi ? 'कुल' : 'total'}</span><span>{inr(best.total ?? (singleGeneral + steel))}</span></div>
+                          <p className="text-[11px] text-slate-400 pt-1">{hi ? `${best.code} = "सभी मदें" वर्ग। स्टील अलग रखा गया, इसलिए तुलना सिर्फ़ गैर-स्टील की है।` : `${best.code} = the "All items" class. Steel-supply items are kept out, so the comparison is general work only.`}</p>
                         </div>
                       </details>
 
