@@ -3065,7 +3065,7 @@ function NewBillPageContent() {
                           <p className="text-[11px] text-indigo-500 mt-1">
                             {hi ? 'हर संभावित वर्ग आज़माया गया — ' : 'every possible group tried — '}
                             {sc.candidates.map((c: any) => `${c.code} ${inr(c.total)}${Number.isFinite(c.matchPct) ? ` (${hi ? 'मेल' : 'fits'} ${c.matchPct}%)` : ''}`).join(' · ')}
-                            {hi ? ' — सबसे ज़्यादा दिखाया गया' : ' — highest shown'}
+                            {hi ? ' — सबसे मेल खाने वाला दिखाया गया' : ' — best match shown'}
                           </p>
                         )}
                         {sc.guideline && (

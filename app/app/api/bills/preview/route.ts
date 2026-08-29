@@ -253,9 +253,19 @@ export async function POST(request: NextRequest) {
         for (const cls of candidateClasses) {
           // Apply the …A class to the general amount only (steel supply already pulled out).
           const r = await calculateDynamicClassificationPvc(generalAmount, quarterlyAverages, cls.code, extractedSteelTypes);
-          if (!r.isProcessingFee) scored.push({ cls, generalPvc: r.totalPvc });
+          if (!r.isProcessingFee) {
+            scored.push({
+              cls, generalPvc: r.totalPvc,
+              // Share of the general value already classified in this group — the MATCH.
+              matchPct: Math.round(((generalByDigit[String(cls.code).charAt(0)] || 0) / generalAmount) * 100),
+            });
+          }
         }
-        scored.sort((a, b) => b.generalPvc - a.generalPvc);
+        // The class SHOWN is picked by MATCH first, payout only as tie-break. Showing the
+        // highest payout headlined a class that fit 0% of the items while the guideline
+        // named another group — a contradiction on screen, and an invitation to pick by
+        // money. All candidates stay listed with their fit, so nothing is hidden.
+        scored.sort((a, b) => b.matchPct - a.matchPct || b.generalPvc - a.generalPvc);
         const winner = scored[0];
         if (winner) {
           const allItemsClass = winner.cls;
@@ -291,7 +301,7 @@ export async function POST(request: NextRequest) {
               candidates: scored.map((s) => ({
                 code: s.cls.code, name: s.cls.name,
                 total: s.generalPvc + steelTmtPvc + steelOtherPvc + cementSupplyPvc,
-                matchPct: Math.round(((generalByDigit[String(s.cls.code).charAt(0)] || 0) / generalAmount) * 100),
+                matchPct: s.matchPct,
               })),
               // The guideline the card prints: pick by MATCH, not payout.
               guideline: (() => {
