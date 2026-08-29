@@ -1296,23 +1296,21 @@ function NewBillPageContent() {
     });
     if (changed === 0) {
       toast.error('Nothing to group — every item is steel or cement supply.');
-      return 0;
+      return null;
     }
     setClassificationEntries(next);
-    return changed;
+    return next;
   };
 
   // The preview footer's second create path: reclassify the general items to the shown
-  // class, close the preview, and go straight into the same confirm dialog the ordinary
-  // create uses — one decision, one click, no re-preview loop. (The confirm step also
-  // guarantees React has flushed the reclassified entries before handleSubmit reads them.)
+  // class and save in the same click. The reclassified entries are handed to
+  // handleSubmit directly — state updates are async and would not be visible yet.
   const handleCreateGrouped = (bestCls: any) => {
-    const changed = applyGroupedClassification(bestCls);
-    if (!changed) return;
+    const next = applyGroupedClassification(bestCls);
+    if (!next) return;
     setShowPreviewModal(false);
     setPreviewResult(null);
-    toast(`${changed} general item(s) reclassified to ${bestCls.code} — confirm to create.`, { icon: '🗂️', duration: 5000 });
-    setShowConfirmDialog(true);
+    handleSubmit(next);
   };
 
   // If the save ends without navigating away — insufficient credit, a validation
@@ -1385,15 +1383,19 @@ function NewBillPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instantMode, instantStage, instantExtractedAt, formData.contractId, formData.billNo, formData.zone, formData.dateOfMeasurement, classificationEntries.length]);
 
+  // Process Bill opens the PREVIEW — the preview modal, with both figures and its two
+  // create buttons, IS the confirmation step now. No separate Preview button, no extra
+  // confirm dialog.
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setShowConfirmDialog(true);
+    handlePreview();
   };
 
-  const handleSubmit = async () => {
-    // The confirm dialog's button has no disabled state, so a double-click fired this
-    // twice — two POSTs, a duplicate bill, and past the trial a double charge.
+  const handleSubmit = async (entriesOverride?: ClassificationEntry[]) => {
+    // Guard against a double-click firing this twice — two POSTs, a duplicate bill,
+    // and past the trial a double charge.
     if (isSaving) return;
+    const sourceEntries = entriesOverride ?? classificationEntries;
     setSaving(true);
     setError('');
 
@@ -1423,13 +1425,13 @@ function NewBillPageContent() {
         }
         return raw;
       };
-      const cleanedEntries = classificationEntries
+      const cleanedEntries = sourceEntries
         .filter(entry => !isEmptyEntry(entry))
         .map(entry => ({
           ...entry,
           subClassificationId: resolveSubId(entry),
         }));
-      if (cleanedEntries.length !== classificationEntries.length) {
+      if (cleanedEntries.length !== sourceEntries.length) {
         setClassificationEntries(cleanedEntries);
       }
 
@@ -2805,34 +2807,16 @@ function NewBillPageContent() {
                     >
                       {t('form.bill.cancel')}
                     </Button>
-                    <div className="flex flex-col items-center gap-1">
-                      <Button
-                        type="button"
-                        onClick={handlePreview}
-                        disabled={isPreviewLoading || isSaving || !formData.contractId || !formData.zone || !formData.dateOfMeasurement || classificationEntries.length === 0}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-emerald-500/10 font-semibold h-10"
-                      >
-                        {isPreviewLoading ? (
-                          <LoadingSpinner size="sm" text={t('form.bill.calculating')} />
-                        ) : (
-                          <>
-                            <Calculator className="h-4 w-4 mr-2" />
-                            {t('form.bill.preview_pvc')}
-                          </>
-                        )}
-                      </Button>
-                      <p className="text-[10px] text-slate-400 text-center max-w-[160px]">
-                        {t('form.bill.preview_free_info')}
-                      </p>
-                    </div>
+                    {/* Preview PVC is no longer a separate button: Process Bill opens the
+                        preview modal, whose footer carries the create choices. */}
                     <Button
                       type="submit"
-                      disabled={isSaving || !formData.contractId || !formData.billNo || !formData.zone || !formData.dateOfMeasurement || (roQuota?.applicable === true && roQuota.postingComplete === false)}
+                      disabled={isPreviewLoading || isSaving || !formData.contractId || !formData.billNo || !formData.zone || !formData.dateOfMeasurement || classificationEntries.length === 0 || (roQuota?.applicable === true && roQuota.postingComplete === false)}
                       title={roQuota?.applicable && roQuota.postingComplete === false ? (language === 'hi' ? 'पहले अपनी रेलवे पोस्टिंग विवरण पूरा करें' : 'Complete your Railway Posting Details first') : undefined}
                       className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[160px] rounded-xl shadow-sm shadow-emerald-500/10 font-semibold h-10 disabled:opacity-50"
                     >
-                      {isSaving ? (
-                        <LoadingSpinner size="sm" text={t('form.bill.processing')} />
+                      {isSaving || isPreviewLoading ? (
+                        <LoadingSpinner size="sm" text={isPreviewLoading ? t('form.bill.calculating') : t('form.bill.processing')} />
                       ) : (
                         <>
                           <Save className="h-4 w-4 mr-2" />
@@ -3204,7 +3188,7 @@ function NewBillPageContent() {
               </Button>
               <Button
                 className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-                onClick={() => { setShowPreviewModal(false); (document.querySelector('form') as HTMLFormElement)?.requestSubmit(); }}
+                onClick={() => { setShowPreviewModal(false); handleSubmit(); }}
               >
                 <Save className="h-4 w-4 mr-2" />
                 {(previewResult.isFirstBill
