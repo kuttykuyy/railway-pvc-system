@@ -3017,8 +3017,8 @@ function NewBillPageContent() {
                       {hasSteel && (
                         <div className="flex items-center justify-between px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-amber-900">{hi ? 'स्टील सप्लाई मदें (अलग)' : 'Steel-supply items (separate)'}</p>
-                            <p className="text-[11px] text-amber-700">{hi ? '…B वर्ग पर 85% स्टील — दोनों तरीकों में एक जैसा' : 'priced at 85% on the …B items — the same either way'}</p>
+                            <p className="text-sm font-semibold text-amber-900">{hi ? 'स्टील मदें (अलग)' : 'Steel items (separate)'}</p>
+                            <p className="text-[11px] text-amber-700">{hi ? 'स्टील-टाइप इंडेक्स पर — दोनों तरीकों में एक जैसा' : 'priced on the steel-type index — the same either way'}</p>
                           </div>
                           <span className="text-base font-bold text-amber-900 whitespace-nowrap">{inr(steel)}</span>
                         </div>
