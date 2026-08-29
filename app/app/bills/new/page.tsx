@@ -3182,24 +3182,21 @@ function NewBillPageContent() {
             {/* The decision lives HERE, beside both figures: create item-by-item (the
                 tender method, primary), or create grouped under the best-matching class
                 (secondary) — one click either way, no group→re-preview loop. */}
-            <div className="flex flex-col sm:flex-row gap-2.5 px-6 py-4 flex-shrink-0 border-t border-slate-100 bg-white">
-              <Button variant="outline" className="rounded-xl sm:w-32" onClick={() => setShowPreviewModal(false)}>
-                {language === 'hi' ? 'संपादित करें' : 'Edit Bill'}
-              </Button>
+            {/* Stacked full-width: the labels carry amounts and don't fit side-by-side
+                in this narrow modal — a row overflowed off the right edge. */}
+            <div className="flex flex-col gap-2 px-6 py-4 flex-shrink-0 border-t border-slate-100 bg-white">
               <Button
-                className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
                 onClick={() => { setShowPreviewModal(false); handleSubmit(); }}
               >
                 <Save className="h-4 w-4 mr-2" />
-                {(previewResult.isFirstBill
-                  ? (language === 'hi' ? 'बनाएं — हर मद अलग' : 'Create — item by item')
-                  : (language === 'hi' ? 'बनाएं — हर मद अलग' : 'Create — item by item'))
+                {(language === 'hi' ? 'बनाएं — हर मद अलग' : 'Create — item by item')
                   + ` · ₹${Number(previewResult.totalPvc ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
               </Button>
               {previewResult.singleClassification?.best && (
                 <Button
                   variant="outline"
-                  className="flex-1 rounded-xl border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-semibold"
+                  className="w-full rounded-xl border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-semibold"
                   onClick={() => handleCreateGrouped(previewResult.singleClassification.best)}
                 >
                   {(language === 'hi'
@@ -3208,6 +3205,9 @@ function NewBillPageContent() {
                     + ` · ₹${Number(previewResult.singleClassification.best.total ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
                 </Button>
               )}
+              <Button variant="ghost" className="w-full rounded-xl text-slate-500 hover:text-slate-700" onClick={() => setShowPreviewModal(false)}>
+                {language === 'hi' ? 'बिल संपादित करें' : 'Edit Bill'}
+              </Button>
             </div>
           </div>
         </div>
