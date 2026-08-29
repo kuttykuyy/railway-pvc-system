@@ -318,7 +318,6 @@ function NewBillPageContent() {
   const [cementUnmatched, setCementUnmatched] = useState<string[]>([]);
   // True when an AI extraction has cement items whose derived cost has NOT yet been
   // applied. PVC check / bill creation is blocked until the user applies it.
-  const [cementCostPending, setCementCostPending] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState<any>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -760,14 +759,9 @@ function NewBillPageContent() {
     setUploadedDocumentId(context?.documentId ?? null);
     // A read has landed, so any earlier "it did not fill the form" notice is stale.
     setExtractionNotice(null);
-    // Block PVC check / create until the derived cement cost is applied: there are
-    // cement items (rows with a coefficient) but the cost hasn't been calculated and
-    // applied yet (no cementAmountSource / cement amount on the result).
-    const cementItemsPresent = (data.results || []).some(
-      row => (row.coefficient ?? 0) > 0 && (row.cementQuantity ?? 0) > 0,
-    );
-    const cementCostApplied = !!data.cementAmountSource || (data.summary?.cementAmount ?? 0) > 0;
-    setCementCostPending(cementItemsPresent && !cementCostApplied);
+    // The derived-cement tools are ADVISORY only (user directive, 2026-08-30): they never
+    // block Preview or Create. Deriving cement from items remains available on the form
+    // for whoever wants it.
     const billDetails = data.billDetails;
     const extractedBillIdentity = [
       billDetails?.agreementNo,
@@ -1219,10 +1213,6 @@ function NewBillPageContent() {
       toast.error('Please fill Contract, Zone, and Date of Measurement before previewing');
       return;
     }
-    if (cementCostPending) {
-      toast.error('Apply the derived cement cost (enter the rate settings and apply) before checking PVC.');
-      return;
-    }
     setIsPreviewLoading(true);
     try {
       const grossAmount = classificationEntries.reduce((sum, e) => {
@@ -1368,11 +1358,11 @@ function NewBillPageContent() {
 
     const ready = Boolean(
       formData.contractId && formData.billNo && formData.zone && formData.dateOfMeasurement,
-    ) && classificationEntries.length > 0 && !cementCostPending;
+    ) && classificationEntries.length > 0;
 
     if (!ready) {
-      // Something needs a person — an unmatched contract, a missing date, a cement cost
-      // waiting to be applied. Lift the cover and let the ordinary form say what.
+      // Something needs a person — an unmatched contract or a missing date. Lift the
+      // cover and let the ordinary form say what.
       setInstantStage(null);
       toast('The bill is read — one detail below needs your eye before the report.', { icon: '👀', duration: 7000 });
       return;
@@ -1382,7 +1372,7 @@ function NewBillPageContent() {
     setInstantStage('saving');
     handleSubmit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instantMode, instantStage, instantExtractedAt, formData.contractId, formData.billNo, formData.zone, formData.dateOfMeasurement, classificationEntries.length, cementCostPending]);
+  }, [instantMode, instantStage, instantExtractedAt, formData.contractId, formData.billNo, formData.zone, formData.dateOfMeasurement, classificationEntries.length]);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1393,14 +1383,6 @@ function NewBillPageContent() {
     // The confirm dialog's button has no disabled state, so a double-click fired this
     // twice — two POSTs, a duplicate bill, and past the trial a double charge.
     if (isSaving) return;
-    if (cementCostPending) {
-      // Inline error too, not only the corner toast — this silent-looking refusal was
-      // read as "Create did nothing" (nothing reached the server, no bill appeared).
-      const msg = 'The bill was NOT created: the derived cement cost is waiting to be applied. Find the cement-cost panel on this form, apply (or dismiss) it, then press Create again.';
-      setError(msg);
-      toast.error(msg, { duration: 9000 });
-      return;
-    }
     setSaving(true);
     setError('');
 
