@@ -145,12 +145,15 @@ export async function POST(request: NextRequest) {
       const amt = parseFloat(entry.amount);
       const code = String(codeBySubId.get(entry.subClassificationId) || codeByLegacyId.get(entry.classificationId) || '').trim().toUpperCase();
       const suffix = code.slice(-1);
-      // A STEEL item is one you tagged with a steel type (TMT / Structural / Plates / Other)
-      // — that is how steel is matched — OR a steel class: …B (TMT reinforcement supply)
-      // or …D (fabrication & erection — the other-than-TMT structural steel). A CEMENT
-      // item is a cement-supply (…C) class. All are pulled out of the general comparison.
+      // A STEEL item is a steel-natured entry: classified …B (TMT reinforcement supply)
+      // or …D (fabrication & erection — the other-than-TMT structural steel), or tagged
+      // with a steel type on a class whose steel share DOMINATES (>= 50%). A steel-type
+      // tag alone is NOT enough: general entries (e.g. 5A, steel 10%) carry a type tag
+      // merely so their small steel component prices on the right index — counting them
+      // as steel items emptied the "general work" bucket and hid the whole comparison.
       const ownSteelTypes = Array.isArray(entry.steelTypes) ? entry.steelTypes : [];
-      const isSteelItem = ownSteelTypes.length > 0 || suffix === 'B' || suffix === 'D';
+      const steelShare = components?.steel ?? 0;
+      const isSteelItem = suffix === 'B' || suffix === 'D' || (ownSteelTypes.length > 0 && steelShare >= 50);
       const isCementItem = !isSteelItem && (suffix === 'C');
       // TMT vs other-than-TMT: …B is TMT by definition; a typed entry is TMT only when
       // every type on it is TMT; …D and anything structural/plates/sections is "other".
