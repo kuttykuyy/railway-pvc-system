@@ -447,6 +447,46 @@ export async function POST(request: NextRequest) {
       return precomputedBillPvc.get(bill.id) ?? calculateBillPvcFromEntries(bill);
     };
 
+    // ── JPC PAID GATE (both formats) ─────────────────────────────────────────
+    // The JPC steel sheets are a paid annex (Rs 500 once per bill, charged on the
+    // single report). A batch must not be the free way around that: steel sheets go
+    // in only when every steel bill in the batch has paid — or its owner is on a
+    // free account, the same exemption the single route applies. Admins are exempt.
+    // Computed HERE, before the format fork, because the IR branch returns early —
+    // it used to embed the sheets without this check, which was exactly the free
+    // way around the charge that the rule forbids.
+    let bulkJpcAllowed = isAdminRequester;
+    if (!bulkJpcAllowed) {
+      const steelBills = bills.filter((b: any) => (b.steelAmount || 0) > 0 || (Array.isArray(b.steelTypes) && (b.steelTypes as any[]).length > 0));
+      let paidIds = new Set<string>();
+      let jpcColumnReady = true;
+      try {
+        const ids = steelBills.map((x: any) => x.id);
+        const rows = ids.length
+          ? await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+              `SELECT id FROM ${await (await import('@/lib/db-schema')).schemaQualified('bills')} WHERE id = ANY($1) AND "jpcDocsPurchasedAt" IS NOT NULL`, ids,
+            )
+          : [];
+        paidIds = new Set(rows.map(r => r.id));
+      } catch { jpcColumnReady = false; }
+      const unpaid = jpcColumnReady ? steelBills.filter((b: any) => !paidIds.has(b.id)) : [];
+      if (unpaid.length === 0) {
+        bulkJpcAllowed = true;
+      } else {
+        const ownerIds = [...new Set(unpaid.map((b: any) => b.contract?.userId).filter(Boolean))] as string[];
+        const owners = await prisma.user.findMany({
+          where: { id: { in: ownerIds } },
+          select: { id: true, role: true, isFreeAccount: true, customProcessingFee: true },
+        });
+        const freeOwner = (id: string) => {
+          const o = owners.find(u => u.id === id);
+          return !!o && (o.isFreeAccount || o.customProcessingFee === 0
+            || ['admin', 'superadmin', 'railway_official', 'accounts_official'].includes(o.role || ''));
+        };
+        bulkJpcAllowed = unpaid.every((b: any) => freeOwner(b.contract?.userId));
+      }
+    }
+
     // ── IR STANDARD FORMAT BRANCH (bulk) ─────────────────────────────────────
     if (pdfFormat === 'ir_standard') {
       const { generateIRStandardReport } = await import('@/lib/pdf/generators/ir-standard-report');
@@ -686,7 +726,8 @@ export async function POST(request: NextRequest) {
       let irFinalBytes = mergedBytes;
       if (includeIndexDocs) {
         try {
-          const componentTypes = anyBillHasSteel(bills) ? undefined : NON_STEEL_COMPONENT_TYPES;
+          // Steel (JPC) sheets only when the batch has passed the paid gate above.
+          const componentTypes = anyBillHasSteel(bills) && bulkJpcAllowed ? undefined : NON_STEEL_COMPONENT_TYPES;
           // One JPC sheet serves the whole batch, so its marks must be true for every
           // bill in it: marked only when all bills read the same city, left plain when
           // zones differ — a box on another zone's column would be a false statement.
@@ -3041,40 +3082,8 @@ export async function POST(request: NextRequest) {
       }, new Date(firstBill.dateOfMeasurement));
 
       // The JPC sheets are a paid annex (Rs 500 once per bill, charged on the single
-      // report). A batch must not be the free way around that: steel sheets go in only
-      // when every steel bill in the batch has paid — or its owner is on a free
-      // account, the same exemption the single route applies. Admins are exempt.
-      let bulkJpcAllowed = isAdminRequester;
-      if (!bulkJpcAllowed) {
-        const steelBills = bills.filter((b: any) => (b.steelAmount || 0) > 0 || (Array.isArray(b.steelTypes) && (b.steelTypes as any[]).length > 0));
-        let paidIds = new Set<string>();
-        let jpcColumnReady = true;
-        try {
-          const ids = steelBills.map((x: any) => x.id);
-          const rows = ids.length
-            ? await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-                `SELECT id FROM ${await (await import('@/lib/db-schema')).schemaQualified('bills')} WHERE id = ANY($1) AND "jpcDocsPurchasedAt" IS NOT NULL`, ids,
-              )
-            : [];
-          paidIds = new Set(rows.map(r => r.id));
-        } catch { jpcColumnReady = false; }
-        const unpaid = jpcColumnReady ? steelBills.filter((b: any) => !paidIds.has(b.id)) : [];
-        if (unpaid.length === 0) {
-          bulkJpcAllowed = true;
-        } else {
-          const ownerIds = [...new Set(unpaid.map((b: any) => b.contract?.userId).filter(Boolean))] as string[];
-          const owners = await prisma.user.findMany({
-            where: { id: { in: ownerIds } },
-            select: { id: true, role: true, isFreeAccount: true, customProcessingFee: true },
-          });
-          const freeOwner = (id: string) => {
-            const o = owners.find(u => u.id === id);
-            return !!o && (o.isFreeAccount || o.customProcessingFee === 0
-              || ['admin', 'superadmin', 'railway_official', 'accounts_official'].includes(o.role || ''));
-          };
-          bulkJpcAllowed = unpaid.every((b: any) => freeOwner(b.contract?.userId));
-        }
-      }
+      // report). The paid gate (bulkJpcAllowed) is computed once above the format
+      // fork, so both this branch and the IR branch apply the same rule.
       const bulkComponentTypes = anyBillHasSteel(bills) && bulkJpcAllowed ? undefined : NON_STEEL_COMPONENT_TYPES;
       // Same rule as the IR-format path above: the shared sheet is marked only when
       // every bill in the batch reads the same city.
