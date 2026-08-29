@@ -2956,8 +2956,9 @@ function NewBillPageContent() {
                 </div>
               </div>
 
-              {/* Non-steel classification comparison (transparency / what-if). Steel is
-                  dropped out of both sides and shown on its own line. */}
+              {/* Classification comparison — leads with FULL bill totals so the numbers
+                  match the Total PVC shown above. Steel/cement are identical on both
+                  sides (always priced separately), so the difference is the other items. */}
               {previewResult.singleClassification?.best && (() => {
                 const sc = previewResult.singleClassification;
                 const currentGeneral = sc.current?.general ?? 0;
@@ -2967,7 +2968,9 @@ function NewBillPageContent() {
                 const hasSteel = Math.abs(steel) > 0.5;
                 const cement = sc.cement?.pvc ?? 0;
                 const hasCement = Math.abs(cement) > 0.5;
-                const diff = singleGeneral - currentGeneral;
+                const currentTotal = sc.current?.total ?? (currentGeneral + steel + cement);
+                const bestTotal = best.total ?? (singleGeneral + steel + cement);
+                const diff = bestTotal - currentTotal;
                 const singleHigher = diff > 0.005;
                 const inr = (v: number) => `₹${(Number(v) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
                 const hi = language === 'hi';
@@ -2984,70 +2987,86 @@ function NewBillPageContent() {
                     <div className="p-4 space-y-3">
                       <p className="text-xs text-slate-500">
                         {hi
-                          ? 'सामान्य काम की तुलना (स्टील सप्लाई मदें अलग से नीचे गिनी गई हैं):'
-                          : 'Comparing the general work (steel-supply items are priced separately, below):'}
+                          ? 'इस बिल की पूरी PVC दो मान्य तरीकों से निकाली गई:'
+                          : 'The full PVC of this bill, worked out both allowed ways:'}
                       </p>
 
-                      {/* Option A — item by item (current), non-steel */}
+                      {/* Option A — your bill as it is (FULL total) */}
                       <div className="flex items-center justify-between px-3 py-2.5 bg-white rounded-lg border-2 border-emerald-300">
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-800">{hi ? 'हर मद अलग (अभी)' : 'Item by item (now)'}</p>
-                          <p className="text-[11px] text-emerald-700">{hi ? '✓ सही तरीका — निविदा के अनुसार' : '✓ correct method — as per tender'}</p>
+                          <p className="text-sm font-semibold text-slate-800">{hi ? 'आपका बिल — हर मद अलग' : 'Your bill — item by item'}</p>
+                          <p className="text-[11px] text-emerald-700">{hi ? '✓ निविदा के अनुसार सही तरीका' : '✓ correct method as per tender'}</p>
                         </div>
-                        <span className="text-lg font-black text-slate-900 whitespace-nowrap">{inr(currentGeneral)}</span>
+                        <span className="text-lg font-black text-slate-900 whitespace-nowrap">{inr(currentTotal)}</span>
                       </div>
 
-                      {/* Option B — all as the "All items" class, non-steel */}
+                      {/* Option B — grouped under one class (FULL total) */}
                       <div className="flex items-center justify-between px-3 py-2.5 bg-white rounded-lg border border-slate-200">
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-800">{hi ? `सब एक वर्ग में: ${best.code}` : `All as one class: ${best.code}`}</p>
+                          <p className="text-sm font-semibold text-slate-800">{hi ? `अगर सब ${best.code} वर्ग में होता` : `If grouped under one class (${best.code})`}</p>
                           <p className="text-[11px] text-slate-400 truncate">{best.name}</p>
                         </div>
-                        <span className="text-lg font-black text-indigo-700 whitespace-nowrap">{inr(singleGeneral)}</span>
+                        <span className="text-lg font-black text-indigo-700 whitespace-nowrap">{inr(bestTotal)}</span>
                       </div>
 
-                      {/* Headline answer (non-steel only) */}
+                      {/* Headline answer — full-bill difference */}
                       <div className={`rounded-lg px-3 py-2.5 text-center font-bold ${singleHigher ? 'bg-indigo-600 text-white' : 'bg-emerald-600 text-white'}`}>
                         {singleHigher
-                          ? (hi ? `${best.code} में ${inr(Math.abs(diff))} ज़्यादा (सामान्य काम)` : `${best.code} pays ${inr(Math.abs(diff))} more (general work)`)
-                          : (hi ? 'आपका मौजूदा तरीका ही ज़्यादा (या बराबर) देता है' : 'Your current method already pays more (or the same)')}
+                          ? (hi ? `${best.code} वर्ग में ${inr(Math.abs(diff))} ज़्यादा मिलता` : `Grouping under ${best.code} would pay ${inr(Math.abs(diff))} more`)
+                          : (hi ? `आपके बिल में ${inr(Math.abs(diff))} ज़्यादा मिलता है — यही रखें` : `Your bill pays ${inr(Math.abs(diff))} more — keep it as it is`)}
                       </div>
 
-                      {/* Steel — its own line, dropped out of the comparison */}
-                      {hasSteel && (
-                        <div className="flex items-center justify-between px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-amber-900">{hi ? 'स्टील मदें (अलग)' : 'Steel items (separate)'}</p>
-                            <p className="text-[11px] text-amber-700">{hi ? 'स्टील-टाइप इंडेक्स पर — दोनों तरीकों में एक जैसा' : 'priced on the steel-type index — the same either way'}</p>
-                          </div>
-                          <span className="text-base font-bold text-amber-900 whitespace-nowrap">{inr(steel)}</span>
-                        </div>
+                      {/* Why steel/cement don't move the comparison — one plain sentence */}
+                      {(hasSteel || hasCement) && (
+                        <p className="text-[11px] leading-relaxed text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                          {hi
+                            ? <>{hasSteel && <>स्टील मदें ({inr(steel)}) </>}{hasSteel && hasCement && 'और '}{hasCement && <>सीमेंट मदें ({inr(cement)}) </>}दोनों तरीकों में एक जैसी हैं — ये हमेशा अपने ही इंडेक्स पर अलग गिनी जाती हैं। फ़र्क़ सिर्फ़ बाकी मदों से आता है।</>
+                            : <>{hasSteel && <>Steel items ({inr(steel)}) </>}{hasSteel && hasCement && 'and '}{hasCement && <>cement items ({inr(cement)}) </>}are the same in both — they are always priced separately on their own index. The difference comes only from the other items.</>}
+                        </p>
                       )}
 
-                      {/* Cement — its own line, dropped out of the comparison */}
-                      {hasCement && (
-                        <div className="flex items-center justify-between px-3 py-2 bg-sky-50 border border-sky-200 rounded-lg">
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-sky-900">{hi ? 'सीमेंट सप्लाई मदें (अलग)' : 'Cement-supply items (separate)'}</p>
-                            <p className="text-[11px] text-sky-700">{hi ? '…C वर्ग पर — दोनों तरीकों में एक जैसा' : 'priced on the …C items — the same either way'}</p>
-                          </div>
-                          <span className="text-base font-bold text-sky-900 whitespace-nowrap">{inr(cement)}</span>
-                        </div>
-                      )}
-
-                      {/* How the totals add up */}
+                      {/* The split, for anyone who wants it */}
                       <details className="text-xs text-slate-600 bg-white rounded-lg border border-slate-200">
                         <summary className="cursor-pointer select-none px-3 py-2 font-medium text-slate-700">
-                          {hi ? 'पूरा जोड़ कैसे बनता है?' : 'How do the full totals add up?'}
+                          {hi ? 'विस्तार से देखें' : 'See the split'}
                         </summary>
-                        <div className="px-3 pb-3 pt-1 space-y-1 border-t border-slate-100">
-                          <div className="flex justify-between"><span>{hi ? 'हर मद अलग (गैर-स्टील)' : 'Item by item (general)'}</span><span className="font-semibold">{inr(currentGeneral)}</span></div>
-                          <div className="flex justify-between"><span>{best.code} {hi ? '(सामान्य)' : '(general)'}</span><span className="font-semibold">{inr(singleGeneral)}</span></div>
-                          {hasSteel && <div className="flex justify-between text-amber-700"><span>{hi ? '+ स्टील (अलग)' : '+ Steel supply (85%)'}</span><span className="font-semibold">{inr(steel)}</span></div>}
-                          {hasCement && <div className="flex justify-between text-sky-700"><span>{hi ? '+ सीमेंट सप्लाई' : '+ Cement supply'}</span><span className="font-semibold">{inr(cement)}</span></div>}
-                          <div className="flex justify-between border-t border-slate-100 pt-1 font-bold text-slate-800"><span>{hi ? 'हर मद अलग — कुल' : 'Item by item — total'}</span><span>{inr(sc.current?.total ?? (currentGeneral + steel + cement))}</span></div>
-                          <div className="flex justify-between font-bold text-indigo-700"><span>{best.code} — {hi ? 'कुल' : 'total'}</span><span>{inr(best.total ?? (singleGeneral + steel + cement))}</span></div>
-                          <p className="text-[11px] text-slate-400 pt-1">{hi ? `${best.code} = "सभी मदें" वर्ग। स्टील अलग रखा गया, इसलिए तुलना सिर्फ़ गैर-स्टील की है।` : `${best.code} = the "All items" class. Steel-supply items are kept out, so the comparison is general work only.`}</p>
+                        <div className="px-3 pb-3 pt-1 border-t border-slate-100">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-slate-400">
+                                <th className="text-left font-medium py-1"></th>
+                                <th className="text-right font-medium py-1">{hi ? 'आपका बिल' : 'Your bill'}</th>
+                                <th className="text-right font-medium py-1">{best.code}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td className="py-1">{hi ? 'अन्य मदें (तुलना यहीं है)' : 'Other items (the comparison)'}</td>
+                                <td className="text-right font-semibold">{inr(currentGeneral)}</td>
+                                <td className="text-right font-semibold text-indigo-700">{inr(singleGeneral)}</td>
+                              </tr>
+                              {hasSteel && (
+                                <tr className="text-amber-700">
+                                  <td className="py-1">{hi ? 'स्टील मदें (अलग, समान)' : 'Steel items (separate, same)'}</td>
+                                  <td className="text-right font-semibold">{inr(steel)}</td>
+                                  <td className="text-right font-semibold">{inr(steel)}</td>
+                                </tr>
+                              )}
+                              {hasCement && (
+                                <tr className="text-sky-700">
+                                  <td className="py-1">{hi ? 'सीमेंट मदें (अलग, समान)' : 'Cement items (separate, same)'}</td>
+                                  <td className="text-right font-semibold">{inr(cement)}</td>
+                                  <td className="text-right font-semibold">{inr(cement)}</td>
+                                </tr>
+                              )}
+                              <tr className="border-t border-slate-200 font-bold text-slate-800">
+                                <td className="py-1">{hi ? 'कुल' : 'Total'}</td>
+                                <td className="text-right">{inr(currentTotal)}</td>
+                                <td className="text-right text-indigo-700">{inr(bestTotal)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <p className="text-[11px] text-slate-400 pt-2">{hi ? `${best.code} = "सभी मदें" वर्ग — सारी अन्य मदें एक ही वर्ग में गिनी जातीं।` : `${best.code} = the "All items" class — all the other items priced as one class.`}</p>
                         </div>
                       </details>
 
