@@ -2216,6 +2216,45 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     }
   }
 
+  // ── CERTIFICATION & SIGNATURES ────────────────────────────────────────────
+  // The standard proforma closes with the certification chain — contractor, then
+  // preparation/verification by the executive side, then vetting by Accounts —
+  // before the index annexes. The statement carried no signature block at all,
+  // so offices were stamping the margin.
+  {
+    ensureSpace(46);
+    y += 4;
+    pdf.setFontSize(8.5);
+    pdf.setFont('helvetica', 'normal');
+    const certText = 'Certified that the price variation above is worked out as per GCC-2022 Clause 46A on the published indices annexed hereto, and that the value of work (W) excludes railway-supplied material and the specific payments the Clause excludes.';
+    const certLines = pdf.splitTextToSize(certText, contentW);
+    pdf.text(certLines, mL, y);
+    y += certLines.length * 3.6 + 14;
+
+    const signatories = [
+      'Contractor',
+      'Prepared & verified — SSE / Works',
+      'Passed — Divisional Engineer',
+      'Vetted — Sr. DFM / Accounts',
+    ];
+    const colW = contentW / signatories.length;
+    signatories.forEach((label, i) => {
+      const x0 = mL + i * colW;
+      pdf.setDrawColor(120, 120, 120);
+      pdf.setLineWidth(0.3);
+      pdf.line(x0 + 6, y, x0 + colW - 14, y);
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(label, x0 + 6, y + 4);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7);
+      pdf.setTextColor(90, 90, 90);
+      pdf.text('name · designation · date', x0 + 6, y + 8);
+      pdf.setTextColor(0, 0, 0);
+    });
+    y += 14;
+  }
+
   // ── AVERAGE JPC STEEL & MONTHLY FUEL (DIESEL) INDICES ─────────────────────
   // Generated average tables in the railway proforma, filtered to the sections
   // and city actually selected for this bill.
