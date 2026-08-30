@@ -2207,10 +2207,6 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       pdf.setFont('helvetica', 'bold');
       pdf.text(label, x0 + 6, y + 4);
       pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7);
-      pdf.setTextColor(90, 90, 90);
-      pdf.text('name · designation · date', x0 + 6, y + 8);
-      pdf.setTextColor(0, 0, 0);
     });
     y += 14;
   }
