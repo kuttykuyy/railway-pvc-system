@@ -276,7 +276,7 @@ export function BillCard({
         </div>
 
         {/* Financial Summary */}
-        <div className={`grid ${isCompact ? 'grid-cols-2' : 'grid-cols-3'} gap-4 mb-4 pb-4 border-b border-gray-200`}>
+        <div className={`grid ${isCompact ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-3'} gap-4 mb-4 pb-4 border-b border-gray-200`}>
           {/* Bill Amount */}
           <div className="space-y-1">
             <p className="text-xs text-gray-500 flex items-center gap-1">

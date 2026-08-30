@@ -162,7 +162,7 @@ export function ShortfallAudit({ billId }: { billId: string }) {
         {/* Result */}
         {hasRailwayData && (
           <div className="space-y-3 pt-1">
-            <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
               <div className="rounded-2xl border border-slate-100 dark:border-slate-800 p-3.5">
                 <span className="text-xs text-muted-foreground block">Entitlement (GCC)</span>
                 <span className="font-mono font-bold text-slate-800 dark:text-slate-200 mt-1 block">{inr(entitlementTotal)}</span>

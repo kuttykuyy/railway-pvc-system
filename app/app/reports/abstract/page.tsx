@@ -443,7 +443,7 @@ function AbstractPageContent() {
           {abstractData.classificationSteelData?.length > 0 && (
             <div>
               <SectionTitle>Classification-wise Steel</SectionTitle>
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="border border-gray-200 rounded-lg overflow-x-auto">
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr>

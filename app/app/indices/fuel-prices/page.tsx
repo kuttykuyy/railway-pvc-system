@@ -592,7 +592,7 @@ export default function FuelPricesPage() {
                   {averages && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
                       <h3 className="font-semibold text-emerald-800 mb-2">Monthly Averages</h3>
-                      <div className="grid grid-cols-5 gap-4 text-sm">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 text-sm">
                         <div>
                           <div className="text-muted-foreground">Delhi</div>
                           <div className="font-bold">₹{averages.delhiAvg.toFixed(2)}</div>

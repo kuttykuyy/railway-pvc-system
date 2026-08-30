@@ -62,7 +62,7 @@ export function PostingDetailsNotice() {
           </div>
           
           {/* Content */}
-          <div className="relative p-8 sm:p-10 md:p-12">
+          <div className="relative p-4 sm:p-8 md:p-12">
             <div className="flex items-start justify-between gap-6">
               <div className="flex-1 text-center max-w-3xl mx-auto">
                 {/* Icon and Title */}
@@ -88,7 +88,7 @@ export function PostingDetailsNotice() {
                     <AlertCircle className="h-5 w-5 text-amber-600" />
                     <h3 className="text-lg font-semibold text-amber-900">Missing Information</h3>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     {!userData?.designation && (
                       <div className="bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
                         <span className="text-amber-700 font-medium">• Designation</span>

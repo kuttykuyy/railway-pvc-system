@@ -200,7 +200,7 @@ export default function GettingStartedPage() {
 
       {/* Quick Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto">
           <TabsTrigger value="overview" className="text-xs sm:text-sm py-2">
             <Home className="h-4 w-4 mr-1 sm:mr-2" />
             <span className="hidden sm:inline">Overview</span>

@@ -398,7 +398,7 @@ export default function IndicesFilter({ indices }: IndicesFilterProps) {
                       {/* Recent Values Timeline */}
                       <div className="space-y-1.5">
                         <p className="text-xs font-medium text-gray-700">Recent Values</p>
-                        <div className="grid grid-cols-6 gap-1.5">
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                           {index.monthlyValues.slice(0, 6).map((value) => (
                             <div 
                               key={value.id} 

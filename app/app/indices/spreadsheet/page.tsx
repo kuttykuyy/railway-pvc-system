@@ -918,7 +918,7 @@ export default function SpreadsheetPage() {
                     </a>
                   </p>
                   
-                  <div className="border rounded-lg overflow-hidden">
+                  <div className="border rounded-lg overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-100">
                         <tr>
@@ -1548,7 +1548,7 @@ export default function SpreadsheetPage() {
                   <div className="space-y-3">
                     <p className="text-sm font-medium">Preview for {steelPreview.month}</p>
                     
-                    <div className="border rounded-lg overflow-hidden">
+                    <div className="border rounded-lg overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead className="bg-gray-100">
                           <tr>
