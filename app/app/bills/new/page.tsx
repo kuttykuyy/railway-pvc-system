@@ -1208,10 +1208,10 @@ function NewBillPageContent() {
     toast.success(`Cement split into ${breakdown.filter(b => b.amount > 0).length} classification row(s): ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
   };
 
-  const handlePreview = async () => {
+  const handlePreview = async (opts?: { silent?: boolean }): Promise<any | null> => {
     if (!formData.contractId || !formData.zone || !formData.dateOfMeasurement) {
-      toast.error('Please fill Contract, Zone, and Date of Measurement before previewing');
-      return;
+      if (!opts?.silent) toast.error('Please fill Contract, Zone, and Date of Measurement before previewing');
+      return null;
     }
     setIsPreviewLoading(true);
     try {
@@ -1238,11 +1238,13 @@ function NewBillPageContent() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Preview failed'); return; }
+      if (!res.ok) { if (!opts?.silent) toast.error(data.error || 'Preview failed'); return null; }
       setPreviewResult(data);
-      setShowPreviewModal(true);
+      if (!opts?.silent) setShowPreviewModal(true);
+      return data;
     } catch {
-      toast.error('Preview failed. Please try again.');
+      if (!opts?.silent) toast.error('Preview failed. Please try again.');
+      return null;
     } finally {
       setIsPreviewLoading(false);
     }
@@ -1378,8 +1380,29 @@ function NewBillPageContent() {
     }
 
     instantSubmittedRef.current = true;
-    setInstantStage('saving');
-    handleSubmit();
+    (async () => {
+      // Instant mode normally creates with no click. Pause at the comparison ONLY when
+      // the choice matters — a composite work (no single class fits), or grouping under
+      // one class would move the PVC by 1% or more. Otherwise create item-by-item now.
+      const data = await handlePreview({ silent: true });
+      const itemTotal = Number(data?.totalPvc ?? 0);
+      const groupedTotal = Number(data?.singleClassification?.best?.total ?? itemTotal);
+      const diff = Math.abs(groupedTotal - itemTotal);
+      const composite = !!data?.singleClassification?.composite;
+      const material = diff >= 1 && diff >= itemTotal * 0.01;
+      if (data && (composite || material)) {
+        setInstantStage(null);
+        instantSubmittedRef.current = false; // let the person choose, then submit from the modal
+        setShowPreviewModal(true);
+        toast(composite
+          ? 'Composite work — choose item-by-item or a single class before creating.'
+          : 'Grouping under one class would change the PVC — choose before creating.',
+          { icon: '🔀', duration: 7000 });
+        return;
+      }
+      setInstantStage('saving');
+      handleSubmit();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instantMode, instantStage, instantExtractedAt, formData.contractId, formData.billNo, formData.zone, formData.dateOfMeasurement, classificationEntries.length]);
 
