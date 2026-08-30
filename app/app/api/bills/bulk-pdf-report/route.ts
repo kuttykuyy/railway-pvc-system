@@ -621,6 +621,39 @@ export async function POST(request: NextRequest) {
         select: { dsrCode: true, workUnit: true, cementQuantityPerUnit: true },
       }).catch(() => []);
 
+      // A bill-cover page precedes each bill's statement in the batch, so it is obvious
+      // where one bill's sheets end and the next begins. Fonts embedded once.
+      const { StandardFonts: SepStd, rgb: sepRgb } = await import('pdf-lib');
+      const sepBold = await mergedPdf.embedFont(SepStd.HelveticaBold);
+      const sepReg = await mergedPdf.embedFont(SepStd.Helvetica);
+      const drawBillCover = (
+        page: any,
+        info: { seq: number; total: number; billNo: string; agreementNo: string; contractor: string; quarter: string },
+      ) => {
+        const { width, height } = page.getSize();
+        const ink = sepRgb(0.11, 0.11, 0.12);
+        const muted = sepRgb(0.42, 0.42, 0.45);
+        const band = sepRgb(0.04, 0.60, 0.42);
+        const centre = (text: string, size: number, font: any) =>
+          (width - font.widthOfTextAtSize(text, size)) / 2;
+        // Top accent band
+        page.drawRectangle({ x: 0, y: height - 10, width, height: 10, color: band });
+        let y = height * 0.62;
+        const eyebrow = `BILL ${info.seq} OF ${info.total}`;
+        page.drawText(eyebrow, { x: centre(eyebrow, 13, sepReg), y: y + 46, size: 13, font: sepReg, color: muted });
+        const bn = info.billNo || '-';
+        const bnSize = Math.min(30, (width - 80) / (bn.length * 0.60) );
+        page.drawText(bn, { x: centre(bn, bnSize, sepBold), y, size: bnSize, font: sepBold, color: ink });
+        const line = (label: string, value: string, dy: number) => {
+          const t = `${label}   ${value}`;
+          page.drawText(t, { x: centre(t, 12, sepReg), y: y - dy, size: 12, font: sepReg, color: muted });
+        };
+        if (info.contractor) line('Contractor', info.contractor, 30);
+        line('Agreement', info.agreementNo || '-', 50);
+        line('Quarter', info.quarter || '-', 70);
+      };
+      let billSeq = 0;
+
       for (const bill of irBills) {
         const baseMonth = new Date(bill.contract.baseMonth);
         const fuelIdxName = getFuelName(bill.zone, bill.fuelPriceType);
@@ -691,8 +724,21 @@ export async function POST(request: NextRequest) {
         });
 
         const billPdfDoc = await PDFDocument.load(billPdfBuf);
+        // Bill-cover separator page, same size as the statement pages, added first so the
+        // batch clearly breaks between bills. The summary link points here (the bill start).
+        billSeq++;
+        const { width: coverW, height: coverH } = billPdfDoc.getPage(0).getSize();
+        billPageStartIndex.push(mergedPdf.getPageCount()); // the cover = this bill's start
+        const coverPage = mergedPdf.addPage([coverW, coverH]);
+        drawBillCover(coverPage, {
+          seq: billSeq,
+          total: irBills.length,
+          billNo: bill.billNo,
+          agreementNo: bill.contract?.agreementNo || '',
+          contractor: bill.contract?.contractorName || '',
+          quarter: bill.quarter,
+        });
         const copiedPages = await mergedPdf.copyPages(billPdfDoc, billPdfDoc.getPageIndices());
-        billPageStartIndex.push(mergedPdf.getPageCount()); // first page of this bill
         for (const page of copiedPages) mergedPdf.addPage(page);
       }
 
