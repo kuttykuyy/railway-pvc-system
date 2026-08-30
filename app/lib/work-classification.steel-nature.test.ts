@@ -54,4 +54,16 @@ describe('enforceSteelSubclassNature', () => {
   it('leaves a …D item with no steel wording alone', () => {
     expect(enforceSteelSubclassNature('5D', 'Some general work item')).toBe('5D');
   });
+
+  // The real regression from the screenshot: DSR 5.22.6 reinforcement whose description
+  // carries the WHOLE DSR clause dump, including "5.22A.1 Mild steel and Medium Tensile
+  // steel bars". Reinforcement must win over that incidental "mild steel".
+  const DSR_5226_DUMP =
+    'Steel reinforcement for R.C.C. work including straightening, cutting, bending, placing in position and binding all complete upto plinth level. — Thermo-Mechanically Treated bars of grade Fe-500D or more. 5.22A Steel reinforcement for R.C.C. work ... 5.22A.1 Mild steel and Medium Tensile steel bars 5.22A.2 Hard drawn steel wire 5.22A.3 Cold twisted bars 5.22A.4 Hot rolled deformed bars 5.22A.5 Hard drawn steel wire fabric 5.22A.6 Thermo-Mechanically Treated bars of grade Fe-500D or more. 5.22B Steel reinforcement ... ready to use "cut and bend" rebars of approved make from factory/workshop to construction site ...';
+  it('reinforcement wins over the DSR clause dump (5.22.6 in …D -> …B)', () => {
+    expect(enforceSteelSubclassNature('5D', DSR_5226_DUMP)).toBe('5B');
+  });
+  it('reinforcement wins over the DSR clause dump (5.22.6 correctly in …B stays …B)', () => {
+    expect(enforceSteelSubclassNature('5B', DSR_5226_DUMP)).toBe('5B');
+  });
 });

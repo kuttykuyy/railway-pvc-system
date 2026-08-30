@@ -223,30 +223,33 @@ export function looksCompositeWork(workDescription: string): { isComposite: bool
  * …D ("Fabrication & Erection including Steel Supply"). The AI prompts carry this rule,
  * but a prompt is a request and the model drifts (real bills came back with MS
  * holding-down bolts and structural trusses in 5B); this function is the enforcement.
- * Runs BOTH ways: moves B → D on non-TMT (structural) evidence, and D → B when a …D
- * item is plainly TMT / reinforcement supply with no fabrication/erection wording (the
- * AI kept dropping TMT reinforcement into …D). A pure TMT item, or one with no steel
- * wording at all, keeps whichever of B it should have; anything genuinely structural
- * stays in D.
+ * Runs BOTH ways: a reinforcement-supply item is …B, structural steel supplied-and-fixed
+ * is …D — and it corrects a code that landed on the wrong one of the two.
+ *
+ * The decisive rule is REINFORCEMENT WINS. Item descriptions often carry the whole DSR
+ * clause dump — e.g. a genuine TMT reinforcement item (5.22.6) whose text also lists
+ * "5.22A.1 Mild steel and Medium Tensile steel bars…" — so a plain "mild steel" scan
+ * mislabels reinforcement as structural. So: if the item is fundamentally reinforcement
+ * (steel reinforcement / rebar / TMT / thermo-mechanically treated) and NOT actually a
+ * fabrication/erection of steelwork, it is …B, whatever incidental structural words the
+ * dump contains. Only when there is no reinforcement core do the broader structural
+ * signals (mild/structural steel, angles, channels, plates, bolts, trusses, fabrication)
+ * push a …B to …D.
  */
-const TMT_NATURE = /\btmt\b|re-?inforc|\bhysd\b|deformed\s+bars?|fe[\s-]?(415|500|550)|cold\s+twisted|\brcc\b|r\.c\.c/i;
-const NON_TMT_NATURE = /mild\s+steel|\bm\.?s\.?\s+(?:round|flat|angle|channel|plate|section|bolt|rod|bar)|structural\s+steel|built-?up\s+section|truss|girder|\bangles?\b|\bchannels?\b|chequered|\bplates?\b|holding[\s-]?down|anchor\s+bolt|\bbolts?\b|gantry|crane\s+rail|\brails?\b|fabricat|erect/i;
+const REINFORCEMENT = /steel\s+reinforcement|reinforcement\s+(?:for|bars?|steel)|\brebars?\b|thermo-?mechanically\s+treated|\btmt\b|\bhysd\b/i;
+const FABRICATION_CORE = /\bfabricat\w*|\berection\b|\berect(?:ing|ed)\b|\btruss(?:es)?\b|\bgirders?\b|built-?up\s+section|\bgantry\b|\bpurlins?\b/i;
+const STRUCTURAL_STEEL = /mild\s+steel|\bm\.?s\.?\s+(?:round|flat|angle|channel|plate|section|bolt|rod|bar)|structural\s+steel|built-?up\s+section|truss|girder|\bangles?\b|\bchannels?\b|chequered|\bplates?\b|holding[\s-]?down|anchor\s+bolt|\bbolts?\b|gantry|crane\s+rail|\brails?\b|fabricat|erect/i;
 export function enforceSteelSubclassNature(subCode: string | null | undefined, itemDescription: string | null | undefined): string {
   const code = String(subCode || '').trim().toUpperCase();
   const last = code.slice(-1);
+  if (last !== 'B' && last !== 'D') return code;
   const text = String(itemDescription || '');
-  if (last === 'B') {
-    // …B is TMT / reinforcement supply only; structural steel supplied-and-fixed is …D.
-    if (!NON_TMT_NATURE.test(text)) return code;           // no non-TMT evidence — B stands
-    if (TMT_NATURE.test(text) && !/mild\s+steel|structural\s+steel/i.test(text)) return code; // genuinely TMT
-    return `${code.slice(0, -1)}D`;
-  }
-  if (last === 'D') {
-    // …D is structural fabrication & erection; a plain TMT / reinforcement supply item
-    // (TMT wording, and NO structural/fabrication/erection wording at all) is really …B.
-    if (TMT_NATURE.test(text) && !NON_TMT_NATURE.test(text)) return `${code.slice(0, -1)}B`;
-    return code;
-  }
+  const digit = code.slice(0, -1);
+  // Reinforcement supply is …B and wins over incidental structural words in a DSR dump,
+  // unless the item is genuinely fabrication/erection of steelwork.
+  if (REINFORCEMENT.test(text) && !FABRICATION_CORE.test(text)) return `${digit}B`;
+  // No reinforcement core: a …B carrying structural / other-than-TMT steel is really …D.
+  if (last === 'B' && STRUCTURAL_STEEL.test(text)) return `${digit}D`;
   return code;
 }
 
