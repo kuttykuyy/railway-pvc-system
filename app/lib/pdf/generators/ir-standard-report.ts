@@ -888,6 +888,12 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   // Return to last page for indices rendering
   pdf.setPage(pagesAfterSummary);
 
+  // Whether Section D (escalation) drew anything. When it did, the next section follows
+  // the live y cursor (D ends with a wrapped item-number list below its table, which
+  // lastAutoTable.finalY does not capture); when it didn't, the next section positions
+  // off the C-summary block instead.
+  let escalationRendered = false;
+
   // ── D. STATUTORY ESCALATION FRAMEWORK & CALCULATIONS ──────────────────────
   if (showCalcSteps) {
   // Per-component statutory escalation (GCC Clause 46A): each cost component's
@@ -1058,6 +1064,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       pdf.text(itemLines, mL, y);
       y += itemLines.length * 3.4;
     }
+    escalationRendered = true;
   }
 
   }
@@ -1066,8 +1073,15 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   const detailEntries = entries.filter(entry =>
     (Number(entry.amount) || 0) !== 0 || entry.classificationJustification || entry.description);
   if (detailEntries.length > 0) {
-    const notesBottom = summaryPage === pagesAfterSummary ? leftBlockBottom : 0;
-    y = Math.max(pdf.lastAutoTable.finalY, notesBottom, summaryStartY + 30) + 6;
+    // When Section D rendered, follow its live cursor (it ends with an item-number list
+    // below its table that lastAutoTable.finalY misses); otherwise position off the
+    // C-summary block, which does not advance y past itself.
+    if (escalationRendered) {
+      y += 8;
+    } else {
+      const notesBottom = summaryPage === pagesAfterSummary ? leftBlockBottom : 0;
+      y = Math.max(pdf.lastAutoTable.finalY, notesBottom, summaryStartY + 30) + 6;
+    }
     ensureSpace(30);
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
