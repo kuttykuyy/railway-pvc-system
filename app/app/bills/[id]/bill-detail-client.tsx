@@ -684,6 +684,29 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
     router.refresh();
   };
 
+  // A readable, Windows-safe file name. So a folder of downloads reads as
+  // "PVC Statement - GNKUMAR INDUSTRIES - Bill B7 - Q3-2024.pdf" instead of an opaque
+  // "PVC_Report_SR_MDU_..._2026-08-30.pdf". Illegal filename characters (\ / : * ? " < >
+  // |) are stripped, runs of space/underscore collapsed, and each part length-capped.
+  const buildPdfName = (kind: 'Statement' | 'Summary') => {
+    const clean = (s: string, cap = 48) =>
+      (s || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/[\s_]+/g, ' ').trim().slice(0, cap).trim();
+    // The bill number usually ends in the CC-bill part (…/B7, …/B1-111) — the tail is
+    // what distinguishes bills of one contract, so lead the label with it.
+    const billTail = (() => {
+      const parts = (bill.billNo || '').split('/').filter(Boolean);
+      const tail = parts.length ? parts[parts.length - 1] : bill.billNo;
+      return clean(tail, 24);
+    })();
+    const parts = [
+      `PVC ${kind}`,
+      clean(bill.contract?.contractorName, 40),
+      billTail ? `Bill ${billTail}` : '',
+      clean(bill.quarter, 16),
+    ].filter(Boolean);
+    return `${parts.join(' - ')}.pdf`;
+  };
+
   const handleDownloadPDF = async () => {
     try {
       setIsDownloading(true);
@@ -705,7 +728,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `PVC_Report_${bill.billNo.replace(/\//g, '_')}_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf`;
+      a.download = buildPdfName('Statement');
       document.body.appendChild(a);
       a.click();
       
@@ -741,7 +764,7 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `PVC_Summary_${bill.billNo.replace(/\//g, '_')}.pdf`;
+      a.download = buildPdfName('Summary');
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(downloadUrl);
