@@ -2198,17 +2198,19 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       'Vetted — Sr. DFM / Accounts',
     ];
     const colW = contentW / signatories.length;
+    // Role label ABOVE the line; the line itself is left clear for the office to sign
+    // and write name / designation / date by hand.
     signatories.forEach((label, i) => {
       const x0 = mL + i * colW;
-      pdf.setDrawColor(120, 120, 120);
-      pdf.setLineWidth(0.3);
-      pdf.line(x0 + 6, y, x0 + colW - 14, y);
       pdf.setFontSize(8);
       pdf.setFont('helvetica', 'bold');
-      pdf.text(label, x0 + 6, y + 4);
+      pdf.text(label, x0 + 6, y);
       pdf.setFont('helvetica', 'normal');
+      pdf.setDrawColor(120, 120, 120);
+      pdf.setLineWidth(0.3);
+      pdf.line(x0 + 6, y + 12, x0 + colW - 14, y + 12);
     });
-    y += 14;
+    y += 16;
   }
 
   // ── AVERAGE JPC STEEL & MONTHLY FUEL (DIESEL) INDICES ─────────────────────
