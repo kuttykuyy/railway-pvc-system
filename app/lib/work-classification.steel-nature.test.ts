@@ -32,4 +32,26 @@ describe('enforceSteelSubclassNature', () => {
   it('works for any group digit', () => {
     expect(enforceSteelSubclassNature('1B', 'Fabrication and erection of MS angles and channels')).toBe('1D');
   });
+
+  // Reverse direction: TMT reinforcement wrongly put in …D must come back to …B.
+  it('moves a TMT reinforcement item out of …D into …B (DSR 5.22.6 miscoded)', () => {
+    expect(enforceSteelSubclassNature('5D',
+      'Supply and fixing of TMT steel reinforcement bars for RCC work including cutting, bending, placing in position and binding')).toBe('5B');
+  });
+
+  it('moves Fe500 reinforcement bars out of …D into …B', () => {
+    expect(enforceSteelSubclassNature('5D',
+      'Steel reinforcement Fe 500 for RCC, cut bent and placed in position')).toBe('5B');
+  });
+
+  it('keeps genuine structural fabrication in …D (not moved to B)', () => {
+    expect(enforceSteelSubclassNature('5D',
+      'Structural steel work in built-up sections, trusses and framed work, fabrication and erection')).toBe('5D');
+    expect(enforceSteelSubclassNature('5D', 'Providing and fixing mild steel holding down bolts')).toBe('5D');
+    expect(enforceSteelSubclassNature('5D', 'Fabrication and erection of MS angles and channels')).toBe('5D');
+  });
+
+  it('leaves a …D item with no steel wording alone', () => {
+    expect(enforceSteelSubclassNature('5D', 'Some general work item')).toBe('5D');
+  });
 });

@@ -223,18 +223,31 @@ export function looksCompositeWork(workDescription: string): { isComposite: bool
  * …D ("Fabrication & Erection including Steel Supply"). The AI prompts carry this rule,
  * but a prompt is a request and the model drifts (real bills came back with MS
  * holding-down bolts and structural trusses in 5B); this function is the enforcement.
- * Only ever moves B → D on non-TMT evidence; a pure TMT item, or one with no steel
- * wording at all, keeps its code.
+ * Runs BOTH ways: moves B → D on non-TMT (structural) evidence, and D → B when a …D
+ * item is plainly TMT / reinforcement supply with no fabrication/erection wording (the
+ * AI kept dropping TMT reinforcement into …D). A pure TMT item, or one with no steel
+ * wording at all, keeps whichever of B it should have; anything genuinely structural
+ * stays in D.
  */
 const TMT_NATURE = /\btmt\b|re-?inforc|\bhysd\b|deformed\s+bars?|fe[\s-]?(415|500|550)|cold\s+twisted|\brcc\b|r\.c\.c/i;
 const NON_TMT_NATURE = /mild\s+steel|\bm\.?s\.?\s+(?:round|flat|angle|channel|plate|section|bolt|rod|bar)|structural\s+steel|built-?up\s+section|truss|girder|\bangles?\b|\bchannels?\b|chequered|\bplates?\b|holding[\s-]?down|anchor\s+bolt|\bbolts?\b|gantry|crane\s+rail|\brails?\b|fabricat|erect/i;
 export function enforceSteelSubclassNature(subCode: string | null | undefined, itemDescription: string | null | undefined): string {
   const code = String(subCode || '').trim().toUpperCase();
-  if (!code.endsWith('B')) return code;
+  const last = code.slice(-1);
   const text = String(itemDescription || '');
-  if (!NON_TMT_NATURE.test(text)) return code;           // no non-TMT evidence — B stands
-  if (TMT_NATURE.test(text) && !/mild\s+steel|structural\s+steel/i.test(text)) return code; // genuinely TMT
-  return `${code.slice(0, -1)}D`;
+  if (last === 'B') {
+    // …B is TMT / reinforcement supply only; structural steel supplied-and-fixed is …D.
+    if (!NON_TMT_NATURE.test(text)) return code;           // no non-TMT evidence — B stands
+    if (TMT_NATURE.test(text) && !/mild\s+steel|structural\s+steel/i.test(text)) return code; // genuinely TMT
+    return `${code.slice(0, -1)}D`;
+  }
+  if (last === 'D') {
+    // …D is structural fabrication & erection; a plain TMT / reinforcement supply item
+    // (TMT wording, and NO structural/fabrication/erection wording at all) is really …B.
+    if (TMT_NATURE.test(text) && !NON_TMT_NATURE.test(text)) return `${code.slice(0, -1)}B`;
+    return code;
+  }
+  return code;
 }
 
 export function classificationCodeMatchesWork(subClassificationCode: string, workDescription: string): boolean {
