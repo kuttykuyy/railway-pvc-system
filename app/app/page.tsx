@@ -140,7 +140,7 @@ export default function HomePage() {
       </section>
 
       {/* --- CORE FEATURES (BENTO GRID) --- */}
-      <section id="features" className="w-full py-24 bg-white">
+      <section id="features" className="w-full py-14 sm:py-24 bg-white">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
           <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
             <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Everything You Need for PVC</h2>
@@ -253,7 +253,7 @@ export default function HomePage() {
       </section>
 
       {/* --- HOW IT WORKS --- */}
-      <section className="w-full bg-white py-24 text-slate-800">
+      <section className="w-full bg-white py-14 sm:py-24 text-slate-800">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
           <div className="flex flex-col lg:flex-row justify-between items-start gap-16">
 
@@ -296,7 +296,7 @@ export default function HomePage() {
       </section>
 
       {/* --- THE CAG NUMBERS — why getting PVC right matters --- */}
-      <section className="w-full py-24 bg-slate-900 text-white">
+      <section className="w-full py-14 sm:py-24 bg-slate-900 text-white">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
           <div className="max-w-3xl">
             <p className="text-emerald-400 font-semibold uppercase tracking-widest text-sm mb-4">Why it matters</p>
@@ -335,7 +335,7 @@ export default function HomePage() {
       </section>
 
       {/* --- TUTORIAL VIDEOS --- */}
-      <section id="tutorials" className="w-full py-24 bg-slate-50 border-y border-slate-100">
+      <section id="tutorials" className="w-full py-14 sm:py-24 bg-slate-50 border-y border-slate-100">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
           <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-sm font-semibold text-slate-600 shadow-sm">
@@ -388,7 +388,7 @@ export default function HomePage() {
       </section>
 
       {/* --- POWERFUL TOOLS (MINI FEATURES GRID) --- */}
-      <section className="w-full py-24 bg-white">
+      <section className="w-full py-14 sm:py-24 bg-white">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
           <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
             <h2 className="text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight">The Ultimate Contractor Toolkit</h2>
@@ -414,7 +414,7 @@ export default function HomePage() {
       </section>
 
       {/* --- PRICING --- */}
-      <section className="w-full bg-white py-24 border-y border-slate-100">
+      <section className="w-full bg-white py-14 sm:py-24 border-y border-slate-100">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
           <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
             <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Simple, Transparent Pricing</h2>
@@ -441,7 +441,7 @@ export default function HomePage() {
             <div className="bg-white rounded-3xl border-2 border-emerald-500 shadow-2xl shadow-emerald-900/10 overflow-hidden">
               <div className="grid grid-cols-1 md:grid-cols-2">
                 {/* Left: price */}
-                <div className="p-10 lg:p-12 flex flex-col justify-center border-b md:border-b-0 md:border-r border-slate-100">
+                <div className="p-6 sm:p-10 lg:p-12 flex flex-col justify-center border-b md:border-b-0 md:border-r border-slate-100">
                   <p className="text-sm font-semibold text-emerald-600 uppercase tracking-widest mb-3">Per Bill Credit Cost</p>
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -471,7 +471,7 @@ export default function HomePage() {
                   </div>
                 </div>
                 {/* Right: credit top-up info */}
-                <div className="p-10 lg:p-12 flex flex-col justify-center bg-slate-50/50">
+                <div className="p-6 sm:p-10 lg:p-12 flex flex-col justify-center bg-slate-50/50">
                   <p className="text-sm font-semibold text-slate-500 uppercase tracking-widest mb-4">Credit Top-Up</p>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between py-3 border-b border-slate-100">
@@ -537,7 +537,7 @@ export default function HomePage() {
       </section>
 
       {/* --- FINAL CTA --- */}
-      <section className="w-full bg-white py-32 text-center">
+      <section className="w-full bg-white py-20 sm:py-32 text-center">
         <div className="max-w-4xl mx-auto px-6">
           <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight mb-6">
             Ready to Streamline Your Billing?

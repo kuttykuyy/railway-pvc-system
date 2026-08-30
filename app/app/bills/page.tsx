@@ -2349,7 +2349,7 @@ export default function BillsPage() {
                         title="Download PDF"
                       >
                         <Download className="h-4 w-4 mb-1 group-hover/btn:scale-110 transition-transform duration-200" />
-                        <span className="text-[10px] font-bold">PDF</span>
+                        <span className="text-[11px] font-bold">PDF</span>
                       </button>
 
                       {/* Excel */}
@@ -2359,7 +2359,7 @@ export default function BillsPage() {
                         title="Download Excel"
                       >
                         <FileSpreadsheet className="h-4 w-4 mb-1 group-hover/btn:scale-110 transition-transform duration-200" />
-                        <span className="text-[10px] font-bold">Excel</span>
+                        <span className="text-[11px] font-bold">Excel</span>
                       </button>
 
                       {/* Covering Letter */}
@@ -2369,7 +2369,7 @@ export default function BillsPage() {
                         title="Download Covering Letter"
                       >
                         <Send className="h-4 w-4 mb-1 group-hover/btn:scale-110 transition-transform duration-200" />
-                        <span className="text-[10px] font-bold">Letter</span>
+                        <span className="text-[11px] font-bold">Letter</span>
                       </button>
                     </div>
 

@@ -68,8 +68,9 @@ export default function BottomNavigation() {
         </div>
       </nav>
 
-      {/* Spacer for fixed bottom nav */}
-      <div className="lg:hidden h-16" />
+      {/* Spacer for fixed bottom nav — matches the bar's h-16 PLUS the notch safe-area
+          the bar's pb-safe adds, so the last row of page content never hides under it. */}
+      <div className="lg:hidden h-[calc(4rem+env(safe-area-inset-bottom))]" />
     </>
   );
 }

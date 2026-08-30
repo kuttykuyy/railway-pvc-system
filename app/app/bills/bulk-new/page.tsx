@@ -1198,7 +1198,7 @@ export default function BulkBillCreationPage() {
                               type="button"
                               onClick={() => groupRowUnderClass(row.id, s.best)}
                               disabled={isSaving}
-                              className="ml-auto rounded border border-indigo-300 px-2 py-0.5 font-semibold text-indigo-700 hover:bg-indigo-50"
+                              className="ml-auto rounded border border-indigo-300 px-3 py-1.5 font-semibold text-indigo-700 hover:bg-indigo-50"
                             >
                               Group under {s.best.code}
                             </button>
