@@ -867,6 +867,32 @@ export default function BillsPage() {
     toast.error(`Abstract not attached — ${status.replace(/^unavailable:\s*/, '')}`, { duration: 6000 });
   };
 
+  // A readable, Windows-safe name for a bulk/combined PDF — mirrors the single-bill
+  // naming (contractor, agreement, bill tail) instead of "Bulk_PVC_Detailed_5_Bills…".
+  // When the selection spans more than one agreement, name it by count + date since no
+  // single contract identifies it.
+  const cleanNamePart = (s: string, cap = 44) =>
+    (s || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/[\s_]+/g, ' ').trim().slice(0, cap).trim();
+  const billTailOf = (billNo: string) => {
+    const p = (billNo || '').split('/').filter(Boolean);
+    return cleanNamePart(p.length ? p[p.length - 1] : billNo, 24);
+  };
+  const buildBulkPdfName = (rows: Bill[]) => {
+    const kind = pdfFormat === 'ir_standard' ? 'Statement' : 'Detailed';
+    const agreements = Array.from(new Set(rows.map(r => r.contract?.agreementNo).filter(Boolean)));
+    const parts: string[] = [`PVC ${kind}`];
+    if (agreements.length === 1 && rows.length > 0) {
+      parts.push(cleanNamePart(rows[0].contract?.contractorName, 40));
+      parts.push(cleanNamePart(rows[0].contract?.agreementNo, 40));
+      const tails = rows.map(r => billTailOf(r.billNo)).filter(Boolean);
+      parts.push(tails.length > 0 && tails.length <= 3 ? `Bills ${tails.join(', ')}` : `${rows.length} bills`);
+    } else {
+      parts.push(`${rows.length} bills`);
+      parts.push(format(toISTDate(new Date()), 'yyyy-MM-dd'));
+    }
+    return `${parts.filter(Boolean).join(' - ')}.pdf`;
+  };
+
   const runBulkReport = async (billIds: string[], includeDocs: boolean) => {
     setGeneratingBulkReport(true);
     try {
@@ -889,8 +915,8 @@ export default function BillsPage() {
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      const formatSuffix = pdfFormat === 'ir_standard' ? 'IR_Standard' : 'Detailed';
-      a.download = `Bulk_PVC_${formatSuffix}_${billIds.length}_Bills_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf`;
+      const rows = billIds.map(id => bills.find(b => b.id === id)).filter(Boolean) as Bill[];
+      a.download = buildBulkPdfName(rows);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -933,9 +959,7 @@ export default function BillsPage() {
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      const sanitizedBatchName = batchName.replace(/[^a-zA-Z0-9]/g, '_');
-      const formatSuffix = pdfFormat === 'ir_standard' ? 'IR_Standard' : 'Detailed';
-      a.download = `${sanitizedBatchName}_${formatSuffix}_${format(toISTDate(new Date()), 'yyyy-MM-dd')}.pdf`;
+      a.download = buildBulkPdfName(batchBills);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

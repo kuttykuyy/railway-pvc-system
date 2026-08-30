@@ -701,8 +701,8 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
     const parts = [
       `PVC ${kind}`,
       clean(bill.contract?.contractorName, 40),
+      clean(bill.contract?.agreementNo, 40),
       billTail ? `Bill ${billTail}` : '',
-      clean(bill.quarter, 16),
     ].filter(Boolean);
     return `${parts.join(' - ')}.pdf`;
   };
