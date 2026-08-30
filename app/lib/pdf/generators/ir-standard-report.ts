@@ -740,7 +740,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       pdf.setFontSize(7.5);
       pdf.setFont('helvetica', 'italic');
       pdf.setTextColor(80, 80, 80);
-      pdf.text(`Balance ${fmtMoney(totalPvcAmt - perClassSum)} is the dedicated cement / steel escalation — worked in Section G.`, mL, y);
+      pdf.text(`Balance ${fmtMoney(totalPvcAmt - perClassSum)} is the dedicated cement / steel escalation — worked in Section D.`, mL, y);
       pdf.setTextColor(0, 0, 0);
       y += 5;
     }
@@ -888,7 +888,175 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   // Return to last page for indices rendering
   pdf.setPage(pagesAfterSummary);
 
-  // ── D. WORK CLASSIFICATION & JUSTIFICATION ────────────────────────────────
+  // ── D. STATUTORY ESCALATION FRAMEWORK & CALCULATIONS ──────────────────────
+  if (showCalcSteps) {
+  // Per-component statutory escalation (GCC Clause 46A): each cost component's
+  // price variation = its weighted amount x [(I1 - I0) / I0]; dedicated cement
+  // and dedicated steel apply the 85% variable factor. Mirrors the on-screen
+  // "Statutory Escalate Framework & Calculations" panel, with the bill's item
+  // numbers listed alongside.
+  if (pvc && allComponents.length > 0) {
+    startSection(58);
+
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('D. STATUTORY ESCALATION FRAMEWORK & CALCULATIONS', mL, y);
+    y += 5;
+
+    pdf.setFontSize(7.5);
+    pdf.setFont('helvetica', 'italic');
+    pdf.setTextColor(80, 80, 80);
+    const gIntro = pdf.splitTextToSize(
+      'Statutory escalation per GCC Clause 46A: Component Escalation = Component Amount x [(I1 - I0) / I0], '
+      + 'where I0 = Base Month index and I1 = Quarter Average index. Dedicated cement / steel apply the 85% variable factor.',
+      contentW,
+    );
+    pdf.text(gIntro, mL, y);
+    pdf.setTextColor(0, 0, 0);
+    y += gIntro.length * 3.4 + 3;
+
+    const escHead = [[
+      'Component',
+      '% (Wtd.)',
+      'Component Amt (Rs.)',
+      'I0',
+      'I1',
+      'Statutory Escalate Formula',
+      'Escalation Amt (Rs.)',
+    ]];
+    // One block per classification (mirrors C.1): the formula an officer checks is the
+    // class's OWN value x its OWN tabled percentage — the weighted blend belonged to no
+    // class and could not be verified against 46A.6. Falls back to the combined rows only
+    // when no entry carries a classification.
+    const escBody: any[] = perClassComp.length > 0
+      ? perClassComp.flatMap(g => ([
+          [{ content: `${g.code} — ${g.name}     Value of work: ${fmtMoney(g.amount)}`, colSpan: 7, styles: { fontStyle: 'bold' as const, fillColor: [232, 238, 247] as [number, number, number], halign: 'left' as const } }],
+          ...g.rows.map(r => {
+            const amt = g.amount * (r.pct / 100);
+            return [
+              r.name,
+              r.pct.toFixed(2) + '%',
+              fmt(amt),
+              fmtIdx(r.base),
+              fmtIdx(r.avg),
+              `${fmt(amt)} x [(${fmtIdx(r.avg)} - ${fmtIdx(r.base)}) / ${fmtIdx(r.base)}]`,
+              fmt(r.pvcAmt),
+            ];
+          }),
+          [
+            { content: `Subtotal — ${g.code}`, colSpan: 6, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [246, 248, 251] as [number, number, number] } },
+            { content: fmt(g.subtotal), styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [246, 248, 251] as [number, number, number] } },
+          ],
+        ]))
+      : allComponents.map(c => {
+          const amt = billAmount * c.pct;
+          return [
+            c.name,
+            (c.pct * 100).toFixed(2) + '%',
+            fmt(amt),
+            fmtIdx(c.base),
+            fmtIdx(c.avg),
+            `${fmt(amt)} x [(${fmtIdx(c.avg)} - ${fmtIdx(c.base)}) / ${fmtIdx(c.base)}]`,
+            fmt(c.pvcAmt),
+          ];
+        });
+
+    // Dedicated cement / steel rows use the 85% escalation factor and their own
+    // dedicated amounts / section indices.
+    const b = bill as any;
+    const dedicated: Array<{ label: string; amount: number; base: number; avg: number; pvc: number }> = [];
+    if (Math.abs(pvc.dedicatedCementPvc ?? 0) > 0.005) {
+      dedicated.push({ label: 'Dedicated Cement (85%)', amount: Number(b.cementAmount) || 0, base: cemBase, avg: cemAvg, pvc: pvc.dedicatedCementPvc! });
+    }
+    const steelDed: Array<[number, string, number]> = [
+      [pvc.dedicatedSteelTmtBarsPvc ?? 0, 'Dedicated Steel TMT Bars (85%)', Number(b.steelTmtBarsAmount) || 0],
+      [pvc.dedicatedSteelAngleChannelPvc ?? 0, 'Dedicated Steel Angle/Channel (85%)', Number(b.steelAngleChannelAmount) || 0],
+      [pvc.dedicatedSteelPlatesPvc ?? 0, 'Dedicated Steel Plates (85%)', Number(b.steelPlatesAmount) || 0],
+      [pvc.dedicatedSteelOtherSectionsPvc ?? 0, 'Dedicated Steel Other Sections (85%)', Number(b.steelOtherSectionsAmount) || 0],
+    ];
+    steelDed.forEach(([pvcVal, label, amount], i) => {
+      if (Math.abs(pvcVal) > 0.005) {
+        const nm = steelIndexNames[i];
+        dedicated.push({ label, amount, base: getIndexBase(quarterlyAverages, nm), avg: getIndexAvg(quarterlyAverages, nm), pvc: pvcVal });
+      }
+    });
+    for (const d of dedicated) {
+      escBody.push([
+        d.label,
+        '85%',
+        fmt(d.amount),
+        fmtIdx(d.base),
+        fmtIdx(d.avg),
+        `${fmt(d.amount)} x [(${fmtIdx(d.avg)} - ${fmtIdx(d.base)}) / ${fmtIdx(d.base)}] x 85%`,
+        fmt(d.pvc),
+      ]);
+    }
+
+    escBody.push([
+      { content: 'TOTAL PRICE VARIATION FOR THIS BILL', colSpan: 6, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [220, 220, 220] as [number, number, number] } },
+      { content: fmt(pvc.totalPvc ?? 0), styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [220, 220, 220] as [number, number, number] } },
+    ]);
+
+    autoTable(pdf, {
+      startY: y,
+      head: escHead,
+      body: escBody,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [20, 20, 20],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 8,
+        halign: 'center',
+        valign: 'middle',
+        cellPadding: 2.5,
+      },
+      bodyStyles: {
+        fontSize: 8,
+        cellPadding: { top: 2, right: 2.5, bottom: 2, left: 2.5 },
+        textColor: [0, 0, 0],
+        valign: 'middle',
+      },
+      alternateRowStyles: { fillColor: [250, 250, 250] },
+      styles: { lineColor: [180, 180, 180], lineWidth: 0.3, font: 'helvetica', overflow: 'linebreak' },
+      margin: { left: mL, right: mR, top: mT },
+      tableWidth: contentW,
+      columnStyles: {
+        0: { cellWidth: 42, halign: 'left' },
+        1: { cellWidth: 16, halign: 'center' },
+        2: { cellWidth: 30, halign: 'right' },
+        3: { cellWidth: 17, halign: 'center' },
+        4: { cellWidth: 17, halign: 'center' },
+        5: { cellWidth: 120, halign: 'left' },
+        6: { cellWidth: 31, halign: 'right' },
+      },
+    });
+
+    y = pdf.lastAutoTable.finalY + 5;
+
+    // Bill item numbers covered by this escalation (item-number list alongside).
+    const escItemNos = Array.from(new Set(
+      entries.flatMap(e => {
+        const rows = (e.itemRows || []).map(r => String(r?.itemNumber || '').trim()).filter(Boolean);
+        return rows.length > 0 ? rows : [String(e.itemNumber || '').trim()];
+      }).filter(Boolean)
+    ));
+    if (escItemNos.length > 0) {
+      ensureSpace(16);
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Bill item numbers covered by this escalation:', mL, y);
+      y += 4;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      const itemLines = pdf.splitTextToSize(escItemNos.join(',   '), contentW);
+      pdf.text(itemLines, mL, y);
+      y += itemLines.length * 3.4;
+    }
+  }
+
+  }
+  // ── E. WORK CLASSIFICATION & JUSTIFICATION ────────────────────────────────
   if (showClassification) {
   const detailEntries = entries.filter(entry =>
     (Number(entry.amount) || 0) !== 0 || entry.classificationJustification || entry.description);
@@ -898,7 +1066,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     ensureSpace(30);
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('D. WORK CLASSIFICATION', mL, y);
+    pdf.text('E. WORK CLASSIFICATION', mL, y);
     y += 2;
 
     const classHead = [[
@@ -1123,7 +1291,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     pdf.setTextColor(0, 0, 0);
   }
 
-  // ── E. BILL SCHEDULE ITEMS & SUMMARY ──────────────────────────────────────
+  // ── F. BILL SCHEDULE ITEMS & SUMMARY ──────────────────────────────────────
   // Item-wise listing of the bill schedule (item no., schedule, quantity,
   // agreement rate, amount) followed by a schedule-wise summary, so every
   // classified amount can be traced back to the source bill lines.
@@ -1135,7 +1303,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     group?: string;
   };
   // A split-off cement row (manual "Cement (derived)" or AI "(Cement Portion)") is a
-  // classification artifact for PVC (Section D), not a real bill line item — the work
+  // classification artifact for PVC (Section E), not a real bill line item — the work
   // item's agreement rate already includes its cement. Listing it in the schedule items
   // would double-count cement on top of the full work items and inflate the gross.
   // isDerivedCement isn't persisted, so detect it from the saved description / item codes.
@@ -1216,7 +1384,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
 
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('E. BILL SCHEDULE ITEMS', mL, y);
+    pdf.text('F. BILL SCHEDULE ITEMS', mL, y);
     y += 2;
 
     const itemHead = [['Sl.', 'Item No.', 'Bill Page', 'Quantity', 'Agreement Rate (Rs.)', 'Amount (Rs.)']];
@@ -1406,7 +1574,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       y = pdf.lastAutoTable.finalY + 6;
     }
 
-    // ── F. BILL SCHEDULE SUMMARY ────────────────────────────────────────────
+    // ── G. BILL SCHEDULE SUMMARY ────────────────────────────────────────────
     const scheduleTotals = new Map<string, number>();
     for (const row of scheduleRows) {
       scheduleTotals.set(row.schedule, (scheduleTotals.get(row.schedule) || 0) + row.amount);
@@ -1469,7 +1637,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     ensureSpace(58 + scheduleTotals.size * 14);
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('F. BILL SCHEDULE SUMMARY', mL, y);
+    pdf.text('G. BILL SCHEDULE SUMMARY', mL, y);
     y += 2;
 
     const summaryBody: any[] = Array.from(scheduleTotals.entries()).map(([schedule, total]) => [
@@ -1591,174 +1759,6 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
 
   }
 
-  // ── G. STATUTORY ESCALATION FRAMEWORK & CALCULATIONS ──────────────────────
-  if (showCalcSteps) {
-  // Per-component statutory escalation (GCC Clause 46A): each cost component's
-  // price variation = its weighted amount x [(I1 - I0) / I0]; dedicated cement
-  // and dedicated steel apply the 85% variable factor. Mirrors the on-screen
-  // "Statutory Escalate Framework & Calculations" panel, with the bill's item
-  // numbers listed alongside.
-  if (pvc && allComponents.length > 0) {
-    startSection(58);
-
-    pdf.setFontSize(9);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('G. STATUTORY ESCALATION FRAMEWORK & CALCULATIONS', mL, y);
-    y += 5;
-
-    pdf.setFontSize(7.5);
-    pdf.setFont('helvetica', 'italic');
-    pdf.setTextColor(80, 80, 80);
-    const gIntro = pdf.splitTextToSize(
-      'Statutory escalation per GCC Clause 46A: Component Escalation = Component Amount x [(I1 - I0) / I0], '
-      + 'where I0 = Base Month index and I1 = Quarter Average index. Dedicated cement / steel apply the 85% variable factor.',
-      contentW,
-    );
-    pdf.text(gIntro, mL, y);
-    pdf.setTextColor(0, 0, 0);
-    y += gIntro.length * 3.4 + 3;
-
-    const escHead = [[
-      'Component',
-      '% (Wtd.)',
-      'Component Amt (Rs.)',
-      'I0',
-      'I1',
-      'Statutory Escalate Formula',
-      'Escalation Amt (Rs.)',
-    ]];
-    // One block per classification (mirrors C.1): the formula an officer checks is the
-    // class's OWN value x its OWN tabled percentage — the weighted blend belonged to no
-    // class and could not be verified against 46A.6. Falls back to the combined rows only
-    // when no entry carries a classification.
-    const escBody: any[] = perClassComp.length > 0
-      ? perClassComp.flatMap(g => ([
-          [{ content: `${g.code} — ${g.name}     Value of work: ${fmtMoney(g.amount)}`, colSpan: 7, styles: { fontStyle: 'bold' as const, fillColor: [232, 238, 247] as [number, number, number], halign: 'left' as const } }],
-          ...g.rows.map(r => {
-            const amt = g.amount * (r.pct / 100);
-            return [
-              r.name,
-              r.pct.toFixed(2) + '%',
-              fmt(amt),
-              fmtIdx(r.base),
-              fmtIdx(r.avg),
-              `${fmt(amt)} x [(${fmtIdx(r.avg)} - ${fmtIdx(r.base)}) / ${fmtIdx(r.base)}]`,
-              fmt(r.pvcAmt),
-            ];
-          }),
-          [
-            { content: `Subtotal — ${g.code}`, colSpan: 6, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [246, 248, 251] as [number, number, number] } },
-            { content: fmt(g.subtotal), styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [246, 248, 251] as [number, number, number] } },
-          ],
-        ]))
-      : allComponents.map(c => {
-          const amt = billAmount * c.pct;
-          return [
-            c.name,
-            (c.pct * 100).toFixed(2) + '%',
-            fmt(amt),
-            fmtIdx(c.base),
-            fmtIdx(c.avg),
-            `${fmt(amt)} x [(${fmtIdx(c.avg)} - ${fmtIdx(c.base)}) / ${fmtIdx(c.base)}]`,
-            fmt(c.pvcAmt),
-          ];
-        });
-
-    // Dedicated cement / steel rows use the 85% escalation factor and their own
-    // dedicated amounts / section indices.
-    const b = bill as any;
-    const dedicated: Array<{ label: string; amount: number; base: number; avg: number; pvc: number }> = [];
-    if (Math.abs(pvc.dedicatedCementPvc ?? 0) > 0.005) {
-      dedicated.push({ label: 'Dedicated Cement (85%)', amount: Number(b.cementAmount) || 0, base: cemBase, avg: cemAvg, pvc: pvc.dedicatedCementPvc! });
-    }
-    const steelDed: Array<[number, string, number]> = [
-      [pvc.dedicatedSteelTmtBarsPvc ?? 0, 'Dedicated Steel TMT Bars (85%)', Number(b.steelTmtBarsAmount) || 0],
-      [pvc.dedicatedSteelAngleChannelPvc ?? 0, 'Dedicated Steel Angle/Channel (85%)', Number(b.steelAngleChannelAmount) || 0],
-      [pvc.dedicatedSteelPlatesPvc ?? 0, 'Dedicated Steel Plates (85%)', Number(b.steelPlatesAmount) || 0],
-      [pvc.dedicatedSteelOtherSectionsPvc ?? 0, 'Dedicated Steel Other Sections (85%)', Number(b.steelOtherSectionsAmount) || 0],
-    ];
-    steelDed.forEach(([pvcVal, label, amount], i) => {
-      if (Math.abs(pvcVal) > 0.005) {
-        const nm = steelIndexNames[i];
-        dedicated.push({ label, amount, base: getIndexBase(quarterlyAverages, nm), avg: getIndexAvg(quarterlyAverages, nm), pvc: pvcVal });
-      }
-    });
-    for (const d of dedicated) {
-      escBody.push([
-        d.label,
-        '85%',
-        fmt(d.amount),
-        fmtIdx(d.base),
-        fmtIdx(d.avg),
-        `${fmt(d.amount)} x [(${fmtIdx(d.avg)} - ${fmtIdx(d.base)}) / ${fmtIdx(d.base)}] x 85%`,
-        fmt(d.pvc),
-      ]);
-    }
-
-    escBody.push([
-      { content: 'TOTAL PRICE VARIATION FOR THIS BILL', colSpan: 6, styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [220, 220, 220] as [number, number, number] } },
-      { content: fmt(pvc.totalPvc ?? 0), styles: { fontStyle: 'bold' as const, halign: 'right' as const, fillColor: [220, 220, 220] as [number, number, number] } },
-    ]);
-
-    autoTable(pdf, {
-      startY: y,
-      head: escHead,
-      body: escBody,
-      theme: 'grid',
-      headStyles: {
-        fillColor: [20, 20, 20],
-        textColor: [255, 255, 255],
-        fontStyle: 'bold',
-        fontSize: 8,
-        halign: 'center',
-        valign: 'middle',
-        cellPadding: 2.5,
-      },
-      bodyStyles: {
-        fontSize: 8,
-        cellPadding: { top: 2, right: 2.5, bottom: 2, left: 2.5 },
-        textColor: [0, 0, 0],
-        valign: 'middle',
-      },
-      alternateRowStyles: { fillColor: [250, 250, 250] },
-      styles: { lineColor: [180, 180, 180], lineWidth: 0.3, font: 'helvetica', overflow: 'linebreak' },
-      margin: { left: mL, right: mR, top: mT },
-      tableWidth: contentW,
-      columnStyles: {
-        0: { cellWidth: 42, halign: 'left' },
-        1: { cellWidth: 16, halign: 'center' },
-        2: { cellWidth: 30, halign: 'right' },
-        3: { cellWidth: 17, halign: 'center' },
-        4: { cellWidth: 17, halign: 'center' },
-        5: { cellWidth: 120, halign: 'left' },
-        6: { cellWidth: 31, halign: 'right' },
-      },
-    });
-
-    y = pdf.lastAutoTable.finalY + 5;
-
-    // Bill item numbers covered by this escalation (item-number list alongside).
-    const escItemNos = Array.from(new Set(
-      entries.flatMap(e => {
-        const rows = (e.itemRows || []).map(r => String(r?.itemNumber || '').trim()).filter(Boolean);
-        return rows.length > 0 ? rows : [String(e.itemNumber || '').trim()];
-      }).filter(Boolean)
-    ));
-    if (escItemNos.length > 0) {
-      ensureSpace(16);
-      pdf.setFontSize(8);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Bill item numbers covered by this escalation:', mL, y);
-      y += 4;
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7.5);
-      const itemLines = pdf.splitTextToSize(escItemNos.join(',   '), contentW);
-      pdf.text(itemLines, mL, y);
-      y += itemLines.length * 3.4;
-    }
-  }
-
-  }
 
   // ── PAGE 2: AFFECTED PRICE INDICES WITH MONTHLY BREAKDOWN ─────────────────
   if (showMonthlyIndices) {
