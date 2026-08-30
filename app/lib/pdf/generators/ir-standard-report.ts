@@ -896,6 +896,11 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   // "Statutory Escalate Framework & Calculations" panel, with the bill's item
   // numbers listed alongside.
   if (pvc && allComponents.length > 0) {
+    // This section now follows the C summary block (Net PVC box on the right,
+    // certification + notes on the left). Advance y below BOTH so the heading doesn't
+    // overprint them — same rule the classification section uses.
+    const dNotesBottom = summaryPage === pagesAfterSummary ? leftBlockBottom : 0;
+    y = Math.max(pdf.lastAutoTable.finalY, dNotesBottom, summaryStartY + 30) + 6;
     startSection(58);
 
     pdf.setFontSize(9);
