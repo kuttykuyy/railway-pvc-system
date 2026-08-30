@@ -2191,25 +2191,15 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     pdf.text(certLines, mL, y);
     y += certLines.length * 3.6 + 14;
 
-    const signatories = [
-      'Contractor',
-      'Prepared & verified — SSE / Works',
-      'Passed — Divisional Engineer',
-      'Vetted — Sr. DFM / Accounts',
-    ];
-    const colW = contentW / signatories.length;
-    // Role label ABOVE the line; the line itself is left clear for the office to sign
-    // and write name / designation / date by hand.
-    signatories.forEach((label, i) => {
+    // Four blank signature lines — no labels; the office writes everything by hand.
+    const SIG_COUNT = 4;
+    const colW = contentW / SIG_COUNT;
+    for (let i = 0; i < SIG_COUNT; i++) {
       const x0 = mL + i * colW;
-      pdf.setFontSize(8);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(label, x0 + 6, y);
-      pdf.setFont('helvetica', 'normal');
       pdf.setDrawColor(120, 120, 120);
       pdf.setLineWidth(0.3);
       pdf.line(x0 + 6, y + 12, x0 + colW - 14, y + 12);
-    });
+    }
     y += 16;
   }
 
