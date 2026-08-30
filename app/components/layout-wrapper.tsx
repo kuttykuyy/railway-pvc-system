@@ -80,7 +80,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
       </div>
       
       {/* Main Content */}
-      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-7xl lg:pt-4 pt-2 pb-6 flex-grow">
+      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-7xl lg:pt-4 pt-2 pb-6 flex-grow w-full min-w-0 overflow-x-clip">
         {children}
       </main>
       

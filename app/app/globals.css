@@ -121,6 +121,21 @@
   p, li, td {
     max-width: 80ch;
   }
+
+  /* Global mobile guard: nothing may scroll the whole PAGE sideways on a phone.
+     A single too-wide element (an unwrapped table, a fixed pixel width, a portaled
+     dialog/toast wider than the screen) otherwise gives every page a horizontal
+     scrollbar and the "everything is shifted / zoomed out" feel. `clip` — not
+     `hidden` — so it never turns the body into a scroll container and never breaks
+     position: sticky; wide data tables keep scrolling inside their own
+     overflow-x-auto wrappers, which is where sideways scrolling belongs.
+     Phone widths only, so desktop is completely untouched. */
+  @media (max-width: 640px) {
+    html, body {
+      overflow-x: clip;
+      max-width: 100%;
+    }
+  }
 }
 
 @layer utilities {
