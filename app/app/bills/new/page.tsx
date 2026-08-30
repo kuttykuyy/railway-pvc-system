@@ -66,6 +66,7 @@ import {
 import { computeRebateFactor, scaleComponentsWithRebate } from '@/lib/rebate';
 import { inferMainClassification } from '@/lib/work-classification';
 import { applyCementSplit, type CementBreakdownItem } from '@/lib/cement-split';
+import { decideInstantPause } from '@/lib/instant-bill-decision';
 
 
 interface Contract {
@@ -1385,16 +1386,12 @@ function NewBillPageContent() {
       // the choice matters — a composite work (no single class fits), or grouping under
       // one class would move the PVC by 1% or more. Otherwise create item-by-item now.
       const data = await handlePreview({ silent: true });
-      const itemTotal = Number(data?.totalPvc ?? 0);
-      const groupedTotal = Number(data?.singleClassification?.best?.total ?? itemTotal);
-      const diff = Math.abs(groupedTotal - itemTotal);
-      const composite = !!data?.singleClassification?.composite;
-      const material = diff >= 1 && diff >= itemTotal * 0.01;
-      if (data && (composite || material)) {
+      const decision = decideInstantPause(data);
+      if (decision.pause) {
         setInstantStage(null);
         instantSubmittedRef.current = false; // let the person choose, then submit from the modal
         setShowPreviewModal(true);
-        toast(composite
+        toast(decision.reason === 'composite'
           ? 'Composite work — choose item-by-item or a single class before creating.'
           : 'Grouping under one class would change the PVC — choose before creating.',
           { icon: '🔀', duration: 7000 });
