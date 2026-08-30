@@ -1,6 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PromoMarquee } from '@/components/promo-banner';
 import { ShortfallAudit } from '@/components/shortfall-audit';
 import { SourceDocuments } from '@/components/documents/source-documents';
 import { BillStatusBadge } from '@/components/bills/bill-status-badge';
@@ -758,6 +759,28 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-7xl">
+      {/* While a report is being built, a full-screen wait state — with the tools
+          marquee, since the PDF takes a few seconds and this is a natural moment for it. */}
+      {isDownloading && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-emerald-200 bg-white shadow-2xl overflow-hidden">
+            <div className="flex flex-col items-center gap-3 px-6 pt-7 pb-5">
+              <div className="h-11 w-11 rounded-full border-[3px] border-emerald-200 border-t-emerald-600 animate-spin" aria-hidden />
+              <div className="text-center">
+                <p className="text-base font-bold text-slate-900">Building your report…</p>
+                <p className="text-[13px] text-slate-500 mt-0.5">Compiling the PVC statement and index sheets. This takes a few seconds.</p>
+              </div>
+            </div>
+            <div className="border-t border-emerald-100 bg-emerald-50/60">
+              <div className="px-5 pt-2">
+                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-emerald-700">From the makers of IR-PVC</span>
+              </div>
+              <PromoMarquee fadeColor="rgba(240,253,244,0.95)" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. Header with glassmorphism */}
       <div className="backdrop-blur-md bg-white/70 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800/80 shadow-lg rounded-3xl p-5 md:p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 transition-all duration-300">
         <div className="flex items-center gap-4 flex-1 min-w-0">

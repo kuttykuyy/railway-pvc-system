@@ -71,6 +71,42 @@ function Dot() {
   return <span aria-hidden className="flex-none h-1.5 w-1.5 rounded-full bg-emerald-300" />;
 }
 
+/**
+ * The bare scrolling strip — no header, no dismiss. Shared by the PromoBanner and by
+ * wait states (e.g. the "generating your report" overlay), so the ads keep moving while
+ * a download is prepared. The track is rendered twice back-to-back; the animation slides
+ * it by exactly one copy's width (-50%) and loops, so the join is seamless. Pauses on
+ * hover and holds still under prefers-reduced-motion.
+ */
+export function PromoMarquee({ fadeColor = 'rgba(236,253,245,0.9)' }: { fadeColor?: string }) {
+  const oneCopy = (
+    <>
+      {PRODUCTS.map((p) => (
+        <span key={p.key} className="flex items-center gap-3.5">
+          <Chip {...p} />
+          <Dot />
+        </span>
+      ))}
+    </>
+  );
+  return (
+    <div className="irpvc-marquee-viewport relative overflow-hidden py-2.5">
+      <style>{`
+        @keyframes irpvc-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        .irpvc-marquee-track { animation: irpvc-marquee 32s linear infinite; }
+        .irpvc-marquee-viewport:hover .irpvc-marquee-track { animation-play-state: paused; }
+        @media (prefers-reduced-motion: reduce) { .irpvc-marquee-track { animation: none; } }
+      `}</style>
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-8 z-10" style={{ background: `linear-gradient(to right, ${fadeColor}, transparent)` }} aria-hidden />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-8 z-10" style={{ background: `linear-gradient(to left, ${fadeColor}, transparent)` }} aria-hidden />
+      <div className="irpvc-marquee-track flex w-max items-center gap-3.5">
+        {oneCopy}
+        {oneCopy}
+      </div>
+    </div>
+  );
+}
+
 export function PromoBanner() {
   const [visible, setVisible] = useState(false);
 
@@ -86,34 +122,11 @@ export function PromoBanner() {
 
   if (!visible) return null;
 
-  // The track is rendered twice back-to-back; the animation slides it by exactly one
-  // copy's width (-50%) and loops, so the join is seamless. A separator dot sits after
-  // every chip, including the last, so the two copies butt together evenly.
-  const oneCopy = (
-    <>
-      {PRODUCTS.map((p) => (
-        <span key={p.key} className="flex items-center gap-3.5">
-          <Chip {...p} />
-          <Dot />
-        </span>
-      ))}
-    </>
-  );
-
   return (
     <section
       aria-label="More tools from the makers of IR-PVC"
       className="relative rounded-2xl border border-emerald-200 bg-emerald-50/60 shadow-sm mb-5 overflow-hidden"
     >
-      <style>{`
-        @keyframes irpvc-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-        .irpvc-marquee-track { animation: irpvc-marquee 32s linear infinite; }
-        .irpvc-marquee-viewport:hover .irpvc-marquee-track { animation-play-state: paused; }
-        @media (prefers-reduced-motion: reduce) {
-          .irpvc-marquee-track { animation: none; }
-        }
-      `}</style>
-
       <div className="absolute inset-y-0 left-0 w-1.5 bg-emerald-600 z-10" aria-hidden />
 
       <div className="flex items-center gap-2 pl-5 pr-3 py-1.5 border-b border-emerald-100">
@@ -129,15 +142,7 @@ export function PromoBanner() {
         </button>
       </div>
 
-      <div className="irpvc-marquee-viewport relative overflow-hidden py-2.5">
-        {/* Soft fade at both edges so chips enter and leave gracefully */}
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-8 z-10 bg-gradient-to-r from-emerald-50/90 to-transparent" aria-hidden />
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-8 z-10 bg-gradient-to-l from-emerald-50/90 to-transparent" aria-hidden />
-        <div className="irpvc-marquee-track flex w-max items-center gap-3.5">
-          {oneCopy}
-          {oneCopy}
-        </div>
-      </div>
+      <PromoMarquee />
     </section>
   );
 }
