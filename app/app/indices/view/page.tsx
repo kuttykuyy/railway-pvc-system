@@ -21,6 +21,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { OfficialSheetViewer } from '@/components/official-sheet-viewer';
 import { DEFAULT_WPI_LINKING_FACTORS, WPI_NEW_SERIES_FROM } from '@/lib/wpi-series';
+import { PromoBanner } from '@/components/promo-banner';
 
 interface IndexValue { value: number | null; isProvisional?: boolean; formula?: string | null; steelDetail?: any }
 interface MonthlyData { month: string; [key: string]: IndexValue | number | string | null }
@@ -304,6 +305,8 @@ export default function IndicesViewPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
+
+      <PromoBanner />
 
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
