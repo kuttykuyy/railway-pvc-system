@@ -93,6 +93,32 @@ export function mightContainUnit(text: string): boolean {
 }
 
 /**
+ * Check if a line might contain a unit (DSR-known or potential unit-like word).
+ * More lenient than containsDSRUnit to catch railway-specific units.
+ */
+export function mightContainUnit(text: string): boolean {
+  // First check: Does it match a known DSR unit?
+  if (containsDSRUnit(text)) return true;
+
+  // Second check: Does it look like it might be a unit?
+  // Pattern: Line with a capitalized word that could be a unit (e.g., "PerTrack", "PerTrackMetre")
+  // Exclude common non-unit words
+  const potentialUnitPattern = /\b([A-Z][a-zA-Z]+(?:[A-Z][a-zA-Z]+)*)\b/;
+  const match = text.match(potentialUnitPattern);
+  
+  if (match && match[1].length > 1) {
+    const candidate = match[1];
+    // Exclude common non-unit words
+    const excludeWords = /^(Total|Qty|Rate|Amount|Sr|No|Page|Description|Schedule|Group|Chapter|Now|To|Pay|Remarks|Less|Add|Further|Item|Block|Section)$/i;
+    if (!excludeWords.test(candidate)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Extract the first DSR unit found in a string.
  */
 export function extractDSRUnit(text: string): string | null {
