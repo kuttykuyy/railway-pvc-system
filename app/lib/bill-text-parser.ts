@@ -268,7 +268,7 @@ function parseLineItems(lines: string[]): ParsedLineItem[] {
       if (!t) continue;
       if (/^Group\s+Name:|^Chapter\s+Name:|^\s*Total\s*\(|Schedule\s+Summary|^Page\s+\d+/i.test(t)) break;
       if (/^\s*Schedule\s+(A1[ab]|A[23]|B)\s*[-\(]/i.test(lines[j]) && !/^Total/i.test(t)) break;
-      if (/\d/.test(t) || /\b(Sqm|cum|Kg|MT|RM|Nos)\b/i.test(t)) blockStart = j;
+      if (/\d/.test(t) || /\b(Sqm|cum|Kg|MT|RM|Nos|PerTrack|PerTrackMetre|of)\b/i.test(t)) blockStart = j;
     }
 
     let blockEnd = anchor.lineIdx;
@@ -279,7 +279,7 @@ function parseLineItems(lines: string[]): ParsedLineItem[] {
       if (!t) { blockEnd = j; continue; }
       if (/^Group\s+Name:|^Chapter\s+Name:|^\s*Total\s*\(|Schedule\s+Summary|^Page\s+\d+/i.test(t)) break;
       if (/^\s*Schedule\s+(A1[ab]|A[23]|B)\s*[-\(]/i.test(lines[j]) && !/^Total/i.test(t)) break;
-      if (/\b(Sqm|cum|Kg|MT)\b/i.test(t) && (t.match(/\d+\.?\d*/g) || []).length > 4) break;
+      if (/\b(Sqm|cum|Kg|MT|PerTrack|PerTrackMetre|of)\b/i.test(t) && (t.match(/\d+\.?\d*/g) || []).length > 4) break;
       blockEnd = j;
     }
 
@@ -392,7 +392,7 @@ function parseItemBlock(blockLines: string[], anchorOffset: number): ParsedItemB
 
   // ── UNIT ──
   const fullBlock = blockLines.join('\n');
-  const unitM = fullBlock.match(/\b(Sqm|cum|Kg|kg|KG|MT|mt|RM|rm|Nos|nos|Each|Ltr|Metre|Set|Pair)\b/i);
+  const unitM = fullBlock.match(/\b(Sqm|cum|Kg|kg|KG|MT|mt|RM|rm|Nos|nos|Each|Ltr|Metre|Set|Pair|PerTrack|PerTrackMetre|of)\b/i);
   const unit = unitM ? unitM[1] : '';
 
   // ── REMARKS ──
