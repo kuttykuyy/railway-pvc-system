@@ -814,22 +814,24 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     // ever unit-like the same physical row would be anchored twice and its amount
     // counted twice. Two anchors reading identical rate, quantity and amount cells
     // are the same row regardless of their y distance, so keep only the first seen.
-    const rowSignature = (y: number) => ([X.agreementRate, X.qtySinceLast, X.amountSinceLast, X.specialAmount] as const)
-      .map(range => cellText(page, page.items, range, y)).join('|');
+    // Additionally, two anchors whose joined unit cell text is identical are the same
+    // physical row even when their numeric columns read slightly differently due to
+    // cellText's ±12 window overlapping the next row.
+    const rowSignature = (y: number) => {
+      const unitCell = cellText(page, page.items, X.unit, y);
+      const amounts = ([X.agreementRate, X.qtySinceLast, X.amountSinceLast, X.specialAmount] as const)
+        .map(range => cellText(page, page.items, range, y)).join('|');
+      return `${unitCell}||${amounts}`;
+    };
     const seenSignatures = new Set<string>();
+    const seenUnitCells = new Set<string>();
     const deduped = candidates.filter(unitItem => {
-      const previous = candidates[candidates.indexOf(unitItem) - 1];
-      // Fast path: rows far apart (> 20px) with different signatures are always distinct.
-      // Rows close together with matching signatures are duplicates (two-word unit anchors).
-      if (!previous || unitItem.y - previous.y > 20) {
-        const sig = rowSignature(unitItem.y);
-        if (seenSignatures.has(sig)) return false;
-        seenSignatures.add(sig);
-        return true;
-      }
+      const unitCell = cellText(page, page.items, X.unit, unitItem.y);
+      if (unitCell && seenUnitCells.has(unitCell)) return false;
       const sig = rowSignature(unitItem.y);
       if (seenSignatures.has(sig)) return false;
       seenSignatures.add(sig);
+      if (unitCell) seenUnitCells.add(unitCell);
       return true;
     });
 
