@@ -32,7 +32,7 @@ interface UsageSummary {
   total: UsageBucket & { failures: number };
   today: UsageBucket;
   month: UsageBucket;
-  byOperation: Array<{ operation: string; calls: number; tokens: number; failures: number }>;
+  byOperation: Array<{ operation: string; calls: number; promptTokens: number; completionTokens: number; tokens: number; failures: number }>;
   untokenedCalls: number;
   recent: RecentCall[];
   lastFailureAt: string | null;
@@ -118,7 +118,7 @@ export default function AdminAiUsagePage() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Sparkles className="h-6 w-6 text-emerald-600" /> AI Usage & Credit
           </h1>
-          <p className="text-muted-foreground">AI bill-extraction consumption and provider status (Abacus RouteLLM). Costs estimated at ${COST_PER_M_INPUT}/1M input · ${COST_PER_M_OUTPUT}/1M output tokens.</p>
+          <p className="text-muted-foreground">AI bill-extraction consumption and provider status (Abacus RouteLLM). Costs at ${COST_PER_M_INPUT}/1M input · ${COST_PER_M_OUTPUT}/1M output tokens.</p>
         </div>
         <Button variant="outline" onClick={loadUsage} disabled={loading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh
@@ -161,9 +161,9 @@ export default function AdminAiUsagePage() {
 
       {/* Usage stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Tokens today" value={usage ? numberFmt.format(usage.today.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.today.calls)} calls · est. ${usdFmt.format(estimateCost(usage.today.tokens * 0.8, usage.today.tokens * 0.2))}` : ''} />
-        <StatCard title="Tokens this month" value={usage ? numberFmt.format(usage.month.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.month.calls)} calls · est. ${usdFmt.format(estimateCost(usage.month.tokens * 0.8, usage.month.tokens * 0.2))}` : ''} />
-        <StatCard title="Tokens all-time" value={usage ? numberFmt.format(usage.total.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.total.calls)} calls · est. ${usdFmt.format(estimateCost(usage.total.tokens * 0.8, usage.total.tokens * 0.2))}` : ''} />
+        <StatCard title="Tokens today" value={usage ? numberFmt.format(usage.today.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.today.calls)} calls` : ''} />
+        <StatCard title="Tokens this month" value={usage ? numberFmt.format(usage.month.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.month.calls)} calls` : ''} />
+        <StatCard title="Tokens all-time" value={usage ? numberFmt.format(usage.total.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.total.calls)} calls` : ''} />
         <StatCard title="Failed calls" value={usage ? numberFmt.format(usage.total.failures) : '—'} sub={usage?.lastFailureAt ? `last ${format(new Date(usage.lastFailureAt), 'dd MMM, HH:mm')}` : 'none'} />
       </div>
 
@@ -202,7 +202,7 @@ export default function AdminAiUsagePage() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{numberFmt.format(row.calls)}</TableCell>
                     <TableCell className="text-right tabular-nums">{numberFmt.format(row.tokens)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-xs">{usdFmt.format(estimateCost(row.tokens * 0.8, row.tokens * 0.2))}</TableCell>
+                    <TableCell className="text-right tabular-nums text-xs">{usdFmt.format(estimateCost(row.promptTokens, row.completionTokens))}</TableCell>
                     <TableCell className="text-right tabular-nums">{row.failures ? <span className="text-red-700">{numberFmt.format(row.failures)}</span> : '—'}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {usage.month.tokens > 0 ? `${((row.tokens / usage.month.tokens) * 100).toFixed(0)}%` : '—'}

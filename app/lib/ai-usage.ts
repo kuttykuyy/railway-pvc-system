@@ -66,7 +66,7 @@ export interface AiUsageSummary {
   today: { calls: number; tokens: number };
   month: { calls: number; tokens: number };
   /** This month, per feature — which screen is spending the credit. */
-  byOperation: Array<{ operation: string; calls: number; tokens: number; failures: number }>;
+  byOperation: Array<{ operation: string; calls: number; promptTokens: number; completionTokens: number; tokens: number; failures: number }>;
   /** Successful calls this month that carry no token count at all — calls the provider
    *  answered but whose usage field was missing or unreadable. A number here means the
    *  totals above are an undercount. */
@@ -105,7 +105,7 @@ export async function getAiUsageSummary(): Promise<AiUsageSummary> {
       by: ['operation'],
       where: { createdAt: { gte: startOfMonth } },
       _count: true,
-      _sum: { totalTokens: true },
+      _sum: { totalTokens: true, promptTokens: true, completionTokens: true },
     }),
     prisma.aiUsageLog.groupBy({
       by: ['operation'],
@@ -117,7 +117,14 @@ export async function getAiUsageSummary(): Promise<AiUsageSummary> {
 
   const failuresByOp = new Map(byOpFailures.map(r => [r.operation, r._count]));
   const byOperation = byOp
-    .map(r => ({ operation: r.operation, calls: r._count, tokens: r._sum.totalTokens || 0, failures: failuresByOp.get(r.operation) || 0 }))
+    .map(r => ({
+      operation: r.operation,
+      calls: r._count,
+      promptTokens: r._sum.promptTokens || 0,
+      completionTokens: r._sum.completionTokens || 0,
+      tokens: r._sum.totalTokens || 0,
+      failures: failuresByOp.get(r.operation) || 0,
+    }))
     .sort((a, b) => b.tokens - a.tokens || b.calls - a.calls);
 
   return {
