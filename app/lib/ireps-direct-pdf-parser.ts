@@ -53,7 +53,7 @@ function normalizedX(page: PositionedPdfPage, item: PositionedPdfTextItem) {
  */
 // "squarefoot": LED signage boards are billed per square foot, and the unit cell wraps
 // as "Squa / re / Foot" — the middle fragment's join window reads "SquareFoot".
-const SQUASHED_UNIT_PATTERN = /^(?:track(?:metre|meter)|r(?:metre|meter)|runningmetre|percmwidth|percmdepth|bridgefor(?:1|one)track|per(?:cm)?width|cubicmetre|squaremetre|square(?:foot|feet))$/;
+const SQUASHED_UNIT_PATTERN = /^(?:track(?:metre|meter)|r(?:metre|meter)|runningmetre|percmwidth|percmdepth|bridgefor(?:1|one)track|per(?:cm)?width|cubicmetre|squaremetre|square(?:foot|feet)|pertrack|pertrackmetre)$/;
 
 /** Does this text name a unit of measure, written either way? */
 function isUnitText(raw: string): boolean {
