@@ -18,7 +18,7 @@ import type { DeterministicBillDetails, DeterministicBillItem } from './ireps-bi
 // "Point" prices electrical work by the wiring point — p8 of the signage bill that
 // taught the reader "Square Foot" bills item 55 in it (Rs 0 that period, so it cost
 // nothing yet; the next bill measured in Points would have come out short).
-const UNIT_PATTERN = /^(?:Cum|Cu\.?m\.?|Sqm|Sq\.?m\.?|Kg|MT|M\.?T\.?|Metre|Meter|Kilo\s*met(?:re|er)|Each|Num|Nos?\.?|RM|Rmt|TRM|Km|Litre|Ltr|Set|Job|LS|Shifts?|Nights?|Hours?|Hrs?|Days?|Quintal|Qtl|Tonne|Pair|Bags?|Sqft|Cft|Joints?|ERC|Numbers?|Points?|MT-?Km|Tonne-?Km)$/i;
+const UNIT_PATTERN = /^(?:Cum|Cu\.?m\.?|Sqm|Sq\.?m\.?|Kg|MT|M\.?T\.?|Metre|Meter|Kilo\s*met(?:re|er)|Each|Num|Nos?\.?|RM|Rmt|TRM|Km|Litre|Ltr|Set|Job|LS|Shifts?|Nights?|Hours?|Hrs?|Days?|Quintal|Qtl|Tonne|Pair|Bags?|Sqft|Cft|Joints?|ERC|Numbers?|Points?|MT-?Km|Tonne-?Km|PerTrack|PerTrackMetre|of)$/i;
 const NUMBER_PATTERN = /^-?[\d,]+(?:\.\d*)?$/;
 const X = {
   serial: [50, 88],
