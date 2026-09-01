@@ -814,13 +814,39 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     // ever unit-like the same physical row would be anchored twice and its amount
     // counted twice. Two anchors within 20px whose numeric columns read identically
     // are the same physical row — keep only the first.
-    const deduped = candidates.filter((unitItem, index) => {
-      const previous = candidates[index - 1];
-      if (!previous || unitItem.y - previous.y > 20) return true;
-      const numericSig = (y: number) => ([X.agreementRate, X.qtySinceLast, X.amountSinceLast, X.specialAmount] as const)
-        .map(range => cellText(page, page.items, range, y)).join('|');
-      return numericSig(unitItem.y) !== numericSig(previous.y);
+    //
+    // Identical readings are not the only way one row anchors twice. "Per / Track /
+    // Metre" prints down THREE lines of the unit column while the row's figures wrap
+    // over two lines beside it, and each anchor's ±12 window then catches a different
+    // slice of the same numbers: the top anchor read "1078074." and the bottom one
+    // "52", with only the middle one seeing the whole "1078074.52". Three different
+    // signatures, three rows counted, and B7 of SER/ADA/Civil/2024/0079 came out over
+    // by Rs 10,78,074 — the row's own value — and refused to load. Two anchors within
+    // 20px whose agreement-rate windows share a printed figure are therefore also the
+    // same row, and of that row's anchors the one whose windows take in the most of the
+    // numeric column text is the one that read it whole.
+    const numericSig = (y: number) => ([X.agreementRate, X.qtySinceLast, X.amountSinceLast, X.specialAmount] as const)
+      .map(range => cellText(page, page.items, range, y)).join('|');
+    const rateItems = (y: number) => page.items.filter(item => {
+      const x = normalizedX(page, item);
+      return x >= X.agreementRate[0] && x < X.agreementRate[1] && Math.abs(item.y - y) <= 12 && NUMBER_PATTERN.test(item.text.trim());
     });
+    const sameRow = (a: PositionedPdfTextItem, b: PositionedPdfTextItem) => {
+      if (Math.abs(a.y - b.y) > 20) return false;
+      if (numericSig(a.y) === numericSig(b.y)) return true;
+      const shared = rateItems(a.y);
+      return shared.length > 0 && rateItems(b.y).some(item => shared.includes(item));
+    };
+    const rowGroups: PositionedPdfTextItem[][] = [];
+    for (const unitItem of candidates) {
+      const group = rowGroups[rowGroups.length - 1];
+      if (group && sameRow(group[group.length - 1], unitItem)) group.push(unitItem);
+      else rowGroups.push([unitItem]);
+    }
+    const completeness = (y: number) => ([X.agreementRate, X.qtySinceLast, X.amountUptoLast, X.amountSinceLast, X.specialAmount, X.totalUptoDate] as const)
+      .reduce((sum, range) => sum + cellText(page, page.items, range, y).length, 0);
+    const deduped = rowGroups.map(group => group.reduce((best, unitItem) =>
+      completeness(unitItem.y) > completeness(best.y) ? unitItem : best, group[0]));
 
     for (let index = 0; index < deduped.length; index += 1) {
       const unitItem = deduped[index];
@@ -834,8 +860,17 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       // rejoined with the digits printed there. Nothing is read across pages unless
       // that proof is present, so an ordinary page header can never be mistaken for
       // a continuation. (SR/MDU/Civil/2024/0037/B7 splits "1705841." | "95" this way.)
-      const straddlesPageBreak = ([X.agreementRate, X.qtySinceLast, X.amountSinceLast, X.specialAmount] as const)
-        .some(range => cellText(page, page.items, range, unitItem.y).endsWith('.'));
+      //
+      // The proof only holds for the LAST row on the page. A figure also wraps onto the
+      // next line within a page — "1078074." above "52" — and an anchor sitting too high
+      // to see the second line reads the same trailing point. Taken as a page break, it
+      // pulled the digits off the next page's first line and made the row 1078074.1,
+      // which Qty x Rate could not tell from the true 1078074.52. Only a row with
+      // nothing below it on its page can continue onto the next one.
+      const isLastRowOnPage = index === deduped.length - 1;
+      const straddlesPageBreak = isLastRowOnPage
+        && ([X.agreementRate, X.qtySinceLast, X.amountSinceLast, X.specialAmount] as const)
+          .some(range => cellText(page, page.items, range, unitItem.y).endsWith('.'));
       const readCell = (range: readonly [number, number]) => {
         const base = cellText(page, page.items, range, unitItem.y);
         if (!base || !straddlesPageBreak) return base;
@@ -859,7 +894,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       const specialPrinted = numericValue(specialAmountRaw) !== undefined;
       const payableAmount = specialPrinted ? specialAmount : agreementAmount;
       const nextRowY = deduped[index + 1]?.y || page.height - 5;
-      const rowMayContinue = straddlesPageBreak || index === deduped.length - 1;
+      const rowMayContinue = isLastRowOnPage;
       const itemNo = extractItemCode(page, unitItem.y, nextRowY, rowMayContinue && nextPage
         ? nextPageTop
             .filter(topItem => {
