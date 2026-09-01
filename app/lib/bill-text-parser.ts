@@ -8,7 +8,7 @@
  *       "1080" on line N + "4.2" on line N+2 = "10804.2"
  */
 
-import { getDSRUnitRegex, extractDSRUnit, containsDSRUnit } from './dsr-units-helper';
+import { getDSRUnitRegex, extractDSRUnit, containsDSRUnit, mightContainUnit, fallbackExtractUnit } from './dsr-units-helper';
 
 export interface ParsedBasicDetails {
   billNo: string;
@@ -270,7 +270,7 @@ function parseLineItems(lines: string[]): ParsedLineItem[] {
       if (!t) continue;
       if (/^Group\s+Name:|^Chapter\s+Name:|^\s*Total\s*\(|Schedule\s+Summary|^Page\s+\d+/i.test(t)) break;
       if (/^\s*Schedule\s+(A1[ab]|A[23]|B)\s*[-\(]/i.test(lines[j]) && !/^Total/i.test(t)) break;
-      if (/\d/.test(t) || containsDSRUnit(t)) blockStart = j;
+      if (/\d/.test(t) || mightContainUnit(t)) blockStart = j;
     }
 
     let blockEnd = anchor.lineIdx;
@@ -281,7 +281,7 @@ function parseLineItems(lines: string[]): ParsedLineItem[] {
       if (!t) { blockEnd = j; continue; }
       if (/^Group\s+Name:|^Chapter\s+Name:|^\s*Total\s*\(|Schedule\s+Summary|^Page\s+\d+/i.test(t)) break;
       if (/^\s*Schedule\s+(A1[ab]|A[23]|B)\s*[-\(]/i.test(lines[j]) && !/^Total/i.test(t)) break;
-      if (containsDSRUnit(t) && (t.match(/\d+\.?\d*/g) || []).length > 4) break;
+      if (mightContainUnit(t) && (t.match(/\d+\.?\d*/g) || []).length > 4) break;
       blockEnd = j;
     }
 
@@ -394,7 +394,7 @@ function parseItemBlock(blockLines: string[], anchorOffset: number): ParsedItemB
 
   // ── UNIT ──
   const fullBlock = blockLines.join('\n');
-  const unit = extractDSRUnit(fullBlock) || '';
+  const unit = fallbackExtractUnit(fullBlock) || '';
 
   // ── REMARKS ──
   const remarksM = fullBlock.match(/(Now\s+to\s+pay\s+\d+%)/i);
