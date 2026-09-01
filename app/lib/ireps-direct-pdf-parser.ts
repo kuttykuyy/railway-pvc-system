@@ -812,27 +812,13 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
 
     // A two-word unit prints on two lines ("HP" above "Hour"), and if both words were
     // ever unit-like the same physical row would be anchored twice and its amount
-    // counted twice. Two anchors reading identical rate, quantity and amount cells
-    // are the same row regardless of their y distance, so keep only the first seen.
-    // Additionally, two anchors whose joined unit cell text is identical are the same
-    // physical row even when their numeric columns read slightly differently due to
-    // cellText's ±12 window overlapping the next row.
-    const rowSignature = (y: number) => {
-      const unitCell = cellText(page, page.items, X.unit, y);
-      const amounts = ([X.agreementRate, X.qtySinceLast, X.amountSinceLast, X.specialAmount] as const)
-        .map(range => cellText(page, page.items, range, y)).join('|');
-      return `${unitCell}||${amounts}`;
-    };
-    const seenSignatures = new Set<string>();
-    const seenUnitCells = new Set<string>();
-    const deduped = candidates.filter(unitItem => {
-      const unitCell = cellText(page, page.items, X.unit, unitItem.y);
-      if (unitCell && seenUnitCells.has(unitCell)) return false;
-      const sig = rowSignature(unitItem.y);
-      if (seenSignatures.has(sig)) return false;
-      seenSignatures.add(sig);
-      if (unitCell) seenUnitCells.add(unitCell);
-      return true;
+    // counted twice. Two anchors within 20px whose joined unit cell texts are identical
+    // are the same physical row — keep only the first.
+    const deduped = candidates.filter((unitItem, index) => {
+      const previous = candidates[index - 1];
+      if (!previous || unitItem.y - previous.y > 20) return true;
+      const unitCell = (y: number) => cellText(page, page.items, X.unit, y);
+      return unitCell(unitItem.y) !== unitCell(previous.y);
     });
 
     for (let index = 0; index < deduped.length; index += 1) {
