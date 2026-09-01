@@ -582,6 +582,11 @@ async function requestAiExtraction(
   const content = extractAiMessageContent(choice?.message?.content);
   const usage = data.usage && typeof data.usage === 'object' ? data.usage : null;
 
+  // Log full usage object once so we can see if Abacus returns cost fields
+  if (usage) {
+    console.info('[bill-extraction] Abacus usage fields', JSON.stringify(usage));
+  }
+
   await recordAiUsage({
     operation: 'bill-extraction',
     success: true,
