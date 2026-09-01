@@ -16,7 +16,7 @@ import { Sparkles, CheckCircle2, XCircle, AlertTriangle, RefreshCw, ExternalLink
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
-interface UsageBucket { calls: number; tokens: number }
+interface UsageBucket { calls: number; promptTokens: number; completionTokens: number; tokens: number }
 interface RecentCall {
   id: string;
   operation: string;
@@ -161,9 +161,9 @@ export default function AdminAiUsagePage() {
 
       {/* Usage stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Tokens today" value={usage ? numberFmt.format(usage.today.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.today.calls)} calls` : ''} />
-        <StatCard title="Tokens this month" value={usage ? numberFmt.format(usage.month.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.month.calls)} calls` : ''} />
-        <StatCard title="Tokens all-time" value={usage ? numberFmt.format(usage.total.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.total.calls)} calls` : ''} />
+        <StatCard title="Tokens today" value={usage ? numberFmt.format(usage.today.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.today.calls)} calls · ${usdFmt.format(estimateCost(usage.today.promptTokens, usage.today.completionTokens))}` : ''} />
+        <StatCard title="Tokens this month" value={usage ? numberFmt.format(usage.month.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.month.calls)} calls · ${usdFmt.format(estimateCost(usage.month.promptTokens, usage.month.completionTokens))}` : ''} />
+        <StatCard title="Tokens all-time" value={usage ? numberFmt.format(usage.total.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.total.calls)} calls · ${usdFmt.format(estimateCost(usage.total.promptTokens, usage.total.completionTokens))}` : ''} />
         <StatCard title="Failed calls" value={usage ? numberFmt.format(usage.total.failures) : '—'} sub={usage?.lastFailureAt ? `last ${format(new Date(usage.lastFailureAt), 'dd MMM, HH:mm')}` : 'none'} />
       </div>
 

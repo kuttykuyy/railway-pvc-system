@@ -62,9 +62,9 @@ export async function recordAiUsage(entry: {
 }
 
 export interface AiUsageSummary {
-  total: { calls: number; tokens: number; failures: number };
-  today: { calls: number; tokens: number };
-  month: { calls: number; tokens: number };
+  total: { calls: number; promptTokens: number; completionTokens: number; tokens: number; failures: number };
+  today: { calls: number; promptTokens: number; completionTokens: number; tokens: number };
+  month: { calls: number; promptTokens: number; completionTokens: number; tokens: number };
   /** This month, per feature — which screen is spending the credit. */
   byOperation: Array<{ operation: string; calls: number; promptTokens: number; completionTokens: number; tokens: number; failures: number }>;
   /** Successful calls this month that carry no token count at all — calls the provider
@@ -91,10 +91,10 @@ export async function getAiUsageSummary(): Promise<AiUsageSummary> {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   const [all, failures, today, month, recent, lastFailure, byOp, byOpFailures, untokened] = await Promise.all([
-    prisma.aiUsageLog.aggregate({ _sum: { totalTokens: true }, _count: true }),
+    prisma.aiUsageLog.aggregate({ _sum: { totalTokens: true, promptTokens: true, completionTokens: true }, _count: true }),
     prisma.aiUsageLog.count({ where: { success: false } }),
-    prisma.aiUsageLog.aggregate({ _sum: { totalTokens: true }, _count: true, where: { createdAt: { gte: startOfToday } } }),
-    prisma.aiUsageLog.aggregate({ _sum: { totalTokens: true }, _count: true, where: { createdAt: { gte: startOfMonth } } }),
+    prisma.aiUsageLog.aggregate({ _sum: { totalTokens: true, promptTokens: true, completionTokens: true }, _count: true, where: { createdAt: { gte: startOfToday } } }),
+    prisma.aiUsageLog.aggregate({ _sum: { totalTokens: true, promptTokens: true, completionTokens: true }, _count: true, where: { createdAt: { gte: startOfMonth } } }),
     prisma.aiUsageLog.findMany({
       orderBy: { createdAt: 'desc' },
       take: 15,
@@ -128,9 +128,9 @@ export async function getAiUsageSummary(): Promise<AiUsageSummary> {
     .sort((a, b) => b.tokens - a.tokens || b.calls - a.calls);
 
   return {
-    total: { calls: all._count, tokens: all._sum.totalTokens || 0, failures },
-    today: { calls: today._count, tokens: today._sum.totalTokens || 0 },
-    month: { calls: month._count, tokens: month._sum.totalTokens || 0 },
+    total: { calls: all._count, promptTokens: all._sum.promptTokens || 0, completionTokens: all._sum.completionTokens || 0, tokens: all._sum.totalTokens || 0, failures },
+    today: { calls: today._count, promptTokens: today._sum.promptTokens || 0, completionTokens: today._sum.completionTokens || 0, tokens: today._sum.totalTokens || 0 },
+    month: { calls: month._count, promptTokens: month._sum.promptTokens || 0, completionTokens: month._sum.completionTokens || 0, tokens: month._sum.totalTokens || 0 },
     byOperation,
     untokenedCalls: untokened,
     recent,
