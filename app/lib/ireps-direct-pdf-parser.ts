@@ -813,13 +813,24 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     // A two-word unit prints on two lines ("HP" above "Hour"), and if both words were
     // ever unit-like the same physical row would be anchored twice and its amount
     // counted twice. Two anchors reading identical rate, quantity and amount cells
-    // within a row's height are the same row, so keep only the first.
-    const deduped = candidates.filter((unitItem, index) => {
-      const previous = candidates[index - 1];
-      if (!previous || unitItem.y - previous.y > 20) return true;
-      const signature = (y: number) => ([X.agreementRate, X.qtySinceLast, X.amountSinceLast, X.specialAmount] as const)
-        .map(range => cellText(page, page.items, range, y)).join('|');
-      return signature(unitItem.y) !== signature(previous.y);
+    // are the same row regardless of their y distance, so keep only the first seen.
+    const rowSignature = (y: number) => ([X.agreementRate, X.qtySinceLast, X.amountSinceLast, X.specialAmount] as const)
+      .map(range => cellText(page, page.items, range, y)).join('|');
+    const seenSignatures = new Set<string>();
+    const deduped = candidates.filter(unitItem => {
+      const previous = candidates[candidates.indexOf(unitItem) - 1];
+      // Fast path: rows far apart (> 20px) with different signatures are always distinct.
+      // Rows close together with matching signatures are duplicates (two-word unit anchors).
+      if (!previous || unitItem.y - previous.y > 20) {
+        const sig = rowSignature(unitItem.y);
+        if (seenSignatures.has(sig)) return false;
+        seenSignatures.add(sig);
+        return true;
+      }
+      const sig = rowSignature(unitItem.y);
+      if (seenSignatures.has(sig)) return false;
+      seenSignatures.add(sig);
+      return true;
     });
 
     for (let index = 0; index < deduped.length; index += 1) {
