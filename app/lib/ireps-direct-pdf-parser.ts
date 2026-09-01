@@ -812,13 +812,14 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
 
     // A two-word unit prints on two lines ("HP" above "Hour"), and if both words were
     // ever unit-like the same physical row would be anchored twice and its amount
-    // counted twice. Two anchors within 20px whose joined unit cell texts are identical
+    // counted twice. Two anchors within 20px whose numeric columns read identically
     // are the same physical row — keep only the first.
     const deduped = candidates.filter((unitItem, index) => {
       const previous = candidates[index - 1];
       if (!previous || unitItem.y - previous.y > 20) return true;
-      const unitCell = (y: number) => cellText(page, page.items, X.unit, y);
-      return unitCell(unitItem.y) !== unitCell(previous.y);
+      const numericSig = (y: number) => ([X.agreementRate, X.qtySinceLast, X.amountSinceLast, X.specialAmount] as const)
+        .map(range => cellText(page, page.items, range, y)).join('|');
+      return numericSig(unitItem.y) !== numericSig(previous.y);
     });
 
     for (let index = 0; index < deduped.length; index += 1) {
