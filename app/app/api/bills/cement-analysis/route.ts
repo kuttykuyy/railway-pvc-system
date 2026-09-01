@@ -1247,48 +1247,25 @@ function completeReconciledItems(
   return [...reconciled, ...recovered];
 }
 
-async function convertPdfToMarkdown(file: File, requestOrigin: string): Promise<string> {
-  const internalSecret = process.env.MARKITDOWN_INTERNAL_SECRET;
-  if (!internalSecret) {
-    throw new Error('PDF conversion is not configured. Missing MARKITDOWN_INTERNAL_SECRET.');
+async function convertPdfToMarkdown(file: File, _requestOrigin: string): Promise<string> {
+  const { extractPdfText } = await import('@/lib/pdf-text-parser');
+  const buffer = await file.arrayBuffer();
+  const pages = await extractPdfText(buffer);
+
+  if (!pages || pages.length === 0) {
+    throw new Error('The uploaded PDF appears to be a scanned image or photo and does not contain selectable text. Please upload a digitally generated PDF from IREPS/IPPAS, or enter the bill details manually.');
   }
 
-  const configuredUrl = process.env.MARKITDOWN_SERVICE_URL?.trim();
-  const serviceUrl = configuredUrl || `${requestOrigin}/api/pdf-to-markdown`;
-  const formData = new FormData();
-  formData.append('file', file, file.name);
+  const markdown = pages
+    .map((text, i) => `Page ${i + 1} of ${pages.length}\n\n${text}`)
+    .join('\n\n---\n\n')
+    .trim();
 
-  const response = await fetch(serviceUrl, {
-    method: 'POST',
-    headers: {
-      'x-markitdown-secret': internalSecret,
-    },
-    body: formData,
-    cache: 'no-store',
-  });
-
-  const responseText = await response.text();
-  let data: any;
-  try {
-    data = JSON.parse(responseText);
-  } catch {
-    data = null;
-  }
-
-  if (!response.ok) {
-    const details = String(data?.detail || responseText || response.statusText);
-    if (details.includes('no usable text') || response.status === 422) {
-      throw new Error('The uploaded PDF appears to be a scanned image or photo and does not contain selectable text. Please upload a digitally generated PDF from IREPS/IPPAS, or enter the bill details manually.');
-    }
-    throw new Error(`MarkItDown conversion failed: ${details}`);
-  }
-
-  const markdown = typeof data?.markdown === 'string' ? data.markdown.trim() : '';
   if (markdown.length < 100) {
-    throw new Error('MarkItDown returned no usable bill text.');
+    throw new Error('The PDF contained no usable bill text.');
   }
 
-  console.info('[bill-extraction] MarkItDown conversion complete', {
+  console.info('[bill-extraction] PDF text extraction complete', {
     fileName: file.name,
     characterCount: markdown.length,
   });
