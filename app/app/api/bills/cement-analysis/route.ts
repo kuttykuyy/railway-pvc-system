@@ -1248,18 +1248,28 @@ function completeReconciledItems(
 }
 
 async function convertPdfToMarkdown(file: File, _requestOrigin: string): Promise<string> {
-  const { extractPdfText } = await import('@/lib/pdf-text-parser');
-  const buffer = await file.arrayBuffer();
-  const pages = await extractPdfText(buffer);
+  const { extractPositionedPdfPages } = await import('@/lib/pdf-layout-extract');
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const pages = await extractPositionedPdfPages(buffer);
 
   if (!pages || pages.length === 0) {
     throw new Error('The uploaded PDF appears to be a scanned image or photo and does not contain selectable text. Please upload a digitally generated PDF from IREPS/IPPAS, or enter the bill details manually.');
   }
 
-  const markdown = pages
-    .map((text, i) => `Page ${i + 1} of ${pages.length}\n\n${text}`)
-    .join('\n\n---\n\n')
-    .trim();
+  // Reconstruct readable text from positioned items, sorted top-to-bottom then left-to-right
+  const markdown = pages.map((page, i) => {
+    const lines = new Map<number, string[]>();
+    for (const item of page.items) {
+      const row = Math.round(item.y);
+      if (!lines.has(row)) lines.set(row, []);
+      lines.get(row)!.push(item.text);
+    }
+    const pageText = Array.from(lines.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([, tokens]) => tokens.join(' '))
+      .join('\n');
+    return `Page ${i + 1} of ${pages.length}\n\n${pageText}`;
+  }).join('\n\n---\n\n').trim();
 
   if (markdown.length < 100) {
     throw new Error('The PDF contained no usable bill text.');
