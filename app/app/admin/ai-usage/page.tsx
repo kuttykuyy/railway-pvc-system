@@ -21,6 +21,8 @@ interface RecentCall {
   id: string;
   operation: string;
   model: string;
+  promptTokens: number;
+  completionTokens: number;
   totalTokens: number;
   success: boolean;
   errorType: string | null;
@@ -57,6 +59,18 @@ const STATUS_META: Record<ProviderStatus, { label: string; className: string; Ic
 };
 
 const numberFmt = new Intl.NumberFormat('en-IN');
+const usdFmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 4 });
+
+// Abacus RouteLLM pricing (per 1M tokens, USD).
+// These are the rates for the default route-llm model (Claude Sonnet).
+// Update if you switch models or Abacus changes their rates.
+const COST_PER_M_INPUT = 3.0;   // $ per 1M prompt tokens
+const COST_PER_M_OUTPUT = 15.0; // $ per 1M completion tokens
+
+function estimateCost(promptTokens: number, completionTokens: number): number {
+  return (promptTokens / 1_000_000) * COST_PER_M_INPUT
+       + (completionTokens / 1_000_000) * COST_PER_M_OUTPUT;
+}
 
 export default function AdminAiUsagePage() {
   const { toast } = useToast();
@@ -104,7 +118,7 @@ export default function AdminAiUsagePage() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Sparkles className="h-6 w-6 text-emerald-600" /> AI Usage & Credit
           </h1>
-          <p className="text-muted-foreground">AI bill-extraction consumption and provider status (Abacus RouteLLM).</p>
+          <p className="text-muted-foreground">AI bill-extraction consumption and provider status (Abacus RouteLLM). Costs estimated at ${COST_PER_M_INPUT}/1M input · ${COST_PER_M_OUTPUT}/1M output tokens.</p>
         </div>
         <Button variant="outline" onClick={loadUsage} disabled={loading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh
@@ -147,9 +161,9 @@ export default function AdminAiUsagePage() {
 
       {/* Usage stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Tokens today" value={usage ? numberFmt.format(usage.today.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.today.calls)} calls` : ''} />
-        <StatCard title="Tokens this month" value={usage ? numberFmt.format(usage.month.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.month.calls)} calls` : ''} />
-        <StatCard title="Tokens all-time" value={usage ? numberFmt.format(usage.total.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.total.calls)} calls` : ''} />
+        <StatCard title="Tokens today" value={usage ? numberFmt.format(usage.today.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.today.calls)} calls · est. ${usdFmt.format(estimateCost(usage.today.tokens * 0.8, usage.today.tokens * 0.2))}` : ''} />
+        <StatCard title="Tokens this month" value={usage ? numberFmt.format(usage.month.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.month.calls)} calls · est. ${usdFmt.format(estimateCost(usage.month.tokens * 0.8, usage.month.tokens * 0.2))}` : ''} />
+        <StatCard title="Tokens all-time" value={usage ? numberFmt.format(usage.total.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.total.calls)} calls · est. ${usdFmt.format(estimateCost(usage.total.tokens * 0.8, usage.total.tokens * 0.2))}` : ''} />
         <StatCard title="Failed calls" value={usage ? numberFmt.format(usage.total.failures) : '—'} sub={usage?.lastFailureAt ? `last ${format(new Date(usage.lastFailureAt), 'dd MMM, HH:mm')}` : 'none'} />
       </div>
 
@@ -173,6 +187,7 @@ export default function AdminAiUsagePage() {
                 <TableHead>Feature</TableHead>
                 <TableHead className="text-right">Calls</TableHead>
                 <TableHead className="text-right">Tokens</TableHead>
+                <TableHead className="text-right">Est. Cost</TableHead>
                 <TableHead className="text-right">Failed</TableHead>
                 <TableHead className="text-right">Share</TableHead>
               </TableRow>
@@ -187,6 +202,7 @@ export default function AdminAiUsagePage() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{numberFmt.format(row.calls)}</TableCell>
                     <TableCell className="text-right tabular-nums">{numberFmt.format(row.tokens)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-xs">{usdFmt.format(estimateCost(row.tokens * 0.8, row.tokens * 0.2))}</TableCell>
                     <TableCell className="text-right tabular-nums">{row.failures ? <span className="text-red-700">{numberFmt.format(row.failures)}</span> : '—'}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {usage.month.tokens > 0 ? `${((row.tokens / usage.month.tokens) * 100).toFixed(0)}%` : '—'}
@@ -195,7 +211,7 @@ export default function AdminAiUsagePage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     {loading ? 'Loading…' : 'No AI calls this month.'}
                   </TableCell>
                 </TableRow>
@@ -218,7 +234,9 @@ export default function AdminAiUsagePage() {
                 <TableHead>When</TableHead>
                 <TableHead>Operation</TableHead>
                 <TableHead>Model</TableHead>
-                <TableHead className="text-right">Tokens</TableHead>
+                <TableHead className="text-right">In tokens</TableHead>
+                <TableHead className="text-right">Out tokens</TableHead>
+                <TableHead className="text-right">Est. Cost</TableHead>
                 <TableHead>Result</TableHead>
               </TableRow>
             </TableHeader>
@@ -228,8 +246,10 @@ export default function AdminAiUsagePage() {
                   <TableRow key={row.id}>
                     <TableCell className="whitespace-nowrap">{format(new Date(row.createdAt), 'dd MMM, HH:mm:ss')}</TableCell>
                     <TableCell>{OPERATION_LABEL[row.operation] || row.operation}</TableCell>
-                    <TableCell>{row.model}</TableCell>
-                    <TableCell className="text-right">{numberFmt.format(row.totalTokens)}</TableCell>
+                    <TableCell className="text-xs">{row.model}</TableCell>
+                    <TableCell className="text-right tabular-nums">{numberFmt.format(row.promptTokens)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{numberFmt.format(row.completionTokens)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-xs">{usdFmt.format(estimateCost(row.promptTokens, row.completionTokens))}</TableCell>
                     <TableCell>
                       {row.success ? (
                         <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">OK</Badge>
@@ -241,7 +261,7 @@ export default function AdminAiUsagePage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     {loading ? 'Loading…' : 'No AI calls recorded yet.'}
                   </TableCell>
                 </TableRow>

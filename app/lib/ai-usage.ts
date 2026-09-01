@@ -75,6 +75,8 @@ export interface AiUsageSummary {
     id: string;
     operation: string;
     model: string;
+    promptTokens: number;
+    completionTokens: number;
     totalTokens: number;
     success: boolean;
     errorType: string | null;
@@ -96,7 +98,7 @@ export async function getAiUsageSummary(): Promise<AiUsageSummary> {
     prisma.aiUsageLog.findMany({
       orderBy: { createdAt: 'desc' },
       take: 15,
-      select: { id: true, operation: true, model: true, totalTokens: true, success: true, errorType: true, createdAt: true },
+      select: { id: true, operation: true, model: true, promptTokens: true, completionTokens: true, totalTokens: true, success: true, errorType: true, createdAt: true },
     }),
     prisma.aiUsageLog.findFirst({ where: { success: false }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
     prisma.aiUsageLog.groupBy({
