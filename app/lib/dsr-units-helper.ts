@@ -67,6 +67,13 @@ export function getDSRUnitRegex(): RegExp {
 }
 
 /**
+ * Check if a string contains a valid DSR unit.
+ */
+export function containsDSRUnit(text: string): boolean {
+  return getDSRUnitRegex().test(text);
+}
+
+/**
  * Check if a line might contain a unit (DSR-known or potential unit-like word).
  * More lenient than containsDSRUnit to catch railway-specific units.
  */
