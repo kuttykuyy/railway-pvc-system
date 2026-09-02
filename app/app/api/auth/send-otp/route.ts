@@ -1,7 +1,6 @@
 ﻿import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { sendOtpWhatsApp } from '@/lib/whatsapp-mydreams';
 import { normalizePhone, PHONE_FORMAT_MESSAGE, PHONE_TAKEN_MESSAGE } from '@/lib/phone-validation';
 import { accountsHoldingPhone } from '@/lib/phone-owner';
 import { phoneOtpRequired, markOtpDeliveryBroken, markOtpDeliveryWorking, classifyOtpDeliveryFailure } from '@/lib/phone-otp';
@@ -99,28 +98,21 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Two channels, tried in order. One channel is one point of failure standing
-    // between a new customer and the product — which is exactly what happened when the
-    // WhatsApp template went missing and nobody could sign up at all.
-    // Every channel's failure is kept: whether the breaker trips depends on what KIND
-    // of failure each one was, not merely that they failed.
+    // SMS only. WhatsApp was the first channel until its 'otp_verification' template
+    // went missing at the provider: every send failed for a week, the breaker kept
+    // switching verification off, and the SMS fallback did the real work. The WhatsApp
+    // path is gone; the code goes by MSG91, and with MSG91 unconfigured the requirement
+    // is lifted (phoneOtpRequired) rather than a code promised that cannot arrive.
     const failures: string[] = [];
-    let result = await sendOtpWhatsApp(phone, otp);
-    let sentBy = 'WhatsApp';
+    const { sendOtpSms, isMsg91Configured } = await import('@/lib/msg91');
+    let result: { success: boolean; messageId?: string; error?: string } = { success: false, error: 'MSG91 is not configured' };
+    if (await isMsg91Configured()) {
+      result = await sendOtpSms(phone, otp);
+    }
+    const sentBy = 'SMS';
     if (!result.success) {
-      failures.push(result.error || 'WhatsApp send failed');
-      console.warn('[OTP] WhatsApp refused the code, trying SMS:', result.error);
-      const { sendOtpSms, isMsg91Configured } = await import('@/lib/msg91');
-      if (await isMsg91Configured()) {
-        const sms = await sendOtpSms(phone, otp);
-        if (sms.success) {
-          result = { success: true, messageId: sms.messageId };
-          sentBy = 'SMS';
-        } else {
-          failures.push(sms.error || 'SMS send failed');
-          console.error('[OTP] SMS also failed:', sms.error);
-        }
-      }
+      failures.push(result.error || 'SMS send failed');
+      console.error('[OTP] SMS failed:', result.error);
     }
 
     if (!result.success) {
@@ -159,11 +151,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       sentBy,
-      // Named, because "check your WhatsApp" while the code is sitting in the SMS inbox
-      // is a person waiting for something that already arrived.
-      message: sentBy === 'SMS'
-        ? 'Code sent by SMS to your mobile number'
-        : 'Code sent to your WhatsApp number',
+      message: 'Code sent by SMS to your mobile number',
       expiresIn: OTP_EXPIRY_MINUTES * 60, // seconds
     });
   } catch (error) {

@@ -73,7 +73,7 @@ export function SignUpForm() {
       return;
     }
     if (!phoneVerified) {
-      setFieldErrors({ whatsappNumber: 'Please verify your number first — tap Verify and enter the code sent on WhatsApp.' });
+      setFieldErrors({ whatsappNumber: 'Please verify your number first — tap Verify and enter the code sent by SMS.' });
       return;
     }
 

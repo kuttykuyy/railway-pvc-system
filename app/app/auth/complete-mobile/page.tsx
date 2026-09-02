@@ -52,7 +52,7 @@ export default function CompleteMobilePage() {
       return;
     }
     if (!phoneVerified) {
-      setError('Please verify the number first — tap Verify and enter the code sent on WhatsApp.');
+      setError('Please verify the number first — tap Verify and enter the code sent by SMS.');
       return;
     }
     setSaving(true);

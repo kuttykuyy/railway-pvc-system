@@ -239,26 +239,34 @@ async function handlePhoneLinking(conversation: any, msg: string, chatId: string
   }
 
   // The number exists — now prove it belongs to whoever is typing. A code goes to the
-  // number's own WhatsApp; without this, anyone knowing a customer's phone number could
-  // bind their chat to that account and read its contracts and bills.
+  // number by SMS; without this, anyone knowing a customer's phone number could bind
+  // their chat to that account and read its contracts and bills. (WhatsApp used to
+  // carry the code; its OTP template went missing at the provider and was dropped.)
   const { randomInt } = await import('crypto');
-  const { sendOtpWhatsApp } = await import('./whatsapp-mydreams');
+  const { sendOtpSms, isMsg91Configured } = await import('./msg91');
+  if (!(await isMsg91Configured())) {
+    // Fail closed: no way to deliver a code means no link, never a link without proof.
+    return sendTelegramMessage(
+      chatId,
+      '❌ Account linking is unavailable right now because verification codes cannot be sent. Please try again later.',
+    );
+  }
   const otp = randomInt(100000, 999999).toString();
   await prisma.phoneOtp.create({
     data: { phone, otp, expiresAt: new Date(Date.now() + 10 * 60 * 1000) },
   });
-  const sent = await sendOtpWhatsApp(phone, otp);
+  const sent = await sendOtpSms(phone, otp);
   if (!sent.success) {
     // Fail closed: no code delivered means no link, never a link without proof.
     return sendTelegramMessage(
       chatId,
-      '❌ I could not send a verification code to that number\'s WhatsApp. Check the number and try again in a few minutes.',
+      '❌ I could not send a verification code to that number by SMS. Check the number and try again in a few minutes.',
     );
   }
   await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_LINK_OTP, { pendingLinkPhone: phone });
   return sendTelegramMessage(
     chatId,
-    `🔐 A 6-digit code has been sent to the WhatsApp of <b>${phone}</b>.\n\nEnter it here to link your account.`,
+    `🔐 A 6-digit code has been sent by SMS to <b>${phone}</b>.\n\nEnter it here to link your account.`,
   );
 }
 

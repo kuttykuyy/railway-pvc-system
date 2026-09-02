@@ -1,5 +1,4 @@
 import { prisma } from './db';
-import { isMyDreamsWhatsAppConfigured } from './whatsapp-mydreams';
 import { normalizePhone } from './phone-validation';
 import { phoneMatchCandidates } from './phone-owner';
 import { logger } from './logger';
@@ -80,27 +79,21 @@ export async function markOtpDeliveryWorking(): Promise<void> {
  * delivered locks every new user out of the product, which is a far worse failure than
  * an unverified number.
  *
- *   1. No channel is configured at all — neither WhatsApp nor SMS.
- *   2. Every channel failed recently on the PROVIDER's side — configured, but not
- *      working (see classifyOtpDeliveryFailure).
+ *   1. SMS (MSG91) is not configured. WhatsApp is no longer a channel: its OTP template
+ *      went missing at the provider and stayed missing, so the code went by SMS anyway.
+ *   2. SMS failed recently on the PROVIDER's side — configured, but not working (see
+ *      classifyOtpDeliveryFailure).
  *
  * Both are admin-side conditions. A number the provider will not deliver to is the
  * user's own condition and never lifts the requirement, so this is not a hole they can
  * walk through.
  */
 export async function phoneOtpRequired(): Promise<boolean> {
-  // Either channel will do. Requiring WhatsApp specifically would have switched
-  // verification off across the whole product on the day its template went missing,
-  // even with SMS sitting there working.
   const { isMsg91Configured } = await import('./msg91');
-  const [whatsApp, sms] = await Promise.all([
-    isMyDreamsWhatsAppConfigured(),
-    isMsg91Configured(),
-  ]);
-  if (!whatsApp && !sms) {
+  if (!(await isMsg91Configured())) {
     console.warn(
-      '[phone-otp] No channel can deliver a code — neither WhatsApp nor MSG91 is '
-      + 'configured — so mobile numbers are being accepted WITHOUT verification.',
+      '[phone-otp] No channel can deliver a code — MSG91 is not configured — so mobile '
+      + 'numbers are being accepted WITHOUT verification.',
     );
     return false;
   }
