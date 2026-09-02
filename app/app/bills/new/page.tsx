@@ -770,6 +770,19 @@ function NewBillPageContent() {
     }));
   };
 
+  /** True when every entry holding a detected extra item is currently flagged outside PVC. */
+  const extraItemEntriesAreOutsidePvc = (report: ExtraItemsReport) => {
+    const tagOf = (value: string | undefined) => String(value || '').match(/Schedule\s+([A-Z]\d*)/i)?.[1]?.toUpperCase() || '';
+    const itemNos = new Set(report.candidates.map(c => c.itemNo.toUpperCase()).filter(Boolean));
+    const tags = new Set(report.schedules.map(tagOf).filter(Boolean));
+    const matching = classificationEntries.filter(entry => {
+      const rowNos = (entry.itemRows || []).map(r => String(r.itemNumber || '').toUpperCase());
+      if (entry.itemNumber) rowNos.push(String(entry.itemNumber).toUpperCase());
+      return rowNos.some(no => itemNos.has(no)) || (tags.size > 0 && tags.has(tagOf(entry.scheduleItem)));
+    });
+    return matching.length > 0 && matching.every(entry => entry.outsidePvc === true);
+  };
+
   const applyExtractedBillDetails = async (data: CementAnalysisData, context?: AppliedExtractionContext) => {
     setIsAiUploaded(true);
     // The server kept the uploaded PDF; hold its id so the bill we are about to save can
@@ -2535,38 +2548,43 @@ function NewBillPageContent() {
                                 <li className="text-amber-700">…and {extraItemCandidates.candidates.length - 8} more</li>
                               )}
                             </ul>
-                            <div className="flex flex-wrap items-center gap-2 pt-1">
-                              {parseFloat(extraItemsOutsidePvc) === extraItemCandidates.total ? (
-                                <span className="font-medium text-emerald-700">
-                                  ✓ ₹{extraItemCandidates.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kept out of PVC
-                                </span>
-                              ) : (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  onClick={() => {
-                                    setExtraItemEntriesOutsidePvc(extraItemCandidates, true);
-                                    setExtraItemsOutsidePvc(extraItemCandidates.total.toFixed(2));
-                                    toast.success('Extra items kept out of PVC (Cl. 46A.1(b)). They stay on the bill and earn no variation.');
-                                  }}
-                                  className="h-8 bg-amber-600 hover:bg-amber-700 text-white"
-                                >
-                                  Keep ₹{extraItemCandidates.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} out of PVC
-                                </Button>
-                              )}
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setExtraItemEntriesOutsidePvc(extraItemCandidates, false);
-                                  if (parseFloat(extraItemsOutsidePvc) === extraItemCandidates.total) setExtraItemsOutsidePvc('');
-                                  setExtraItemCandidates(null);
-                                }}
-                                className="h-8 text-amber-800"
-                              >
-                                PVC was agreed for these — keep them in
-                              </Button>
+                            {/* A two-way switch that stays on screen: the decision can be
+                                changed any time before the bill is saved. */}
+                            {(() => {
+                              const money = extraItemCandidates.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                              const isOut = extraItemEntriesAreOutsidePvc(extraItemCandidates);
+                              const base = 'h-8 rounded-md border px-3 text-xs font-medium transition-colors';
+                              return (
+                                <div className="flex flex-wrap items-center gap-2 pt-1">
+                                  <button
+                                    type="button"
+                                    aria-pressed={isOut}
+                                    onClick={() => {
+                                      if (isOut) return;
+                                      setExtraItemEntriesOutsidePvc(extraItemCandidates, true);
+                                      setExtraItemsOutsidePvc(extraItemCandidates.total.toFixed(2));
+                                      toast.success('Kept out of PVC (Cl. 46A.1(b)). Still on the bill, earns no variation.');
+                                    }}
+                                    className={`${base} ${isOut ? 'border-amber-700 bg-amber-600 text-white' : 'border-amber-300 bg-white text-amber-900 hover:bg-amber-100'}`}
+                                  >
+                                    {isOut ? '✓ ' : ''}Keep ₹{money} out of PVC
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-pressed={!isOut}
+                                    onClick={() => {
+                                      if (!isOut) return;
+                                      setExtraItemEntriesOutsidePvc(extraItemCandidates, false);
+                                      if (parseFloat(extraItemsOutsidePvc) === extraItemCandidates.total) setExtraItemsOutsidePvc('');
+                                      toast.success('Kept in PVC — treated as agreed with PVC and a base month.');
+                                    }}
+                                    className={`${base} ${!isOut ? 'border-emerald-700 bg-emerald-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+                                  >
+                                    {!isOut ? '✓ ' : ''}PVC was agreed — keep them in
+                                  </button>
+                                </div>
+                              );
+                            })()}
                             </div>
                           </div>
                         )}
