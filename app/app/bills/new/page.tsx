@@ -1165,6 +1165,7 @@ function NewBillPageContent() {
           calculationMethod: (formData as any).calculationMethod || 'auto',
           classificationEntries,
           isAiUploaded,
+          extraItemsOutsidePvc: parseFloat(extraItemsOutsidePvc) || 0,
         }),
       });
       const data = await res.json();
