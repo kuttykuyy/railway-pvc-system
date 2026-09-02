@@ -55,8 +55,6 @@ import { useLanguage } from '@/components/i18n-provider';
 import { defaultLanguageForZone } from '@/lib/i18n/zone-language';
 import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { scheduleNames, normalizeSchedules } from '@/lib/contract-schedules';
-import { DsrCementCalculator, type CementSchedule } from '@/components/bills/dsr-cement-calculator';
-import { CEMENT_DERIVATION_ENABLED } from '@/lib/cement-derivation';
 import { ContextualHelp } from '@/components/contextual-help';
 import { validateDate, validateDateForApi } from '@/lib/date-validation';
 import { matchExtractedSchedule } from '@/lib/bill-schedule-matching';
@@ -66,7 +64,6 @@ import {
 } from '@/lib/extracted-bill-entries';
 import { computeRebateFactor, scaleComponentsWithRebate } from '@/lib/rebate';
 import { inferMainClassification } from '@/lib/work-classification';
-import { applyCementSplit, type CementBreakdownItem } from '@/lib/cement-split';
 import { decideInstantPause } from '@/lib/instant-bill-decision';
 
 
@@ -314,10 +311,7 @@ function NewBillPageContent() {
   /** The kept copy of the uploaded bill PDF, claimed by the bill when it is saved. */
   const [uploadedDocumentId, setUploadedDocumentId] = useState<number | null>(null);
   // DSR cement derivation: schedules (with cement MT) worked out from the entered items.
-  const [cementSchedules, setCementSchedules] = useState<CementSchedule[]>([]);
-  const [derivingCement, setDerivingCement] = useState(false);
   // Item numbers that had no cement coefficient — shown so the gap is actionable.
-  const [cementUnmatched, setCementUnmatched] = useState<string[]>([]);
   // True when an AI extraction has cement items whose derived cost has NOT yet been
   // applied. PVC check / bill creation is blocked until the user applies it.
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -1105,110 +1099,7 @@ function NewBillPageContent() {
       workClassification: subClassId
     }));
   };
-  // Work out the cement-affected schedules (and their cement MT) from the item numbers
-  // and quantities already entered, so the DSR calculator can derive the cement cost
-  // without needing a PDF upload or a hand-typed quantity.
-  const deriveCementFromItems = async () => {
-    const items: Array<{ dsrCode: string; description: string; unit: string; quantity: number; schedule: string }> = [];
-    for (const entry of classificationEntries) {
-      const schedule = entry.scheduleItem || 'Default';
-      const rows = entry.itemRows && entry.itemRows.length > 0
-        ? entry.itemRows
-        : [{ itemNumber: entry.itemNumber, quantity: entry.quantity }];
-      for (const row of rows) {
-        const qty = Number(row.quantity) || 0;
-        const code = String(row.itemNumber || '').trim();
-        if (code && qty > 0) {
-          items.push({ dsrCode: code, description: entry.description || '', unit: '', quantity: qty, schedule });
-        }
-      }
-    }
-    if (items.length === 0) {
-      toast.error('Add item numbers and quantities to your classification items first.');
-      return;
-    }
-    setDerivingCement(true);
-    try {
-      const res = await fetch('/api/bills/cement-from-items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data.error || 'Could not derive cement.');
-        return;
-      }
-      setCementUnmatched(data.unmatchedCodes || []);
-      if (!data.schedules?.length) {
-        setCementSchedules([]);
-        toast.error('No cement found — none of these item numbers are in the cement coefficient list.', { duration: 5000 });
-        return;
-      }
-      setCementSchedules(data.schedules);
-      toast.success(
-        `Found ${data.matchedCount} cement item(s) across ${data.schedules.length} schedule(s).`
-        + (data.unmatchedCount ? ` ${data.unmatchedCount} item(s) had no coefficient.` : ''),
-      );
-    } catch {
-      toast.error('The request failed. Please try again.');
-    } finally {
-      setDerivingCement(false);
-    }
-  };
 
-  // Split derived cement out of the work items into a "Cement (derived)" classification
-  // row (like the AI upload) instead of the single dedicated field, keeping the total same.
-  const applyDerivedCement = (total: number, breakdown: CementBreakdownItem[]) => {
-    const allSubs = classificationGroups.flatMap((g: any) => g.subClassifications);
-    const mainCode = (classificationEntries[0]?.subClassification?.code
-      || (selectedContract?.workDescription ? inferMainClassification(selectedContract.workDescription).code : '')
-      || '').charAt(0).toUpperCase();
-    const cementSub = allSubs.find((s: any) => s.code?.toUpperCase() === `${mainCode}C`)
-      || allSubs.find((s: any) => /c$/i.test(s.code || ''));
-    if (!cementSub) {
-      // No cement classification exists — fall back to the dedicated field.
-      setFormData(p => ({ ...p, cementAmount: total.toFixed(2) }));
-      toast.success(`Cement cost applied to the dedicated field: ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
-      return;
-    }
-    const makeCementEntry = (item: CementBreakdownItem, amount: number): ClassificationEntry => {
-      const qty = item.cementQtyMT ?? 0;
-      const rate = item.ratePerMt ?? 0;
-      const breakup = qty > 0 && rate > 0
-        ? ` · ${qty.toLocaleString('en-IN', { maximumFractionDigits: 3 })} MT × ₹${rate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}/MT`
-          + (item.affectedItemCount ? ` (${item.affectedItemCount} items)` : '')
-        : '';
-      const rate4 = rate ? Math.round(rate * 10000) / 10000 : '';
-      // One item row per cement-affected item (its own cement MT); fall back to a single
-      // aggregate row when per-item detail isn't available.
-      const perItem: any[] = (item.items && item.items.length > 0)
-        ? item.items.map(it => ({ itemNumber: `${it.code} (Cement)`, quantity: it.cementQtyMT || '', agreementRate: rate4, sourceQty: it.sourceQty, coefficient: it.coefficient, workUnit: it.workUnit }))
-        : [{ itemNumber: 'DSR 5.35 (Cement)', quantity: qty || '', agreementRate: rate4 }];
-      // Set the amount from the rows so Payable = the sum of the item lines.
-      const computed = Math.round(perItem.reduce((s, r) => s + (Number(r.quantity) || 0) * (Number(r.agreementRate) || 0), 0) * 100) / 100 || amount;
-      const first = perItem[0];
-      return {
-        subClassificationId: cementSub.id,
-        subClassification: cementSub,
-        amount: computed,
-        description: `Cement (derived) — ${item.schedule}${breakup}`,
-        scheduleItem: item.schedule === 'Default' ? '' : item.schedule,
-        isDerivedCement: true,
-        manualClassification: true,
-        itemNumber: first.itemNumber,
-        quantity: first.quantity,
-        agreementRate: first.agreementRate,
-        itemRows: perItem,
-        classificationJustification: `Cement portion split from the work items using DSR 2021 cement coefficients${breakup ? `:${breakup.replace(' · ', ' ')} = ₹${computed.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '.'}`,
-      };
-    };
-    const next = applyCementSplit(classificationEntries, breakdown, makeCementEntry);
-    setClassificationEntries(next);
-    // Cement now lives in the classification rows, so clear the dedicated field to avoid double-counting.
-    setFormData(p => ({ ...p, cementAmount: '' }));
-    toast.success(`Cement split into ${breakdown.filter(b => b.amount > 0).length} classification row(s): ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
-  };
 
   const handlePreview = async (opts?: { silent?: boolean }): Promise<any | null> => {
     if (!formData.contractId || !formData.zone || !formData.dateOfMeasurement) {
@@ -2604,50 +2495,9 @@ function NewBillPageContent() {
                     </div>
                   </div>
 
-                  {/* SECTION 2b: Cement (derived from the entered items via DSR) */}
+                  {/* SECTION 2b: Cement */}
                   <div className={billPanelCls('cement')}>
                     <div className="border border-slate-200 rounded-xl bg-white px-4 py-4 space-y-4">
-                      {/* Deriving cement out of DSR items is off — see lib/cement-derivation.ts. */}
-                      {CEMENT_DERIVATION_ENABLED && (
-                      <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-700">No direct cement item? Derive it from your items.</p>
-                            <p className="text-[11px] text-slate-500">Uses the item numbers &amp; quantities entered above + DSR 2021 cement coefficients.</p>
-                          </div>
-                          <Button type="button" variant="outline" size="sm" disabled={derivingCement}
-                            onClick={deriveCementFromItems}
-                            className="border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100">
-                            {derivingCement ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deriving…</>) : (<><ClipboardList className="mr-2 h-4 w-4" /> Derive cement from items</>)}
-                          </Button>
-                        </div>
-                        {cementUnmatched.length > 0 && (
-                          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs">
-                            <p className="font-semibold text-amber-900">
-                              No cement coefficient for {cementUnmatched.length} item number{cementUnmatched.length > 1 ? 's' : ''}:
-                            </p>
-                            <p className="mt-1 font-mono text-amber-800">{cementUnmatched.join(', ')}</p>
-                            <p className="mt-1.5 text-amber-700">
-                              Cement is only worked out for item numbers listed in the cement coefficient library.
-                              Add them in{' '}
-                              <Link href="/admin/dsr-cement-coefficients" target="_blank" className="underline font-medium">
-                                Admin → Cement Coefficients
-                              </Link>
-                              , then press Derive again.
-                            </p>
-                          </div>
-                        )}
-                        {cementSchedules.length > 0 && (
-                          <DsrCementCalculator
-                            schedules={cementSchedules}
-                            contractId={formData.contractId || undefined}
-                            contractSchedules={selectedContract?.schedules}
-                            contractRebate={selectedContract?.rebatePercentage}
-                            onApply={applyDerivedCement}
-                          />
-                        )}
-                      </div>
-                      )}
                       {Number(formData.cementAmount) > 0 && (
                         <p className="text-xs text-emerald-700">
                           Applied cement amount: <strong>₹{Number(formData.cementAmount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong> — included in this bill&apos;s PVC.
