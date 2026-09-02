@@ -135,6 +135,8 @@ interface ClassificationEntry {
   aiReviewed?: boolean;
   manualClassification?: boolean;
   isDerivedCement?: boolean;
+  /** Extra item ordered after the agreement (Cl.39): paid, but earns no PVC (Cl.46A.1(b)). */
+  outsidePvc?: boolean;
 }
 
 function classificationEntryKey(entry: ClassificationEntry): string {
@@ -750,6 +752,25 @@ function NewBillPageContent() {
     } catch {
       return mappedEntries;
     }
+  };
+
+  /**
+   * Flag (or unflag) the classification entries that hold the detected extra items.
+   * An entry matches by item number, or by carrying the same schedule tag as the
+   * "Additional NS item" heading — the reader files those rows under "Schedule D".
+   */
+  const setExtraItemEntriesOutsidePvc = (report: ExtraItemsReport, outside: boolean) => {
+    const tagOf = (value: string | undefined) => String(value || '').match(/Schedule\s+([A-Z]\d*)/i)?.[1]?.toUpperCase() || '';
+    const itemNos = new Set(report.candidates.map(c => c.itemNo.toUpperCase()).filter(Boolean));
+    const tags = new Set(report.schedules.map(tagOf).filter(Boolean));
+    setClassificationEntries(current => current.map(entry => {
+      const rowNos = (entry.itemRows || []).map(r => String(r.itemNumber || '').toUpperCase());
+      if (entry.itemNumber) rowNos.push(String(entry.itemNumber).toUpperCase());
+      const byItem = rowNos.some(no => itemNos.has(no));
+      const bySchedule = tags.size > 0 && tags.has(tagOf(entry.scheduleItem));
+      if (!byItem && !bySchedule) return entry;
+      return entry.outsidePvc === outside ? entry : { ...entry, outsidePvc: outside };
+    }));
   };
 
   const applyExtractedBillDetails = async (data: CementAnalysisData, context?: AppliedExtractionContext) => {
@@ -1415,6 +1436,7 @@ function NewBillPageContent() {
           uploadedDocumentId,
           classificationEntries: cleanedEntries.map(entry => ({
             subClassificationId: entry.subClassificationId,
+            outsidePvc: entry.outsidePvc === true,
             amount: entry.amount === '' || entry.amount === null || entry.amount === undefined
               ? 0
               : typeof entry.amount === 'string'
@@ -2555,8 +2577,9 @@ function NewBillPageContent() {
                                   type="button"
                                   size="sm"
                                   onClick={() => {
+                                    setExtraItemEntriesOutsidePvc(extraItemCandidates, true);
                                     setExtraItemsOutsidePvc(extraItemCandidates.total.toFixed(2));
-                                    toast.success('Extra items kept out of PVC (Cl. 46A.1(b)).');
+                                    toast.success('Extra items kept out of PVC (Cl. 46A.1(b)). They stay on the bill and earn no variation.');
                                   }}
                                   className="h-8 bg-amber-600 hover:bg-amber-700 text-white"
                                 >
@@ -2567,7 +2590,11 @@ function NewBillPageContent() {
                                 type="button"
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => setExtraItemCandidates(null)}
+                                onClick={() => {
+                                  setExtraItemEntriesOutsidePvc(extraItemCandidates, false);
+                                  if (parseFloat(extraItemsOutsidePvc) === extraItemCandidates.total) setExtraItemsOutsidePvc('');
+                                  setExtraItemCandidates(null);
+                                }}
                                 className="h-8 text-amber-800"
                               >
                                 PVC was agreed for these — keep them in

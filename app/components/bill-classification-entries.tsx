@@ -83,6 +83,8 @@ interface ClassificationEntry {
   /** True for a "Cement (derived)" row split out of the work items by the DSR calculator,
    * so re-applying can fold it back in first (keeps the bill total stable). */
   isDerivedCement?: boolean;
+  /** Extra item ordered after the agreement (Cl.39): paid, but earns no PVC (Cl.46A.1(b)). */
+  outsidePvc?: boolean;
 }
 
 interface BillClassificationEntriesProps {
@@ -658,6 +660,14 @@ export function BillClassificationEntries({
                     {entry.scheduleItem ? `Sch ${scheduleTag(entry.scheduleItem)} · ` : ''}{rowCount || 0} item{rowCount === 1 ? '' : 's'}
                   </span>
                   <span className="text-sm font-semibold text-slate-800 whitespace-nowrap">Rs {formatMoney(Number(entry.amount) || 0)}</span>
+                  {entry.outsidePvc && (
+                    <span
+                      className="text-[10px] text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                      title="Extra item ordered after the agreement (Cl. 39). Paid, but earns no price variation (Cl. 46A.1(b))."
+                    >
+                      Outside PVC · Cl.39
+                    </span>
+                  )}
                   {entry.aiReviewed && (
                     <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">AI</span>
                   )}
@@ -688,6 +698,21 @@ export function BillClassificationEntries({
                     <Pencil className="mr-1 h-3.5 w-3.5" /> Enable editing
                   </Button>
                 )}
+
+                <label className={`flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${entry.outsidePvc ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-50 text-slate-600'} ${locked ? 'opacity-70' : 'cursor-pointer'}`}>
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={entry.outsidePvc === true}
+                    disabled={locked}
+                    onChange={event => updateEntry(entryIndex, { outsidePvc: event.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium">Extra item ordered after the agreement (Cl. 39) — outside PVC.</span>{' '}
+                    It stays on the bill and is paid, but earns no price variation (GCC-2022 Cl. 46A.1(b)).
+                    Leave unticked if PVC and a base month were agreed when its rate was fixed.
+                  </span>
+                </label>
 
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <div className="space-y-1.5 min-w-0">

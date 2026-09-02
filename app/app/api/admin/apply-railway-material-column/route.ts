@@ -106,6 +106,12 @@ const PENDING: PendingColumn[] = [
     why: "GCC-2022 Cl.46A.1(b) puts extra items added under Cl.39(1)(b) outside price variation, unless PVC and a base month were specially agreed when their rates were fixed.",
   },
   {
+    table: 'bill_classification_entries',
+    column: 'outsidePvc',
+    ddlType: 'BOOLEAN NOT NULL DEFAULT false',
+    why: 'An extra item ordered after the agreement (Cl.39) is listed and paid but earns no price variation (GCC-2022 Cl.46A.1(b)).',
+  },
+  {
     table: 'contracts',
     column: 'pvcClauseVersion',
     ddlType: 'TEXT',

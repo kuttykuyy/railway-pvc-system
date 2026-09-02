@@ -565,6 +565,9 @@ model BillClassificationEntry {
   agreementRate               Float? // Agreement Rate in Rs.
   itemRows                    Json? // Array of {itemNumber, quantity, agreementRate} for multi-item entries
   classificationJustification String? // Reasoning for why this classification was chosen for the item
+  /// An extra item ordered after the agreement (GCC Cl.39). GCC-2022 Cl.46A.1(b) keeps
+  /// it out of price variation, so it is listed and paid but earns no PVC.
+  outsidePvc                  Boolean @default(false)
 
   // Per-entry PVC breakdown (calculated during bill processing)
   labourPvc         Float? @default(0)

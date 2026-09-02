@@ -117,6 +117,7 @@ function EditBillPageContent() {
           scheduleItem: e.scheduleItem || '',
           steelTypes: e.steelTypes || [],
           itemRows: e.itemRows || undefined,
+          outsidePvc: e.outsidePvc === true,
         })));
       }
       if (billData.nonScheduleItems?.length > 0) {
@@ -303,6 +304,7 @@ function EditBillPageContent() {
           billAmount: netBillAmount,
           classificationEntries: classificationEntries.map(e => ({
             subClassificationId: e.subClassificationId,
+            outsidePvc: (e as any).outsidePvc === true,
             amount: e.amount,
             description: e.description || '',
             classificationJustification: e.classificationJustification || null,
