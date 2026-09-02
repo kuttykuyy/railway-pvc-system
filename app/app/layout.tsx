@@ -71,16 +71,19 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_IN',
-    url: 'https://irpvc.in',
+    url: 'https://www.irpvc.in',
     title: 'IR-PVC - Indian Railway Price Variation Clause Calculator',
     description: 'Automate PVC calculations for Indian Railway contracts. Manage bills, track indices, and generate GCC-compliant reports. Trusted by railway contractors across India.',
     siteName: 'IR-PVC',
+    // A 1200x630 card, not the 512px app icon: the icon rendered as a tiny square in
+    // WhatsApp, LinkedIn and Twitter previews. Relative, so it resolves under metadataBase
+    // (www) rather than the bare domain, which only redirects.
     images: [
       {
-        url: 'https://irpvc.in/icons/icon-512x512.png',
-        width: 512,
-        height: 512,
-        alt: 'IR-PVC - Railway PVC Calculator System',
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'IR-PVC - Indian Railway Price Variation Clause Calculator',
       },
     ],
   },
@@ -88,7 +91,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'IR-PVC - Indian Railway Price Variation Clause Calculator',
     description: 'Automate PVC calculations for Indian Railway contracts. Manage bills, track indices, and generate GCC-compliant reports.',
-    images: ['https://irpvc.in/icons/icon-512x512.png'],
+    images: ['/og-image.png'],
     creator: '@irpvc',
     site: '@irpvc',
   },
@@ -113,9 +116,10 @@ export const metadata: Metadata = {
       { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
     ],
   },
-  verification: {
-    google: process.env.GOOGLE_SITE_VERIFICATION || 'google-site-verification-code-here', // Add your verification code from Google Search Console
-  },
+  // Only when set: the fallback used to emit the literal placeholder text as a meta tag.
+  ...(process.env.GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } }
+    : {}),
   other: {
     'mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-capable': 'yes',
