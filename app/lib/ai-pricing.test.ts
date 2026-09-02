@@ -11,6 +11,12 @@ describe('AI pricing by routed model', () => {
     expect(estimateCostUsd('Supporting Services', 4_440, 60)).toBe(0);
   });
 
+  it('prices Claude models named directly at Anthropic rates', () => {
+    expect(estimateCostUsd('claude-sonnet-5', 1_000_000, 1_000_000)).toBeCloseTo(12.0, 6);
+    expect(estimateCostUsd('claude-opus-5', 1_000_000, 1_000_000)).toBeCloseTo(30.0, 6);
+    expect(rateForModel('claude-opus-4-8').label).toBe('Claude Opus');
+  });
+
   it('falls back for calls that never recorded their model, and says so', () => {
     const fallback = rateForModel('route-llm');
     expect(fallback.known).toBe(false);

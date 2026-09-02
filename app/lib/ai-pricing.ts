@@ -26,8 +26,12 @@ const KNOWN_MODELS: KnownModel[] = [
   { match: /gpt[-_ ]?4[._-]?1/i, label: 'OpenAI GPT-4.1', rate: { input: 0.0020, output: 0.0080 } },
   { match: /gpt[-_ ]?5/i, label: 'OpenAI GPT-5.x', rate: { input: 0.0002, output: 0.0012 } },
   { match: /gemini.*flash/i, label: 'Gemini Flash', rate: { input: 0.0008, output: 0.0037 } },
-  { match: /claude.*sonnet|sonnet/i, label: 'Claude Sonnet', rate: { input: 0.0030, output: 0.0150 } },
-  { match: /claude.*haiku|haiku/i, label: 'Claude Haiku', rate: { input: 0.0008, output: 0.0040 } },
+  // Anthropic first-party API rates (USD per 1K tokens), for models named directly.
+  { match: /fable|mythos/i, label: 'Claude Fable 5.x', rate: { input: 0.0100, output: 0.0500 } },
+  { match: /opus[-_ ]?5|opus[-_ ]?4[-_.]?[678]/i, label: 'Claude Opus', rate: { input: 0.0050, output: 0.0250 } },
+  { match: /sonnet[-_ ]?5/i, label: 'Claude Sonnet 5', rate: { input: 0.0020, output: 0.0100 } },
+  { match: /claude.*sonnet|sonnet/i, label: 'Claude Sonnet 4.x', rate: { input: 0.0030, output: 0.0150 } },
+  { match: /claude.*haiku|haiku/i, label: 'Claude Haiku', rate: { input: 0.0010, output: 0.0050 } },
   { match: /supporting\s*service/i, label: 'Supporting services', rate: { input: 0, output: 0 } },
 ];
 
