@@ -16,6 +16,7 @@ import {
 import { sendWhatsAppTextMessage } from './whatsapp-response';
 import { prisma } from './db';
 import { emailLinkOrigin } from './email-link-origin';
+import { billRequiresExtension } from './extension-compliance';
 
 /**
  * Format phone number for WhatsApp (91XXXXXXXXXX format)
@@ -837,6 +838,22 @@ async function createBillFromConversation(conversation: any) {
 
     if (!contract) {
       await sendWhatsAppTextMessage(phone, '❌ Error: Contract not found.');
+      await resetConversation(conversation.id);
+      return;
+    }
+
+    // Same gate as the web and bulk routes: a bill measured after the date the contract
+    // covers waits until the time extension is recorded, because the extension decides
+    // how PVC applies to that period. This flow used to create the bill regardless.
+    const extensionGate = billRequiresExtension(contract, new Date(data.dateOfMeasurement!));
+    if (extensionGate.blocked) {
+      const coveredUntil = extensionGate.coveredUntil!.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
+      await sendWhatsAppTextMessage(
+        phone,
+        `⚠️ This bill is measured *after the contract's completion date* (covered until *${coveredUntil}*).\n\n` +
+          `Please record the time extension for this contract first, then type "create bill" again:\n` +
+          `${emailLinkOrigin()}/contracts/${contract.id}/extensions`,
+      );
       await resetConversation(conversation.id);
       return;
     }

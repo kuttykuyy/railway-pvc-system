@@ -25,6 +25,7 @@ import {
 } from './telegram-api';
 import { extractBillDetailsDirect } from '@/app/api/bills/cement-analysis/route';
 import { getQuarterFromDate, getQuarterMonths, calculateClassificationEntryPvc } from './pvc-calculations';
+import { billRequiresExtension } from './extension-compliance';
 import { getQuarterlyAverages } from './db-utils';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill, getSteelCityForZone } from './zone-steel-city-mapping';
 import { extractSteelTypesFromEntries } from './steel-type-handler';
@@ -175,6 +176,26 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
 
   // 4. Run the PVC engine over the entries for the bill's quarter.
   const measurementDate = billDetails.measurementDate ? new Date(billDetails.measurementDate) : new Date();
+
+  // A bill measured after the date the contract covers needs its time extension recorded
+  // first: the extension decides whether PVC applies to that period at all (17B caps the
+  // indices). The web and bulk routes stop there, and this flow now does too, rather than
+  // pricing the bill on a guess. The gate lifts itself once an extension pushes the
+  // completion date out, and never fires on a contract with no completion date at all.
+  const extensionGate = billRequiresExtension(contract, measurementDate);
+  if (extensionGate.blocked) {
+    const fmt = (d: Date) => new Date(d).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
+    await sendTelegramMessage(
+      chatId,
+      `⚠️ This bill is measured <b>after the contract's completion date</b>.\n\n` +
+        `📅 Bill measured: <b>${fmt(measurementDate)}</b>\n` +
+        `📅 Contract covered until: <b>${fmt(extensionGate.coveredUntil!)}</b>\n\n` +
+        `Work in this period needs a recorded <b>time extension</b> (GCC 17A/17B), and the extension ` +
+        `decides how PVC applies to it. Please record the extension on the website first, then send the bill again:\n` +
+        `${getPublicSiteUrl()}/contracts/${contract.id}/extensions`,
+    );
+    return {};
+  }
 
   // 17B-extended contracts freeze the quarter at the original completion date.
   let quarterDate = measurementDate;

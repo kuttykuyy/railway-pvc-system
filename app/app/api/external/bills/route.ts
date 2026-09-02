@@ -17,6 +17,7 @@ import { getBillingSettings } from '@/lib/admin-settings';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill } from '@/lib/zone-steel-city-mapping';
 import { checkUserContractAccess } from '@/lib/permissions';
 import { areFinalIndicesAvailableForBill } from '@/lib/index-status';
+import { billRequiresExtension } from '@/lib/extension-compliance';
 import { extractSteelTypesFromEntries } from '@/lib/steel-type-handler';
 import { getExternalCorsHeaders } from '@/lib/external-cors';
 
@@ -206,6 +207,8 @@ export async function POST(request: NextRequest) {
         extensionType: true,
         originalCompletionDate: true,
         currentCompletionDate: true,
+        dateOfOpening: true,
+        completionPeriodMonths: true,
         contractorName: true
       }
     });
@@ -248,6 +251,25 @@ export async function POST(request: NextRequest) {
       }, { status: 400, headers: getExternalCorsHeaders(request) });
     }
     
+    // A bill measured after the date the contract covers is work in a period the
+    // contract does not yet run to. Under the GCC that period exists only once a time
+    // extension is granted, and the extension decides how PVC applies to it (17B caps
+    // the indices). The web and bulk routes stop such a bill until the extension is
+    // recorded; this route created it anyway, applying the 17B cap only when an
+    // extension already existed. Same gate, same answer, here too.
+    const extensionGate = billRequiresExtension(contract, measurementDate);
+    if (extensionGate.blocked) {
+      return NextResponse.json({
+        success: false,
+        error: `This bill is measured after the contract's completion date `
+          + `(${extensionGate.coveredUntil?.toLocaleDateString('en-IN')}). Record the time `
+          + `extension for this contract first, then create the bill.`,
+        code: 'EXTENSION_REQUIRED',
+        coveredUntil: extensionGate.coveredUntil,
+        addExtensionUrl: `/contracts/${contract.id}/extensions`,
+      }, { status: 409, headers: getExternalCorsHeaders(request) });
+    }
+
     // Check if final indices are available
     const indicesCheck = await areFinalIndicesAvailableForBill(measurementDate, contract.baseMonth);
     if (!indicesCheck.available) {

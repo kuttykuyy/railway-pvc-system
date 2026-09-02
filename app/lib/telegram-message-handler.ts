@@ -28,6 +28,7 @@ import {
   handleCouponInput,
 } from './telegram-document-flow';
 import { prisma } from './db';
+import { billRequiresExtension } from './extension-compliance';
 
 /**
  * Main entry point — called from webhook route
@@ -819,6 +820,22 @@ async function createBillFromTelegram(conversation: any, chatId: string) {
   try {
     const contract = await prisma.contract.findUnique({ where: { id: data.contractId } });
     if (!contract) { await resetTelegramConversation(conversation.id); return sendTelegramMessage(chatId, '❌ Contract not found.'); }
+
+    // Same gate as the web and bulk routes: a bill measured after the date the contract
+    // covers waits until the time extension is recorded, because the extension decides
+    // how PVC applies to that period. This flow used to create the bill regardless.
+    const extensionGate = billRequiresExtension(contract, new Date(data.dateOfMeasurement!));
+    if (extensionGate.blocked) {
+      const fmt = (d: Date) => new Date(d).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
+      await resetTelegramConversation(conversation.id);
+      return sendTelegramMessage(
+        chatId,
+        `⚠️ This bill is measured <b>after the contract's completion date</b> ` +
+          `(covered until <b>${fmt(extensionGate.coveredUntil!)}</b>).\n\n` +
+          `Please record the time extension for this contract first, then run /createbill again:\n` +
+          `${getPublicSiteUrl()}/contracts/${contract.id}/extensions`,
+      );
+    }
 
     const billAmount = data.billAmount!;
     const cementPct = data.cementPercentage || 0;
