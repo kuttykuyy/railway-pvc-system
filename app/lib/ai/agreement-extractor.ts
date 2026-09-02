@@ -172,14 +172,11 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   "rebatePercentage": "Any separately stated REBATE % (a discount on the accepted rates, sometimes offered in a later letter), as a positive number. Null if the document states no separate rebate. Do NOT repeat acceptedPercentage here — a below-estimate offer is not a rebate."
 }`;
 
-  // The schedules ride in the SAME request as the essentials. They used to be a second
-  // request with a 16,000-token reply — the PDF sent twice, and hundreds of A-schedule
-  // item numbers read out that nothing ever used. Only B-schedule item numbers do work
-  // (findExtraItems flags a bill item the LOA never listed), so those are the only ones
-  // asked for; the reply shrinks to a few hundred tokens and one request does the job.
-  const schedulesKey = `,
-  "schedules": "Every work schedule listed (Schedule A1, A2, B1, ...). Each element: { name, escalation, bidRate, subWorks, items }. name = the schedule's title. escalation and bidRate = percentages stated for the schedule AS A WHOLE, else null. subWorks = the rows under that schedule in the 'Awarded Quantities And Rates' table — each row is a sub-work priced separately, as { name, escalation, bidRate }: name is the item description (e.g. 'Renewal of roofing sheet in foundry shop.'), escalation is that row's Escl. (%) as a signed number with 'At Par' meaning 0, bidRate is that row's Bid Rate as a signed number ('17.00 % Above' is 17, '5.00 % Below' is -5, 'At Par' is 0). items = ONLY for schedules whose name starts with B (non-schedule / NS items): every item number printed under it, exactly as printed (e.g. '1', '5.35', '082011'). For every other schedule (A, C, D, ...) return items as [] — do NOT list their item numbers. Return [] if no schedules are listed."`;
-  const fullPrompt = essentialsPrompt.replace(/\n}$/, schedulesKey + '\n}');
+  // Schedules are NOT read. They were asked for so the form could pre-fill each
+  // schedule's escalation and bid rate, and that pass was the whole cost of reading an
+  // LOA: hundreds of item numbers, 16,000 tokens, its own copy of the PDF. The decision
+  // is that those percentages are not needed from the document; anyone who wants them
+  // types them on the contract form. The AI now reads the essentials and nothing else.
 
   const withPdf = (text: string) => [
     {
@@ -240,14 +237,11 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
     }
   };
 
-  // One request in the normal case. If the reply is cut off or unusable, the retry asks
-  // for the essentials ALONE, small enough that it is never cut off: the contract can
-  // be set up without its schedule rows, but not without its number, contractor, work
-  // and closing date.
-  const full = await ask(fullPrompt, 8000, 'agreement');
-  const essentials = full.ok || full.kind !== 'unparseable'
-    ? full
-    : await ask(essentialsPrompt, 3000, 'essentials retry');
+  // One small request, and one compact retry if the reply comes back unusable.
+  const first = await ask(essentialsPrompt, 3000, 'essentials');
+  const essentials = first.ok || first.kind !== 'unparseable'
+    ? first
+    : await ask(essentialsPrompt + '\n\nCOMPACT RETRY: the previous reply was cut off. Keep every text value under 400 characters. No prose, nothing outside the JSON object.', 3000, 'essentials retry');
 
   if (!essentials.ok) {
     if (essentials.kind === 'network') {
@@ -273,12 +267,6 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
 
   const warnings: string[] = [];
   const extracted: any = { ...essentials.extracted };
-  if (!Array.isArray(extracted.schedules)) {
-    extracted.schedules = [];
-    // Not a failure of the read: the contract stands without its schedule rows.
-    console.warn('agreement-extractor: schedules not read, continuing without them:', full.ok ? 'no schedules array' : full.detail);
-    warnings.push('The schedules could not be read from this document. Add them on the form if you need them; the bill supplies item numbers later.');
-  }
 
   // The closing date decides the base month, and a base month that is out by a month
   // skews every quarter's PVC without ever looking wrong. Both agreements and LOAs
@@ -294,9 +282,6 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   // derives it from dateOfOpening. So map the closing date onto dateOfOpening.
   const dateOfOpening = extracted.closingDate || extracted.dateOfOpening || null;
 
-  // Normalise the extracted schedules to { name, escalation, bidRate } strings and
-  // drop any without a name, so the form can drop them straight into its schedule rows.
-  const asStr = (v: any) => (v === null || v === undefined ? '' : String(v).trim());
   /**
    * A percentage as printed on a letter, to a signed number.
    *
@@ -319,32 +304,8 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
     return value;
   };
 
-  const schedules: ExtractedSchedule[] = Array.isArray(extracted.schedules)
-    ? extracted.schedules
-        .map((s: any) => ({
-          name: asStr(s?.name),
-          escalation: asStr(s?.escalation).replace(/%/g, ''),
-          bidRate: asStr(s?.bidRate).replace(/%/g, ''),
-          // The item numbers accepted under this schedule, kept exactly as printed —
-          // a bill cites them the same way, and normalising here would only make the
-          // two sides disagree about what counts as the same item.
-          items: Array.isArray(s?.items)
-            ? Array.from(new Set(s.items.map((value: unknown) => asStr(value)).filter(Boolean)))
-            : [],
-          // Each sub-work keeps its own rates. "At Par" reads as 0 and "% Below" as
-          // negative, the same way the whole-LOA percentage is read above.
-          subWorks: Array.isArray(s?.subWorks)
-            ? s.subWorks
-                .map((w: any) => ({
-                  name: asStr(w?.name),
-                  escalation: asStr(parsePercent(w?.escalation) ?? asStr(w?.escalation).replace(/%/g, '')),
-                  bidRate: asStr(parsePercent(w?.bidRate) ?? asStr(w?.bidRate).replace(/%/g, '')),
-                }))
-                .filter((w: any) => w.name)
-            : [],
-        }))
-        .filter((s: any) => s.name)
-    : [];
+  // Nothing reads schedules any more; the field stays so callers keep their shape.
+  const schedules: ExtractedSchedule[] = [];
 
   const docTypeRaw = String(extracted.documentType ?? '').trim().toLowerCase();
   const documentType: ExtractedAgreement['documentType'] =
