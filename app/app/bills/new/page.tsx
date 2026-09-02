@@ -275,6 +275,7 @@ function NewBillPageContent() {
   // agreement, so outside PVC under Cl.46A.1(b) unless specially agreed. Offered, never
   // applied on its own: a person confirms before the contractor loses price variation.
   const [extraItemCandidates, setExtraItemCandidates] = useState<ExtraItemsReport | null>(null);
+  const [showExtraAmountBox, setShowExtraAmountBox] = useState(false);
   
   // Accordion state - start with basic info open
   const [openAccordion, setOpenAccordion] = useState<string[]>(['basic']);
@@ -2520,83 +2521,82 @@ function NewBillPageContent() {
                         floatingSummary
                       />
 
-                      {/* Extra items outside PVC — GCC-2022 Cl.46A.1(b) */}
-                      <div className="space-y-2 p-3 border border-amber-200 rounded-lg bg-amber-50">
-                        <Label htmlFor="extraItemsOutsidePvc" className="text-sm font-semibold text-amber-900">
-                          Extra items outside PVC (Cl. 39(1)(b))
-                        </Label>
-                        <p className="text-xs text-amber-800">
-                          Items ordered after the agreement (Cl. 39) are paid but earn no PVC under Clause 46A.1(b), unless PVC
-                          and a base month were agreed when their rates were fixed. Tick <strong>outside PVC</strong> on an item&apos;s
-                          card above to exclude it. Use the amount box only for a sum that has no entry of its own. B-schedule items
-                          are part of the contract and do get PVC.
-                        </p>
-                        {extraItemCandidates && (
-                          <div className="rounded-md border border-amber-300 bg-white p-3 text-xs space-y-2">
-                            <p className="font-semibold text-amber-900">
-                              This bill has {extraItemCandidates.candidates.length} item{extraItemCandidates.candidates.length === 1 ? '' : 's'} under{' '}
-                              {extraItemCandidates.schedules.map(name => `“${name}”`).join(', ')} — added after the agreement, so outside PVC unless PVC and a base month were agreed when their rates were fixed.
-                            </p>
-                            <ul className="space-y-0.5 text-amber-900/90">
-                              {extraItemCandidates.candidates.slice(0, 8).map((c, i) => (
-                                <li key={`${c.itemNo}-${i}`} className="flex justify-between gap-3">
-                                  <span className="truncate"><span className="font-mono">{c.itemNo || '—'}</span> {c.description}</span>
-                                  <span className="shrink-0 tabular-nums">₹{c.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                </li>
-                              ))}
-                              {extraItemCandidates.candidates.length > 8 && (
-                                <li className="text-amber-700">…and {extraItemCandidates.candidates.length - 8} more</li>
-                              )}
-                            </ul>
-                            {/* A two-way switch that stays on screen: the decision can be
-                                changed any time before the bill is saved. */}
-                            {(() => {
-                              const money = extraItemCandidates.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                              const isOut = extraItemEntriesAreOutsidePvc(extraItemCandidates);
-                              const base = 'h-8 rounded-md border px-3 text-xs font-medium transition-colors';
-                              return (
-                                <div className="flex flex-wrap items-center gap-2 pt-1">
-                                  <button
-                                    type="button"
-                                    aria-pressed={isOut}
-                                    onClick={() => {
-                                      if (isOut) return;
-                                      setExtraItemEntriesOutsidePvc(extraItemCandidates, true);
-                                      setExtraItemsOutsidePvc(extraItemCandidates.total.toFixed(2));
-                                      toast.success('Kept out of PVC (Cl. 46A.1(b)). Still on the bill, earns no variation.');
-                                    }}
-                                    className={`${base} ${isOut ? 'border-amber-700 bg-amber-600 text-white' : 'border-amber-300 bg-white text-amber-900 hover:bg-amber-100'}`}
-                                  >
-                                    {isOut ? '✓ ' : ''}Keep ₹{money} out of PVC
-                                  </button>
-                                  <button
-                                    type="button"
-                                    aria-pressed={!isOut}
-                                    onClick={() => {
-                                      if (!isOut) return;
-                                      setExtraItemEntriesOutsidePvc(extraItemCandidates, false);
-                                      if (parseFloat(extraItemsOutsidePvc) === extraItemCandidates.total) setExtraItemsOutsidePvc('');
-                                      toast.success('Kept in PVC — treated as agreed with PVC and a base month.');
-                                    }}
-                                    className={`${base} ${!isOut ? 'border-emerald-700 bg-emerald-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
-                                  >
-                                    {!isOut ? '✓ ' : ''}PVC was agreed — keep them in
-                                  </button>
-                                </div>
-                              );
-                            })()}
+                      {/* Extra items outside PVC — GCC-2022 Cl.46A.1(b). Kept quiet: one line
+                          per detected item and a two-way switch; the clause text sits behind
+                          the info icon, and the free amount box behind a link. */}
+                      <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs">
+                        <div className="flex items-center gap-1.5 text-amber-900">
+                          <span className="font-semibold">Extra items outside PVC</span>
+                          <span
+                            className="inline-flex cursor-help"
+                            title="Cl. 39 extra items ordered after the agreement are paid but earn no PVC (GCC-2022 Cl. 46A.1(b)), unless PVC and a base month were agreed when their rates were fixed. Tick 'outside PVC' on any item card to exclude it. B-schedule items are part of the contract and do get PVC."
+                          >
+                            <Info className="h-3.5 w-3.5 text-amber-600" />
+                          </span>
+                          {!extraItemCandidates && !showExtraAmountBox && (
+                            <button type="button" onClick={() => setShowExtraAmountBox(true)} className="ml-auto text-amber-700 underline-offset-2 hover:underline">
+                              Enter an amount
+                            </button>
+                          )}
+                        </div>
+
+                        {extraItemCandidates && (() => {
+                          const money = extraItemCandidates.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                          const isOut = extraItemEntriesAreOutsidePvc(extraItemCandidates);
+                          const seg = 'h-7 px-2.5 text-xs font-medium transition-colors';
+                          return (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                              <span className="min-w-0 flex-1 truncate text-amber-900" title={extraItemCandidates.schedules.join(', ')}>
+                                {extraItemCandidates.candidates.slice(0, 3).map(c => c.itemNo || '—').join(', ')}
+                                {extraItemCandidates.candidates.length > 3 ? ` +${extraItemCandidates.candidates.length - 3}` : ''}
+                                <span className="text-amber-700"> · {extraItemCandidates.schedules[0]}</span>
+                                <span className="tabular-nums font-semibold"> · ₹{money}</span>
+                              </span>
+                              <div className="inline-flex overflow-hidden rounded-md border border-amber-300 bg-white" role="group" aria-label="PVC treatment for extra items">
+                                <button
+                                  type="button"
+                                  aria-pressed={isOut}
+                                  onClick={() => {
+                                    if (isOut) return;
+                                    setExtraItemEntriesOutsidePvc(extraItemCandidates, true);
+                                    setExtraItemsOutsidePvc(extraItemCandidates.total.toFixed(2));
+                                  }}
+                                  className={`${seg} ${isOut ? 'bg-amber-600 text-white' : 'text-amber-900 hover:bg-amber-100'}`}
+                                >
+                                  Outside PVC
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-pressed={!isOut}
+                                  onClick={() => {
+                                    if (!isOut) return;
+                                    setExtraItemEntriesOutsidePvc(extraItemCandidates, false);
+                                    if (parseFloat(extraItemsOutsidePvc) === extraItemCandidates.total) setExtraItemsOutsidePvc('');
+                                  }}
+                                  className={`${seg} border-l border-amber-300 ${!isOut ? 'bg-emerald-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+                                >
+                                  In PVC
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {(showExtraAmountBox || (!extraItemCandidates && parseFloat(extraItemsOutsidePvc) > 0)) && (
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <Label htmlFor="extraItemsOutsidePvc" className="text-xs text-amber-900">Amount with no entry of its own (₹)</Label>
+                            <Input
+                              id="extraItemsOutsidePvc"
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={extraItemsOutsidePvc}
+                              onChange={(event) => setExtraItemsOutsidePvc(event.target.value)}
+                              placeholder="0.00"
+                              className="h-8 w-40 bg-white text-xs"
+                            />
                           </div>
                         )}
-                        <Input
-                          id="extraItemsOutsidePvc"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={extraItemsOutsidePvc}
-                          onChange={(event) => setExtraItemsOutsidePvc(event.target.value)}
-                          placeholder="0.00"
-                          className="bg-white max-w-xs"
-                        />
                       </div>
 
                       {Number(formData.cementAmount) > 0 && (
