@@ -24,7 +24,6 @@ import {
   Building2,
   ClipboardList,
   Package,
-  Layers,
   TrendingUp,
   CheckCircle2,
   Info,
@@ -270,7 +269,6 @@ function NewBillPageContent() {
   const [subClassifications, setSubClassifications] = useState<Array<{ code: string; name: string; amount: string }>>([]);
   
   // Non-schedule items state - array of { description, amount }
-  const [nonScheduleItems, setNonScheduleItems] = useState<Array<{ description: string; amount: string }>>([]);
 
   // Value of extra items ordered under Cl.39(1)(b) that carry no PVC — see Cl.46A.1(b).
   const [extraItemsOutsidePvc, setExtraItemsOutsidePvc] = useState('');
@@ -942,7 +940,7 @@ function NewBillPageContent() {
       // commit time instead of overwriting that manual choice with an older extraction.
       setClassificationEntries(currentEntries =>
         preserveManualClassifications(mappedEntries, currentEntries));
-      setOpenAccordion(prev => Array.from(new Set([...prev, 'basic', 'classification', 'optional'])));
+      setOpenAccordion(prev => Array.from(new Set([...prev, 'basic', 'classification'])));
       toast.success(`Applied ${mappedEntries.length} mapped bill item(s)`);
     } else {
       setOpenAccordion(prev => Array.from(new Set([...prev, 'basic'])));
@@ -1141,16 +1139,13 @@ function NewBillPageContent() {
         const amt = e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount;
         return sum + amt;
       }, 0);
-      const nonScheduleTotal = nonScheduleItems
-        .filter(i => i.description && i.amount)
-        .reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
       const res = await fetch('/api/bills/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contractId: formData.contractId,
           grossBillAmount: grossAmount,
-          billAmount: grossAmount - nonScheduleTotal,
+          billAmount: grossAmount,
           dateOfMeasurement: formData.dateOfMeasurement,
           zone: formData.zone,
           fuelPriceType: formData.fuelPriceType,
@@ -1409,18 +1404,10 @@ function NewBillPageContent() {
           amount: parseFloat(sc.amount) || 0
         }));
       
-      // Convert non-schedule items to proper format with numeric amounts
-      const formattedNonScheduleItems = nonScheduleItems
-        .filter(item => item.description && item.amount) // Only include complete entries
-        .map(item => ({
-          description: item.description.trim(),
-          amount: parseFloat(item.amount) || 0
-        }));
-      
-      // Use total classification amount as gross bill amount
+      // The gross bill amount is the classification total. Nothing is deducted from it:
+      // an extra item outside PVC stays in the bill and is flagged on its own entry.
       const grossAmount = totalClassificationAmount;
-      const nonScheduleTotal = formattedNonScheduleItems.reduce((sum, item) => sum + item.amount, 0);
-      const netBillAmount = grossAmount - nonScheduleTotal;
+      const netBillAmount = grossAmount;
 
       // Submit bill with classification entries
       const response = await fetch('/api/bills', {
@@ -1463,7 +1450,7 @@ function NewBillPageContent() {
             })) : null
           })),
           subClassifications: formattedSubClassifications, // Legacy support
-          nonScheduleItems: formattedNonScheduleItems,
+          nonScheduleItems: [],
           extraItemsOutsidePvc: parseFloat(extraItemsOutsidePvc) || 0,
           paymentConfirmed: true, // Always set as confirmed since we removed payments
           paymentMethod: 'free',
@@ -1606,7 +1593,6 @@ function NewBillPageContent() {
     { id: 'basic', label: t('form.bill.basic_info'), icon: Building2 },
     { id: 'classification', label: t('form.bill.classifications'), icon: ClipboardList },
     { id: 'cement', label: language === 'hi' ? 'सीमेंट' : 'Cement', icon: Package },
-    { id: 'optional', label: t('form.bill.non_schedule'), icon: Layers },
   ];
   const billTabIndex = Math.max(0, BILL_TABS.findIndex(tb => tb.id === activeBillTab));
   const billPanelCls = (id: string) => (activeBillTab === id ? 'block' : 'hidden');
@@ -2522,33 +2508,17 @@ function NewBillPageContent() {
                         onGrossBillAmountChange={(v) => setFormData(prev => ({ ...prev, grossBillAmount: v ? String(v) : '' }))}
                         floatingSummary
                       />
-                    </div>
-                  </div>
 
-                  {/* SECTION 2b: Cement */}
-                  <div className={billPanelCls('cement')}>
-                    <div className="border border-slate-200 rounded-xl bg-white px-4 py-4 space-y-4">
-                      {Number(formData.cementAmount) > 0 && (
-                        <p className="text-xs text-emerald-700">
-                          Applied cement amount: <strong>₹{Number(formData.cementAmount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong> — included in this bill&apos;s PVC.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* SECTION 3: Non-Schedule Items (Optional) */}
-                  <div className={billPanelCls('optional')}>
-                    <div className="border border-slate-200 rounded-xl bg-white px-4 py-4 space-y-4">
                       {/* Extra items outside PVC — GCC-2022 Cl.46A.1(b) */}
                       <div className="space-y-2 p-3 border border-amber-200 rounded-lg bg-amber-50">
                         <Label htmlFor="extraItemsOutsidePvc" className="text-sm font-semibold text-amber-900">
                           Extra items outside PVC (Cl. 39(1)(b))
                         </Label>
                         <p className="text-xs text-amber-800">
-                          Value of extra items ordered during execution that fall outside the tender&apos;s Bill of
-                          Quantities. Clause 46A.1(b) keeps these out of the value price variation is worked out on —
-                          unless PVC and a base month were specially agreed when their rates were fixed, in which case
-                          leave this blank. Not for B-schedule items: those are part of the contract and do get PVC.
+                          Items ordered after the agreement (Cl. 39) are paid but earn no PVC under Clause 46A.1(b), unless PVC
+                          and a base month were agreed when their rates were fixed. Tick <strong>outside PVC</strong> on an item&apos;s
+                          card above to exclude it. Use the amount box only for a sum that has no entry of its own. B-schedule items
+                          are part of the contract and do get PVC.
                         </p>
                         {extraItemCandidates && (
                           <div className="rounded-md border border-amber-300 bg-white p-3 text-xs space-y-2">
@@ -2613,93 +2583,17 @@ function NewBillPageContent() {
                           className="bg-white max-w-xs"
                         />
                       </div>
+                    </div>
+                  </div>
 
-                      {/* Non-Schedule Items Section */}
-                      <div className="space-y-3 p-3 border border-orange-200 rounded-lg bg-orange-50 mt-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <Label className="text-sm font-semibold text-orange-900">
-                              {t('form.bill.non_schedule')}
-                            </Label>
-                            <p className="text-xs text-orange-700 mt-0.5">
-                              {t('form.bill.non_schedule_help')}
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setNonScheduleItems([...nonScheduleItems, { description: '', amount: '' }])}
-                            className="bg-white hover:bg-orange-100 h-8 text-xs"
-                          >
-                            {language === 'hi' ? '+ जोड़ें' : '+ Add'}
-                          </Button>
-                        </div>
-                        
-                        {nonScheduleItems.map((item, index) => (
-                          <div key={index} className="grid grid-cols-12 gap-2 items-start p-2 bg-white rounded border border-gray-200">
-                            <div className="col-span-7">
-                              <Label className="text-xs text-gray-600 mb-1">{language === 'hi' ? 'विवरण' : 'Description'}</Label>
-                              <Input
-                                value={item.description}
-                                onChange={(e) => {
-                                  const newItems = [...nonScheduleItems];
-                                  newItems[index].description = e.target.value;
-                                  setNonScheduleItems(newItems);
-                                }}
-                                placeholder={language === 'hi' ? 'जैसे, विशेष सामग्री...' : 'e.g., Special materials...'}
-                                className="h-8 text-xs"
-                              />
-                            </div>
-                            <div className="col-span-4">
-                              <Label className="text-xs text-gray-600 mb-1">{language === 'hi' ? 'राशि (₹)' : 'Amount (₹)'}</Label>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={item.amount}
-                                onChange={(e) => {
-                                  const newItems = [...nonScheduleItems];
-                                  newItems[index].amount = e.target.value;
-                                  setNonScheduleItems(newItems);
-                                }}
-                                placeholder="0.00"
-                                className="h-8 text-xs"
-                              />
-                            </div>
-                            <div className="col-span-1 flex items-end">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  const newItems = nonScheduleItems.filter((_, i) => i !== index);
-                                  setNonScheduleItems(newItems);
-                                }}
-                                className="h-8 px-1 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                ×
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                        
-                        {nonScheduleItems.length === 0 && (
-                          <p className="text-xs text-gray-600 italic text-center py-2">
-                            {t('form.bill.no_non_schedule')}
-                          </p>
-                        )}
-                        
-                        {nonScheduleItems.length > 0 && (
-                          <div className="flex justify-end pt-2 border-t border-orange-200">
-                            <div className="text-right">
-                              <span className="text-xs font-medium text-orange-900">{t('form.bill.total_deduction')}</span>
-                              <span className="text-sm font-bold text-orange-700">
-                                -₹{nonScheduleItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                  {/* SECTION 2b: Cement */}
+                  <div className={billPanelCls('cement')}>
+                    <div className="border border-slate-200 rounded-xl bg-white px-4 py-4 space-y-4">
+                      {Number(formData.cementAmount) > 0 && (
+                        <p className="text-xs text-emerald-700">
+                          Applied cement amount: <strong>₹{Number(formData.cementAmount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong> — included in this bill&apos;s PVC.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
