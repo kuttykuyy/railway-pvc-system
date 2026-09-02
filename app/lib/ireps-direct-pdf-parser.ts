@@ -973,7 +973,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         ? 'USSR_2021'
         : /CPWD.*DSR|DSR.*(?:2021|Vol)|CPWD\s*SOR|\bDSR\b/i.test(currentScheduleHeading)
           ? 'DSR_2021'
-          : /NOT COVERED/i.test(currentScheduleHeading)
+          : /NOT COVERED|\bNS\b|NON.?SCHEDULE/i.test(currentScheduleHeading)
             ? 'NON_SCHEDULE'
             : 'UNKNOWN';
 

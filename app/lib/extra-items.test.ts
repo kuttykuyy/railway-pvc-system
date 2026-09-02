@@ -1,58 +1,47 @@
 import { describe, expect, it } from 'vitest';
-import { findExtraItems } from './extra-items';
+import { findAdditionalNsItems, isAdditionalNsSchedule } from './extra-items';
 
+const D = 'Schedule D-Additional NS item';
 const B2 = 'Schedule B2-Items which are not covered by Unified Standard Schedule of rates 2021 and CPWD-DSR-2021 for Tiruchirappalli Division.';
 const A4 = 'Schedule A4-All items which are covered by Unified Standard Schedule of rates 2021 for Tiruchirappalli Division.';
 
-const contract = [
-  { name: 'A4', escalation: '', bidRate: '', items: [] },
-  { name: 'B2', escalation: '', bidRate: '', items: ['1', '2', '3'] },
-];
+describe('isAdditionalNsSchedule', () => {
+  it('recognises the headings IREPS prints for items added after the agreement', () => {
+    expect(isAdditionalNsSchedule(D)).toBe(true);
+    expect(isAdditionalNsSchedule('Schedule E - Extra NS Items')).toBe(true);
+    expect(isAdditionalNsSchedule('Schedule C: New Non-Schedule items')).toBe(true);
+    expect(isAdditionalNsSchedule('Schedule F - Extra items')).toBe(true);
+  });
 
-const item = (over: Record<string, unknown>) => ({
-  itemNo: '1', schedule: B2, amountSinceLastBill: 1000, description: 'x', ...over,
+  it("leaves the tender's own schedules alone", () => {
+    expect(isAdditionalNsSchedule(B2)).toBe(false);
+    expect(isAdditionalNsSchedule(A4)).toBe(false);
+    expect(isAdditionalNsSchedule('Schedule B - NS items')).toBe(false);
+    expect(isAdditionalNsSchedule('')).toBe(false);
+  });
 });
 
-describe('findExtraItems', () => {
-  it('reports a B item the LOA never listed', () => {
-    const report = findExtraItems([item({ itemNo: '4', amountSinceLastBill: 5000 })], contract);
+describe('findAdditionalNsItems', () => {
+  it('reports the items under an additional-NS schedule with their paid total', () => {
+    const report = findAdditionalNsItems([
+      { itemNo: 'NS01(I)', scheduleHeading: D, schedule: 'Schedule D', amountSinceLastBill: 445069.5, description: 'Groove cutting' },
+      { itemNo: '1', scheduleHeading: B2, schedule: 'Schedule B2', amountSinceLastBill: 1000 },
+      { itemNo: '082011', scheduleHeading: A4, schedule: 'Schedule A4', amountSinceLastBill: 2000 },
+    ]);
     expect(report.candidates).toHaveLength(1);
-    expect(report.candidates[0].itemNo).toBe('4');
-    expect(report.total).toBe(5000);
+    expect(report.candidates[0].itemNo).toBe('NS01(I)');
+    expect(report.total).toBe(445069.5);
+    expect(report.schedules).toEqual([D]);
   });
 
-  it('leaves items the LOA accepted alone', () => {
-    expect(findExtraItems([item({ itemNo: '2' })], contract).candidates).toHaveLength(0);
-  });
-
-  it('never judges an A schedule — an LOA does not list a published book item by item', () => {
-    const report = findExtraItems([item({ itemNo: '082011', schedule: A4 })], contract);
+  it('skips idle rows, so a schedule with nothing billed this period offers nothing', () => {
+    const report = findAdditionalNsItems([{ itemNo: 'NS02', scheduleHeading: D, amountSinceLastBill: 0 }]);
     expect(report.candidates).toHaveLength(0);
+    expect(report.total).toBe(0);
   });
 
-  it('judges nothing where the LOA listed no items for that schedule', () => {
-    const noItems = [{ name: 'B2', escalation: '', bidRate: '', items: [] }];
-    const report = findExtraItems([item({ itemNo: '9' })], noItems);
-    expect(report.candidates).toHaveLength(0);
-    expect(report.schedulesWithoutLoaItems).toEqual(['B2']);
-  });
-
-  it('treats the same number written differently as the same item', () => {
-    const spaced = [{ name: 'B2', escalation: '', bidRate: '', items: ['1710 14'] }];
-    expect(findExtraItems([item({ itemNo: '171014' })], spaced).candidates).toHaveLength(0);
-  });
-
-  it('keeps a sub-item apart from its parent', () => {
-    expect(findExtraItems([item({ itemNo: '1.1' })], contract).candidates).toHaveLength(1);
-  });
-
-  it('adds up several extras', () => {
-    const report = findExtraItems([
-      item({ itemNo: '4', amountSinceLastBill: 5000 }),
-      item({ itemNo: '5', amountSinceLastBill: 2500.5 }),
-      item({ itemNo: '1', amountSinceLastBill: 9999 }),
-    ], contract);
-    expect(report.candidates).toHaveLength(2);
-    expect(report.total).toBe(7500.5);
+  it('falls back to the schedule name when no heading was kept', () => {
+    const report = findAdditionalNsItems([{ itemNo: 'NS03', schedule: D, amountSinceLastBill: 10 }]);
+    expect(report.candidates).toHaveLength(1);
   });
 });

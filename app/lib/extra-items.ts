@@ -1,22 +1,21 @@
 /**
- * Finding items on a bill that the LOA never accepted.
+ * Finding items on a bill that were ordered AFTER the agreement.
  *
- * The LOA fixes the work as at the day it is issued. An item billed later that is not
- * in it was ordered during execution — an extra item under Cl.39(1)(b) — and
- * Cl.46A.1(b) puts those outside price variation unless applicability of PVC and a base
- * month were specially agreed when their rates were fixed.
+ * GCC-2022 Cl.46A.1(b): an extra item under Cl.39 — work that was not in the tender and
+ * whose rate was fixed during execution — is outside price variation, unless PVC and a
+ * base month were specially agreed when its rate was fixed. Extra quantity of an
+ * existing item (Cl.42) is NOT excluded, and neither are the non-schedule items a tender
+ * itself carries in its B schedule: those are part of the contract and attract PVC.
  *
- * Only the B schedules are checked. The A schedules quote a published book — USSOR or
- * CPWD-DSR — and an LOA does not list their thousands of item numbers one by one; an
- * item absent from such a list says nothing. A B schedule is the tenderer's own quoted
- * list, short and enumerated, so absence from it is meaningful.
+ * IREPS prints the items added during execution under their own schedule heading —
+ * "Schedule D-Additional NS item", "Schedule E - Extra items" — so the heading is what
+ * tells them apart from the tender's own "Schedule B2-Items which are not covered by
+ * USSOR". (An earlier version compared item numbers against the LOA's B-schedule lists;
+ * the LOA is no longer read for schedules, and the heading is the better signal anyway.)
  *
- * Nothing here excludes anything. It reports candidates and their value, for a person
- * to confirm: an item wrongly called extra costs the contractor its price variation,
- * and the LOA reading is not certain enough to spend someone's money on unattended.
+ * Nothing here excludes anything. It reports candidates and their value for a person to
+ * confirm: an item wrongly called extra costs the contractor its price variation.
  */
-import { normalizeSchedules, type ContractSchedule } from './contract-schedules';
-import { matchExtractedSchedule } from './bill-schedule-matching';
 
 export interface BillItemForExtraCheck {
   itemNo?: string;
@@ -24,7 +23,7 @@ export interface BillItemForExtraCheck {
   description?: string;
   schedule?: string;
   scheduleGroup?: string;
-  chapter?: string;
+  scheduleHeading?: string;
   amountSinceLastBill?: number;
   pageNumber?: number;
 }
@@ -38,67 +37,53 @@ export interface ExtraItemCandidate {
 }
 
 export interface ExtraItemsReport {
-  /** Items on a B schedule whose number is not in that schedule's LOA list. */
+  /** Items printed under an "additional / extra NS item" schedule. */
   candidates: ExtraItemCandidate[];
   /** Their total, ready to be offered as the amount outside PVC. */
   total: number;
-  /** B schedules on the bill for which the LOA listed no items, so nothing was judged. */
-  schedulesWithoutLoaItems: string[];
-}
-
-/** A B schedule — the tenderer's own quoted items, which an LOA does enumerate. */
-function isBSchedule(name: string): boolean {
-  return /\bB\s?\d*\b/.test(String(name || '').toUpperCase().replace(/[^A-Z0-9 ]+/g, ' '));
+  /** The schedule headings those items sat under, as printed. */
+  schedules: string[];
 }
 
 /**
- * Item numbers compare loosely on punctuation and case only. "1710 14" and "171014" are
- * the same item written two ways; "1" and "1.1" are not, and are kept apart.
+ * Whether a schedule heading names items added after the agreement.
+ *
+ * "Additional NS item", "Extra NS items", "New non-schedule items", "Extra items" all
+ * qualify. A tender's own NS schedule — "Items which are not covered by USSOR",
+ * "Schedule B - NS items" — does not: it says nothing about being added later.
  */
-function keyOf(itemNo: string): string {
-  return String(itemNo || '').toUpperCase().replace(/[\s()]+/g, '').replace(/[-/]/g, '.');
+export function isAdditionalNsSchedule(heading: string): boolean {
+  const text = String(heading || '').toUpperCase().replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!text) return false;
+  const later = /\b(ADDITIONAL|EXTRA|NEW|SUPPLEMENTARY)\b/;
+  const ns = /\b(NS|N S|NON SCHEDULE|NON SCHEDULED|EXTRA ITEMS?)\b/;
+  return later.test(text) && ns.test(text);
 }
 
-export function findExtraItems(
-  items: BillItemForExtraCheck[],
-  contractSchedules: unknown,
-): ExtraItemsReport {
-  const schedules: ContractSchedule[] = normalizeSchedules(contractSchedules);
-  const names = schedules.map(schedule => schedule.name).filter(Boolean);
-  const byName = new Map(schedules.map(schedule => [schedule.name, schedule]));
-
+export function findAdditionalNsItems(items: BillItemForExtraCheck[]): ExtraItemsReport {
   const candidates: ExtraItemCandidate[] = [];
-  const unlisted = new Set<string>();
+  const schedules = new Set<string>();
 
-  for (const item of items) {
-    const matched = matchExtractedSchedule(names, [item.schedule, item.scheduleGroup, item.chapter]);
-    if (!matched || !isBSchedule(matched)) continue;
-
-    const schedule = byName.get(matched);
-    const accepted = schedule?.items ?? [];
-    if (accepted.length === 0) {
-      // The LOA listed nothing for this schedule, so absence proves nothing.
-      unlisted.add(matched);
-      continue;
-    }
-
-    const itemNo = String(item.itemNo || item.dsrCode || '').trim();
-    if (!itemNo) continue;
-    const acceptedKeys = new Set(accepted.map(keyOf));
-    if (acceptedKeys.has(keyOf(itemNo))) continue;
-
+  for (const item of items || []) {
+    const heading = [item.scheduleHeading, item.schedule, item.scheduleGroup]
+      .map(value => String(value || '').trim())
+      .find(isAdditionalNsSchedule);
+    if (!heading) continue;
+    const amount = Number(item.amountSinceLastBill) || 0;
+    if (amount === 0) continue;
+    schedules.add(heading);
     candidates.push({
-      itemNo,
+      itemNo: String(item.itemNo || item.dsrCode || '').trim(),
       description: String(item.description || '').trim(),
-      schedule: matched,
-      amount: Number(item.amountSinceLastBill) || 0,
+      schedule: heading,
+      amount,
       pageNumber: item.pageNumber,
     });
   }
 
   return {
     candidates,
-    total: Math.round(candidates.reduce((sum, item) => sum + item.amount, 0) * 100) / 100,
-    schedulesWithoutLoaItems: [...unlisted],
+    total: Math.round(candidates.reduce((sum, c) => sum + c.amount, 0) * 100) / 100,
+    schedules: Array.from(schedules),
   };
 }
