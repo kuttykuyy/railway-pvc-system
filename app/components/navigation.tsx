@@ -98,7 +98,6 @@ export default function Navigation() {
       case 'Bill Approvals': return 'nav.approvals';
       case 'Abstract of Bills': return 'nav.abstract';
       case 'Steel PVC Forecast': return 'nav.forecast';
-      case 'Tendering Estimator': return 'nav.tendering_estimator';
       case 'Refer & Earn': return '';
       case 'Price Indices': return 'nav.price_indices';
       case 'PVC Check Analytics': return 'nav.analytics';
