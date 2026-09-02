@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Save, Calendar, Info, AlertTriangle, Building2, ClipboardList, Package, Layers, Loader2, Calculator } from 'lucide-react';
+import { Save, Calendar, Info, AlertTriangle, Building2, ClipboardList, Loader2, Calculator } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { format } from 'date-fns';
@@ -15,7 +15,6 @@ import { getRailwayZoneOptions, getSteelCityForZone } from '@/lib/zone-steel-cit
 import { toast } from 'react-hot-toast';
 import { BackButton } from '@/components/ui/back-button';
 import { BillClassificationEntries } from '@/components/bill-classification-entries';
-import { BillAmountCalculator } from '@/components/bill-amount-calculator';
 import { scheduleNames, normalizeSchedules } from '@/lib/contract-schedules';
 import { inferMainClassification } from '@/lib/work-classification';
 import { undoCementSplit, isDerivedCementEntry } from '@/lib/cement-split';
@@ -39,18 +38,9 @@ interface ClassificationEntry {
   manualClassification?: boolean;
 }
 
-const STEEL_FIELDS = [
-  { key: 'steelTmtBarsAmount', label: 'TMT Bars (Rs)' },
-  { key: 'steelAngleChannelAmount', label: 'Angle / Channel (Rs)' },
-  { key: 'steelPlatesAmount', label: 'Plates (Rs)' },
-  { key: 'steelOtherSectionsAmount', label: 'Other Sections (Rs)' },
-] as const;
-
 const TABS = [
   { id: 'basic', label: 'Basics', icon: Building2 },
   { id: 'classification', label: 'Work & items', icon: ClipboardList },
-  { id: 'cement', label: 'Cement & steel', icon: Package },
-  { id: 'optional', label: 'Optional', icon: Layers },
 ];
 
 function EditBillPageContent() {
@@ -66,7 +56,6 @@ function EditBillPageContent() {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('basic');
   const [classificationEntries, setClassificationEntries] = useState<ClassificationEntry[]>([]);
-  const [nonScheduleItems, setNonScheduleItems] = useState<Array<{ description: string; amount: string }>>([]);
 
   // Cement-from-items (DSR) state — mirrors the new-bill form.
 
@@ -120,12 +109,6 @@ function EditBillPageContent() {
           outsidePvc: e.outsidePvc === true,
         })));
       }
-      if (billData.nonScheduleItems?.length > 0) {
-        setNonScheduleItems(billData.nonScheduleItems.map((i: any) => ({
-          description: i.description || '',
-          amount: i.amount?.toString() || '',
-        })));
-      }
     }).catch(e => setError(e.message)).finally(() => setIsLoading(false));
   }, [billId]);
 
@@ -133,8 +116,9 @@ function EditBillPageContent() {
     const a = e.amount === '' || e.amount == null ? 0 : typeof e.amount === 'string' ? parseFloat(e.amount) || 0 : e.amount;
     return s + a;
   }, 0);
-  const nonScheduleTotal = nonScheduleItems.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const netBillAmount = totalClassification - nonScheduleTotal;
+  // Nothing is deducted from the gross any more: an extra item outside PVC stays on
+  // the bill and is flagged on its own entry. Net equals gross.
+  const netBillAmount = totalClassification;
 
   const selectedContract = contracts.find(c => c.id === form.contractId);
 
@@ -317,10 +301,7 @@ function EditBillPageContent() {
               ...(r.sourceQty !== undefined ? { sourceQty: r.sourceQty, coefficient: r.coefficient, workUnit: r.workUnit } : {}),
             })) : null,
           })),
-          nonScheduleItems: nonScheduleItems.filter(i => i.description && i.amount).map(i => ({
-            description: i.description.trim(),
-            amount: parseFloat(i.amount) || 0,
-          })),
+          nonScheduleItems: [],
         }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to update'); }
@@ -477,29 +458,7 @@ function EditBillPageContent() {
               Anything typed in by hand here is lost — the bill number, dates and the fields on the other tabs are kept.
             </div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-4 mt-4">
-            <BillClassificationEntries
-              value={classificationEntries}
-              onChange={setClassificationEntries}
-              classificationGroups={classificationGroups}
-              // The bill's SAVED gross, so the Difference panel guards the edit. Without
-              // it the panel showed "-" and reported Rs 0.00 whatever you did — deleting
-              // a cement row worth lakhs raised nothing, and the save then redefined the
-              // bill's gross as whatever the rows happened to total.
-              grossBillAmount={Number(bill?.grossBillAmount) || undefined}
-              workDescription={selectedContract?.workDescription}
-              contractSchedules={scheduleNames(selectedContract?.schedules)}
-              scheduleRates={normalizeSchedules(selectedContract?.schedules)}
-              contractId={form.contractId || undefined}
-              measurementDate={form.dateOfMeasurement || undefined}
-              aiJustificationFee={99}
-            />
-          </div>
-        </div>
-
-        {/* Cement & steel */}
-        <div className={panelCls('cement')}>
-          <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 mt-4 space-y-4">
             {/* Already split? Offer to put it back. Some agreements are read as not
                 requiring a cement split on DSR items at all, and the split then has to
                 come off the bills it was applied to. */}
@@ -520,89 +479,22 @@ function EditBillPageContent() {
                 </Button>
               </div>
             )}
-
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label className="text-xs text-gray-600">Cement Work Amount (Rs)</Label>
-                <div className="flex gap-2 mt-1">
-                  <Input type="number" step="0.01" value={form.cementAmount}
-                    onChange={e => setForm(p => ({ ...p, cementAmount: e.target.value }))} placeholder="0.00" />
-                  <BillAmountCalculator onInsertTotal={t => setForm(p => ({ ...p, cementAmount: t.toString() }))} />
-                </div>
-              </div>
-              {STEEL_FIELDS.map(f => (
-                <div key={f.key}>
-                  <Label className="text-xs text-gray-600">{f.label}</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input type="number" step="0.01" value={(form as any)[f.key]}
-                      onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder="0.00" />
-                    <BillAmountCalculator onInsertTotal={t => setForm(p => ({ ...p, [f.key]: t.toString() }))} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-gray-400">Dedicated cement / steel components are paid 85% PVC.</p>
-          </div>
-        </div>
-
-        {/* Optional — non-schedule items + summary */}
-        <div className={panelCls('optional')}>
-          <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
-            <div className="space-y-3 p-3 border border-orange-200 rounded-lg bg-orange-50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-sm font-semibold text-orange-900">Non-Schedule Items</Label>
-                  <p className="text-xs text-orange-700 mt-0.5">Extra items deducted from the gross before PVC.</p>
-                </div>
-                <Button type="button" variant="outline" size="sm"
-                  onClick={() => setNonScheduleItems([...nonScheduleItems, { description: '', amount: '' }])}
-                  className="bg-white hover:bg-orange-100 h-8 text-xs">+ Add</Button>
-              </div>
-              {nonScheduleItems.map((item, index) => (
-                <div key={index} className="grid grid-cols-12 gap-2 items-end p-2 bg-white rounded border border-gray-200">
-                  <div className="col-span-7">
-                    <Label className="text-xs text-gray-600 mb-1">Description</Label>
-                    <Input value={item.description}
-                      onChange={e => { const n = [...nonScheduleItems]; n[index].description = e.target.value; setNonScheduleItems(n); }}
-                      placeholder="e.g. Special materials..." className="h-8 text-xs" />
-                  </div>
-                  <div className="col-span-4">
-                    <Label className="text-xs text-gray-600 mb-1">Amount (Rs)</Label>
-                    <Input type="number" step="0.01" value={item.amount}
-                      onChange={e => { const n = [...nonScheduleItems]; n[index].amount = e.target.value; setNonScheduleItems(n); }}
-                      placeholder="0.00" className="h-8 text-xs" />
-                  </div>
-                  <div className="col-span-1 flex">
-                    <Button type="button" variant="ghost" size="sm"
-                      onClick={() => setNonScheduleItems(nonScheduleItems.filter((_, i) => i !== index))}
-                      className="h-8 px-1 text-red-600 hover:text-red-700 hover:bg-red-50">×</Button>
-                  </div>
-                </div>
-              ))}
-              {nonScheduleItems.length === 0 && (
-                <p className="text-xs text-orange-700/70 italic text-center py-1">No non-schedule items.</p>
-              )}
-            </div>
-
-            {classificationEntries.length > 0 && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm space-y-2">
-                <div className="flex justify-between text-gray-600">
-                  <span>Total Classification Amount</span>
-                  <span className="font-medium">₹{totalClassification.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-                </div>
-                {nonScheduleTotal > 0 && (
-                  <div className="flex justify-between text-red-600">
-                    <span>Less: Non-Schedule Items</span>
-                    <span>-₹{nonScheduleTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-bold text-gray-900 pt-2 border-t border-gray-200">
-                  <span>Net Bill Amount (for PVC)</span>
-                  <span>₹{netBillAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-                </div>
-              </div>
-            )}
+            <BillClassificationEntries
+              value={classificationEntries}
+              onChange={setClassificationEntries}
+              classificationGroups={classificationGroups}
+              // The bill's SAVED gross, so the Difference panel guards the edit. Without
+              // it the panel showed "-" and reported Rs 0.00 whatever you did — deleting
+              // a cement row worth lakhs raised nothing, and the save then redefined the
+              // bill's gross as whatever the rows happened to total.
+              grossBillAmount={Number(bill?.grossBillAmount) || undefined}
+              workDescription={selectedContract?.workDescription}
+              contractSchedules={scheduleNames(selectedContract?.schedules)}
+              scheduleRates={normalizeSchedules(selectedContract?.schedules)}
+              contractId={form.contractId || undefined}
+              measurementDate={form.dateOfMeasurement || undefined}
+              aiJustificationFee={99}
+            />
           </div>
         </div>
 
