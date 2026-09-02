@@ -62,6 +62,8 @@ export async function markOtpDeliveryBroken(reason: string): Promise<void> {
   }
 }
 
+export { classifyOtpDeliveryFailure, type OtpFailureKind } from './otp-failure-kind';
+
 /** A code went out. Whatever was wrong is not wrong now. */
 export async function markOtpDeliveryWorking(): Promise<void> {
   try {
@@ -79,10 +81,12 @@ export async function markOtpDeliveryWorking(): Promise<void> {
  * an unverified number.
  *
  *   1. No channel is configured at all — neither WhatsApp nor SMS.
- *   2. Every channel failed recently — configured, but not working.
+ *   2. Every channel failed recently on the PROVIDER's side — configured, but not
+ *      working (see classifyOtpDeliveryFailure).
  *
- * Both are admin-side conditions and neither is something a signing-up user can reach
- * or cause, so lifting the requirement is not a hole they can walk through.
+ * Both are admin-side conditions. A number the provider will not deliver to is the
+ * user's own condition and never lifts the requirement, so this is not a hole they can
+ * walk through.
  */
 export async function phoneOtpRequired(): Promise<boolean> {
   // Either channel will do. Requiring WhatsApp specifically would have switched

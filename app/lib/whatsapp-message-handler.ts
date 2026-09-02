@@ -17,6 +17,7 @@ import { sendWhatsAppTextMessage } from './whatsapp-response';
 import { prisma } from './db';
 import { emailLinkOrigin } from './email-link-origin';
 import { billRequiresExtension } from './extension-compliance';
+import { decideChatBillCharge, settleChatBill } from './chat-bill-charge';
 
 /**
  * Format phone number for WhatsApp (91XXXXXXXXXX format)
@@ -858,6 +859,20 @@ async function createBillFromConversation(conversation: any) {
       return;
     }
 
+    // The same decision the web route makes before it builds a bill: free (role, free
+    // account, ₹0 fee, trial remaining) or paid from the credit balance — or not at all.
+    // This flow used to create the bill for nothing, every time.
+    const charge = await decideChatBillCharge(conversation.userId);
+    if (charge.canCreate === false) {
+      await sendWhatsAppTextMessage(
+        phone,
+        `❌ This bill can't be created yet: ${charge.message}\n\n` +
+          `Add credits here and then type "create bill" again:\n${emailLinkOrigin()}/billing`,
+      );
+      await resetConversation(conversation.id);
+      return;
+    }
+
     // Calculate cement and steel amounts based on percentages
     const billAmount = data.billAmount!;
     const cementPercentage = data.cementPercentage || 0;
@@ -881,8 +896,9 @@ async function createBillFromConversation(conversation: any) {
         grossBillAmount: billAmount,
         dateOfMeasurement: new Date(data.dateOfMeasurement!),
         quarter: 'Q1', // Will be calculated properly in the API or during PVC calculation
-        isChargeable: true,
-        processingFee: 1000,
+        isChargeable: !charge.isFree,
+        processingFee: charge.requiredPayment,
+        createdVia: 'whatsapp',
         workClassificationId: data.classificationId,
         cementAmount: cementAmount,
         steelAmount: steelAmount,
@@ -896,20 +912,18 @@ async function createBillFromConversation(conversation: any) {
       },
     });
 
-    // Same rule as the Telegram path: a 'trial' transaction row, because the watermark
-    // keys on it — a bill with no row at all reads as fully paid to every report route.
-    if (conversation.userId) {
-      await prisma.billTransaction.create({
-        data: {
-          billId: bill.id,
-          userId: conversation.userId,
-          amount: 0,
-          discount: 0,
-          discountType: 'trial',
-          status: 'success',
-          isFree: true,
-        },
-      }).catch((err: any) => console.error('whatsapp bill transaction failed:', err));
+    // Take the trial slot or the money, exactly as the web route does. A bill that
+    // cannot be settled is deleted rather than kept: a bill with no paid transaction
+    // reads as fully paid to every report route.
+    const settled = await settleChatBill({ userId: conversation.userId, billId: bill.id, agreementNo: contract.agreementNo, decision: charge });
+    if (!settled.ok) {
+      await sendWhatsAppTextMessage(
+        phone,
+        `❌ The bill was not created: ${settled.message}\n\n` +
+          `Add credits here and then type "create bill" again:\n${emailLinkOrigin()}/billing`,
+      );
+      await resetConversation(conversation.id);
+      return;
     }
 
     await sendWhatsAppTextMessage(
@@ -917,6 +931,7 @@ async function createBillFromConversation(conversation: any) {
       `✅ *Bill Created Successfully!*\n\n` +
         `📄 *Bill No:* ${bill.billNo}\n` +
         `💰 *Amount:* ₹${bill.billAmount.toLocaleString('en-IN')}\n` +
+        `💳 ${settled.message}\n` +
         `🏗️ *Classification:* ${data.classificationName}\n` +
         `🧱 *Cement:* ${cementPercentage}% (₹${cementAmount.toLocaleString('en-IN')})\n` +
         `🔩 *Steel:* ${steelPercentage}% (₹${steelAmount.toLocaleString('en-IN')})\n\n` +

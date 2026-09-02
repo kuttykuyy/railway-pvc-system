@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 import { sendOtpWhatsApp } from '@/lib/whatsapp-mydreams';
 import { normalizePhone, PHONE_FORMAT_MESSAGE, PHONE_TAKEN_MESSAGE } from '@/lib/phone-validation';
 import { accountsHoldingPhone } from '@/lib/phone-owner';
-import { phoneOtpRequired, markOtpDeliveryBroken, markOtpDeliveryWorking } from '@/lib/phone-otp';
+import { phoneOtpRequired, markOtpDeliveryBroken, markOtpDeliveryWorking, classifyOtpDeliveryFailure } from '@/lib/phone-otp';
 import { randomInt } from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -102,9 +102,13 @@ export async function POST(request: NextRequest) {
     // Two channels, tried in order. One channel is one point of failure standing
     // between a new customer and the product — which is exactly what happened when the
     // WhatsApp template went missing and nobody could sign up at all.
+    // Every channel's failure is kept: whether the breaker trips depends on what KIND
+    // of failure each one was, not merely that they failed.
+    const failures: string[] = [];
     let result = await sendOtpWhatsApp(phone, otp);
     let sentBy = 'WhatsApp';
     if (!result.success) {
+      failures.push(result.error || 'WhatsApp send failed');
       console.warn('[OTP] WhatsApp refused the code, trying SMS:', result.error);
       const { sendOtpSms, isMsg91Configured } = await import('@/lib/msg91');
       if (await isMsg91Configured()) {
@@ -113,24 +117,38 @@ export async function POST(request: NextRequest) {
           result = { success: true, messageId: sms.messageId };
           sentBy = 'SMS';
         } else {
+          failures.push(sms.error || 'SMS send failed');
           console.error('[OTP] SMS also failed:', sms.error);
         }
       }
     }
 
     if (!result.success) {
-      console.error('[OTP] No channel could deliver the code:', result.error);
-      // Trip the breaker: a code that cannot be delivered must not become a wall
-      // between a new user and the product. The signup route reads this and stops
-      // demanding proof until the channel is working again.
-      await markOtpDeliveryBroken(result.error || 'send failed');
+      console.error('[OTP] No channel could deliver the code:', failures);
+      // The breaker lifts the verification requirement for EVERYONE, so it trips only
+      // when every channel failed on the provider's side — a missing template, bad
+      // credentials, the gateway down. A number the provider will not deliver to is
+      // this user's problem, not a reason to stop asking everyone else for proof:
+      // that is how one made-up number used to switch sign-up verification off for
+      // thirty minutes.
+      const providerWide = failures.length > 0 && failures.every(f => classifyOtpDeliveryFailure(f) === 'provider');
+      if (providerWide) {
+        await markOtpDeliveryBroken(failures.join(' | '));
+        return NextResponse.json(
+          {
+            error: 'We could not send the code right now, so verification has been skipped. '
+              + 'You can carry on and finish signing up.',
+            verificationUnavailable: true,
+          },
+          { status: 503 },
+        );
+      }
       return NextResponse.json(
         {
-          error: 'We could not send the code right now, so verification has been skipped. '
-            + 'You can carry on and finish signing up.',
-          verificationUnavailable: true,
+          error: 'We could not deliver a code to this number. Please check it (including the '
+            + 'country code) and that it can receive WhatsApp or SMS, then try again.',
         },
-        { status: 503 },
+        { status: 502 },
       );
     }
     // It worked, so whatever was wrong is not wrong now.

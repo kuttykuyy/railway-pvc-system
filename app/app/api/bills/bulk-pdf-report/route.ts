@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger';
+import { isTrialBill, isUnsettledChatBill } from '@/lib/trial-watermark';
 
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -203,9 +204,12 @@ export async function POST(request: NextRequest) {
     const isAdminRequester = requester.role === 'admin' || requester.role === 'superadmin';
     let bulkNeedsWatermark = false;
     if (!isAdminRequester) {
+      // A chat-created bill with no transaction row was never charged; its stamp is
+      // never waived, whatever the owner has paid for since.
+      if (bills.some((b: any) => isUnsettledChatBill(b))) bulkNeedsWatermark = true;
       const trialOwnerIds = [...new Set(
         bills
-          .filter((b: any) => b.billTransaction?.discountType === 'trial')
+          .filter((b: any) => isTrialBill(b))
           .map((b: any) => b.contract?.userId)
           .filter(Boolean),
       )] as string[];
@@ -216,7 +220,7 @@ export async function POST(request: NextRequest) {
           distinct: ['userId'],
         });
         const topupOwners = new Set(ownersWithTopup.map(t => t.userId));
-        bulkNeedsWatermark = trialOwnerIds.some(id => !topupOwners.has(id));
+        bulkNeedsWatermark = bulkNeedsWatermark || trialOwnerIds.some(id => !topupOwners.has(id));
       }
     }
 

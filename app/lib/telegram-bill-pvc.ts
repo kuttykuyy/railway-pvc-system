@@ -26,6 +26,7 @@ import {
 import { extractBillDetailsDirect } from '@/app/api/bills/cement-analysis/route';
 import { getQuarterFromDate, getQuarterMonths, calculateClassificationEntryPvc } from './pvc-calculations';
 import { billRequiresExtension } from './extension-compliance';
+import { decideChatBillCharge, settleChatBill } from './chat-bill-charge';
 import { getQuarterlyAverages } from './db-utils';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill, getSteelCityForZone } from './zone-steel-city-mapping';
 import { extractSteelTypesFromEntries } from './steel-type-handler';
@@ -372,8 +373,18 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   // the estimate or the report.
   try {
     const fuelPriceTypeChosen = fuelPriceType;
-    await persistTelegramBill({
+    // A linked chat saves the bill into the user's real account, where it is a web
+    // bill in every respect — so it is charged like one (trial slot or credits). An
+    // unlinked chat's bill lives under the guest owner and is reachable only here.
+    const conv = await prisma.telegramConversation.findUnique({
+      where: { id: args.conversationId },
+      select: { userId: true },
+    });
+    const linkedUserId = conv?.userId && contract.userId === conv.userId ? conv.userId : null;
+    const saved = await persistTelegramBill({
       contractId: contract.id,
+      agreementNo: contract.agreementNo,
+      linkedUserId,
       billNo: billNo || `RA-${quarter}`,
       grossBillAmount,
       dateOfMeasurement: measurementDate,
@@ -382,6 +393,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       fuelPriceType: fuelPriceTypeChosen,
       components: { labour, plant, fuel, materials, cement, steel, explosives, totalPvc },
     });
+    if (saved.note) await sendTelegramMessage(chatId, saved.note);
   } catch (err) {
     console.error('[Telegram] persist bill failed:', err);
   }
@@ -567,6 +579,9 @@ async function backfillContractFromBill(
  */
 async function persistTelegramBill(o: {
   contractId: string;
+  agreementNo: string;
+  /** The web account this chat is linked to, when the contract is theirs. Null for a guest chat. */
+  linkedUserId: string | null;
   billNo: string;
   grossBillAmount: number;
   dateOfMeasurement: Date;
@@ -574,7 +589,7 @@ async function persistTelegramBill(o: {
   zone: string | null;
   fuelPriceType: string;
   components: { labour: number; plant: number; fuel: number; materials: number; cement: number; steel: number; explosives: number; totalPvc: number };
-}): Promise<void> {
+}): Promise<{ saved: boolean; note?: string }> {
   const c = o.components;
   const existing = await prisma.bill.findFirst({
     where: { contractId: o.contractId, billNo: o.billNo, dateOfMeasurement: o.dateOfMeasurement },
@@ -604,6 +619,11 @@ async function persistTelegramBill(o: {
     isFinalPvc: false,
     status: 'draft',
   };
+  const creditsUrl = `${getPublicSiteUrl()}/billing`;
+  const notSavedNote = (reason: string) =>
+    `ℹ️ The PVC estimate above stands, and the statement can still be bought with the link below. ` +
+    `The bill was <b>not saved to your website account</b>: ${escapeHtml(reason)}\n` +
+    `Add credits to have chat bills saved to your account: ${creditsUrl}`;
   const pvcData = {
     labourPvc: c.labour,
     plantMachineryPvc: c.plant,
@@ -624,10 +644,33 @@ async function persistTelegramBill(o: {
       update: pvcData,
       create: { ...pvcData, contractId: o.contractId, billId: existing.id },
     });
-    return;
+    return { saved: true };
   }
-  const bill = await prisma.bill.create({ data: { ...billData, contractId: o.contractId, createdVia: 'telegram' } });
+
+  // A bill in a real account is charged like a web bill: the same free/paid decision
+  // before it is created, the same trial claim or credit deduction after. This path
+  // stored it with no transaction row at all, which every report route read as "paid"
+  // — a linked chat was a clean official statement for nothing, forty times a day.
+  let charge: Awaited<ReturnType<typeof decideChatBillCharge>> | null = null;
+  if (o.linkedUserId) {
+    charge = await decideChatBillCharge(o.linkedUserId);
+    if (charge.canCreate === false) return { saved: false, note: notSavedNote(charge.message) };
+  }
+
+  const bill = await prisma.bill.create({
+    data: {
+      ...billData,
+      ...(charge?.canCreate ? { isChargeable: !charge.isFree, processingFee: charge.requiredPayment } : {}),
+      contractId: o.contractId,
+      createdVia: 'telegram',
+    },
+  });
+  if (o.linkedUserId && charge?.canCreate) {
+    const settled = await settleChatBill({ userId: o.linkedUserId, billId: bill.id, agreementNo: o.agreementNo, decision: charge });
+    if (!settled.ok) return { saved: false, note: notSavedNote(settled.message) };
+  }
   await prisma.pvcCalculation.create({ data: { ...pvcData, contractId: o.contractId, billId: bill.id } });
+  return { saved: true };
 }
 
 /** Everything needed to render the report later, once payment is confirmed. */
