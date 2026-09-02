@@ -111,6 +111,8 @@ export interface AgreementExtractionResult {
   data?: ExtractedAgreement;
   status?: number;
   error?: string;
+  /** What actually went wrong, for the failure record — never shown to the user. */
+  detail?: string;
 }
 
 /**
@@ -177,52 +179,84 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
     },
   ];
 
-  let response: Response;
-  try {
-    response = await fetch(ABACUS_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'route-llm', messages, response_format: { type: 'json_object' }, max_tokens: 9000, temperature: 0.1 }),
-      signal: AbortSignal.timeout(60000),
-    });
-  } catch {
-    await recordAiUsage({ operation: 'agreement-extraction', success: false, errorType: 'network' });
-    return { ok: false, status: 502, error: 'The AI request failed. Please try again.' };
+  // Two readings at most. The first asks for everything. An LOA with many schedules
+  // lists hundreds of item numbers, and the reply — 36,000 characters of them — used to
+  // stop mid-array at the output limit and fail as "unparseable" three times running for
+  // one user. The limit is now larger, and when a reply is still cut off (or the model
+  // declines to reproduce the document, Gemini's RECITATION) the second reading asks for
+  // the same fields without the item numbers, which the bill supplies later anyway.
+  const COMPACT_RETRY = `
+
+COMPACT RETRY: the previous reply was cut off before it finished. Return the same JSON object, but with "items": [] for every schedule and every subWorks name shortened to under 120 characters. No prose, nothing outside the JSON object.`;
+
+  let data: any = null;
+  let extracted: any = null;
+  let lastFailure: { reason: string; detail: string } | null = null;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const attemptMessages = attempt === 1
+      ? messages
+      : [{ ...messages[0], content: [messages[0].content[0], { type: 'text', text: prompt + COMPACT_RETRY }] }];
+
+    let response: Response;
+    try {
+      response = await fetch(ABACUS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model: 'route-llm', messages: attemptMessages, response_format: { type: 'json_object' }, max_tokens: 16000, temperature: 0.1 }),
+        signal: AbortSignal.timeout(90000),
+      });
+    } catch (err: any) {
+      await recordAiUsage({ operation: 'agreement-extraction', success: false, errorType: 'network' });
+      return { ok: false, status: 502, error: 'The AI request failed. Please try again.', detail: `network: ${err?.message || err}` };
+    }
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      console.error(`agreement-extractor: AI HTTP ${response.status}:`, text.slice(0, 500));
+      const outOfCredit = response.status === 402 || /no remaining credits|insufficient credits|credit balance/i.test(text);
+      await recordAiUsage({ operation: 'agreement-extraction', success: false, errorType: outOfCredit ? 'out_of_credit' : `http_${response.status}` });
+      return {
+        ok: false,
+        status: outOfCredit ? 402 : 502,
+        error: outOfCredit
+          ? 'The AI service is out of credit. Please try again later.'
+          : `Could not read the agreement (AI error ${response.status}). Please try again, or fill the form manually.`,
+        detail: `AI HTTP ${response.status}: ${text.slice(0, 500)}`,
+      };
+    }
+
+    data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    const finishReason = String(data?.choices?.[0]?.finish_reason ?? 'unknown');
+    try {
+      extracted = JSON.parse(content);
+      if (!extracted || typeof extracted !== 'object') throw new Error('not an object');
+      lastFailure = null;
+      break;
+    } catch {
+      const truncated = finishReason === 'length';
+      console.error(
+        `agreement-extractor: unparseable AI reply on attempt ${attempt} (finish_reason=${finishReason}, ${String(content ?? '').length} chars):`,
+        String(content ?? '').slice(-300),
+      );
+      await recordAiUsage({ operation: 'agreement-extraction', model: data?.model, ...tokensFromUsage(data?.usage), success: false, errorType: truncated ? 'truncated' : 'parse_error' });
+      lastFailure = {
+        reason: truncated ? 'truncated' : 'parse_error',
+        detail: `attempt ${attempt}: finish_reason=${finishReason}, ${String(content ?? '').length} chars, model=${data?.model ?? '?'}; tail: ${String(content ?? '').slice(-200)}`,
+      };
+      extracted = null;
+    }
   }
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    console.error(`agreement-extractor: AI HTTP ${response.status}:`, text.slice(0, 500));
-    const outOfCredit = response.status === 402 || /no remaining credits|insufficient credits|credit balance/i.test(text);
-    await recordAiUsage({ operation: 'agreement-extraction', success: false, errorType: outOfCredit ? 'out_of_credit' : `http_${response.status}` });
-    return {
-      ok: false,
-      status: outOfCredit ? 402 : 502,
-      error: outOfCredit
-        ? 'The AI service is out of credit. Please try again later.'
-        : `Could not read the agreement (AI error ${response.status}). Please try again, or fill the form manually.`,
-    };
-  }
-
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
-  const finishReason = data?.choices?.[0]?.finish_reason;
-  let extracted: any = {};
-  try {
-    extracted = JSON.parse(content);
-  } catch {
-    const truncated = finishReason === 'length';
-    console.error(
-      `agreement-extractor: unparseable AI reply (finish_reason=${finishReason ?? 'unknown'}, ${String(content ?? '').length} chars):`,
-      String(content ?? '').slice(-300),
-    );
-    await recordAiUsage({ operation: 'agreement-extraction', success: false, errorType: truncated ? 'truncated' : 'parse_error' });
+  if (!extracted) {
     return {
       ok: false,
       status: 502,
-      error: truncated
-        ? 'The document has more schedules and items than one reading could return. Please try again; if it repeats, fill the form manually.'
-        : 'Could not read the agreement clearly. Please fill the form manually.',
+      error: lastFailure?.reason === 'truncated'
+        ? 'This document is too long for the reader to return in one go, even in short form. Our team has been notified and will look at it; meanwhile the form can be filled in by hand.'
+        : 'Could not read the agreement clearly. Our team has been notified; meanwhile the form can be filled in by hand.',
+      detail: lastFailure?.detail || 'no reply parsed',
     };
   }
 
