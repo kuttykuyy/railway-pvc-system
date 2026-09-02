@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Download, Trash2, RefreshCw, Mail, Check, Loader2 } from 'lucide-react';
+import { Download, Trash2, RefreshCw, Mail, Check, Loader2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Failure {
@@ -41,6 +41,9 @@ export default function ParseFailuresPage() {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+  /** A line for the AI to build the reply around — "this is an MB, not the bill". */
+  const [hint, setHint] = useState('');
+  const [drafting, setDrafting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,6 +70,27 @@ export default function ParseFailuresPage() {
     const first = templates[0];
     setSubject(first?.subject || 'About your bill — IR-PVC');
     setMessage(first?.body || '');
+    setHint('');
+  };
+
+  const draftWithAi = async (id: number) => {
+    setDrafting(true);
+    try {
+      const res = await fetch('/api/admin/parse-failures/draft-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, hint }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not draft');
+      setSubject(data.subject);
+      setMessage(data.body);
+      toast.success(data.sawPdfText ? 'Drafted from the error and the PDF text. Read it before sending.' : 'Drafted from the error. Read it before sending.');
+    } catch (e: any) {
+      toast.error(e.message, { duration: 8000 });
+    } finally {
+      setDrafting(false);
+    }
   };
 
   const send = async (id: number) => {
@@ -185,6 +209,23 @@ export default function ParseFailuresPage() {
                     ))}
                   </div>
                 )}
+
+                {/* A custom reply, written by the AI from the exact error, the PDF's own
+                    text and whatever the admin wants said. It lands in the boxes below
+                    for editing; nothing goes out until Send. */}
+                <div className="mt-2 flex flex-col gap-2 rounded-md border border-violet-200 bg-violet-50/60 p-2 sm:flex-row sm:items-center">
+                  <input
+                    value={hint}
+                    onChange={e => setHint(e.target.value)}
+                    placeholder="Optional: what to tell them, e.g. “this is the Measurement Book, not the bill”"
+                    className="flex-1 rounded-md border border-violet-200 bg-white px-3 py-1.5 text-xs"
+                    disabled={drafting}
+                  />
+                  <Button size="sm" variant="outline" onClick={() => draftWithAi(f.id)} disabled={drafting || sending}
+                    className="border-violet-300 text-violet-800 hover:bg-violet-100">
+                    {drafting ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Drafting…</> : <><Sparkles className="h-4 w-4 mr-1" />Draft with AI</>}
+                  </Button>
+                </div>
 
                 <input
                   value={subject}
