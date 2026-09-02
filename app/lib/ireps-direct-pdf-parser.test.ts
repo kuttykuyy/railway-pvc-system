@@ -68,6 +68,42 @@ function wrappedUnitBill(): PositionedPdfPage[] {
   return [page2, page3];
 }
 
+/**
+ * A bill whose only row is a non-schedule item added after the agreement, billed "per
+ * cm depth per cm width per metre length" — the unit printed down ten lines of its
+ * column — with the payment remark "Rate Reduction as per Variation (-4%) for beyond
+ * 50%" wrapped down the right-hand margin, and the item numbered "NS01 (I)" over two
+ * lines.
+ */
+function additionalNsBill(): PositionedPdfPage[] {
+  const unitCol = ['per', 'cm', 'depth', 'per', 'cm', 'width', 'per', 'metre', 'lengt', 'h'];
+  const page16 = page(16, [
+    ...HEADER,
+    ...words(148, [[330, 'Schedule'], [372, 'D-Additional'], [432, 'NS'], [448, 'item']]),
+    ...unitCol.flatMap((text, i) => words(162 + i * 10, [[135, text]])),
+    ...words(200, [[67, '1'], [97, 'NS01']]),
+    ...words(210, [[97, '(I)']]),
+    ...words(205, [[167, '247.0'], [226, '247.0'], [297, '0.0'], [334, '2000.0'], [379, '0.0'], [420, '1876.98'], [447, '1876.98'], [492, '0.0'], [543, '463614.06'], [599, '445069.5'], [659, '445069.5']]),
+    ...words(195, [[713, 'Rate'], [740, 'Reduction']]),
+    ...words(205, [[713, 'as'], [725, 'per'], [745, 'Variation'], [790, '(-']]),
+    ...words(215, [[713, '4%)'], [735, 'for'], [755, 'beyond']]),
+    ...words(225, [[713, '50%']]),
+    ...words(272, [[135, 'NS-GNT-DSR-348:'], [205, 'Making'], [240, 'groove'], [272, 'of'], [285, 'suitable'], [320, 'width'], [350, '&'], [360, 'depth'], [390, 'in'], [402, 'concrete'], [440, 'flooring']]),
+    ...words(282, [[135, 'by'], [150, 'mechanical'], [200, 'cutter'], [230, 'true'], [252, 'to'], [265, 'the'], [282, 'line'], [305, 'for'], [322, 'expansion'], [368, 'of'], [380, 'floor']]),
+    ...words(310, [[300, 'Total'], [340, '(Schedule'], [400, 'D-Additional'], [470, 'NS'], [490, 'item)'], [543, '463614.06'], [599, '445069.5'], [659, '445069.5']]),
+  ]);
+  const summary = page(17, [
+    ...words(300, [[60, 'Schedule'], [110, 'Summary:']]),
+    ...words(361, [[173, '0.0'], [286, '445069.5'], [437, '445069.5']]),
+    ...words(362, [[55, 'Total'], [79, 'Amount(Rs.)']]),
+    ...words(375, [[369, '0.0']]),
+    ...words(376, [[55, 'Rebate(0.0%)']]),
+    ...words(389, [[286, '445069.5']]),
+    ...words(390, [[55, 'Bill'], [74, 'Amount'], [100, '(Rs.)'], [123, '(Including'], [165, 'Tax'], [180, '(GST))']]),
+  ]);
+  return [page16, summary];
+}
+
 describe('parseIrepsBillPdfDirect', () => {
   beforeEach(() => {
     extractPositionedPdfPages.mockReset();
@@ -109,5 +145,22 @@ describe('parseIrepsBillPdfDirect', () => {
     expect(bill.itemAmountTotal).toBe(2544518.62);
     expect(bill.amountsReconciled).toBe(true);
     expect(bill.amountDifference).toBe(0);
+  });
+
+  it('reads an added non-schedule item: its NS number, a clean heading and a clean description', async () => {
+    extractPositionedPdfPages.mockResolvedValue(additionalNsBill());
+    const bill = await parseIrepsBillPdfDirect(Buffer.from('%PDF-1.4 test'));
+
+    expect(bill.items).toHaveLength(1);
+    const ns = bill.items[0];
+    expect(ns.itemNo).toBe('NS01');
+    expect(ns.schedule).toBe('Schedule D');
+    expect(ns.scheduleHeading).toBe('Schedule D-Additional NS item');
+    expect(ns.sourceBook).toBe('NON_SCHEDULE');
+    expect(ns.description.startsWith('NS-GNT-DSR-348:')).toBe(true);
+    expect(ns.description).not.toMatch(/50%|lengt|Reduction/);
+    expect(ns.amountSinceLastBill).toBe(445069.5);
+    expect(ns.amountAtAgreementRateSinceLastBill).toBe(463614.06);
+    expect(bill.amountsReconciled).toBe(true);
   });
 });
