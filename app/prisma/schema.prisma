@@ -122,20 +122,6 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-model PhoneOtp {
-  id        String   @id @default(cuid())
-  phone     String
-  otp       String
-  attempts  Int      @default(0)
-  verified  Boolean  @default(false)
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  @@index([phone, otp])
-  @@index([phone, verified])
-  @@map("phone_otps")
-}
-
 model ClassificationGroup {
   id                 String              @id @default(cuid())
   code               String              @unique
