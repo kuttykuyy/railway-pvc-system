@@ -117,8 +117,13 @@ export const RATE_LIMITS = {
  */
 export function getIdentifier(request: Request, userId?: string): string {
   if (userId) return `user:${userId}`;
-  
-  // Try to get IP from headers
+
+  // The platform's own statement of the client address first. x-real-ip is set by the
+  // edge from the connection it accepted; x-forwarded-for is a list a client can seed
+  // with any value it likes, and keying on its first hop let a caller pick their own
+  // bucket and never share one with their previous request.
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) return `ip:${realIp}`;
   const forwarded = request.headers.get('x-forwarded-for');
   const ip = forwarded ? forwarded.split(',')[0].trim() : 'unknown';
   return `ip:${ip}`;

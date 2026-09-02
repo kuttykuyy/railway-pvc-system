@@ -405,34 +405,50 @@ export async function handleFuelBasisReply(conversation: any, msg: string, chatI
 /**
  * Secret coupon codes that waive the report fee, from TELEGRAM_REPORT_COUPONS
  * (comma-separated, case-insensitive). Each entry is `CODE`, `CODE:YYYY-MM-DD` or
- * `CODE:YYYY-MM-DD:N`, where the date is the last day the code is valid — so a
- * leaked code stops working — and N caps how many statements one redemption covers.
- * Without N a code covers every statement waiting, which is the point of it: a batch
- * of bills is settled in one go. Use `CODE::1` to give away exactly one.
+ * `CODE:YYYY-MM-DD:N` or `CODE:YYYY-MM-DD:N:T`, where the date is the last day the
+ * code is valid — so a leaked code stops working — N caps how many statements the code
+ * covers for ONE chat in total, and T caps how many it covers across ALL chats. Both are
+ * counted from the redemption rows written on every free statement, so a code that
+ * leaks is worth at most T statements, not unlimited ones until expiry. Defaults: N 10,
+ * T 25. Use `CODE::1:1` to give away exactly one statement to exactly one chat.
  * Never advertised in chat.
  */
-interface CouponDef { code: string; expiry: string | null; maxReports: number | null }
+interface CouponDef { code: string; expiry: string | null; maxReports: number | null; maxTotal: number }
+
+const COUPON_DEFAULT_PER_CHAT = 10;
+const COUPON_DEFAULT_TOTAL = 25;
 
 function couponDefs(): CouponDef[] {
   return String(process.env.TELEGRAM_REPORT_COUPONS || '')
     .split(',')
     .map((part) => {
-      const [code, expiry, max] = part.split(':');
+      const [code, expiry, max, total] = part.split(':');
       const maxReports = Number(String(max || '').trim());
+      const maxTotal = Number(String(total || '').trim());
       return {
         code: String(code || '').trim().toLowerCase(),
         expiry: (expiry || '').trim() || null,
-        maxReports: Number.isFinite(maxReports) && maxReports > 0 ? Math.floor(maxReports) : null,
+        maxReports: Number.isFinite(maxReports) && maxReports > 0 ? Math.floor(maxReports) : COUPON_DEFAULT_PER_CHAT,
+        maxTotal: Number.isFinite(maxTotal) && maxTotal > 0 ? Math.floor(maxTotal) : COUPON_DEFAULT_TOTAL,
       };
     })
     .filter((c) => c.code);
 }
 
-/** How many statements a code covers, or null for "everything waiting". */
-function couponReportCap(code?: string): number | null {
-  if (!code) return null;
-  const def = couponDefs().find((c) => c.code === String(code).trim().toLowerCase());
-  return def?.maxReports ?? null;
+/**
+ * How many more statements this code may cover for this chat: the per-chat cap and
+ * the all-chats cap, each less what the redemption rows say has already gone out.
+ */
+async function couponRemaining(code: string | undefined, chatId: string): Promise<{ remaining: number; perChat: number; total: number } | null> {
+  const def = code ? couponDefs().find((c) => c.code === String(code).trim().toLowerCase()) : undefined;
+  if (!def) return null;
+  const [usedTotal, usedByChat] = await Promise.all([
+    prisma.telegramCouponRedemption.count({ where: { code: def.code } }),
+    prisma.telegramCouponRedemption.count({ where: { code: def.code, chatId } }),
+  ]);
+  const perChat = def.maxReports ?? COUPON_DEFAULT_PER_CHAT;
+  const remaining = Math.max(0, Math.min(perChat - usedByChat, def.maxTotal - usedTotal));
+  return { remaining, perChat, total: def.maxTotal };
 }
 
 /** A YYYY-MM-DD expiry is inclusive; expired once the (IST) date passes it. */
@@ -514,8 +530,30 @@ export async function handleCoupon(conversation: any, chatId: string, code?: str
     );
   }
 
-  const cap = couponReportCap(code);
-  const covered = cap ? Math.min(cap, waiting) : waiting;
+  // Every free statement is written down, and a code is worth only what its caps allow:
+  // so many statements per chat, so many across all chats. Without this a code was
+  // redeemable without limit by any chat that learned it, and nothing recorded where it
+  // had gone.
+  const allowance = await couponRemaining(code, chatId);
+  if (!allowance) {
+    return sendTelegramMessage(chatId, '🎟️ That code is not valid any more.');
+  }
+  if (allowance.remaining <= 0) {
+    return sendTelegramMessage(
+      chatId,
+      `🎟️ This code has been used up — it covered its ${allowance.perChat} statement${allowance.perChat === 1 ? '' : 's'} for this chat, or its ${allowance.total} in total. Send /payall for a payment link.`,
+    );
+  }
+  const cap = allowance.remaining;
+  const covered = Math.min(cap, waiting);
+  const normalizedCode = String(code || '').trim().toLowerCase();
+  const recordRedemption = async (linkId: string | null) => {
+    try {
+      await prisma.telegramCouponRedemption.create({ data: { code: normalizedCode, chatId, linkId } });
+    } catch (err) {
+      console.error('[Telegram] could not record coupon redemption:', err);
+    }
+  };
 
   await sendTelegramMessage(
     chatId,
@@ -534,11 +572,11 @@ export async function handleCoupon(conversation: any, chatId: string, code?: str
   try {
     if (!linkIds.length) {
       // Older chat with only the single slot and no link to name.
-      if (await renderAndSendPaidReport(chatId)) delivered++;
+      if (await renderAndSendPaidReport(chatId)) { delivered++; await recordRedemption(null); }
     } else {
       for (const linkId of linkIds) {
         try {
-          if (await renderAndSendPaidReport(chatId, linkId)) delivered++;
+          if (await renderAndSendPaidReport(chatId, linkId)) { delivered++; await recordRedemption(linkId); }
         } catch (err: any) {
           failures++;
           console.error('[Telegram] coupon delivery failed for', linkId, err);
@@ -559,10 +597,10 @@ export async function handleCoupon(conversation: any, chatId: string, code?: str
       `⚠️ ${delivered} of ${covered} statements went out; ${failures} failed to build. Send the coupon again to retry the rest — it hasn't been used up.`,
     );
   }
-  if (cap && waiting > covered) {
+  if (waiting > covered) {
     return sendTelegramMessage(
       chatId,
-      `🎟️ This code covers ${cap} statement${cap === 1 ? '' : 's'}, so ${waiting - covered} ${waiting - covered === 1 ? 'is' : 'are'} still waiting. Send /payall for a link covering ${waiting - covered === 1 ? 'it' : 'them'}.`,
+      `🎟️ This code had ${cap} statement${cap === 1 ? '' : 's'} left on it, so ${waiting - covered} ${waiting - covered === 1 ? 'is' : 'are'} still waiting. Send /payall for a link covering ${waiting - covered === 1 ? 'it' : 'them'}.`,
     );
   }
 }

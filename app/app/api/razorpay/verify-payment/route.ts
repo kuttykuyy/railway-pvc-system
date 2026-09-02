@@ -166,6 +166,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // The signature proves this payment belongs to this order id; it says nothing about
+    // how much was paid. Razorpay's own record of the payment must name this order and
+    // carry the amount the order was created for, so a payment for another order, or a
+    // smaller one, cannot redeem these credits.
+    const expectedPaise = Math.round(Number(transaction.amount) * 100);
+    const paidPaise = Number((paymentDetails as any).amount);
+    const paidOrderId = (paymentDetails as any).order_id;
+    const paidCurrency = (paymentDetails as any).currency;
+    if (
+      paidOrderId !== razorpay_order_id
+      || !Number.isFinite(paidPaise) || Math.abs(paidPaise - expectedPaise) > 1
+      || (paidCurrency && paidCurrency !== (transaction.currency || 'INR'))
+    ) {
+      console.error(`[${requestId}] Payment does not match order: order ${paidOrderId} vs ${razorpay_order_id}, amount ${paidPaise} vs ${expectedPaise} paise, currency ${paidCurrency}`);
+      return NextResponse.json(
+        { error: 'Payment does not match this order' },
+        { status: 400 }
+      );
+    }
+
     // Determine how much to add to wallet based on GST option
     const transactionNotes = transaction.notes as any;
     const gstOption = transactionNotes?.gstOption || 'exclude';
@@ -246,7 +266,10 @@ export async function POST(request: NextRequest) {
     const newBalance = creditResult.newBalance;
     logger.log(`[${requestId}] Credited ₹${creditsToAdd} (gstOption: ${gstOption}); new balance ₹${newBalance}`);
 
-    await processReferralReward(user.id, transaction.id)
+    await processReferralReward(user.id, transaction.id, {
+      email: (paymentDetails as any).email,
+      contact: (paymentDetails as any).contact,
+    })
       .then((result) => {
         if (result.rewarded) {
           logger.log(`[${requestId}] Referral rewards credited successfully`);

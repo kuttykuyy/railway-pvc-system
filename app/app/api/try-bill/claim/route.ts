@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     const identifier = getIdentifier(request);
-    const rateLimit = await checkDbRateLimit(`try-bill-claim:${identifier}`, 10, 60 * 60 * 1000);
+    const rateLimit = await checkDbRateLimit(`try-bill-claim:${identifier}`, 10, 60 * 60 * 1000, { failOpen: false });
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many claims. Please try again later.' },
@@ -175,11 +175,19 @@ export async function POST(request: NextRequest) {
       let isFree = false;
       let freeReason = '';
       let requiredPayment = 0;
+      // The same price the web route charges: a negotiated per-bill fee when the admin
+      // set one, the standard rate otherwise. This route charged the standard rate to
+      // everyone, so a ₹50-a-bill customer paid ₹199 for their first bill here.
+      const paidAmount = freshUser.customProcessingFee !== null && freshUser.customProcessingFee > 0
+        ? freshUser.customProcessingFee
+        : baseAmount;
 
+      // The same free roles as everywhere else: accounts/audit staff were missing here.
       if (
         freshUser.role === 'admin' ||
         freshUser.role === 'superadmin' ||
-        freshUser.role === 'railway_official'
+        freshUser.role === 'railway_official' ||
+        freshUser.role === 'accounts_official'
       ) {
         isFree = true;
         freeReason = freshUser.role;
@@ -193,22 +201,27 @@ export async function POST(request: NextRequest) {
         isFree = true;
         freeReason = 'trial';
       } else {
-        requiredPayment = baseAmount;
+        requiredPayment = paidAmount;
       }
 
       if (isFree && freeReason === 'trial') {
-        try {
+        // Looked up before it is written, not caught after. This used to create the claim
+        // and catch the unique-key error, but on Postgres a failed statement aborts the
+        // whole transaction, so every query after the catch failed and the user got a 500
+        // instead of the intended "charge instead". The web route checks first for the
+        // same reason.
+        const alreadyClaimed = await tx.trialClaimedAgreement.findUnique({
+          where: { normalizedAgreementNo },
+          select: { id: true },
+        });
+        if (alreadyClaimed) {
+          isFree = false;
+          freeReason = '';
+          requiredPayment = paidAmount;
+        } else {
           await tx.trialClaimedAgreement.create({
             data: { normalizedAgreementNo, claimedByUserId: user.id },
           });
-        } catch (error) {
-          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-            isFree = false;
-            freeReason = '';
-            requiredPayment = baseAmount;
-          } else {
-            throw error;
-          }
         }
 
         if (isFree && freeReason === 'trial') {
@@ -223,7 +236,7 @@ export async function POST(request: NextRequest) {
           if (trialIncrement.count === 0) {
             isFree = false;
             freeReason = '';
-            requiredPayment = baseAmount;
+            requiredPayment = paidAmount;
           }
         }
       }

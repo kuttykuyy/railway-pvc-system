@@ -1769,6 +1769,35 @@ export async function POST(request: NextRequest) {
 
     const stage = request.nextUrl.searchParams.get('stage') || 'full';
     const contractId = request.nextUrl.searchParams.get('contractId') || undefined;
+
+    // Reading a bill costs provider credit on every call, and nothing limited how often
+    // one account could do it: a single login could burn the AI budget for everyone.
+    // A per-account daily cap, counted once per PDF (the stages that take a file) and
+    // separately for the markdown parts a client posts back, which are many per PDF.
+    // The typed spreadsheet ('sheet') calls no AI. Admins are exempt. The limiter fails
+    // closed here: if it cannot count, the extraction — which also needs the database —
+    // was not going to succeed either.
+    const requesterRole = (user as any)?.role;
+    if (requesterRole !== 'admin' && requesterRole !== 'superadmin' && stage !== 'sheet' && stage !== 'finalize') {
+      const { checkDbRateLimit } = await import('@/lib/rate-limit-db');
+      const dayMs = 24 * 60 * 60 * 1000;
+      const isPart = stage === 'part';
+      const limit = isPart
+        ? (Number(process.env.AI_EXTRACTION_PARTS_PER_DAY) || 400)
+        : (Number(process.env.AI_EXTRACTIONS_PER_DAY) || 40);
+      const cap = await checkDbRateLimit(`ai-extract:${isPart ? 'part' : 'pdf'}:${user!.id}`, limit, dayMs, { failOpen: false });
+      if (!cap.allowed) {
+        return NextResponse.json(
+          {
+            error: `You have reached today's limit of ${limit} bill readings. It resets at ${cap.resetAt.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })} IST. `
+              + 'Bills can still be entered by hand meanwhile.',
+            code: 'AI_EXTRACTION_LIMIT',
+            resetAt: cap.resetAt,
+          },
+          { status: 429, headers: { 'Retry-After': String(cap.retryAfterSeconds) } },
+        );
+      }
+    }
     // When the bill already exists (re-reading a PDF on the edit page), the kept file is
     // attached to it straight away instead of waiting to be claimed on save.
     const forBillId = request.nextUrl.searchParams.get('billId') || undefined;
@@ -2154,6 +2183,12 @@ export async function POST(request: NextRequest) {
     }
 
     const extractedItems = billDetails.items;
+    // The stored PDF was actually read: it now counts as evidence that the bill saved
+    // from it is an AI-read bill, whatever the client says on save.
+    if (storedDocumentId && extractedItems.length > 0) {
+      const { markUploadedDocumentExtracted } = await import('@/lib/uploaded-documents');
+      await markUploadedDocumentExtracted(storedDocumentId);
+    }
     const rawDsrCodes = Array.from(new Set(extractedItems
       .filter(item => item.sourceBook === 'DSR_2021')
       .map(item => normalizeDsrCode(item.dsrCode))

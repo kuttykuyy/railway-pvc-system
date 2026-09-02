@@ -170,6 +170,75 @@ export async function linkUploadedDocument(
   }
 }
 
+/**
+ * Record that the reader got items out of this document. Only a document that was
+ * actually read counts as evidence of an AI-read bill below; a PDF that was stored and
+ * then failed to parse (a scan, a photo) must not price the bill the user then typed.
+ */
+export async function markUploadedDocumentExtracted(id: number | string | null | undefined): Promise<void> {
+  const documentId = Number(id);
+  if (!documentId || !Number.isFinite(documentId)) return;
+  try {
+    const t = await table();
+    await prisma.$executeRawUnsafe(
+      `UPDATE ${t} SET "note" = COALESCE("note", 'extracted') WHERE id = $1`,
+      documentId,
+    );
+  } catch (error: any) {
+    logger.warn('uploaded-documents: could not mark the document extracted:', error?.message || error);
+  }
+}
+
+/** Does this stored document belong to this user? */
+export async function uploadedDocumentBelongsTo(id: number | string | null | undefined, userId: string): Promise<boolean> {
+  const documentId = Number(id);
+  if (!documentId || !Number.isFinite(documentId)) return false;
+  try {
+    const t = await table();
+    const rows = await prisma.$queryRawUnsafe<Array<{ n: number }>>(
+      `SELECT COUNT(*)::int AS n FROM ${t} WHERE id = $1 AND "userId" = $2`,
+      documentId, userId,
+    );
+    return (rows?.[0]?.n || 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Was this bill read from a PDF? Decided here, not by the client.
+ *
+ * A bill read by the AI costs more than one typed in, and which it was used to be a
+ * flag in the request body. Read the PDF, then save with the flag off: the cheaper
+ * price for the dearer work. So the server now decides from what it saw itself: the
+ * client's flag is honoured when it says AI; otherwise a bill is AI-read when it
+ * attaches a PDF this user had read, or when this user has had a bill PDF read in the
+ * last day that no saved bill has yet claimed. Only successfully READ documents count
+ * (see markUploadedDocumentExtracted), so a scan that failed and was then typed in is
+ * still a manual bill.
+ */
+export async function billLooksAiRead(
+  userId: string,
+  clientSaysAi: unknown,
+  uploadedDocumentId: unknown,
+  withinMs = 24 * 60 * 60 * 1000,
+): Promise<boolean> {
+  if (clientSaysAi === true) return true;
+  if (uploadedDocumentId && await uploadedDocumentBelongsTo(uploadedDocumentId as any, userId)) return true;
+  try {
+    const t = await table();
+    const rows = await prisma.$queryRawUnsafe<Array<{ n: number }>>(
+      `SELECT COUNT(*)::int AS n FROM ${t}
+       WHERE "kind" = 'bill' AND "userId" = $1 AND "billId" IS NULL
+         AND "note" = 'extracted' AND "createdAt" > $2`,
+      userId, new Date(Date.now() - withinMs),
+    );
+    return (rows?.[0]?.n || 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** The documents held for a bill or a contract, newest first. Never their bytes. */
 export async function listUploadedDocuments(
   target: { billId?: string | null; contractId?: string | null },

@@ -297,7 +297,7 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
     console.error(`[${requestId}] ⚠️ Zoho Books invoice creation failed (webhook path):`, zohoError?.message);
   }
 
-  await processReferralReward(user.id, transaction.id)
+  await processReferralReward(user.id, transaction.id, { email: payment.email, contact: payment.contact })
     .then((result) => {
       if (result.rewarded) {
         logger.log(`[${requestId}] Referral rewards credited successfully`);

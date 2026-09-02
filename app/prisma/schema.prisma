@@ -274,6 +274,21 @@ model Contract {
 
 // Tracks which normalized agreement numbers have already consumed a free trial
 // globally — prevents multi-account trial abuse on the same contract.
+/// One statement handed out free against a Telegram coupon code. Codes come from the
+/// environment and used to be redeemable without limit or record; these rows are what
+/// caps a code across every chat and what an admin reads to see where a code went.
+model TelegramCouponRedemption {
+  id         String   @id @default(cuid())
+  code       String
+  chatId     String
+  linkId     String?
+  redeemedAt DateTime @default(now())
+
+  @@index([code])
+  @@index([code, chatId])
+  @@map("telegram_coupon_redemptions")
+}
+
 model TrialClaimedAgreement {
   id                    String   @id @default(cuid())
   normalizedAgreementNo String   @unique

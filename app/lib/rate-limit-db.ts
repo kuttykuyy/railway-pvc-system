@@ -20,13 +20,17 @@ export interface DbRateLimitResult {
  * each counted. At the exact window-reset boundary a few extra requests may slip through,
  * which is acceptable for rate limiting.
  *
- * Fail-open: if the DB call errors, the request is allowed (a limiter outage must not take
- * down auth/payments). Errors are logged.
+ * Fail-open by default: if the DB call errors, the request is allowed (a limiter outage
+ * must not take down auth/payments). Errors are logged. Callers guarding something that
+ * needs the database anyway — sign-up, the trial claim, a metered extraction — pass
+ * `failOpen: false`: with the database down the guarded action was going to fail too, and
+ * a limiter that opens on error is a limiter an outage switches off.
  */
 export async function checkDbRateLimit(
   key: string,
   limit: number,
   windowMs: number,
+  options: { failOpen?: boolean } = {},
 ): Promise<DbRateLimitResult> {
   const now = new Date();
   const newWindowEnd = new Date(now.getTime() + windowMs);
@@ -61,6 +65,10 @@ export async function checkDbRateLimit(
     });
     return ok(reset.count, reset.windowEnd);
   } catch (error) {
+    if (options.failOpen === false) {
+      console.error('[rate-limit-db] limiter error (failing closed):', error);
+      return { allowed: false, remaining: 0, limit, resetAt: newWindowEnd, retryAfterSeconds: 30 };
+    }
     console.error('[rate-limit-db] limiter error (failing open):', error);
     return { allowed: true, remaining: limit, limit, resetAt: newWindowEnd, retryAfterSeconds: 0 };
   }
