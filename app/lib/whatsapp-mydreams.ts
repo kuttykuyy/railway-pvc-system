@@ -650,60 +650,6 @@ export async function sendPaymentConfirmation(
   }
 }
 
-/**
- * Send OTP via WhatsApp for phone verification during signup
- * Uses otp_verification template with 1 parameter: the OTP code
- */
-export async function sendOtpWhatsApp(
-  phoneNumber: string,
-  otpCode: string
-): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  try {
-    const credentials = await getMyDreamsCredentials();
-    if (!credentials) {
-      return { success: false, error: 'WhatsApp API not configured' };
-    }
-
-    const formattedContact = formatPhoneNumber(phoneNumber);
-
-    const url = new URL('https://wa.mydreamstechnology.in/api/sendtemplate.php');
-    url.searchParams.append('LicenseNumber', credentials.licenseNumber);
-    url.searchParams.append('APIKey', credentials.apiKey);
-    url.searchParams.append('Contact', formattedContact);
-    url.searchParams.append('Template', 'otp_verification');
-    url.searchParams.append('Param', otpCode);
-
-    logger.log('[WhatsApp OTP] Sending OTP to:', formattedContact);
-
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-    });
-
-    const data = await response.json();
-    logger.log('[WhatsApp OTP] API response:', data);
-
-    const isSuccess =
-      data.status === 'success' ||
-      data.ApiResponse === 'Success' ||
-      data.ApiMessage?.Status === 'Success';
-
-    if (!isSuccess) {
-      const errorMsg = data.error || data.message || data.ApiMessage?.ErrorMessage?.error?.message || 'Failed to send OTP';
-      console.error('[WhatsApp OTP] Error:', errorMsg);
-      return { success: false, error: errorMsg };
-    }
-
-    logger.log('[WhatsApp OTP] ✅ OTP sent successfully');
-    return {
-      success: true,
-      messageId: data.messageId || data.id || data.message_id || 'sent',
-    };
-  } catch (error: any) {
-    console.error('[WhatsApp OTP] Exception:', error);
-    return { success: false, error: error.message || 'Failed to send OTP' };
-  }
-}
 
 /**
  * Send welcome message to newly registered user with support contact number

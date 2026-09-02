@@ -4,7 +4,6 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { normalizePhone, PHONE_FORMAT_MESSAGE, PHONE_TAKEN_MESSAGE } from '@/lib/phone-validation';
 import { phoneIsTaken } from '@/lib/phone-owner';
-import { phoneOtpRequired, consumeVerifiedOtp, PHONE_UNVERIFIED_MESSAGE } from '@/lib/phone-otp';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,14 +60,6 @@ export async function POST(request: NextRequest) {
     if (await phoneIsTaken(phone, me?.id)) {
       return NextResponse.json({ error: PHONE_TAKEN_MESSAGE }, { status: 409 });
     }
-    // Proved, not just typed — same bar as signup. This is the route the phone gate
-    // exempts, so it must not be the easier way in.
-    if (await phoneOtpRequired()) {
-      if (!(await consumeVerifiedOtp(phone))) {
-        return NextResponse.json({ error: PHONE_UNVERIFIED_MESSAGE }, { status: 400 });
-      }
-    }
-
     await prisma.user.update({
       where: { email: session.user.email },
       data: { phone },

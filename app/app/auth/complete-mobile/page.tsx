@@ -8,14 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { validatePhoneNumber } from '@/lib/phone-validation';
-import { VerifyMobile } from '@/components/auth/verify-mobile';
 import { Loader2, Phone } from 'lucide-react';
 
 export default function CompleteMobilePage() {
   const router = useRouter();
   const { update } = useSession();
   const [whatsappNumber, setWhatsappNumber] = useState('');
-  const [phoneVerified, setPhoneVerified] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -49,10 +47,6 @@ export default function CompleteMobilePage() {
     }
     if (!validatePhoneNumber(whatsappNumber)) {
       setError('Invalid format. Use +[country code][number] (e.g. +919876543210)');
-      return;
-    }
-    if (!phoneVerified) {
-      setError('Please verify the number first — tap Verify and enter the code sent on WhatsApp.');
       return;
     }
     setSaving(true);
@@ -94,18 +88,21 @@ export default function CompleteMobilePage() {
         </p>
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-3">
-          {/* The same field as sign-up, on purpose: this form writes to the same column
-              and the server holds it to the same bar, so it must not become the easier
-              way to claim a number. */}
-          <VerifyMobile
-            value={whatsappNumber}
-            onChange={setWhatsappNumber}
-            onVerifiedChange={setPhoneVerified}
-            label="Mobile / WhatsApp Number"
-            error={error}
-          />
+          <div className="space-y-2">
+            <Label htmlFor="whatsappNumber">Mobile / WhatsApp Number</Label>
+            <Input
+              id="whatsappNumber"
+              type="tel"
+              value={whatsappNumber}
+              onChange={(e) => { setWhatsappNumber(e.target.value); setError(''); }}
+              required
+              placeholder="+919876543210"
+              className={error ? 'border-red-500' : ''}
+            />
+            {error && <p className="text-sm text-red-600">{error}</p>}
+          </div>
 
-          <Button type="submit" disabled={saving || !phoneVerified} className="w-full">
+          <Button type="submit" disabled={saving} className="w-full">
             {saving ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</>) : 'Save and continue'}
           </Button>
         </form>

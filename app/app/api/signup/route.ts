@@ -10,7 +10,6 @@ import { randomBytes } from 'crypto';
 import { validatePhoneNumber, sendUserSignupWelcome, sendWelcomeMessageToUser, getAdminWhatsAppNumber } from '@/lib/whatsapp-mydreams';
 import { normalizePhone, PHONE_FORMAT_MESSAGE, PHONE_TAKEN_MESSAGE } from '@/lib/phone-validation';
 import { phoneIsTaken } from '@/lib/phone-owner';
-import { phoneOtpRequired, consumeVerifiedOtp, PHONE_UNVERIFIED_MESSAGE } from '@/lib/phone-otp';
 import { isEmailVerificationRequired } from '@/lib/admin-settings';
 import { validatePassword } from '@/lib/password-strength';
 import { RAILWAY_ZONE_STEEL_CITY_MAP } from '@/lib/zone-steel-city-mapping';
@@ -115,25 +114,15 @@ export async function POST(request: NextRequest) {
     // spellings. The WhatsApp bot finds an account by its number, so a person messaging
     // from their own phone could land in a stranger's account.
     //
-    // (The number is still not VERIFIED here — no OTP is sent. send-otp and verify-otp
-    // exist and are called from nowhere. That is a separate piece of work, and until it
-    // is done this check stops a number being claimed twice, not being claimed wrongly.)
+    // The number is not proved by a code. Mobile OTP verification was tried and removed:
+    // it kept locking new users out whenever the SMS provider hiccupped, and the
+    // product decision is that a number only has to be unique, not proved.
     const normalizedPhone = normalizePhone(whatsappNumber);
     if (!normalizedPhone) {
       return NextResponse.json({ error: PHONE_FORMAT_MESSAGE }, { status: 400 });
     }
     if (await phoneIsTaken(normalizedPhone)) {
       return NextResponse.json({ error: PHONE_TAKEN_MESSAGE }, { status: 400 });
-    }
-
-    // And the number has to have been PROVED, not merely typed. The OTP machinery has
-    // been in the codebase the whole time and called from nowhere; the line this
-    // replaces read "Verify that phone OTP was completed - REMOVED". Spending the
-    // verification deletes it, so one code proves one number once.
-    if (await phoneOtpRequired()) {
-      if (!(await consumeVerifiedOtp(normalizedPhone))) {
-        return NextResponse.json({ error: PHONE_UNVERIFIED_MESSAGE }, { status: 400 });
-      }
     }
 
     // Check if user already exists
