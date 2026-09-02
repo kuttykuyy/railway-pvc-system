@@ -1,7 +1,7 @@
 'use client';
 
 import { ChangeEvent, DragEvent, MutableRefObject, useRef, useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Cpu, Download, FileSpreadsheet, FileText, HardDrive, Lightbulb, Loader2, Lock, RotateCcw, Save, ScanText, Trash2, Unlock, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Cpu, Download, FileSpreadsheet, FileText, HardDrive, Lightbulb, Loader2, Lock, Save, ScanText, Trash2, Unlock, Upload } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { Badge } from '@/components/ui/badge';
@@ -9,14 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { unitBlockSize } from '@/lib/dsr-cement-calculation';
-import { CEMENT_DERIVATION_ENABLED } from '@/lib/cement-derivation';
-import {
-  DEFAULT_DSR_BASE_RATE,
-  contractCementRateSettings,
-  deriveCementRate,
-  isBlankCementRateSettings,
-  type CementRateSettings,
-} from '@/lib/dsr-cement-rate';
 
 /** Vercel rejects a serverless request body larger than this, before any of our code runs. */
 const MAX_UPLOAD_BYTES = 4.5 * 1024 * 1024;
@@ -166,12 +158,6 @@ interface BillPdfCementAnalyzerProps {
    *  spinner runs for ever and a failed read looks exactly like a slow one. */
   /** Why a PDF did not fill the form, and which file it was (single-file mode). */
   onExtractionIncomplete?: (reason: string, fileName?: string) => void;
-}
-
-interface SavedCementRateSettings {
-  baseRate: number;
-  schedules: Record<string, CementRateSettings>;
-  savedAt: string;
 }
 
 function formatFileSize(bytes: number) {
@@ -376,94 +362,6 @@ export function BillPdfCementAnalyzer({
     }
   };
 
-  const [dsrBaseRate, setDsrBaseRate] = useState<number>(DEFAULT_DSR_BASE_RATE);
-  const [scheduleSettings, setScheduleSettings] = useState<Record<string, CementRateSettings>>({});
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [settingsSavedAt, setSettingsSavedAt] = useState<string | null>(null);
-  const settingsStorageKey = `irpvc:cement-rate-settings:${contractId || 'default'}`;
-
-  useEffect(() => {
-    setSettingsLoaded(false);
-    try {
-      const savedValue = window.localStorage.getItem(settingsStorageKey);
-      if (savedValue) {
-        const saved = JSON.parse(savedValue) as SavedCementRateSettings;
-        setDsrBaseRate(Number.isFinite(saved.baseRate) ? saved.baseRate : DEFAULT_DSR_BASE_RATE);
-        setScheduleSettings(saved.schedules && typeof saved.schedules === 'object' ? saved.schedules : {});
-        setSettingsSavedAt(saved.savedAt || null);
-      } else {
-        setDsrBaseRate(DEFAULT_DSR_BASE_RATE);
-        setScheduleSettings({});
-        setSettingsSavedAt(null);
-      }
-    } catch {
-      setDsrBaseRate(DEFAULT_DSR_BASE_RATE);
-      setScheduleSettings({});
-      setSettingsSavedAt(null);
-    } finally {
-      setSettingsLoaded(true);
-    }
-  }, [settingsStorageKey]);
-
-  useEffect(() => {
-    if (!settingsLoaded) return;
-    const timeout = window.setTimeout(() => {
-      const savedAt = new Date().toISOString();
-      const value: SavedCementRateSettings = {
-        baseRate: dsrBaseRate,
-        schedules: scheduleSettings,
-        savedAt,
-      };
-      try {
-        window.localStorage.setItem(settingsStorageKey, JSON.stringify(value));
-        setSettingsSavedAt(savedAt);
-      } catch {
-        setSettingsSavedAt(null);
-      }
-    }, 500);
-    return () => window.clearTimeout(timeout);
-  }, [dsrBaseRate, scheduleSettings, settingsLoaded, settingsStorageKey]);
-
-  const resetSavedRateSettings = () => {
-    window.localStorage.removeItem(settingsStorageKey);
-    setDsrBaseRate(DEFAULT_DSR_BASE_RATE);
-    setScheduleSettings({});
-    setSettingsSavedAt(null);
-    toast.success('Saved cement rate settings reset.');
-  };
-
-  // Helper to extract unique schedules that are cement affected
-  const getUniqueCementSchedules = (res: CementAnalysisData | null) => {
-    if (!res) return [];
-    const items = res.billDetails?.items || res.extractedItems || [];
-    const affected = items.filter(item => item.isCementAffected && item.sourceBook !== 'USSR_2021');
-    const schedules = affected.map(item => item.schedule || item.scheduleGroup || 'Default');
-    return Array.from(new Set(schedules)).sort();
-  };
-
-  // Initialize schedule settings when result changes. Prefilled from the CONTRACT's
-  // agreed escalation/bid rate — same source the manual calculator has always read —
-  // rather than blank, so a bill nobody has typed a rate into yet still shows an
-  // accurate reference figure instead of one derived at 0% escalation.
-  useEffect(() => {
-    if (!result) return;
-    const schedules = getUniqueCementSchedules(result);
-    setScheduleSettings(prev => {
-      const updated = { ...prev };
-      schedules.forEach(sched => {
-        if (isBlankCementRateSettings(updated[sched])) {
-          updated[sched] = contractCementRateSettings(contractSchedules, sched, contractRebate);
-        }
-      });
-      return updated;
-    });
-  }, [result, contractSchedules, contractRebate]);
-
-  const getDerivedRates = (sched: string) => {
-    const { perQuintal, perMt } = deriveCementRate(dsrBaseRate, scheduleSettings[sched]);
-    return { derivedRatePerQuintal: perQuintal, derivedRatePerMt: perMt };
-  };
-
   // A cement coefficient row is identified by its ITEM NUMBER (DSR / item no). An item
   // is cement-affected only when its item number appears in the coefficient table.
   // Description is deliberately NOT used to match, because different items can share the
@@ -475,38 +373,6 @@ export function BillPdfCementAnalyzer({
     const key = coeffKey(item);
     if (!key || !list) return -1;
     return list.findIndex(ci => coeffKey(ci) === key);
-  };
-
-  const getScheduleCementAmount = (sched: string) => {
-    if (!result) return 0;
-    const { derivedRatePerMt } = getDerivedRates(sched);
-    
-    // Find all items belonging to this schedule
-    const items = result.billDetails?.items || result.extractedItems || [];
-    let scheduleCementQtyMT = 0;
-    
-    items.forEach(item => {
-      const itemSched = item.schedule || item.scheduleGroup || 'Default';
-      if (itemSched === sched && item.isCementAffected && item.sourceBook !== 'USSR_2021') {
-        const coeffIndex = findCoeffIndex(result.coefficientItems, item);
-        if (coeffIndex !== -1) {
-          scheduleCementQtyMT += result.results[coeffIndex]?.cementQuantity || 0;
-        }
-      }
-    });
-
-    return scheduleCementQtyMT * derivedRatePerMt;
-  };
-
-  const getItemCementDeduction = (item: ExtractedBillItem, resData = result) => {
-    if (!resData || !item.isCementAffected || item.sourceBook === 'USSR_2021') return 0;
-    const sched = item.schedule || item.scheduleGroup || 'Default';
-    const { derivedRatePerMt } = getDerivedRates(sched);
-    
-    const coeffIndex = findCoeffIndex(resData.coefficientItems, item);
-    if (coeffIndex === -1) return 0;
-    const cementQtyMT = resData.results[coeffIndex]?.cementQuantity || 0;
-    return cementQtyMT * derivedRatePerMt;
   };
 
   const saveMissingCoefficient = async (item: CementAnalysisResultItem) => {
@@ -623,8 +489,8 @@ export function BillPdfCementAnalyzer({
 
   const deleteCementResultItem = (itemToRemove: CementAnalysisResultItem) => {
     if (!result) return;
-    // `coefficientItems` and `results` are parallel arrays (getItemCementDeduction and
-    // applyCalculatedAmount match a bill item to its cement by the SAME index in both).
+    // `coefficientItems` and `results` are parallel arrays (a bill item is matched to
+    // its cement by the SAME index in both).
     // Remove the row from BOTH so the arrays stay aligned — otherwise later items shift
     // and get the wrong cement quantity.
     const removeIndex = result.results.indexOf(itemToRemove);
@@ -674,69 +540,6 @@ export function BillPdfCementAnalyzer({
     setResult(updated);
     onApplyBillDetails?.(updated, activeUpload ?? undefined);
     toast.success('Coefficient row removed. Its cement is excluded from the calculation.');
-  };
-
-  const applyCalculatedAmount = (amount: number) => {
-    if (!result) return;
-
-    // Update the amountSinceLastBill of each cement-affected item in the result items list
-    const updatedItems = (result.billDetails?.items || result.extractedItems || []).map((item) => {
-      const deduction = getItemCementDeduction(item);
-      if (deduction > 0) {
-        // Store the original amount in a new property if not already present
-        const originalAmount = (item as any).originalAmount ?? Number(item.amountSinceLastBill || 0);
-        
-        // Find cement quantity in MT from result (matched by item number)
-        const coeffIndex = findCoeffIndex(result.coefficientItems, item);
-        const cementResult = coeffIndex !== -1 ? result.results[coeffIndex] : undefined;
-        const cementQtyMT = cementResult?.cementQuantity || 0;
-        const cementQuantityQuintals = cementQtyMT * 10;
-
-        const sched = item.schedule || item.scheduleGroup || 'Default';
-        const { derivedRatePerQuintal } = getDerivedRates(sched);
-
-        return {
-          ...item,
-          originalAmount,
-          cementDeduction: deduction,
-          cementQuantityQuintals,
-          cementRatePerQuintal: derivedRatePerQuintal,
-          // How the cement quantity was arrived at. Carried onto the item so the saved
-          // bill keeps it and the report can print the working (Qty x Coeff / block)
-          // instead of a dash — without it the cement figure is unverifiable on the
-          // statement, which is the first thing an accounts office asks about.
-          cementSourceQty: cementResult?.quantity,
-          cementCoefficient: cementResult?.coefficient ?? undefined,
-          cementWorkUnit: cementResult?.coefficientWorkUnit ?? undefined,
-          amountSinceLastBill: originalAmount - deduction,
-        };
-      }
-      return item;
-    });
-
-    const updated = {
-      ...result,
-      billDetails: result.billDetails ? {
-        ...result.billDetails,
-        items: updatedItems,
-      } : undefined,
-      extractedItems: result.extractedItems ? updatedItems : undefined,
-      summary: {
-        ...result.summary,
-        cementAmount: amount,
-      },
-      cementRatePerUnit: amount / result.summary.cementQuantity,
-      cementAmountSource: 'DSR_COEFFICIENT' as const,
-    };
-
-    setResult(updated);
-    if (onApplyCementAmount) {
-      onApplyCementAmount(amount, updated);
-    }
-    if (onApplyBillDetails) {
-      onApplyBillDetails(updated, activeUpload ?? undefined);
-    }
-    toast.success(`Applied derived cement cost: ${formatAmount(amount)} and deducted from cement-affected DSR items.`);
   };
 
   /** Outcome of one PDF. The reason is returned rather than shown, so a single upload can
@@ -1414,185 +1217,17 @@ export function BillPdfCementAnalyzer({
 
             {isUnlocked && (result.summary.cementAmount === null || result.summary.cementAmount === undefined) ? (
               <div className="space-y-3">
-                {/* While cement derivation is off, this is not a problem and not a
-                    calculation waiting to be made — it is simply how a DSR bill works,
-                    so it is one line and no numbers.
-
-                    It used to print a seven-figure TOTAL DERIVED CEMENT COST in bold,
-                    with a faint grey line beside it admitting the figure was not used
-                    by anything. A number shown that confidently gets quoted; the note
-                    saying to ignore it does not travel with it. */}
-                {!CEMENT_DERIVATION_ENABLED ? (
-                  <div className="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600">
-                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
-                    <div>
-                      <span className="font-medium text-slate-800">No separate cement item in this bill</span> —
-                      nothing to enter. Cement stays inside the DSR item rates, and is priced through
-                      each item&apos;s own classification under the GCC component table. Splitting it out
-                      would price the same cement twice.
-                    </div>
-                  </div>
-                ) : (
-                <>
-                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
-                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {/* No separate cement item is not a problem: a DSR item's rate already
+                    includes its cement, so there is nothing to derive or enter. */}
+                <div className="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600">
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
                   <div>
-                    No cement supply rate was found in the bill, so the cement amount could not be calculated automatically.
+                    <span className="font-medium text-slate-800">No separate cement item in this bill</span> —
+                    nothing to enter. Cement stays inside the DSR item rates, and is priced through
+                    each item&apos;s own classification under the GCC component table. Splitting it out
+                    would price the same cement twice.
                   </div>
                 </div>
-
-                {result.summary.cementQuantity > 0 && (
-                  <div className="rounded-md border border-slate-200 bg-slate-50/50 p-3 text-xs space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="font-semibold text-slate-800 flex items-center gap-1.5">
-                        <FileText className="h-4 w-4 text-emerald-600" />
-                        DSR 5.35 Cement Rate Calculator (No direct supply rate fallback)
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] text-emerald-700">
-                        <span className="inline-flex items-center gap-1">
-                          <Save className="h-3 w-3" />
-                          {settingsSavedAt ? 'Saved for next bill' : 'Auto-save enabled'}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={resetSavedRateSettings}
-                          className="h-7 px-2 text-[10px] text-slate-500"
-                          title="Reset saved cement rate settings"
-                        >
-                          <RotateCcw className="mr-1 h-3 w-3" />
-                          Reset
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
-                      If there is no direct cement supply item in this contract, the cement rate is derived from DSR 2021 item 5.35 (base Rs. 688.45/quintal) adjusted for contract escalation, bid rate, and rebate.
-                    </p>
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-medium text-slate-500">Base Rate (Rs./Qtl)</label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={dsrBaseRate}
-                        onChange={(e) => setDsrBaseRate(parseFloat(e.target.value) || 0)}
-                        className="h-8 text-xs bg-white w-40"
-                      />
-                    </div>
-
-                    <div className="space-y-4 pt-2">
-                      {getUniqueCementSchedules(result).map(sched => {
-                        const settings = scheduleSettings[sched] || { escalation: '', bidRate: '', rebate: '' };
-                        const { derivedRatePerQuintal, derivedRatePerMt } = getDerivedRates(sched);
-                        const schedAmount = getScheduleCementAmount(sched);
-                        const schedItemsCount = (result.billDetails?.items || result.extractedItems || [])
-                          .filter(item => (item.schedule || item.scheduleGroup || 'Default') === sched && item.isCementAffected && item.sourceBook !== 'USSR_2021').length;
-
-                        return (
-                          <div key={sched} className="border-t pt-3 first:border-t-0 first:pt-0 space-y-2">
-                            <div className="flex items-center gap-2">
-                              <Badge className="bg-emerald-100 text-emerald-750 font-bold border-none">
-                                {sched}
-                              </Badge>
-                              <span className="text-[10px] text-slate-500">({schedItemsCount} cement-affected items)</span>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-medium text-slate-500">Escalation %</label>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="e.g. -25.00"
-                                  value={settings.escalation}
-                                  onChange={(e) => setScheduleSettings(prev => ({
-                                    ...prev,
-                                    [sched]: { ...prev[sched], escalation: e.target.value }
-                                  }))}
-                                  className="h-8 text-xs bg-white"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-medium text-slate-500">Bid Rate % (+/-)</label>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="e.g. 3.80"
-                                  value={settings.bidRate}
-                                  onChange={(e) => setScheduleSettings(prev => ({
-                                    ...prev,
-                                    [sched]: { ...prev[sched], bidRate: e.target.value }
-                                  }))}
-                                  className="h-8 text-xs bg-white"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-medium text-slate-500">Rebate % (discount)</label>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="e.g. 0.50"
-                                  value={settings.rebate}
-                                  onChange={(e) => setScheduleSettings(prev => ({
-                                    ...prev,
-                                    [sched]: { ...prev[sched], rebate: e.target.value }
-                                  }))}
-                                  className="h-8 text-xs bg-white"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-2 pt-1.5 text-[11px] bg-slate-50 p-2 rounded">
-                              <div>
-                                <span className="text-slate-400">Rate/Qtl: </span>
-                                <span className="font-semibold text-slate-800">Rs. {derivedRatePerQuintal.toFixed(4)}</span>
-                              </div>
-                              <div>
-                                <span className="text-slate-400">Rate/MT: </span>
-                                <span className="font-semibold text-slate-800">Rs. {derivedRatePerMt.toFixed(2)}</span>
-                              </div>
-                              <div className="text-right">
-                                <span className="text-slate-400">Amount: </span>
-                                <span className="font-bold text-emerald-700">{formatAmount(schedAmount)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-200">
-                      <div>
-                        <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Total Derived Cement Cost</div>
-                        <div className="text-base font-extrabold text-emerald-850">
-                          {formatAmount(
-                            getUniqueCementSchedules(result).reduce((sum, sched) => sum + getScheduleCementAmount(sched), 0)
-                          )}
-                        </div>
-                      </div>
-                      {/* Applying this splits the cement out of the work items into a "C"
-                          sub-classification. That is off — a DSR item's rate already
-                          includes its cement and its own class already carries a cement
-                          share. The figures above stay, as a reading of how much cement
-                          the work consumes. See lib/cement-derivation.ts. */}
-                      {CEMENT_DERIVATION_ENABLED ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => applyCalculatedAmount(
-                            getUniqueCementSchedules(result).reduce((sum, sched) => sum + getScheduleCementAmount(sched), 0)
-                          )}
-                          className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
-                        >
-                          Apply Derived Costs
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                )}
-                </>
-                )}
               </div>
             ) : isUnlocked && result.cementAmountSource === 'USSR_SEPARATE_SUPPLY' ? (
               <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
@@ -1679,21 +1314,7 @@ export function BillPdfCementAnalyzer({
                             {isSpecialConditionOnlyItem(item) ? '-' : (item.agreementRateRaw || formatAmount(item.agreementRate))}
                           </td>
                           <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
-                            {getItemCementDeduction(item) > 0 ? (
-                              <div className="space-y-0.5">
-                                <div className="text-[10px] text-slate-400 line-through">
-                                  {formatAmount((item as any).originalAmount || item.amountSinceLastBill)}
-                                </div>
-                                <div className="text-[10px] text-red-500 font-medium">
-                                  -{formatAmount(getItemCementDeduction(item))}
-                                </div>
-                                <div className="text-slate-800 font-bold">
-                                  {formatAmount(item.amountSinceLastBill)}
-                                </div>
-                              </div>
-                            ) : (
-                              formatAmount(item.amountSinceLastBill)
-                            )}
+                            {formatAmount(item.amountSinceLastBill)}
                           </td>
                           <td className="px-2 py-2">
                             <div className="font-semibold">{item.suggestedClassificationCode || '-'}</div>
