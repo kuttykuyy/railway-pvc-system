@@ -115,11 +115,19 @@ function continuationDigits(
 
 function pageLines(page: PositionedPdfPage) {
   const sorted = [...page.items].sort((left, right) => left.y - right.y || left.x - right.x);
-  const lines: Array<{ y: number; text: string }> = [];
+  // maxX is the right edge of the line in table coordinates: a line whose every token
+  // sits left of the description area is column matter (a serial, an item code, a
+  // wrapped unit), never prose.
+  const lines: Array<{ y: number; text: string; maxX: number }> = [];
   for (const item of sorted) {
+    const x = normalizedX(page, item);
     const line = lines.find(candidate => Math.abs(candidate.y - item.y) <= 2.5);
-    if (line) line.text += ` ${item.text}`;
-    else lines.push({ y: item.y, text: item.text });
+    if (line) {
+      line.text += ` ${item.text}`;
+      line.maxX = Math.max(line.maxX, x);
+    } else {
+      lines.push({ y: item.y, text: item.text, maxX: x });
+    }
   }
   return lines.sort((left, right) => left.y - right.y);
 }
@@ -192,7 +200,11 @@ function extractItemCode(
   // The code is read from this page only. A token from the next page may complete a
   // code but must never start one, or the last row of a page would take the code of
   // the first row of the next.
-  const base = pageTokens.find(token => /^\d+(?:\.\d+)*\.?$/.test(token))?.replace(/\.$/, '') || '';
+  // A non-schedule item is numbered "NS01", "NS-02(I)", "NS1" — letters then digits.
+  // Only digits used to qualify, so every NS item came out with no number at all.
+  const base = pageTokens.find(token => /^\d+(?:\.\d+)*\.?$/.test(token))?.replace(/\.$/, '')
+    || pageTokens.find(token => /^[A-Z]{1,4}\d{1,4}[A-Z]?$/i.test(token))?.toUpperCase()
+    || '';
   if (/^\d{4}$/.test(base)) {
     // A six-digit USSOR code is printed on two lines — "0820" above "11" — and when the
     // row is the last on its page, the second line is printed at the top of the next
@@ -250,6 +262,17 @@ function extractDescription(page: PositionedPdfPage, rowY: number, nextRowY: num
     // so a line that is mostly standalone numbers is not description text.
     const numericTokens = tokens.filter(token => NUMBER_PATTERN.test(token));
     if (numericTokens.length >= Math.max(2, Math.ceil(tokens.length * 0.6))) continue;
+    // A description line runs from the left of its cell across the page, so it has
+    // words in the description area proper. A line without any is column matter
+    // sitting between the rows — the tail of a unit wrapped down its column ("metre",
+    // "lengt", "h") or of the payment remark wrapped down the right-hand margin
+    // ("50%") — and reading it as prose produced "per 50% metre lengt h NS-GNT-DSR-348:
+    // Making groove…" for a row whose description begins at "NS-GNT-DSR-348".
+    const hasProse = ordered.some(item => {
+      const x = normalizedX(page, item);
+      return x >= X.unit[1] && x < X.agreementRate[1] && /[A-Za-z]/.test(item.text);
+    });
+    if (!hasProse) continue;
     // Keep only the description column (drop left-margin serial / item-code tokens).
     const descTokens = ordered
       .filter(item => {
@@ -648,7 +671,8 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     // each pass replays from the top of the page, so the heading is rebuilt the same
     // way every time rather than growing.
     let headingContinue = 0;
-    const updateContext = (lineText: string) => {
+    const updateContext = (line: { text: string; maxX: number }) => {
+      const lineText = line.text;
       const scheduleMatch = lineText.match(/Schedule\s+([A-Z]\d*[A-Za-z]?)\b/i);
       if (scheduleMatch) {
         currentSchedule = `Schedule ${scheduleMatch[1]}`;
@@ -665,9 +689,14 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         return;
       }
       if (headingContinue > 0) {
+        // A line living entirely in the serial / item / unit columns is table matter
+        // too: the first words of a unit printed down the column — "per" out of "per
+        // cm depth per cm width per metre length" — used to be glued onto the heading
+        // ("Schedule D-Additional NS item per").
         const tableish = /Sr\.|Item\s*No|Account of work|Payment on the basis|Amount\s+(?:up\s*to|Since)|Base\s*Rate|^Total\b/i.test(lineText)
           || (lineText.match(/\d+\.\d/g) || []).length >= 2
-          || !/[A-Za-z]{3}/.test(lineText);
+          || !/[A-Za-z]{3}/.test(lineText)
+          || line.maxX < X.baseRate[0];
         if (tableish) {
           headingContinue = 0;
         } else {
@@ -851,7 +880,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
     for (let index = 0; index < deduped.length; index += 1) {
       const unitItem = deduped[index];
       for (const line of lines.filter(line => line.y < unitItem.y)) {
-        updateContext(line.text);
+        updateContext(line);
       }
 
       // A figure ending in a decimal point is proof this row was cut in half by a
@@ -1017,7 +1046,7 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
         reason: 'Direct PDF coordinates; Qty since last Bill x Agreement Rate verified against current amount.',
       });
     }
-    for (const line of lines) updateContext(line.text);
+    for (const line of lines) updateContext(line);
   }
   const financials = extractScheduleSummaryFinancials(pages);
   const netBillAmount = financials.billAmount;
