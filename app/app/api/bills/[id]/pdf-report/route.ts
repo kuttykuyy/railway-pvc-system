@@ -1,5 +1,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
+import { needsTrialWatermark } from '@/lib/trial-watermark';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
@@ -278,6 +279,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             billNo: true,
             dateOfMeasurement: true,
             pvcCalculation: true,
+            createdVia: true,
             billTransaction: { select: { discountType: true } },
             classificationEntries: {
               select: { steelTypes: true, subClassification: { select: { code: true } } },
@@ -318,11 +320,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 dateOfMeasurement: clauseCheck.dateOfMeasurement,
               }));
               // Same trial watermark rule as every other report.
-              if (!isAdminRequester && !trialWatermarkWaived) {
-                if (preflightBill?.billTransaction?.discountType === 'trial') {
-                  const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
-                  pre2022Bytes = await applyTrialWatermark(pre2022Bytes);
-                }
+              if (!isAdminRequester && needsTrialWatermark(preflightBill, trialWatermarkWaived)) {
+                const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
+                pre2022Bytes = await applyTrialWatermark(pre2022Bytes);
               }
               const safeBillNo = clauseCheck.billNo.replace(/[^A-Za-z0-9-]+/g, '_');
               return new NextResponse(new Uint8Array(pre2022Bytes), {
@@ -1181,8 +1181,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
       }
 
-      // Apply trial watermark for free-trial bills only (waived once the owner has topped up)
-      if (!isAdminRequester && !trialWatermarkWaived && bill.billTransaction?.discountType === 'trial') {
+      // Apply trial watermark for free-trial bills only (waived once the owner has topped up),
+      // and for a chat-created bill that was never charged at all (never waived).
+      if (!isAdminRequester && needsTrialWatermark(bill, trialWatermarkWaived)) {
         const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
         irFinalBytes = await applyTrialWatermark(irFinalBytes);
       }
@@ -4905,8 +4906,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       console.log('Component index documents disabled in template settings');
     }
 
-    // Apply trial watermark for free-trial bills (waived once the owner has topped up)
-    if (!isAdminRequester && !trialWatermarkWaived && bill.billTransaction?.discountType === 'trial') {
+    // Apply trial watermark for free-trial bills (waived once the owner has topped up),
+    // and for a chat-created bill that was never charged at all (never waived).
+    if (!isAdminRequester && needsTrialWatermark(bill, trialWatermarkWaived)) {
       const { applyTrialWatermark } = await import('@/lib/pdf/utils/watermark');
       finalPdfBytes = await applyTrialWatermark(finalPdfBytes);
     }

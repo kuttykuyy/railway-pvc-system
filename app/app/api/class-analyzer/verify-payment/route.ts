@@ -44,12 +44,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get Razorpay secret
-    const keySecretSetting = await prisma.adminSettings.findUnique({
-      where: { key: 'razorpay_key_secret' },
-    });
+    // The order being verified must be the one this session was sold under. Without
+    // this, any valid (order, payment, signature) triple from the user's own past — a
+    // wallet top-up, say — marked the session paid.
+    if (!pvcSession.razorpayOrderId || pvcSession.razorpayOrderId !== razorpay_order_id) {
+      return NextResponse.json(
+        { error: 'This payment does not belong to this session' },
+        { status: 400 }
+      );
+    }
 
-    if (!keySecretSetting?.value) {
+    // Get Razorpay credentials
+    const [keyIdSetting, keySecretSetting] = await Promise.all([
+      prisma.adminSettings.findUnique({ where: { key: 'razorpay_key_id' } }),
+      prisma.adminSettings.findUnique({ where: { key: 'razorpay_key_secret' } }),
+    ]);
+
+    if (!keySecretSetting?.value || !keyIdSetting?.value) {
       return NextResponse.json(
         { error: 'Payment system not configured' },
         { status: 503 }
@@ -72,6 +83,34 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'Invalid payment signature' },
         { status: 400 }
+      );
+    }
+
+    // The signature binds payment to order; Razorpay's own record must say the money
+    // was captured, for this order, in the amount the session was priced at.
+    try {
+      const Razorpay = (await import('razorpay')).default;
+      const razorpay = new Razorpay({ key_id: keyIdSetting.value, key_secret: keySecretSetting.value });
+      const payment: any = await razorpay.payments.fetch(razorpay_payment_id);
+      const expectedPaise = Math.round(Number(pvcSession.amount || 250) * 100);
+      if (payment.status !== 'captured') {
+        return NextResponse.json(
+          { error: 'Payment is not captured yet. Please try again in a moment.' },
+          { status: 409 }
+        );
+      }
+      if (payment.order_id !== razorpay_order_id || Math.abs(Number(payment.amount) - expectedPaise) > 1 || (payment.currency && payment.currency !== 'INR')) {
+        console.error('[PVC Payment] payment does not match session order:', { paymentOrder: payment.order_id, sessionOrder: razorpay_order_id, amount: payment.amount, expectedPaise });
+        return NextResponse.json(
+          { error: 'Payment does not match this order' },
+          { status: 400 }
+        );
+      }
+    } catch (fetchError: any) {
+      console.error('[PVC Payment] could not fetch payment from Razorpay:', fetchError?.message || fetchError);
+      return NextResponse.json(
+        { error: 'Payment verification failed. Please try again.' },
+        { status: 502 }
       );
     }
 

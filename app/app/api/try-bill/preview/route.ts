@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const identifier = getIdentifier(request);
-    const rateLimit = await checkDbRateLimit(`try-bill-preview:${identifier}`, 20, 60 * 60 * 1000);
+    const rateLimit = await checkDbRateLimit(`try-bill-preview:${identifier}`, 20, 60 * 60 * 1000, { failOpen: false });
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many preview requests. Please try again later.' },

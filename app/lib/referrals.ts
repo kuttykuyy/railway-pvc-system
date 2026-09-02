@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from './db';
+import { normalizePhone } from './phone-validation';
 
 export const REFERRAL_MINIMUM_TOPUP = 1000;
 export const REFERRAL_REWARD = 199;
@@ -125,9 +126,23 @@ async function addReferralCredit(
   });
 }
 
+/**
+ * Who actually paid for the qualifying top-up, as Razorpay reports it. A referral is
+ * blocked at sign-up when the new account shares the referrer's email or phone, but a
+ * second email and a second SIM are cheap, and a self-referral through them earned
+ * ₹398 of credit on every ₹1,000 paid. The payment instrument is harder to fake: when
+ * the payer's email or contact on the qualifying payment is the REFERRER's, the two
+ * accounts are one person and the referral is rejected rather than rewarded.
+ */
+export interface QualifyingPayer {
+  email?: string | null;
+  contact?: string | null;
+}
+
 export async function processReferralReward(
   referredUserId: string,
-  triggeringTransactionId: string
+  triggeringTransactionId: string,
+  payer?: QualifyingPayer,
 ): Promise<{ rewarded: boolean; reason?: string }> {
   return prisma.$transaction(async (tx) => {
     const triggerTransaction = await tx.razorpayTransaction.findUnique({
@@ -161,6 +176,29 @@ export async function processReferralReward(
 
     if (referral.status === 'rewarded') {
       return { rewarded: false, reason: 'Referral already rewarded' };
+    }
+
+    if (payer && (payer.email || payer.contact)) {
+      const referrer = await tx.user.findUnique({
+        where: { id: referral.referrerUserId },
+        select: { email: true, phone: true },
+      });
+      const payerEmail = String(payer.email || '').trim().toLowerCase();
+      const payerPhone = payer.contact ? normalizePhone(String(payer.contact)) : null;
+      const referrerPhone = referrer?.phone ? normalizePhone(referrer.phone) : null;
+      const sameEmail = !!payerEmail && !!referrer?.email && referrer.email.trim().toLowerCase() === payerEmail;
+      const samePhone = !!payerPhone && !!referrerPhone && payerPhone === referrerPhone;
+      if (sameEmail || samePhone) {
+        await tx.referral.updateMany({
+          where: { id: referral.id, status: { not: 'rewarded' } },
+          data: {
+            status: 'rejected',
+            rejectedAt: new Date(),
+            rejectionReason: 'self_referral_payment_identity',
+          },
+        });
+        return { rewarded: false, reason: 'Qualifying payment was made by the referrer' };
+      }
     }
 
     const firstQualifyingTopup = await tx.razorpayTransaction.findFirst({

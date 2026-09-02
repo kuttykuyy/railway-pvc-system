@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const ip = (request.headers.get('x-forwarded-for')?.split(',')[0]?.trim())
       || request.headers.get('x-real-ip')
       || 'unknown';
-    const signupRl = await checkDbRateLimit(`signup:${ip}`, 20, 60 * 60 * 1000); // 20 / hour / IP
+    const signupRl = await checkDbRateLimit(`signup:${ip}`, 20, 60 * 60 * 1000, { failOpen: false }); // 20 / hour / IP
     if (!signupRl.allowed) {
       return NextResponse.json(
         { error: 'Too many signup attempts. Please try again later.' },

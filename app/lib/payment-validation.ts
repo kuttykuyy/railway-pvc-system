@@ -21,19 +21,37 @@ export async function validateBillProcessing(
   request: Request,
   isAiUploaded?: boolean
 ): Promise<PaymentValidationResult> {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.email) {
-      return {
-        canProcess: false,
-        reason: 'Authentication required'
-      };
-    }
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return {
+      canProcess: false,
+      reason: 'Authentication required'
+    };
+  }
+  const sessionUser = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { id: true },
+  });
+  if (!sessionUser) {
+    return {
+      canProcess: false,
+      reason: 'User not found'
+    };
+  }
+  return validateBillProcessingForUser(sessionUser.id, isAiUploaded);
+}
 
-    // Find user
+/**
+ * The same decision for a caller that has no web session — a chat bot acting for a
+ * linked account. Chat-created bills used to skip this entirely.
+ */
+export async function validateBillProcessingForUser(
+  userId: string,
+  isAiUploaded?: boolean
+): Promise<PaymentValidationResult> {
+  try {
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: userId },
       include: {
         customerAccount: true
       }

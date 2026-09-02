@@ -258,11 +258,16 @@ export async function POST(request: NextRequest) {
       isFinalPvc = false,
       nonScheduleItems = [],
       classificationEntries = [],
-      isAiUploaded,
+      isAiUploaded: clientSaysAiUploaded,
       railwaySuppliedMaterialValue = 0,
       extraItemsOutsidePvc = 0,
       extractedAgreementNo = '',
     } = body;
+
+    // Whether this bill was read from a PDF decides its price (AI rate vs manual rate),
+    // so it is decided here from what the server saw, not taken from the request body.
+    const { billLooksAiRead } = await import('@/lib/uploaded-documents');
+    const isAiUploaded = await billLooksAiRead(user!.id, clientSaysAiUploaded, body.uploadedDocumentId);
 
     // GCC-2022 Cl.46A: W (the PVC base) is the gross value of work done EXCLUDING the
     // "cost of materials supplied by Railway either free or at fixed rate". The billed

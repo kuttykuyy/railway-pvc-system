@@ -139,8 +139,11 @@ export async function POST(request: NextRequest) {
     const negotiatedFee = userWithAccount.customProcessingFee !== null && userWithAccount.customProcessingFee > 0
       ? userWithAccount.customProcessingFee
       : null;
+    // A row that attaches the PDF it was read from is an AI-read bill whatever its flag
+    // says; the flag alone used to pick the cheaper manual rate for the dearer work.
+    const rowIsAiRead = (bill: BillInput) => !!(bill.isAiUploaded || bill.uploadedDocumentId);
     const feeForBill = (bill: BillInput) =>
-      isFreeAccount ? 0 : (negotiatedFee ?? (bill.isAiUploaded ? aiBillCost : manualBillCost));
+      isFreeAccount ? 0 : (negotiatedFee ?? (rowIsAiRead(bill) ? aiBillCost : manualBillCost));
 
     // (The free-trial claim happens AFTER validation, below — claiming here burned the
     // trial on any batch that was then rejected with nothing created.)
@@ -518,7 +521,7 @@ export async function POST(request: NextRequest) {
           contractId,
           billNo: billInput.billNo.trim(),
           // Per bill: a batch can mix typed and uploaded, and each was priced on its own flag.
-          createdVia: billInput.isAiUploaded ? 'pdf' : 'manual',
+          createdVia: rowIsAiRead(billInput) ? 'pdf' : 'manual',
           grossBillAmount,
           billAmount: grossBillAmount, // No non-schedule items for now
           dateOfMeasurement: measurementDate,

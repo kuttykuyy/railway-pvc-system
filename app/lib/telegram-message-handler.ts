@@ -28,6 +28,8 @@ import {
   handleCouponInput,
 } from './telegram-document-flow';
 import { prisma } from './db';
+import { billRequiresExtension } from './extension-compliance';
+import { decideChatBillCharge, settleChatBill } from './chat-bill-charge';
 
 /**
  * Main entry point — called from webhook route
@@ -820,6 +822,35 @@ async function createBillFromTelegram(conversation: any, chatId: string) {
     const contract = await prisma.contract.findUnique({ where: { id: data.contractId } });
     if (!contract) { await resetTelegramConversation(conversation.id); return sendTelegramMessage(chatId, '❌ Contract not found.'); }
 
+    // Same gate as the web and bulk routes: a bill measured after the date the contract
+    // covers waits until the time extension is recorded, because the extension decides
+    // how PVC applies to that period. This flow used to create the bill regardless.
+    const extensionGate = billRequiresExtension(contract, new Date(data.dateOfMeasurement!));
+    if (extensionGate.blocked) {
+      const fmt = (d: Date) => new Date(d).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
+      await resetTelegramConversation(conversation.id);
+      return sendTelegramMessage(
+        chatId,
+        `⚠️ This bill is measured <b>after the contract's completion date</b> ` +
+          `(covered until <b>${fmt(extensionGate.coveredUntil!)}</b>).\n\n` +
+          `Please record the time extension for this contract first, then run /createbill again:\n` +
+          `${getPublicSiteUrl()}/contracts/${contract.id}/extensions`,
+      );
+    }
+
+    // The same decision the web route makes before it builds a bill: free (role, free
+    // account, ₹0 fee, trial remaining) or paid from the credit balance — or not at all.
+    // This flow used to create the bill for nothing, every time.
+    const charge = await decideChatBillCharge(conversation.userId);
+    if (charge.canCreate === false) {
+      await resetTelegramConversation(conversation.id);
+      return sendTelegramMessage(
+        chatId,
+        `❌ This bill can't be created yet: ${charge.message}\n\n` +
+          `Add credits here and then run /createbill again:\n${getPublicSiteUrl()}/billing`,
+      );
+    }
+
     const billAmount = data.billAmount!;
     const cementPct = data.cementPercentage || 0;
     const steelPct = data.steelPercentage || 0;
@@ -836,8 +867,9 @@ async function createBillFromTelegram(conversation: any, chatId: string) {
         grossBillAmount: billAmount,
         dateOfMeasurement: new Date(data.dateOfMeasurement!),
         quarter: 'Q1',
-        isChargeable: true,
-        processingFee: 1000,
+        isChargeable: !charge.isFree,
+        processingFee: charge.requiredPayment,
+        createdVia: 'telegram',
         workClassificationId: data.classificationId,
         cementAmount,
         steelAmount,
@@ -850,23 +882,17 @@ async function createBillFromTelegram(conversation: any, chatId: string) {
       },
     });
 
-    // A transaction row marked 'trial', because the watermark rule keys on it. This
-    // path created bills with NO transaction row at all, which every report route
-    // reads as fully paid — a chat was the way to a clean statement without a rupee.
-    // Marked trial, the report carries the watermark until the owner tops up, the
-    // same bar every web trial bill clears.
-    if (conversation.userId) {
-      await prisma.billTransaction.create({
-        data: {
-          billId: bill.id,
-          userId: conversation.userId,
-          amount: 0,
-          discount: 0,
-          discountType: 'trial',
-          status: 'success',
-          isFree: true,
-        },
-      }).catch((err: any) => console.error('telegram bill transaction failed:', err));
+    // Take the trial slot or the money, exactly as the web route does. A bill that
+    // cannot be settled is deleted rather than kept: a bill with no paid transaction
+    // reads as fully paid to every report route.
+    const settled = await settleChatBill({ userId: conversation.userId, billId: bill.id, agreementNo: contract.agreementNo, decision: charge });
+    if (!settled.ok) {
+      await resetTelegramConversation(conversation.id);
+      return sendTelegramMessage(
+        chatId,
+        `❌ The bill was not created: ${settled.message}\n\n` +
+          `Add credits here and then run /createbill again:\n${getPublicSiteUrl()}/billing`,
+      );
     }
 
     await sendTelegramMessage(
@@ -874,6 +900,7 @@ async function createBillFromTelegram(conversation: any, chatId: string) {
       `✅ <b>Bill Created Successfully!</b>\n\n` +
         `📄 Bill No: <b>${bill.billNo}</b>\n` +
         `💰 Amount: <b>₹${bill.billAmount.toLocaleString('en-IN')}</b>\n` +
+        `💳 ${settled.message}\n` +
         `🧱 Cement: ${cementPct}% (₹${cementAmount.toLocaleString('en-IN')})\n` +
         `🔩 Steel: ${steelPct}% (₹${steelAmount.toLocaleString('en-IN')})\n\n` +
         `View bill: ${getPublicSiteUrl()}/bills/${bill.id}\n\n` +

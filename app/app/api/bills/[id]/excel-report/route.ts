@@ -211,13 +211,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const stamp = await prisma.bill.findUnique({
       where: { id: billId },
       select: {
+        createdVia: true,
         billTransaction: { select: { discountType: true } },
         contract: { select: { userId: true } },
       },
     });
-    if (stamp?.billTransaction?.discountType === 'trial' && stamp.contract?.userId) {
-      const topups = await prisma.creditTransaction.count({
-        where: { userId: stamp.contract.userId, type: 'add' },
+    // A chat-created bill that was never charged is refused outright, whatever the owner
+    // has paid for since; a trial bill is refused until the owner has topped up.
+    const { isTrialBill, isUnsettledChatBill } = await import('@/lib/trial-watermark');
+    if (isUnsettledChatBill(stamp) || (isTrialBill(stamp) && stamp?.contract?.userId)) {
+      const topups = isUnsettledChatBill(stamp) ? 0 : await prisma.creditTransaction.count({
+        where: { userId: stamp!.contract!.userId!, type: 'add' },
       });
       if (topups === 0) {
         return NextResponse.json(
