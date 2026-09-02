@@ -22,6 +22,15 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(newUrl);
   }
 
+  // The tendering estimator is gone — the page, its charts and its forecast APIs. An old
+  // bookmark lands on the contracts list rather than a 404.
+  if (pathname.startsWith('/tendering-estimator') || pathname.startsWith('/api/pvc-forecast')) {
+    const newUrl = new URL(req.url);
+    newUrl.pathname = '/contracts';
+    newUrl.search = '';
+    return NextResponse.redirect(newUrl);
+  }
+
   if (pathname.startsWith('/api/pvc-comparison')) {
     const newUrl = new URL(req.url);
     newUrl.pathname = pathname.replace('/api/pvc-comparison', '/api/class-analyzer');

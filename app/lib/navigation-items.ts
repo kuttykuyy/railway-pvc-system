@@ -1,5 +1,5 @@
 import {
-  BarChart3, Briefcase, Building2, Calculator, CheckSquare, CreditCard, Database,
+  Briefcase, Building2, Calculator, CheckSquare, CreditCard, Database,
   FileText, Gift, Home, LineChart, MessageSquare, ShieldCheck, Star, User, UserCircle,
   PlayCircle } from 'lucide-react';
 
@@ -52,7 +52,6 @@ export const WORK_ITEMS: NavItem[] = [
   { name: 'Bill Approvals', href: '/approvals', icon: CheckSquare, railwayOfficialOnly: true },
   { name: 'Accounts / Audit', href: '/accounts', icon: CheckSquare, accountsOfficialOnly: true },
   { name: 'Abstract of Bills', href: '/reports/abstract', icon: Calculator, adminOnly: false },
-  { name: 'Tendering Estimator', href: '/tendering-estimator', icon: BarChart3, adminOnly: false },
   { name: 'Refer & Earn', href: '/referrals', icon: Gift, adminOnly: false },
 ];
 

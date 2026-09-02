@@ -47,7 +47,7 @@ const OPERATION_LABEL: Record<string, string> = {
   'jpc-extraction': 'JPC steel sheet reading',
   'classification-justification': 'Classification justification',
   'find-classifications': 'Classification search',
-  'tendering-insights': 'Tendering estimator insights',
+  'tendering-insights': 'Tendering estimator insights (feature removed)',
   'ppac-fuel-fetch': 'Diesel price fetch (nightly)',
 };
 type ProviderStatus = 'working' | 'payment_required' | 'out_of_credit' | 'not_configured' | 'error';
