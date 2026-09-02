@@ -14,8 +14,8 @@ export function validatePhoneNumber(phone: string): boolean {
  *
  * Numbers were stored exactly as typed, so the same mobile lived in the database as
  * "+919876543210", "919876543210", "9876543210" and "098765 43210" all at once. Nothing
- * could tell they were the same number: the duplicate check in send-otp is an exact
- * match and would miss every one of those pairs, and the database could not hold a
+ * could tell they were the same number: an exact-match duplicate check would miss every
+ * one of those pairs, and the database could not hold a
  * unique constraint on a column whose values disagree about their own format.
  *
  * The output is E.164 — a "+" and digits only. A bare ten-digit number is assumed
