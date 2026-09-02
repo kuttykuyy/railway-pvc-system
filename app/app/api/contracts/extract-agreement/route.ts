@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       userEmail: session.user.email || null,
     });
 
-    return NextResponse.json({ data: result.data, documentId });
+    return NextResponse.json({ data: result.data, documentId, warnings: result.warnings ?? [] });
   } catch (error) {
     console.error('extract-agreement error:', error);
     try {

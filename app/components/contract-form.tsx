@@ -280,7 +280,8 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
       // The server keeps the LOA for 90 days. Hold its id so the contract claims it on
       // save -- an upload nobody claims is swept after a week.
       setUploadedDocumentId(typeof json.documentId === 'number' ? json.documentId : null);
-      toast.success('Form filled from the agreement. Please review before saving.', { id: toastId });
+      const warning = Array.isArray(json.warnings) && json.warnings.length ? ` ${json.warnings.join(' ')}` : '';
+      toast.success(`Form filled from the agreement. Please review before saving.${warning}`, { id: toastId, duration: warning ? 9000 : 4000 });
     } catch {
       toast.error('The upload failed. Please try again.', { id: toastId });
     } finally {
