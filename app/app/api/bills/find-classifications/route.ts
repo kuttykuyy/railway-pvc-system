@@ -443,6 +443,7 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
     // classification search existed — every one of its calls was spent unseen.
     await recordAiUsage({
       operation: 'find-classifications',
+      model: data?.model,
       ...tokensFromUsage(data?.usage),
       success: !!content,
       errorType: content ? null : 'empty_response',

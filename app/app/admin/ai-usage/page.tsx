@@ -15,8 +15,9 @@ import {
 import { Sparkles, CheckCircle2, XCircle, AlertTriangle, RefreshCw, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { estimateCostUsd, rateForModel } from '@/lib/ai-pricing';
 
-interface UsageBucket { calls: number; promptTokens: number; completionTokens: number; tokens: number }
+interface UsageBucket { calls: number; promptTokens: number; completionTokens: number; tokens: number; costUsd: number }
 interface RecentCall {
   id: string;
   operation: string;
@@ -32,7 +33,8 @@ interface UsageSummary {
   total: UsageBucket & { failures: number };
   today: UsageBucket;
   month: UsageBucket;
-  byOperation: Array<{ operation: string; calls: number; promptTokens: number; completionTokens: number; tokens: number; failures: number }>;
+  byOperation: Array<{ operation: string; calls: number; promptTokens: number; completionTokens: number; tokens: number; failures: number; costUsd: number }>;
+  byModel: Array<{ model: string; label: string; known: boolean; calls: number; promptTokens: number; completionTokens: number; tokens: number; costUsd: number }>;
   untokenedCalls: number;
   recent: RecentCall[];
   lastFailureAt: string | null;
@@ -61,16 +63,8 @@ const STATUS_META: Record<ProviderStatus, { label: string; className: string; Ic
 const numberFmt = new Intl.NumberFormat('en-IN');
 const usdFmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 4 });
 
-// Abacus RouteLLM pricing (per 1M tokens, USD).
-// These are the rates for the default route-llm model (Claude Sonnet).
-// Update if you switch models or Abacus changes their rates.
-const COST_PER_M_INPUT = 3.0;   // $ per 1M prompt tokens
-const COST_PER_M_OUTPUT = 15.0; // $ per 1M completion tokens
-
-function estimateCost(promptTokens: number, completionTokens: number): number {
-  return (promptTokens / 1_000_000) * COST_PER_M_INPUT
-       + (completionTokens / 1_000_000) * COST_PER_M_OUTPUT;
-}
+// Costs are priced per routed model (see lib/ai-pricing.ts) — Abacus bills each call
+// under the model it routed to, at that model's rate. The server sums them per period.
 
 export default function AdminAiUsagePage() {
   const { toast } = useToast();
@@ -118,7 +112,7 @@ export default function AdminAiUsagePage() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Sparkles className="h-6 w-6 text-emerald-600" /> AI Usage & Credit
           </h1>
-          <p className="text-muted-foreground">AI bill-extraction consumption and provider status (Abacus RouteLLM). Costs at ${COST_PER_M_INPUT}/1M input · ${COST_PER_M_OUTPUT}/1M output tokens.</p>
+          <p className="text-muted-foreground">AI bill-extraction consumption and provider status (Abacus RouteLLM). Costs are priced per routed model at Abacus's own rates; calls recorded before the model was written down are estimated at the GPT-4.1 rate.</p>
         </div>
         <Button variant="outline" onClick={loadUsage} disabled={loading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh
@@ -161,9 +155,9 @@ export default function AdminAiUsagePage() {
 
       {/* Usage stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Tokens today" value={usage ? numberFmt.format(usage.today.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.today.calls)} calls · ${usdFmt.format(estimateCost(usage.today.promptTokens, usage.today.completionTokens))}` : ''} />
-        <StatCard title="Tokens this month" value={usage ? numberFmt.format(usage.month.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.month.calls)} calls · ${usdFmt.format(estimateCost(usage.month.promptTokens, usage.month.completionTokens))}` : ''} />
-        <StatCard title="Tokens all-time" value={usage ? numberFmt.format(usage.total.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.total.calls)} calls · ${usdFmt.format(estimateCost(usage.total.promptTokens, usage.total.completionTokens))}` : ''} />
+        <StatCard title="Tokens today" value={usage ? numberFmt.format(usage.today.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.today.calls)} calls · ${usdFmt.format(usage.today.costUsd || 0)}` : ''} />
+        <StatCard title="Tokens this month" value={usage ? numberFmt.format(usage.month.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.month.calls)} calls · ${usdFmt.format(usage.month.costUsd || 0)}` : ''} />
+        <StatCard title="Tokens all-time" value={usage ? numberFmt.format(usage.total.tokens) : '—'} sub={usage ? `${numberFmt.format(usage.total.calls)} calls · ${usdFmt.format(usage.total.costUsd || 0)}` : ''} />
         <StatCard title="Failed calls" value={usage ? numberFmt.format(usage.total.failures) : '—'} sub={usage?.lastFailureAt ? `last ${format(new Date(usage.lastFailureAt), 'dd MMM, HH:mm')}` : 'none'} />
       </div>
 
@@ -202,13 +196,61 @@ export default function AdminAiUsagePage() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{numberFmt.format(row.calls)}</TableCell>
                     <TableCell className="text-right tabular-nums">{numberFmt.format(row.tokens)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-xs">{usdFmt.format(estimateCost(row.promptTokens, row.completionTokens))}</TableCell>
+                    <TableCell className="text-right tabular-nums text-xs">{usdFmt.format(row.costUsd || 0)}</TableCell>
                     <TableCell className="text-right tabular-nums">{row.failures ? <span className="text-red-700">{numberFmt.format(row.failures)}</span> : '—'}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {usage.month.tokens > 0 ? `${((row.tokens / usage.month.tokens) * 100).toFixed(0)}%` : '—'}
                     </TableCell>
                   </TableRow>
                 ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    {loading ? 'Loading…' : 'No AI calls this month.'}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Which model answered — the same cut as the Abacus usage page, for checking against the bill */}
+      <Card>
+        <CardHeader>
+          <CardTitle>By model this month</CardTitle>
+          <CardDescription>Abacus bills each call under the model it routed to. Lay this beside the Abacus usage page to check the estimate.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Model</TableHead>
+                <TableHead className="text-right">Calls</TableHead>
+                <TableHead className="text-right">In tokens</TableHead>
+                <TableHead className="text-right">Out tokens</TableHead>
+                <TableHead className="text-right">Rate (in / out per 1K)</TableHead>
+                <TableHead className="text-right">Est. Cost</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {usage && usage.byModel && usage.byModel.length > 0 ? (
+                usage.byModel.map((row) => {
+                  const { rate } = rateForModel(row.model);
+                  return (
+                    <TableRow key={row.model}>
+                      <TableCell>
+                        {row.label}
+                        <span className="block text-xs text-muted-foreground">{row.model}{row.known ? '' : ' · rate estimated'}</span>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{numberFmt.format(row.calls)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{numberFmt.format(row.promptTokens)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{numberFmt.format(row.completionTokens)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">${rate.input.toFixed(4)} / ${rate.output.toFixed(4)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">{usdFmt.format(row.costUsd || 0)}</TableCell>
+                    </TableRow>
+                  );
+                })
               ) : (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
@@ -249,7 +291,7 @@ export default function AdminAiUsagePage() {
                     <TableCell className="text-xs">{row.model}</TableCell>
                     <TableCell className="text-right tabular-nums">{numberFmt.format(row.promptTokens)}</TableCell>
                     <TableCell className="text-right tabular-nums">{numberFmt.format(row.completionTokens)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-xs">{usdFmt.format(estimateCost(row.promptTokens, row.completionTokens))}</TableCell>
+                    <TableCell className="text-right tabular-nums text-xs">{usdFmt.format(estimateCostUsd(row.model, row.promptTokens, row.completionTokens))}</TableCell>
                     <TableCell>
                       {row.success ? (
                         <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">OK</Badge>

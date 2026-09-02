@@ -143,6 +143,7 @@ Rules:
 
   await recordAiUsage({
     operation: 'jpc-extraction',
+    model: payload?.model,
     ...tokensFromUsage(payload?.usage),
     success: true,
   });
