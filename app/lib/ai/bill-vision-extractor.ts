@@ -150,6 +150,7 @@ export async function extractBillJsonWithVision(
   await recordAiUsage({
     operation: 'bill-vision-extraction',
     success: true,
+    model: data?.model,
     promptTokens: data?.usage?.prompt_tokens,
     completionTokens: data?.usage?.completion_tokens,
     totalTokens: data?.usage?.total_tokens,

@@ -1,8 +1,3 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -15,37 +10,31 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Footer } from '@/components/footer';
+import { getBillingSettings } from '@/lib/admin-settings';
 
-export default function HomePage() {
-  const router = useRouter();
-  const { status } = useSession();
-  const [mounted, setMounted] = useState(false);
-  const [pricing, setPricing] = useState({ billCost: 199, aiBillCost: 499 });
+// Rendered on the server, and re-rendered every five minutes so a price change in the
+// admin settings reaches the page without a deploy.
+//
+// This page used to be a client component that showed a spinner and "Loading IR-PVC..."
+// until it had mounted and asked next-auth for the session. The HTML the server sent
+// therefore carried no headline, no text and no links: search engines had to run the
+// JavaScript to see anything, link previews saw a blank page, and the largest content
+// paint waited on a round trip. The session check was redundant — the middleware already
+// sends a signed-in visitor from / to /contracts before this page renders — so the page
+// is now plain server-rendered HTML with the live prices already in it.
+export const revalidate = 300;
 
-  useEffect(() => {
-    setMounted(true);
-    fetch('/api/public/pricing')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (data) setPricing({ billCost: data.billCost ?? 199, aiBillCost: data.aiBillCost ?? 499 }); })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (status === 'authenticated') {
-      router.replace('/contracts');
-    }
-  }, [status, router]);
-
-  if (!mounted || status === 'loading') {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-white">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto" />
-          <p className="text-slate-500 font-medium tracking-wide">Loading IR-PVC...</p>
-        </div>
-      </div>
-    );
+async function loadPricing(): Promise<{ billCost: number; aiBillCost: number }> {
+  try {
+    const settings = await getBillingSettings();
+    return { billCost: settings.billCost ?? 199, aiBillCost: settings.aiBillCost ?? 499 };
+  } catch {
+    return { billCost: 199, aiBillCost: 499 };
   }
+}
+
+export default async function HomePage() {
+  const pricing = await loadPricing();
 
   return (
     <div className="min-h-screen bg-white font-sans text-slate-800 selection:bg-emerald-100 selection:text-emerald-900">

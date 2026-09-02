@@ -124,6 +124,7 @@ Respond with raw JSON only. Be specific, practical, and reference actual numbers
     // Previously unrecorded: the usage page did not know the estimator's insights existed.
     await recordAiUsage({
       operation: 'tendering-insights',
+      model: data?.model,
       ...tokensFromUsage(data?.usage),
       success: !!content,
       errorType: content ? null : 'empty_response',

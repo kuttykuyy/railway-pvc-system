@@ -50,9 +50,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow public policy and info pages
+  // Allow public policy and info pages. Help and Getting Started are documentation —
+  // the pages that answer "how do I calculate PVC" searches — and neither reads the
+  // session; keeping them behind the login sent every crawler to the sign-in page.
   if (pathname.startsWith('/terms') || 
       pathname.startsWith('/privacy') ||
+      pathname.startsWith('/help') ||
+      pathname.startsWith('/getting-started') ||
       pathname.startsWith('/refund') ||
       pathname.startsWith('/contact') ||
       pathname.startsWith('/payment-guide') ||

@@ -228,6 +228,7 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
 
   await recordAiUsage({
     operation: 'agreement-extraction',
+    model: data?.model,
     ...tokensFromUsage(data?.usage),
     success: true,
   });

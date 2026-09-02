@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { SampleDocumentDialog } from '@/components/onboarding/sample-document-dialog';
+import { BillReadingInfographic } from '@/components/bills/bill-reading-infographic';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -1769,12 +1770,10 @@ function NewBillPageContent() {
             )}
             {instantStage === 'reading' && (
               <>
-                <LoadingSpinner />
-                <h2 className="text-xl font-bold">Reading your bill…</h2>
-                <p className="text-sm text-muted-foreground">
-                  Every item is read off the PDF and the totals are checked against the bill&apos;s own
-                  figures. A long bill can take a minute or two.
-                </p>
+                {/* A step-by-step picture of what is happening to the bill, in place of a
+                    spinner: upload, read, check, classify — advancing on elapsed time,
+                    with a line on what each step does and a PVC fact while it runs. */}
+                <BillReadingInfographic phase="reading" />
                 <button
                   type="button"
                   className="text-sm text-muted-foreground hover:underline"
@@ -1869,11 +1868,7 @@ function NewBillPageContent() {
             )}
             {instantStage === 'saving' && (
               <>
-                <LoadingSpinner />
-                <h2 className="text-xl font-bold">Preparing your report…</h2>
-                <p className="text-sm text-muted-foreground">
-                  The bill is saved and the PVC report is on its way. The download starts by itself.
-                </p>
+                <BillReadingInfographic phase="saving" />
               </>
             )}
           </div>

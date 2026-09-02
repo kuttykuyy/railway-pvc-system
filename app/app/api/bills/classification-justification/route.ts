@@ -151,6 +151,7 @@ Return ONLY JSON: {"justification": "..."}`;
 
     await recordAiUsage({
       operation: 'classification-justification',
+      model: data?.model,
       ...tokensFromUsage(data?.usage),
       success: !!justification,
       errorType: justification ? null : 'empty_response',

@@ -1,4 +1,5 @@
 import { prisma } from './db';
+import { estimateCostUsd, rateForModel } from './ai-pricing';
 
 /**
  * AI provider (Abacus RouteLLM) usage tracking + live status.
@@ -48,7 +49,9 @@ export async function recordAiUsage(entry: {
     await prisma.aiUsageLog.create({
       data: {
         operation: entry.operation,
-        model: entry.model || 'route-llm',
+        // The routed model as the provider names it, so each call can be priced at the
+        // rate it was billed under. Bounded: it is a display key, not a document.
+        model: String(entry.model || 'route-llm').trim().slice(0, 80) || 'route-llm',
         promptTokens: prompt,
         completionTokens: completion,
         totalTokens: total,
@@ -62,11 +65,14 @@ export async function recordAiUsage(entry: {
 }
 
 export interface AiUsageSummary {
-  total: { calls: number; promptTokens: number; completionTokens: number; tokens: number; failures: number };
-  today: { calls: number; promptTokens: number; completionTokens: number; tokens: number };
-  month: { calls: number; promptTokens: number; completionTokens: number; tokens: number };
+  total: { calls: number; promptTokens: number; completionTokens: number; tokens: number; failures: number; costUsd: number };
+  today: { calls: number; promptTokens: number; completionTokens: number; tokens: number; costUsd: number };
+  month: { calls: number; promptTokens: number; completionTokens: number; tokens: number; costUsd: number };
   /** This month, per feature — which screen is spending the credit. */
-  byOperation: Array<{ operation: string; calls: number; promptTokens: number; completionTokens: number; tokens: number; failures: number }>;
+  byOperation: Array<{ operation: string; calls: number; promptTokens: number; completionTokens: number; tokens: number; failures: number; costUsd: number }>;
+  /** This month, per routed model — the same cut the Abacus usage page shows, so the
+   *  two can be laid side by side. `known` is false when the rate is a fallback guess. */
+  byModel: Array<{ model: string; label: string; known: boolean; calls: number; promptTokens: number; completionTokens: number; tokens: number; costUsd: number }>;
   /** Successful calls this month that carry no token count at all — calls the provider
    *  answered but whose usage field was missing or unreadable. A number here means the
    *  totals above are an undercount. */
@@ -90,7 +96,18 @@ export async function getAiUsageSummary(): Promise<AiUsageSummary> {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [all, failures, today, month, recent, lastFailure, byOp, byOpFailures, untokened] = await Promise.all([
+  // Cost is summed per routed model, because that is how the provider bills: one blended
+  // rate over the totals was a third out. Each period is grouped by model for its cost.
+  const costOf = (rows: Array<{ model: string; _sum: { promptTokens: number | null; completionTokens: number | null } }>) =>
+    Math.round(rows.reduce((sum, r) => sum + estimateCostUsd(r.model, r._sum.promptTokens || 0, r._sum.completionTokens || 0), 0) * 10000) / 10000;
+  const byModelFor = (where: object) => prisma.aiUsageLog.groupBy({
+    by: ['model'],
+    where,
+    _count: true,
+    _sum: { totalTokens: true, promptTokens: true, completionTokens: true },
+  });
+
+  const [all, failures, today, month, recent, lastFailure, byOp, byOpFailures, untokened, allByModel, todayByModel, monthByModel, byOpModel] = await Promise.all([
     prisma.aiUsageLog.aggregate({ _sum: { totalTokens: true, promptTokens: true, completionTokens: true }, _count: true }),
     prisma.aiUsageLog.count({ where: { success: false } }),
     prisma.aiUsageLog.aggregate({ _sum: { totalTokens: true, promptTokens: true, completionTokens: true }, _count: true, where: { createdAt: { gte: startOfToday } } }),
@@ -113,9 +130,21 @@ export async function getAiUsageSummary(): Promise<AiUsageSummary> {
       _count: true,
     }),
     prisma.aiUsageLog.count({ where: { createdAt: { gte: startOfMonth }, success: true, totalTokens: 0 } }),
+    byModelFor({}),
+    byModelFor({ createdAt: { gte: startOfToday } }),
+    byModelFor({ createdAt: { gte: startOfMonth } }),
+    prisma.aiUsageLog.groupBy({
+      by: ['operation', 'model'],
+      where: { createdAt: { gte: startOfMonth } },
+      _sum: { promptTokens: true, completionTokens: true },
+    }),
   ]);
 
   const failuresByOp = new Map(byOpFailures.map(r => [r.operation, r._count]));
+  const costByOp = new Map<string, number>();
+  for (const r of byOpModel) {
+    costByOp.set(r.operation, (costByOp.get(r.operation) || 0) + estimateCostUsd(r.model, r._sum.promptTokens || 0, r._sum.completionTokens || 0));
+  }
   const byOperation = byOp
     .map(r => ({
       operation: r.operation,
@@ -124,14 +153,31 @@ export async function getAiUsageSummary(): Promise<AiUsageSummary> {
       completionTokens: r._sum.completionTokens || 0,
       tokens: r._sum.totalTokens || 0,
       failures: failuresByOp.get(r.operation) || 0,
+      costUsd: Math.round((costByOp.get(r.operation) || 0) * 10000) / 10000,
     }))
     .sort((a, b) => b.tokens - a.tokens || b.calls - a.calls);
+  const byModel = monthByModel
+    .map(r => {
+      const priced = rateForModel(r.model);
+      return {
+        model: r.model,
+        label: priced.label,
+        known: priced.known,
+        calls: r._count,
+        promptTokens: r._sum.promptTokens || 0,
+        completionTokens: r._sum.completionTokens || 0,
+        tokens: r._sum.totalTokens || 0,
+        costUsd: Math.round(estimateCostUsd(r.model, r._sum.promptTokens || 0, r._sum.completionTokens || 0) * 10000) / 10000,
+      };
+    })
+    .sort((a, b) => b.costUsd - a.costUsd || b.tokens - a.tokens);
 
   return {
-    total: { calls: all._count, promptTokens: all._sum.promptTokens || 0, completionTokens: all._sum.completionTokens || 0, tokens: all._sum.totalTokens || 0, failures },
-    today: { calls: today._count, promptTokens: today._sum.promptTokens || 0, completionTokens: today._sum.completionTokens || 0, tokens: today._sum.totalTokens || 0 },
-    month: { calls: month._count, promptTokens: month._sum.promptTokens || 0, completionTokens: month._sum.completionTokens || 0, tokens: month._sum.totalTokens || 0 },
+    total: { calls: all._count, promptTokens: all._sum.promptTokens || 0, completionTokens: all._sum.completionTokens || 0, tokens: all._sum.totalTokens || 0, failures, costUsd: costOf(allByModel) },
+    today: { calls: today._count, promptTokens: today._sum.promptTokens || 0, completionTokens: today._sum.completionTokens || 0, tokens: today._sum.totalTokens || 0, costUsd: costOf(todayByModel) },
+    month: { calls: month._count, promptTokens: month._sum.promptTokens || 0, completionTokens: month._sum.completionTokens || 0, tokens: month._sum.totalTokens || 0, costUsd: costOf(monthByModel) },
     byOperation,
+    byModel,
     untokenedCalls: untokened,
     recent,
     lastFailureAt: lastFailure?.createdAt || null,

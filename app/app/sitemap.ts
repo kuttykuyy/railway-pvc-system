@@ -12,18 +12,28 @@ export const SITE_ORIGIN = 'https://www.irpvc.in';
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = SITE_ORIGIN;
 
-  // Public pages (accessible without login)
+  // Public pages (accessible without login). Sign-in and sign-up are deliberately not
+  // here: they are noindex (app/auth/layout.tsx), and listing them at 0.8 put two login
+  // forms above the product pages. Try-bill, the page that converts, was missing.
   const publicPages = [
-    { route: '', priority: 1.0, changeFrequency: 'daily' as const },
-    { route: '/about', priority: 0.9, changeFrequency: 'monthly' as const },
-    { route: '/pricing', priority: 0.9, changeFrequency: 'weekly' as const },
+    { route: '', priority: 1.0, changeFrequency: 'weekly' as const },
+    { route: '/try-bill', priority: 0.9, changeFrequency: 'monthly' as const },
+    { route: '/pricing', priority: 0.9, changeFrequency: 'monthly' as const },
     { route: '/how-it-works', priority: 0.9, changeFrequency: 'monthly' as const },
-    { route: '/contact', priority: 0.8, changeFrequency: 'monthly' as const },
-    { route: '/privacy', priority: 0.5, changeFrequency: 'yearly' as const },
-    { route: '/terms', priority: 0.5, changeFrequency: 'yearly' as const },
-    { route: '/auth/signin', priority: 0.8, changeFrequency: 'monthly' as const },
-    { route: '/auth/signup', priority: 0.8, changeFrequency: 'monthly' as const },
+    { route: '/about', priority: 0.7, changeFrequency: 'monthly' as const },
+    { route: '/help', priority: 0.7, changeFrequency: 'monthly' as const },
+    { route: '/getting-started', priority: 0.7, changeFrequency: 'monthly' as const },
+    { route: '/payment-guide', priority: 0.6, changeFrequency: 'monthly' as const },
+    { route: '/contact', priority: 0.6, changeFrequency: 'yearly' as const },
+    { route: '/privacy', priority: 0.3, changeFrequency: 'yearly' as const },
+    { route: '/terms', priority: 0.3, changeFrequency: 'yearly' as const },
+    { route: '/refund', priority: 0.3, changeFrequency: 'yearly' as const },
   ];
+
+  // One date for the lot, moved by hand when the public pages change. It used to be
+  // "now" on every request, which told Google every page changed every minute — a
+  // signal it learns to ignore, taking the real changes down with it.
+  const LAST_MODIFIED = new Date('2026-09-02T00:00:00Z');
 
   // Pages behind the login are deliberately NOT listed. A sitemap is a list of pages
   // that can be indexed, and every one of these answers a crawler with a redirect to
@@ -46,7 +56,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const sitemap: MetadataRoute.Sitemap = allPages.map((page) => ({
     url: `${baseUrl}${page.route}`,
-    lastModified: new Date(),
+    lastModified: LAST_MODIFIED,
     changeFrequency: page.changeFrequency,
     priority: page.priority,
   }));
