@@ -704,6 +704,7 @@ export default function BulkBillCreationPage() {
             cementAmount: parseAmount(row.cementAmount),
             classificationEntries: row.classificationEntries.map(entry => ({
               subClassificationId: entry.subClassificationId || (entry.subClassification as any)?.id || '',
+              outsidePvc: (entry as any).outsidePvc === true,
               amount: entry.amount === '' || entry.amount === null || entry.amount === undefined
                 ? 0 : typeof entry.amount === 'string' ? parseFloat(entry.amount) || 0 : entry.amount,
               description: entry.description || '',
