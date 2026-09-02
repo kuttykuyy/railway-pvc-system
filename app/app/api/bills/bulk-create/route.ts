@@ -405,10 +405,13 @@ export async function POST(request: NextRequest) {
       // bought. The billed amounts are untouched — that is the real work value — and
       // only the base the variation is worked out on is reduced, spread across the
       // entries in proportion to their amounts, exactly as the single-bill route does.
+      const flaggedExtraTotal = billInput.classificationEntries.reduce(
+        (sum: number, e: any) => sum + (e?.outsidePvc ? (Number(e?.amount) || 0) : 0), 0);
+      const varyingTotal = classificationTotal - flaggedExtraTotal;
       const outsidePvc = Math.max(0, Number(billInput.railwaySuppliedMaterialValue) || 0)
-        + Math.max(0, Number(billInput.extraItemsOutsidePvc) || 0);
-      const pvcBaseFactor = outsidePvc > 0 && classificationTotal > outsidePvc
-        ? (classificationTotal - outsidePvc) / classificationTotal
+        + Math.max(0, (Number(billInput.extraItemsOutsidePvc) || 0) - flaggedExtraTotal);
+      const pvcBaseFactor = outsidePvc > 0 && varyingTotal > outsidePvc
+        ? (varyingTotal - outsidePvc) / varyingTotal
         : 1;
 
       // Generate PVC auto-number
@@ -475,7 +478,7 @@ export async function POST(request: NextRequest) {
         const entryPvc = await calculateClassificationEntryPvc(
           {
             subClassificationId: entry.subClassificationId,
-            amount: Number(entry.amount) * pvcBaseFactor,
+            amount: (entry as any).outsidePvc ? 0 : Number(entry.amount) * pvcBaseFactor,
             steelTypes: entrySteelTypes,
             itemRows: entry.itemRows || null
           },
@@ -496,6 +499,7 @@ export async function POST(request: NextRequest) {
 
         classificationEntriesData.push({
           subClassificationId: entry.subClassificationId,
+          outsidePvc: (entry as any).outsidePvc === true,
           amount: Number(entry.amount),
           description: entry.description || '',
           classificationJustification: entry.classificationJustification || null,

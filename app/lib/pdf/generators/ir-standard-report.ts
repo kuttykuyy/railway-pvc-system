@@ -34,6 +34,8 @@ interface SubClassification {
 
 interface ClassificationEntry {
   amount: number;
+  /** Extra item under Cl.39: listed and paid, outside price variation (Cl.46A.1(b)). */
+  outsidePvc?: boolean | null;
   description?: string | null;
   scheduleItem?: string | null;
   itemNumber?: string | null;
@@ -281,7 +283,13 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   const pvc = bill.pvcCalculation;
   const billAmount = bill.grossBillAmount ?? bill.billAmount;
   const entries = (bill.classificationEntries || []) as ClassificationEntry[];
-  const weights = computeWeightedComponents(entries, billAmount);
+  // Extra items ordered after the agreement are on the bill but outside price variation
+  // (Cl.46A.1(b)): they are listed in Section E, and left out of every computation.
+  const extraOutsidePvc = entries.filter(e => e.outsidePvc === true);
+  const extraOutsidePvcTotal = extraOutsidePvc.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const varyingEntries = entries.filter(e => e.outsidePvc !== true);
+  const varyingAmount = Math.max(0, billAmount - extraOutsidePvcTotal);
+  const weights = computeWeightedComponents(varyingEntries, varyingAmount);
 
   // Only the steel index types actually used by this bill (entry steel types or
   // dedicated steel PVC amounts) are shown; falls back to all types if none is marked.
@@ -583,7 +591,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   ].filter(c => c.pct > 0.0001 || Math.abs(c.pvcAmt) > 0.01);
 
   const totalPct = allComponents.reduce((s, c) => s + c.pct, 0);
-  const totalCompAmt = allComponents.reduce((s, c) => s + billAmount * c.pct, 0);
+  const totalCompAmt = allComponents.reduce((s, c) => s + varyingAmount * c.pct, 0);
 
   // ── Per-classification computation (Sections C and G print one block per class) ──
   // The combined table above prices the bill on WEIGHTED percentages — a blend that
@@ -597,7 +605,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     subtotal: number;
   }> = (() => {
     const byCode = new Map<string, { code: string; name: string; amount: number; comps: any; steelTypes: Set<string> }>();
-    for (const e of entries) {
+    for (const e of varyingEntries) {
       const sub: any = (e as any).subClassification;
       const amt = Number(e.amount) || 0;
       if (!sub?.code || !amt) continue;
@@ -669,7 +677,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     i + 1,
     c.name,
     (c.pct * 100).toFixed(2) + '%',
-    fmt(billAmount * c.pct),
+    fmt(varyingAmount * c.pct),
     fmtIdx(c.base),
     fmtIdx(c.avg),
     fmtVariation(c.variation),
@@ -960,7 +968,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
           ],
         ]))
       : allComponents.map(c => {
-          const amt = billAmount * c.pct;
+          const amt = varyingAmount * c.pct;
           return [
             c.name,
             (c.pct * 100).toFixed(2) + '%',
@@ -1137,7 +1145,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         classBody.push([
           dSl,
           pdfSafe(itemNumbers),
-          pdfSafe(classification),
+          pdfSafe(entry.outsidePvc ? `${classification} [Extra item, Cl.39 - outside PVC]` : classification),
           fmt(Number(entry.amount) || 0),
         ]);
       }

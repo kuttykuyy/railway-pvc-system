@@ -281,9 +281,17 @@ export async function POST(request: NextRequest) {
     // any other. Not to be confused with the B-schedule items a tender itself carries:
     // those are part of the contract and attract PVC in the ordinary way.
     const extraItems = Math.max(0, parseFloat(extraItemsOutsidePvc) || 0);
-    const outsidePvc = railwaySupplied + extraItems;
+    // Entries flagged outsidePvc are the extra items themselves: they are listed and
+    // paid but earn no PVC at all, so they leave the varying amount whole rather than
+    // being spread across every entry in proportion. The Clause 39 box covers only
+    // what is NOT already flagged, so the same rupee is never taken out twice.
+    const flaggedExtraTotal = (classificationEntries || []).reduce(
+      (sum: number, e: any) => sum + (e?.outsidePvc ? (parseFloat(e?.amount) || 0) : 0),
+      0,
+    );
+    const outsidePvc = railwaySupplied + Math.max(0, extraItems - flaggedExtraTotal);
     const entriesTotalAmount = (classificationEntries || []).reduce(
-      (sum: number, e: any) => sum + (parseFloat(e?.amount) || 0),
+      (sum: number, e: any) => sum + (e?.outsidePvc ? 0 : (parseFloat(e?.amount) || 0)),
       0,
     );
     const pvcBaseFactor = outsidePvc > 0 && entriesTotalAmount > outsidePvc
@@ -836,8 +844,9 @@ export async function POST(request: NextRequest) {
             {
               subClassificationId: entry.subClassificationId,
               classificationId: entry.classificationId,
-              // PVC base excludes railway-supplied material (factor is 1 when none).
-              amount: parseFloat(entry.amount) * pvcBaseFactor,
+              // PVC base excludes railway-supplied material (factor is 1 when none) and
+              // an extra item outside PVC varies on nothing at all.
+              amount: entry.outsidePvc ? 0 : parseFloat(entry.amount) * pvcBaseFactor,
               steelTypes: entrySteelTypes,
               // One entry can merge reinforcement with structural steelwork. When the rows
               // carry their own categories, each is priced against its own index.
@@ -864,6 +873,7 @@ export async function POST(request: NextRequest) {
               quantity: entry.quantity ? parseFloat(entry.quantity) : null,
               agreementRate: entry.agreementRate ? parseFloat(entry.agreementRate) : null,
               itemRows: entry.itemRows ? JSON.parse(JSON.stringify(entry.itemRows)) : null,
+              outsidePvc: entry.outsidePvc === true,
               labourPvc: entryPvc.labourPvc,
               plantMachineryPvc: entryPvc.plantMachineryPvc,
               fuelPowerPvc: entryPvc.fuelPowerPvc,

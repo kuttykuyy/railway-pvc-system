@@ -400,9 +400,15 @@ export async function PUT(
     // exclusion it was created with.
     const railwaySupplied = Math.max(0, Number(body.railwaySuppliedMaterialValue ?? existingBill.railwaySuppliedMaterialValue ?? 0) || 0);
     const extraItems = Math.max(0, Number(body.extraItemsOutsidePvc ?? 0) || 0);
-    const outsidePvc = railwaySupplied + extraItems;
+    // Same as creation: flagged extra items earn no PVC and leave the varying amount
+    // whole; the Clause 39 box covers only what is not already flagged.
+    const flaggedExtraTotal = (classificationEntries || []).reduce(
+      (sum: number, e: any) => sum + (e?.outsidePvc ? (parseFloat(e?.amount) || 0) : 0),
+      0,
+    );
+    const outsidePvc = railwaySupplied + Math.max(0, extraItems - flaggedExtraTotal);
     const entriesTotalAmount = (classificationEntries || []).reduce(
-      (sum: number, e: any) => sum + (parseFloat(e?.amount) || 0),
+      (sum: number, e: any) => sum + (e?.outsidePvc ? 0 : (parseFloat(e?.amount) || 0)),
       0,
     );
     const pvcBaseFactor = outsidePvc > 0 && entriesTotalAmount > outsidePvc
@@ -512,7 +518,7 @@ export async function PUT(
             {
               subClassificationId: entry.subClassificationId,
               classificationId: entry.classificationId,
-              amount: parseFloat(entry.amount) * pvcBaseFactor,
+              amount: entry.outsidePvc ? 0 : parseFloat(entry.amount) * pvcBaseFactor,
               steelTypes: entrySteelTypes,
               // Same as creation: per-row steel categories price row by row.
               itemRows: entry.itemRows || null
@@ -537,6 +543,7 @@ export async function PUT(
               quantity: entry.quantity ? parseFloat(entry.quantity) : null,
               agreementRate: entry.agreementRate ? parseFloat(entry.agreementRate) : null,
               itemRows: entry.itemRows ? JSON.parse(JSON.stringify(entry.itemRows)) : null,
+              outsidePvc: entry.outsidePvc === true,
               labourPvc: entryPvc.labourPvc,
               plantMachineryPvc: entryPvc.plantMachineryPvc,
               fuelPowerPvc: entryPvc.fuelPowerPvc,
