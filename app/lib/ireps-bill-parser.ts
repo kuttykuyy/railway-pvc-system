@@ -446,7 +446,7 @@ export function parseIrepsBillMarkdown(markdown: string): DeterministicBillDetai
       ? 'USSR_2021'
       : /CPWD-?DSR|DSR-?2021/.test(scheduleText)
         ? 'DSR_2021'
-        : /NOT COVERED|NON.?SCHEDULE/.test(scheduleText)
+        : /NOT COVERED|\bNS\b|NON.?SCHEDULE/.test(scheduleText)
           ? 'NON_SCHEDULE'
           : 'UNKNOWN';
     const materials = classifyMaterials(description);

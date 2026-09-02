@@ -41,6 +41,7 @@ import {
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
+import { findAdditionalNsItems, type ExtraItemsReport } from '@/lib/extra-items';
 import { STEEL_COMPONENT_OPTIONS } from '@/lib/types';
 import { getRailwayZoneOptions, getSteelCityForZone, DEFAULT_FUEL_PRICE_TYPE } from '@/lib/zone-steel-city-mapping';
 import { parseAgreementNumber } from '@/lib/railway-division-helper';
@@ -271,6 +272,10 @@ function NewBillPageContent() {
 
   // Value of extra items ordered under Cl.39(1)(b) that carry no PVC — see Cl.46A.1(b).
   const [extraItemsOutsidePvc, setExtraItemsOutsidePvc] = useState('');
+  // Items the bill prints under an "Additional NS item" schedule — ordered after the
+  // agreement, so outside PVC under Cl.46A.1(b) unless specially agreed. Offered, never
+  // applied on its own: a person confirms before the contractor loses price variation.
+  const [extraItemCandidates, setExtraItemCandidates] = useState<ExtraItemsReport | null>(null);
   
   // Accordion state - start with basic info open
   const [openAccordion, setOpenAccordion] = useState<string[]>(['basic']);
@@ -755,6 +760,9 @@ function NewBillPageContent() {
     setUploadedDocumentId(context?.documentId ?? null);
     // A read has landed, so any earlier "it did not fill the form" notice is stale.
     setExtractionNotice(null);
+    // Items added after the agreement, if the bill prints any under their own schedule.
+    const additional = findAdditionalNsItems((data.billDetails?.items || data.extractedItems || []) as any[]);
+    setExtraItemCandidates(additional.candidates.length > 0 ? additional : null);
     // The derived-cement tools are ADVISORY only (user directive, 2026-08-30): they never
     // block Preview or Create. Deriving cement from items remains available on the form
     // for whoever wants it.
@@ -2520,6 +2528,53 @@ function NewBillPageContent() {
                           unless PVC and a base month were specially agreed when their rates were fixed, in which case
                           leave this blank. Not for B-schedule items: those are part of the contract and do get PVC.
                         </p>
+                        {extraItemCandidates && (
+                          <div className="rounded-md border border-amber-300 bg-white p-3 text-xs space-y-2">
+                            <p className="font-semibold text-amber-900">
+                              This bill has {extraItemCandidates.candidates.length} item{extraItemCandidates.candidates.length === 1 ? '' : 's'} under{' '}
+                              {extraItemCandidates.schedules.map(name => `“${name}”`).join(', ')} — added after the agreement, so outside PVC unless PVC and a base month were agreed when their rates were fixed.
+                            </p>
+                            <ul className="space-y-0.5 text-amber-900/90">
+                              {extraItemCandidates.candidates.slice(0, 8).map((c, i) => (
+                                <li key={`${c.itemNo}-${i}`} className="flex justify-between gap-3">
+                                  <span className="truncate"><span className="font-mono">{c.itemNo || '—'}</span> {c.description}</span>
+                                  <span className="shrink-0 tabular-nums">₹{c.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </li>
+                              ))}
+                              {extraItemCandidates.candidates.length > 8 && (
+                                <li className="text-amber-700">…and {extraItemCandidates.candidates.length - 8} more</li>
+                              )}
+                            </ul>
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              {parseFloat(extraItemsOutsidePvc) === extraItemCandidates.total ? (
+                                <span className="font-medium text-emerald-700">
+                                  ✓ ₹{extraItemCandidates.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kept out of PVC
+                                </span>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => {
+                                    setExtraItemsOutsidePvc(extraItemCandidates.total.toFixed(2));
+                                    toast.success('Extra items kept out of PVC (Cl. 46A.1(b)).');
+                                  }}
+                                  className="h-8 bg-amber-600 hover:bg-amber-700 text-white"
+                                >
+                                  Keep ₹{extraItemCandidates.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} out of PVC
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setExtraItemCandidates(null)}
+                                className="h-8 text-amber-800"
+                              >
+                                PVC was agreed for these — keep them in
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                         <Input
                           id="extraItemsOutsidePvc"
                           type="number"
