@@ -111,6 +111,10 @@ export interface AgreementExtractionResult {
   data?: ExtractedAgreement;
   status?: number;
   error?: string;
+  /** What actually went wrong, for the failure record — never shown to the user. */
+  detail?: string;
+  /** Things the reader could not get that the form can do without — shown to the user. */
+  warnings?: string[];
 }
 
 /**
@@ -143,7 +147,9 @@ export async function extractAgreementFromPdf(
   }
   const dataUri = `data:application/pdf;base64,${Buffer.from(pdfBytes).toString('base64')}`;
 
-  const prompt = `You are extracting fields from an Indian Railway "Contract Agreement of Works" / e-tender agreement PDF to pre-fill a form. Read the whole document.
+  // What the contract cannot be set up without: who, what, which number, and the closing
+  // date that fixes the base month. Small enough that the reply is never cut off.
+  const essentialsPrompt = `You are extracting fields from an Indian Railway "Contract Agreement of Works" / e-tender agreement PDF to pre-fill a form. Read the whole document.
 
 Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null when a value is not clearly present. Convert every date to "YYYY-MM-DD" — these documents write dates DAY FIRST, so 05-06-2025 means 5 June 2025 -> "2025-06-05", never 6 May. Convert money to a plain number (no commas, no ₹).
 
@@ -162,76 +168,129 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   "agreementAmount": "LOA Amount / accepted contract value (number)",
   "railwayName": "Railway zone name (e.g. Southern Railway)",
   "division": "Division/Unit (e.g. Tiruchchirappalli / TPJ)",
-  "schedules": "Every work schedule listed (Schedule A1, A2, B1, ...). Each element: { name, escalation, bidRate, subWorks, items }. name = the schedule's title. escalation and bidRate = percentages stated for the schedule AS A WHOLE, else null. subWorks = the rows under that schedule in the 'Awarded Quantities And Rates' table — each row is a sub-work priced separately, as { name, escalation, bidRate }: name is the item description (e.g. 'Renewal of roofing sheet in foundry shop.'), escalation is that row's Escl. (%) as a signed number with 'At Par' meaning 0, bidRate is that row's Bid Rate as a signed number ('17.00 % Above' is 17, '5.00 % Below' is -5, 'At Par' is 0). items = every item number printed under the schedule, exactly as printed (e.g. '1', '5.35', '082011'), or [] where none are listed. Return [] if no schedules are listed.",
   "acceptedPercentage": "The ONE overall tender percentage the offer was accepted at, as a number: ABOVE the estimate is POSITIVE, BELOW is NEGATIVE, 'at par' is 0. A Letter of Acceptance states this in a sentence rather than a table — 'your offer ... at 5.75% below the estimated cost is accepted' -> -5.75; 'quoted 3% excess' -> 3; '(-)7.5%' -> -7.5; 'at par' -> 0. Words to read as BELOW: below, less, discount, rebate, minus, (-). Words to read as ABOVE: above, excess, over, plus, (+). Return null if no such percentage is stated anywhere.",
   "rebatePercentage": "Any separately stated REBATE % (a discount on the accepted rates, sometimes offered in a later letter), as a positive number. Null if the document states no separate rebate. Do NOT repeat acceptedPercentage here — a below-estimate offer is not a rebate."
 }`;
 
-  const messages = [
+  // The schedules are useful but optional: an LOA with many schedules lists hundreds of
+  // item numbers, and this is the part of the reply that gets cut off. It is asked for
+  // separately, so a failure here costs the form its schedule rows and nothing else.
+  const schedulesPrompt = `You are extracting the work schedules from an Indian Railway "Contract Agreement of Works" / e-tender agreement PDF. Read the whole document.
+
+Return ONLY raw JSON (no markdown, no code fences) with this one key. Use [] when no schedules are listed.
+
+{
+  "schedules": "Every work schedule listed (Schedule A1, A2, B1, ...). Each element: { name, escalation, bidRate, subWorks, items }. name = the schedule's title. escalation and bidRate = percentages stated for the schedule AS A WHOLE, else null. subWorks = the rows under that schedule in the 'Awarded Quantities And Rates' table — each row is a sub-work priced separately, as { name, escalation, bidRate }: name is the item description (e.g. 'Renewal of roofing sheet in foundry shop.'), escalation is that row's Escl. (%) as a signed number with 'At Par' meaning 0, bidRate is that row's Bid Rate as a signed number ('17.00 % Above' is 17, '5.00 % Below' is -5, 'At Par' is 0). items = every item number printed under the schedule, exactly as printed (e.g. '1', '5.35', '082011'), or [] where none are listed. Return [] if no schedules are listed."
+}`;
+
+  const withPdf = (text: string) => [
     {
       role: 'user',
       content: [
         { type: 'file', file: { filename, file_data: dataUri } },
-        { type: 'text', text: prompt },
+        { type: 'text', text },
       ],
     },
   ];
 
-  let response: Response;
-  try {
-    response = await fetch(ABACUS_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'route-llm', messages, response_format: { type: 'json_object' }, max_tokens: 9000, temperature: 0.1 }),
-      signal: AbortSignal.timeout(60000),
-    });
-  } catch {
-    await recordAiUsage({ operation: 'agreement-extraction', success: false, errorType: 'network' });
-    return { ok: false, status: 502, error: 'The AI request failed. Please try again.' };
+  // One shape for both outcomes: the project compiles without strict null checks, so a
+  // discriminated union would not narrow on `ok` and every field read would fail to type.
+  interface Ask {
+    ok: boolean;
+    extracted?: any;
+    model?: string | null;
+    kind?: 'network' | 'http' | 'unparseable';
+    status?: number;
+    outOfCredit?: boolean;
+    detail?: string;
+    truncated?: boolean;
   }
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    console.error(`agreement-extractor: AI HTTP ${response.status}:`, text.slice(0, 500));
-    const outOfCredit = response.status === 402 || /no remaining credits|insufficient credits|credit balance/i.test(text);
-    await recordAiUsage({ operation: 'agreement-extraction', success: false, errorType: outOfCredit ? 'out_of_credit' : `http_${response.status}` });
-    return {
-      ok: false,
-      status: outOfCredit ? 402 : 502,
-      error: outOfCredit
-        ? 'The AI service is out of credit. Please try again later.'
-        : `Could not read the agreement (AI error ${response.status}). Please try again, or fill the form manually.`,
-    };
-  }
+  const ask = async (text: string, maxTokens: number, label: string): Promise<Ask> => {
+    let response: Response;
+    try {
+      response = await fetch(ABACUS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model: 'route-llm', messages: withPdf(text), response_format: { type: 'json_object' }, max_tokens: maxTokens, temperature: 0.1 }),
+        signal: AbortSignal.timeout(90000),
+      });
+    } catch (err: any) {
+      await recordAiUsage({ operation: 'agreement-extraction', success: false, errorType: 'network' });
+      return { ok: false, kind: 'network', status: 502, detail: `${label}: network: ${err?.message || err}` };
+    }
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      console.error(`agreement-extractor: ${label}: AI HTTP ${response.status}:`, body.slice(0, 500));
+      const outOfCredit = response.status === 402 || /no remaining credits|insufficient credits|credit balance/i.test(body);
+      await recordAiUsage({ operation: 'agreement-extraction', success: false, errorType: outOfCredit ? 'out_of_credit' : `http_${response.status}` });
+      return { ok: false, kind: 'http', status: outOfCredit ? 402 : 502, outOfCredit, detail: `${label}: AI HTTP ${response.status}: ${body.slice(0, 300)}` };
+    }
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    const finishReason = String(data?.choices?.[0]?.finish_reason ?? 'unknown');
+    try {
+      const parsed = JSON.parse(content);
+      if (!parsed || typeof parsed !== 'object') throw new Error('not an object');
+      await recordAiUsage({ operation: 'agreement-extraction', model: data?.model, ...tokensFromUsage(data?.usage), success: true });
+      return { ok: true, extracted: parsed, model: data?.model ?? null };
+    } catch {
+      const truncated = finishReason === 'length';
+      console.error(`agreement-extractor: ${label}: unparseable AI reply (finish_reason=${finishReason}, ${String(content ?? '').length} chars):`, String(content ?? '').slice(-200));
+      await recordAiUsage({ operation: 'agreement-extraction', model: data?.model, ...tokensFromUsage(data?.usage), success: false, errorType: truncated ? 'truncated' : 'parse_error' });
+      return { ok: false, kind: 'unparseable', status: 502, truncated, detail: `${label}: finish_reason=${finishReason}, ${String(content ?? '').length} chars, model=${data?.model ?? '?'}` };
+    }
+  };
 
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
-  const finishReason = data?.choices?.[0]?.finish_reason;
-  let extracted: any = {};
-  try {
-    extracted = JSON.parse(content);
-  } catch {
-    const truncated = finishReason === 'length';
-    console.error(
-      `agreement-extractor: unparseable AI reply (finish_reason=${finishReason ?? 'unknown'}, ${String(content ?? '').length} chars):`,
-      String(content ?? '').slice(-300),
-    );
-    await recordAiUsage({ operation: 'agreement-extraction', success: false, errorType: truncated ? 'truncated' : 'parse_error' });
+  const COMPACT = `
+
+COMPACT RETRY: the previous reply was cut off before it finished. Return the same JSON object with every text value under 400 characters and, where schedules are asked for, "items": [] for every schedule. No prose, nothing outside the JSON object.`;
+
+  // Both readings at once, so the optional one adds no waiting. Each gets one compact
+  // retry if its reply comes back unusable.
+  const [essentialsFirst, schedulesFirst] = await Promise.all([
+    ask(essentialsPrompt, 6000, 'essentials'),
+    ask(schedulesPrompt, 16000, 'schedules'),
+  ]);
+  const essentials = essentialsFirst.ok || essentialsFirst.kind !== 'unparseable'
+    ? essentialsFirst
+    : await ask(essentialsPrompt + COMPACT, 6000, 'essentials retry');
+  const schedulesRead = schedulesFirst.ok || schedulesFirst.kind !== 'unparseable'
+    ? schedulesFirst
+    : await ask(schedulesPrompt + COMPACT, 16000, 'schedules retry');
+
+  if (!essentials.ok) {
+    if (essentials.kind === 'network') {
+      return { ok: false, status: 502, error: 'The AI request failed. Please try again.', detail: essentials.detail };
+    }
+    if (essentials.kind === 'http') {
+      return {
+        ok: false,
+        status: essentials.status ?? 502,
+        error: essentials.outOfCredit
+          ? 'The AI service is out of credit. Please try again later.'
+          : 'Could not read the agreement (AI error). Please try again, or fill the form manually.',
+        detail: essentials.detail,
+      };
+    }
     return {
       ok: false,
       status: 502,
-      error: truncated
-        ? 'The document has more schedules and items than one reading could return. Please try again; if it repeats, fill the form manually.'
-        : 'Could not read the agreement clearly. Please fill the form manually.',
+      error: 'Could not read the agreement clearly. Our team has been notified; meanwhile the form can be filled in by hand.',
+      detail: essentials.detail,
     };
   }
 
-  await recordAiUsage({
-    operation: 'agreement-extraction',
-    model: data?.model,
-    ...tokensFromUsage(data?.usage),
-    success: true,
-  });
+  const warnings: string[] = [];
+  const extracted: any = { ...essentials.extracted };
+  if (schedulesRead.ok && Array.isArray(schedulesRead.extracted?.schedules)) {
+    extracted.schedules = schedulesRead.extracted.schedules;
+  } else {
+    extracted.schedules = [];
+    // Not a failure of the read: the contract stands without its schedule rows.
+    console.warn('agreement-extractor: schedules not read, continuing without them:', schedulesRead.ok ? 'no schedules array' : schedulesRead.detail);
+    warnings.push('The schedules could not be read from this document. Add them on the form if you need them; the bill supplies item numbers later.');
+  }
 
   // The closing date decides the base month, and a base month that is out by a month
   // skews every quarter's PVC without ever looking wrong. Both agreements and LOAs
@@ -305,6 +364,7 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
 
   return {
     ok: true,
+    warnings: warnings.length ? warnings : undefined,
     data: {
       documentType,
       schedules,

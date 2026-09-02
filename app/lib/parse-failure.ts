@@ -16,19 +16,29 @@ import { schemaQualified } from './db-schema';
  * takes unrelated queries down with it, which is a lesson this codebase has now paid
  * for twice.
  */
+/** Which reader failed. The row's error text is prefixed so the admin list tells them apart without a new column. */
+export type ParseFailureKind = 'bill' | 'agreement';
+
+const KIND_PREFIX: Record<ParseFailureKind, string> = { bill: '', agreement: '[LOA] ' };
+const KIND_LABEL: Record<ParseFailureKind, string> = { bill: 'A bill PDF failed to read', agreement: 'An LOA / agreement PDF failed to read' };
+
 export async function recordParseFailure(args: {
   userEmail: string | null;
   fileName: string | null;
   error: string;
   pdfBuffer: Buffer | null;
+  /** Defaults to 'bill'. LOA reads used to fail with nothing kept and nobody told. */
+  kind?: ParseFailureKind;
 }): Promise<void> {
+  const kind: ParseFailureKind = args.kind || 'bill';
+  const error = `${KIND_PREFIX[kind]}${args.error}`;
   try {
     const table = await schemaQualified('parse_failures');
     await prisma.$executeRawUnsafe(
       `INSERT INTO ${table} ("userEmail", "fileName", "error", "pdfBase64") VALUES ($1, $2, $3, $4)`,
       args.userEmail,
       args.fileName,
-      args.error.slice(0, 8000),
+      error.slice(0, 8000),
       args.pdfBuffer ? args.pdfBuffer.toString('base64') : null,
     );
   } catch (err) {
@@ -37,7 +47,7 @@ export async function recordParseFailure(args: {
   try {
     const { notifyTelegramAdmin } = await import('./telegram-api');
     await notifyTelegramAdmin(
-      `📄❌ A bill PDF failed to read\nFile: ${args.fileName || '(unnamed)'}\nUser: ${args.userEmail || '(unknown)'}\n${args.error.slice(0, 400)}\n\nThe PDF is saved under Admin → Parse Failures.`,
+      `📄❌ ${KIND_LABEL[kind]}\nFile: ${args.fileName || '(unnamed)'}\nUser: ${args.userEmail || '(unknown)'}\n${args.error.slice(0, 400)}\n\nThe PDF is saved under Admin → Parse Failures.`,
     );
   } catch (err) {
     console.error('parse-failure: telegram alert failed:', err);

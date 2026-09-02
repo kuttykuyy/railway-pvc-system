@@ -48,6 +48,18 @@ export async function POST(request: NextRequest) {
     const original = Buffer.from(await file.arrayBuffer());
     const result = await extractAgreementFromPdf(original, file.name);
     if (!result.ok) {
+      // Kept and reported exactly as a bill that could not be read is: the PDF, the
+      // exact error, who hit it, and a Telegram ping to the admin. LOA failures used to
+      // leave only a toast on the user's screen — three in one morning, and nobody knew.
+      // Client-side mistakes (not a PDF, too large) are handled above and never get here.
+      const { recordParseFailure } = await import('@/lib/parse-failure');
+      await recordParseFailure({
+        kind: 'agreement',
+        userEmail: session.user.email || null,
+        fileName: file.name || null,
+        error: `${result.error || 'read failed'}${result.detail ? ` — ${result.detail}` : ''}`,
+        pdfBuffer: original,
+      });
       return NextResponse.json({ error: result.error }, { status: result.status ?? 500 });
     }
 
@@ -63,9 +75,19 @@ export async function POST(request: NextRequest) {
       userEmail: session.user.email || null,
     });
 
-    return NextResponse.json({ data: result.data, documentId });
+    return NextResponse.json({ data: result.data, documentId, warnings: result.warnings ?? [] });
   } catch (error) {
     console.error('extract-agreement error:', error);
+    try {
+      const { recordParseFailure } = await import('@/lib/parse-failure');
+      await recordParseFailure({
+        kind: 'agreement',
+        userEmail: null,
+        fileName: null,
+        error: `UNHANDLED — ${error instanceof Error ? error.message : String(error)}`,
+        pdfBuffer: null,
+      });
+    } catch { /* the failure is already being reported */ }
     return NextResponse.json({ error: 'Failed to read the agreement.' }, { status: 500 });
   }
 }
