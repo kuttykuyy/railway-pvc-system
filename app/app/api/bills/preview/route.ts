@@ -38,7 +38,23 @@ export async function POST(request: NextRequest) {
       calculationMethod = 'auto',
       classificationEntries = [],
       isAiUploaded,
+      railwaySuppliedMaterialValue = 0,
+      extraItemsOutsidePvc = 0,
     } = body;
+
+    // Same base as the save routes, or the preview promises a figure the saved bill
+    // will not show. An entry flagged outsidePvc (a Cl.39 extra item) earns nothing;
+    // railway-supplied material and any un-flagged Clause 39 amount come off the rest
+    // in proportion.
+    const flaggedExtraTotal = (classificationEntries as any[]).reduce(
+      (sum: number, e: any) => sum + (e?.outsidePvc ? (parseFloat(e?.amount) || 0) : 0), 0);
+    const varyingTotal = (classificationEntries as any[]).reduce(
+      (sum: number, e: any) => sum + (e?.outsidePvc ? 0 : (parseFloat(e?.amount) || 0)), 0);
+    const outsidePvc = Math.max(0, parseFloat(railwaySuppliedMaterialValue) || 0)
+      + Math.max(0, (parseFloat(extraItemsOutsidePvc) || 0) - flaggedExtraTotal);
+    const pvcBaseFactor = outsidePvc > 0 && varyingTotal > outsidePvc
+      ? (varyingTotal - outsidePvc) / varyingTotal
+      : 1;
 
     if (!contractId || !grossBillAmount || !billAmount || !dateOfMeasurement) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -119,6 +135,8 @@ export async function POST(request: NextRequest) {
     for (const entry of classificationEntries) {
       const hasAmount = entry.amount !== '' && entry.amount !== null && entry.amount !== undefined && parseFloat(entry.amount) > 0;
       if (!hasAmount || (!entry.subClassificationId && !entry.classificationId)) continue;
+      // A Cl.39 extra item: on the bill, outside price variation (Cl.46A.1(b)).
+      if (entry.outsidePvc === true) continue;
 
       // Shared cache — the same row calculateClassificationEntryPvc reads below, so this
       // costs nothing after the first entry that uses it.
@@ -130,7 +148,7 @@ export async function POST(request: NextRequest) {
         : (hasSteelComponent && extractedSteelTypes.length > 0 ? extractedSteelTypes : []);
 
       const pvc = await calculateClassificationEntryPvc(
-        { subClassificationId: entry.subClassificationId, classificationId: entry.classificationId, amount: parseFloat(entry.amount), steelTypes: entrySteelTypes, itemRows: entry.itemRows || null },
+        { subClassificationId: entry.subClassificationId, classificationId: entry.classificationId, amount: parseFloat(entry.amount) * pvcBaseFactor, steelTypes: entrySteelTypes, itemRows: entry.itemRows || null },
         quarterlyAverages
       );
 
