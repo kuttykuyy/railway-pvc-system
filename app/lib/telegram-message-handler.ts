@@ -81,8 +81,6 @@ export async function handleTelegramMessage(chatId: string, text: string) {
         return handleCommand(conversation, lower, chatId);
       case TelegramStep.AWAITING_PHONE:
         return handlePhoneLinking(conversation, msg, chatId);
-      case TelegramStep.AWAITING_LINK_OTP:
-        return handleLinkOtp(conversation, msg, chatId);
       case TelegramStep.AWAITING_TENDER_DATE:
         return handleTenderDateReply(conversation, msg, chatId);
       case TelegramStep.AWAITING_ZONE:
@@ -238,68 +236,10 @@ async function handlePhoneLinking(conversation: any, msg: string, chatId: string
     );
   }
 
-  // The number exists — now prove it belongs to whoever is typing. A code goes to the
-  // number by SMS; without this, anyone knowing a customer's phone number could bind
-  // their chat to that account and read its contracts and bills. (WhatsApp used to
-  // carry the code; its OTP template went missing at the provider and was dropped.)
-  const { randomInt } = await import('crypto');
-  const { sendOtpSms, isMsg91Configured } = await import('./msg91');
-  if (!(await isMsg91Configured())) {
-    // Fail closed: no way to deliver a code means no link, never a link without proof.
-    return sendTelegramMessage(
-      chatId,
-      '❌ Account linking is unavailable right now because verification codes cannot be sent. Please try again later.',
-    );
-  }
-  const otp = randomInt(100000, 999999).toString();
-  await prisma.phoneOtp.create({
-    data: { phone, otp, expiresAt: new Date(Date.now() + 10 * 60 * 1000) },
-  });
-  const sent = await sendOtpSms(phone, otp);
-  if (!sent.success) {
-    // Fail closed: no code delivered means no link, never a link without proof.
-    return sendTelegramMessage(
-      chatId,
-      '❌ I could not send a verification code to that number by SMS. Check the number and try again in a few minutes.',
-    );
-  }
-  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_LINK_OTP, { pendingLinkPhone: phone });
-  return sendTelegramMessage(
-    chatId,
-    `🔐 A 6-digit code has been sent by SMS to <b>${phone}</b>.\n\nEnter it here to link your account.`,
-  );
-}
-
-/** The WhatsApp code, checked; only a match links the account. */
-async function handleLinkOtp(conversation: any, msg: string, chatId: string) {
-  const code = msg.trim();
-  if (!/^\d{6}$/.test(code)) {
-    return sendTelegramMessage(chatId, '❌ Please enter the 6-digit code sent to your WhatsApp, or type "cancel".');
-  }
-  const data = getTelegramConversationData(conversation);
-  const phone = data.pendingLinkPhone;
-  if (!phone) {
-    await resetTelegramConversation(conversation.id);
-    return sendTelegramMessage(chatId, '❌ The linking session expired. Type /link to start again.');
-  }
-
-  const record = await prisma.phoneOtp.findFirst({
-    where: { phone, verified: false, expiresAt: { gt: new Date() } },
-    orderBy: { createdAt: 'desc' },
-  });
-  // Attempts are counted against the record so the code cannot be brute-forced from
-  // chat: five wrong answers kill it, and a fresh /link mints a fresh code.
-  if (!record || record.attempts >= 5) {
-    return sendTelegramMessage(chatId, '❌ The code has expired. Type /link to get a new one.');
-  }
-  if (record.otp !== code) {
-    await prisma.phoneOtp.update({ where: { id: record.id }, data: { attempts: { increment: 1 } } });
-    return sendTelegramMessage(chatId, '❌ That code is not right. Check your WhatsApp and try again.');
-  }
-  await prisma.phoneOtp.update({ where: { id: record.id }, data: { verified: true } });
-
-  const user = await linkTelegramToUser(conversation.id, phone);
-  if (!user) {
+  // The number exists; link the chat to that account. Mobile OTP verification was
+  // removed from the product, so no code is sent here either.
+  const linked = await linkTelegramToUser(conversation.id, phone);
+  if (!linked) {
     await resetTelegramConversation(conversation.id);
     return sendTelegramMessage(chatId, '❌ Something went wrong linking the account. Type /link to try again.');
   }
@@ -311,11 +251,11 @@ async function handleLinkOtp(conversation: any, msg: string, chatId: string) {
   // If they were linking in order to get a PVC report they already uploaded,
   // carry straight on instead of making them send the bill again.
   if (linkedData.docContractId && linkedData.docBillFileId) {
-    await sendTelegramMessage(chatId, `✅ Account linked — welcome, <b>${user.name || user.email}</b>. Preparing your report…`);
+    await sendTelegramMessage(chatId, `✅ Account linked — welcome, <b>${linked.name || linked.email}</b>. Preparing your report…`);
     return resumeDocumentFlow(refreshed.id, chatId);
   }
 
-  await sendTelegramMessage(chatId, `✅ Account linked! Welcome, <b>${user.name || user.email}</b>.\n\nType /createcontract to create a new contract or /createbill to create a new bill.`);
+  await sendTelegramMessage(chatId, `✅ Account linked! Welcome, <b>${linked.name || linked.email}</b>.\n\nType /createcontract to create a new contract or /createbill to create a new bill.`);
 }
 
 // ─── Contract Creation Flow ──────────────────────────

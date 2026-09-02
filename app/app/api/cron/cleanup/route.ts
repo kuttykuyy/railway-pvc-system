@@ -1,14 +1,14 @@
 /**
  * Nightly cleanup: the one job that stops eleven tables growing forever.
  *
- * Every other cron here imports something; nothing ever removed anything. Expired OTPs,
+ * Every other cron here imports something; nothing ever removed anything. Expired tokens,
  * dead sessions, spent verification tokens, closed rate-limit windows and old message
  * logs all accumulated from the first day, and were deleted only when an entire user
  * account was deleted.
  *
  * Two rules this job holds to:
  *
- *   1. It only deletes rows that are spent — an OTP past its expiry, a session past
+ *   1. It only deletes rows that are spent — a token past its expiry, a session past
  *      its own `expires`, a rate-limit window already closed. Nothing here decides that
  *      live data is old enough to lose.
  *
@@ -35,8 +35,6 @@ export const maxDuration = 120;
 
 /** How long each kind of spent row is kept. Days. */
 const KEEP = {
-  /** Expired one-time passwords. Kept a day for support questions ("it said invalid"). */
-  otps: 1,
   /** Sessions and email tokens: deleted once past their own expiry, plus a day's grace. */
   authGrace: 1,
   /** Closed rate-limit windows. Nothing reads a window that has ended. */
@@ -97,11 +95,6 @@ export async function GET(request: NextRequest) {
   };
 
   // ── Spent authentication rows ────────────────────────────────────────────────
-  const otpCutoff = daysAgo(KEEP.otps);
-  await sweep('phone_otps',
-    () => prisma.phoneOtp.count({ where: { expiresAt: { lt: otpCutoff } } }),
-    () => prisma.phoneOtp.deleteMany({ where: { expiresAt: { lt: otpCutoff } } }));
-
   const authCutoff = daysAgo(KEEP.authGrace);
   await sweep('sessions',
     () => prisma.session.count({ where: { expires: { lt: authCutoff } } }),

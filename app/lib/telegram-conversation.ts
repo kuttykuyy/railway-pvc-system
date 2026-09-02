@@ -14,7 +14,6 @@ export enum TelegramStep {
   // The code sent to that phone's WhatsApp. A phone number alone proved nothing:
   // anyone knowing a customer's number could bind their own chat to that account and
   // read its contracts and bills.
-  AWAITING_LINK_OTP = 'AWAITING_LINK_OTP',
   // Guided PDF → PVC flow: agreement → zone → fuel basis → bill.
   AWAITING_AGREEMENT_PDF = 'AWAITING_AGREEMENT_PDF',
   AWAITING_ZONE = 'AWAITING_ZONE',
@@ -50,7 +49,6 @@ export interface TelegramConversationData {
   // Account linking
   phone?: string; // phone used to link account
   /** The phone awaiting its WhatsApp code — linking happens only after the code matches. */
-  pendingLinkPhone?: string;
   /** When the account link was verified. Links expire 90 days after this. */
   linkedAt?: string;
   // Contract creation
@@ -262,7 +260,7 @@ export async function mutateTelegramConversationData(
 /**
  * The account a phone number belongs to, without linking anything.
  *
- * Split out of linkTelegramToUser so the OTP flow can check the number exists before
+ * Split out of linkTelegramToUser so the link flow can check the number exists before
  * sending a code — and so nothing can link a conversation as a side effect of a lookup.
  */
 export async function findUserByPhone(phone: string) {
