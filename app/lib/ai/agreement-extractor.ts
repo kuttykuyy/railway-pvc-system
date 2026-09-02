@@ -172,16 +172,14 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   "rebatePercentage": "Any separately stated REBATE % (a discount on the accepted rates, sometimes offered in a later letter), as a positive number. Null if the document states no separate rebate. Do NOT repeat acceptedPercentage here — a below-estimate offer is not a rebate."
 }`;
 
-  // The schedules are useful but optional: an LOA with many schedules lists hundreds of
-  // item numbers, and this is the part of the reply that gets cut off. It is asked for
-  // separately, so a failure here costs the form its schedule rows and nothing else.
-  const schedulesPrompt = `You are extracting the work schedules from an Indian Railway "Contract Agreement of Works" / e-tender agreement PDF. Read the whole document.
-
-Return ONLY raw JSON (no markdown, no code fences) with this one key. Use [] when no schedules are listed.
-
-{
-  "schedules": "Every work schedule listed (Schedule A1, A2, B1, ...). Each element: { name, escalation, bidRate, subWorks, items }. name = the schedule's title. escalation and bidRate = percentages stated for the schedule AS A WHOLE, else null. subWorks = the rows under that schedule in the 'Awarded Quantities And Rates' table — each row is a sub-work priced separately, as { name, escalation, bidRate }: name is the item description (e.g. 'Renewal of roofing sheet in foundry shop.'), escalation is that row's Escl. (%) as a signed number with 'At Par' meaning 0, bidRate is that row's Bid Rate as a signed number ('17.00 % Above' is 17, '5.00 % Below' is -5, 'At Par' is 0). items = every item number printed under the schedule, exactly as printed (e.g. '1', '5.35', '082011'), or [] where none are listed. Return [] if no schedules are listed."
-}`;
+  // The schedules ride in the SAME request as the essentials. They used to be a second
+  // request with a 16,000-token reply — the PDF sent twice, and hundreds of A-schedule
+  // item numbers read out that nothing ever used. Only B-schedule item numbers do work
+  // (findExtraItems flags a bill item the LOA never listed), so those are the only ones
+  // asked for; the reply shrinks to a few hundred tokens and one request does the job.
+  const schedulesKey = `,
+  "schedules": "Every work schedule listed (Schedule A1, A2, B1, ...). Each element: { name, escalation, bidRate, subWorks, items }. name = the schedule's title. escalation and bidRate = percentages stated for the schedule AS A WHOLE, else null. subWorks = the rows under that schedule in the 'Awarded Quantities And Rates' table — each row is a sub-work priced separately, as { name, escalation, bidRate }: name is the item description (e.g. 'Renewal of roofing sheet in foundry shop.'), escalation is that row's Escl. (%) as a signed number with 'At Par' meaning 0, bidRate is that row's Bid Rate as a signed number ('17.00 % Above' is 17, '5.00 % Below' is -5, 'At Par' is 0). items = ONLY for schedules whose name starts with B (non-schedule / NS items): every item number printed under it, exactly as printed (e.g. '1', '5.35', '082011'). For every other schedule (A, C, D, ...) return items as [] — do NOT list their item numbers. Return [] if no schedules are listed."`;
+  const fullPrompt = essentialsPrompt.replace(/\n}$/, schedulesKey + '\n}');
 
   const withPdf = (text: string) => [
     {
@@ -242,22 +240,14 @@ Return ONLY raw JSON (no markdown, no code fences) with this one key. Use [] whe
     }
   };
 
-  const COMPACT = `
-
-COMPACT RETRY: the previous reply was cut off before it finished. Return the same JSON object with every text value under 400 characters and, where schedules are asked for, "items": [] for every schedule. No prose, nothing outside the JSON object.`;
-
-  // Both readings at once, so the optional one adds no waiting. Each gets one compact
-  // retry if its reply comes back unusable.
-  const [essentialsFirst, schedulesFirst] = await Promise.all([
-    ask(essentialsPrompt, 6000, 'essentials'),
-    ask(schedulesPrompt, 16000, 'schedules'),
-  ]);
-  const essentials = essentialsFirst.ok || essentialsFirst.kind !== 'unparseable'
-    ? essentialsFirst
-    : await ask(essentialsPrompt + COMPACT, 6000, 'essentials retry');
-  const schedulesRead = schedulesFirst.ok || schedulesFirst.kind !== 'unparseable'
-    ? schedulesFirst
-    : await ask(schedulesPrompt + COMPACT, 16000, 'schedules retry');
+  // One request in the normal case. If the reply is cut off or unusable, the retry asks
+  // for the essentials ALONE, small enough that it is never cut off: the contract can
+  // be set up without its schedule rows, but not without its number, contractor, work
+  // and closing date.
+  const full = await ask(fullPrompt, 8000, 'agreement');
+  const essentials = full.ok || full.kind !== 'unparseable'
+    ? full
+    : await ask(essentialsPrompt, 3000, 'essentials retry');
 
   if (!essentials.ok) {
     if (essentials.kind === 'network') {
@@ -283,12 +273,10 @@ COMPACT RETRY: the previous reply was cut off before it finished. Return the sam
 
   const warnings: string[] = [];
   const extracted: any = { ...essentials.extracted };
-  if (schedulesRead.ok && Array.isArray(schedulesRead.extracted?.schedules)) {
-    extracted.schedules = schedulesRead.extracted.schedules;
-  } else {
+  if (!Array.isArray(extracted.schedules)) {
     extracted.schedules = [];
     // Not a failure of the read: the contract stands without its schedule rows.
-    console.warn('agreement-extractor: schedules not read, continuing without them:', schedulesRead.ok ? 'no schedules array' : schedulesRead.detail);
+    console.warn('agreement-extractor: schedules not read, continuing without them:', full.ok ? 'no schedules array' : full.detail);
     warnings.push('The schedules could not be read from this document. Add them on the form if you need them; the bill supplies item numbers later.');
   }
 
