@@ -2585,7 +2585,6 @@ function NewBillPageContent() {
                                 </div>
                               );
                             })()}
-                            </div>
                           </div>
                         )}
                         <Input
