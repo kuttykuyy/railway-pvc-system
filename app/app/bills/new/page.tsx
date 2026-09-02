@@ -23,7 +23,6 @@ import {
   AlertTriangle,
   Building2,
   ClipboardList,
-  Package,
   TrendingUp,
   CheckCircle2,
   Info,
@@ -1592,7 +1591,6 @@ function NewBillPageContent() {
   const BILL_TABS = [
     { id: 'basic', label: t('form.bill.basic_info'), icon: Building2 },
     { id: 'classification', label: t('form.bill.classifications'), icon: ClipboardList },
-    { id: 'cement', label: language === 'hi' ? 'सीमेंट' : 'Cement', icon: Package },
   ];
   const billTabIndex = Math.max(0, BILL_TABS.findIndex(tb => tb.id === activeBillTab));
   const billPanelCls = (id: string) => (activeBillTab === id ? 'block' : 'hidden');
@@ -2583,19 +2581,15 @@ function NewBillPageContent() {
                           className="bg-white max-w-xs"
                         />
                       </div>
-                    </div>
-                  </div>
 
-                  {/* SECTION 2b: Cement */}
-                  <div className={billPanelCls('cement')}>
-                    <div className="border border-slate-200 rounded-xl bg-white px-4 py-4 space-y-4">
                       {Number(formData.cementAmount) > 0 && (
                         <p className="text-xs text-emerald-700">
-                          Applied cement amount: <strong>₹{Number(formData.cementAmount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong> — included in this bill&apos;s PVC.
+                          Cement supplied as its own item: <strong>₹{Number(formData.cementAmount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong> — priced on the cement index in this bill&apos;s PVC.
                         </p>
                       )}
                     </div>
                   </div>
+
                 </div>
 
                 {/* Tab step navigation */}
