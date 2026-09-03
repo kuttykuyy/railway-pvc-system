@@ -281,21 +281,36 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   }));
 
   let totalPvc = 0, labour = 0, plant = 0, fuel = 0, materials = 0, cement = 0, steel = 0, explosives = 0;
-  for (const pe of preparedEntries) {
-    if (pe.outsidePvc) continue; // Cl.39 extra item: on the bill, no variation
+  // Each entry's own split is kept and handed to the report, so its class blocks print
+  // the figures that were actually summed (as the website's saved bills do) instead of
+  // recomputing them on a blended steel basis.
+  const zeroPvc = { labourPvc: 0, plantMachineryPvc: 0, fuelPowerPvc: 0, otherMaterialsPvc: 0, cementPvc: 0, steelPvc: 0, explosivesPvc: 0, totalPvc: 0 };
+  const pvcByEntry = new Map<number, typeof zeroPvc>();
+  for (const [i, pe] of preparedEntries.entries()) {
+    if (pe.outsidePvc) { pvcByEntry.set(i, zeroPvc); continue; } // Cl.39 extra item: on the bill, no variation
     const pvc = await calculateClassificationEntryPvc(
       { subClassificationId: pe.subClassificationId, amount: pe.amount, steelTypes: pe.steelTypes, itemRows: pe.rows as any },
       quarterlyAverages,
     );
+    pvcByEntry.set(i, pvc as any);
     labour += pvc.labourPvc; plant += pvc.plantMachineryPvc; fuel += pvc.fuelPowerPvc;
     materials += pvc.otherMaterialsPvc; cement += pvc.cementPvc; steel += pvc.steelPvc;
     explosives += pvc.explosivesPvc; totalPvc += pvc.totalPvc;
   }
-  const entriesForReport: any[] = preparedEntries.map((pe) => {
+  const entriesForReport: any[] = preparedEntries.map((pe, i) => {
     const first = pe.rows[0];
+    const saved = pvcByEntry.get(i) || zeroPvc;
     return {
       amount: pe.amount,
       outsidePvc: pe.outsidePvc,
+      labourPvc: saved.labourPvc,
+      plantMachineryPvc: saved.plantMachineryPvc,
+      fuelPowerPvc: saved.fuelPowerPvc,
+      otherMaterialsPvc: saved.otherMaterialsPvc,
+      cementPvc: saved.cementPvc,
+      steelPvc: saved.steelPvc,
+      explosivesPvc: saved.explosivesPvc,
+      totalPvc: saved.totalPvc,
       steelTypes: pe.steelTypes,
       subClassification: subById.get(pe.subClassificationId),
       // Item detail so the report shows item no / quantity / agreement rate.
