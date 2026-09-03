@@ -756,12 +756,29 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     });
     y = (pdf as any).lastAutoTable.finalY + 3;
     if (Math.abs(perClassSum - totalPvcAmt) > 1) {
-      pdf.setFontSize(7.5);
-      pdf.setFont('helvetica', 'italic');
-      pdf.setTextColor(80, 80, 80);
-      pdf.text(`Balance ${fmtMoney(totalPvcAmt - perClassSum)} is the dedicated cement / steel escalation — worked in Section D.`, mL, y);
-      pdf.setTextColor(0, 0, 0);
-      y += 5;
+      // Say what the gap actually is. Dedicated cement / steel supply is priced in
+      // Section D and never sits in a class block, so that part is expected. Anything
+      // left is method, not money: the total on page 1 prices each steel item against
+      // its own section index (as saved with the bill), while a class block prices the
+      // class's steel share at one blended basis — the two round differently. Calling
+      // that "dedicated escalation" on a bill with no cement or steel supply was wrong.
+      const dedicatedTotal = (pvc?.dedicatedCementPvc ?? 0)
+        + (pvc?.dedicatedSteelTmtBarsPvc ?? 0) + (pvc?.dedicatedSteelAngleChannelPvc ?? 0)
+        + (pvc?.dedicatedSteelPlatesPvc ?? 0) + (pvc?.dedicatedSteelOtherSectionsPvc ?? 0);
+      const gap = totalPvcAmt - perClassSum;
+      const residual = gap - dedicatedTotal;
+      const parts: string[] = [];
+      if (Math.abs(dedicatedTotal) > 0.005) parts.push(`${fmtMoney(dedicatedTotal)} is the dedicated cement / steel supply escalation, worked in Section D`);
+      if (Math.abs(residual) > 1) parts.push(`${fmtMoney(residual)} is the difference between pricing each steel item on its own section index (the total above) and pricing the class's steel share at one blended basis (the blocks here)`);
+      if (parts.length > 0) {
+        pdf.setFontSize(7.5);
+        pdf.setFont('helvetica', 'italic');
+        pdf.setTextColor(80, 80, 80);
+        const note = pdf.splitTextToSize(`Balance ${fmtMoney(gap)}: ${parts.join('; ')}.`, contentW);
+        pdf.text(note, mL, y);
+        pdf.setTextColor(0, 0, 0);
+        y += 4 * note.length + 1;
+      }
     }
     ensureSpace(30);
     pdf.setFontSize(8);
