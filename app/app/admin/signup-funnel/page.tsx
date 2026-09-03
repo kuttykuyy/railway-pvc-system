@@ -13,6 +13,7 @@ type Stage = 'signed_up' | 'email_verified' | 'signed_in' | 'contract_created' |
 
 interface FunnelUser {
   id: string; name: string | null; email: string; role: string; companyName: string | null; phone: boolean;
+  signupMethod: string;
   signedUpAt: string; emailVerifiedAt: string | null; lastLoginAt: string | null;
   firstContractAt: string | null; contracts: number;
   firstBillAt: string | null; bills: number;
@@ -29,6 +30,7 @@ interface FunnelData {
   lastSeenPages: Array<{ path: string; users: number }>;
   pageViewsAvailable: boolean;
   emailVerificationRequired: boolean;
+  byMethod: Record<string, number>;
 }
 
 const STAGE_LABEL: Record<Stage, string> = {
@@ -154,6 +156,11 @@ export default function SignupFunnelPage() {
               );
             })}
           </div>
+          {data.byMethod && Object.keys(data.byMethod).length > 0 && (
+            <p className="mt-3 text-[11px] text-slate-500">
+              Signed up {Object.entries(data.byMethod).map(([m, n]) => `${n} via ${m}`).join(' · ')}.
+            </p>
+          )}
           {data.lastSeenPages.length > 0 && (
             <div className="mt-4 border-t pt-3">
               <p className="text-xs font-semibold text-slate-700 mb-1.5">Where people who have not paid were last seen</p>
@@ -181,7 +188,7 @@ export default function SignupFunnelPage() {
               <div className="min-w-0">
                 <div className="font-medium text-slate-900 truncate">{u.name || '(no name)'}</div>
                 <div className="text-slate-500 truncate">{u.email}</div>
-                <div className="text-[10px] text-slate-400">{u.role}{u.phone ? '' : ' · no mobile'} · signed up {ago(u.signedUpAt)}</div>
+                <div className="text-[10px] text-slate-400">{u.role} · via {u.signupMethod}{u.phone ? '' : ' · no mobile'} · signed up {ago(u.signedUpAt)}</div>
               </div>
               <span className={`shrink-0 rounded-full px-2 py-0.5 font-semibold ${STAGE_TONE[u.stage]}`}>{STAGE_LABEL[u.stage]}</span>
             </div>
@@ -232,7 +239,7 @@ export default function SignupFunnelPage() {
                 <td className="px-3 py-2">
                   <div className="font-medium text-slate-900">{u.name || '(no name)'}</div>
                   <div className="text-slate-500">{u.email}</div>
-                  <div className="text-[10px] text-slate-400">{u.role}{u.companyName ? ` · ${u.companyName}` : ''}{u.phone ? '' : ' · no mobile'}</div>
+                  <div className="text-[10px] text-slate-400">{u.role} · via {u.signupMethod}{u.companyName ? ` · ${u.companyName}` : ''}{u.phone ? '' : ' · no mobile'}</div>
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap text-slate-700">
                   {new Date(u.signedUpAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}

@@ -327,6 +327,12 @@ export const authOptions: NextAuthOptions = {
     async createUser({ user }) {
       await ensureCustomerAccount(user.id);
 
+      // An SSO account is created BY a sign-in, but the signIn callback above ran before
+      // the row existed and so skipped the login stamp. Without this, every new Google
+      // user read as "signed up, never signed in" on the signup funnel.
+      prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+        .catch((err) => console.error('lastLoginAt stamp on SSO signup failed:', err));
+
       // A user created through NextAuth's adapter comes from an OAuth/SSO provider
       // (e.g. "Continue with Google"). Email/password signups are created in
       // /api/signup and notify there, so this is the SSO counterpart and does not
