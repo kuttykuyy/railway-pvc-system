@@ -99,6 +99,8 @@ function calculateWeightedPercentage(
   let weightedSum = 0;
 
   classificationEntries.forEach((entry) => {
+    // A Cl.39 extra item outside PVC carries no weight — same as the statement.
+    if (entry?.outsidePvc === true) return;
     const amount = entry.amount || 0;
     const classification = entry.subClassification || entry.classification;
     
@@ -362,48 +364,25 @@ function calculateTotalPvc(
     };
   };
 
+  // The figures SAVED with the bill — the same ones the PDF prints. This page used to
+  // recompute in the browser (entry x class % x rounded index), which drifted from the
+  // statement on steel and ignored entries flagged outside PVC. One source now.
   let classificationPvcTotal = 0;
-  
-  if (classificationEntries && classificationEntries.length > 0 && indicesData) {
-    for (const entry of classificationEntries) {
-      const entryAmount = parseFloat(String(entry.amount)) || 0;
-      if (entryAmount <= 0) continue;
-      
-      const classification = entry.subClassification || entry.classification;
-      if (!classification) continue;
-
-      const entrySteelTypes = entry.steelTypes && Array.isArray(entry.steelTypes) ? entry.steelTypes : [];
-
-      for (const [key, indexName] of Object.entries(componentIndexMap)) {
-        if (key === 'fixed') continue;
-        const percentage = classification[key];
-        if (!percentage || percentage <= 0) continue;
-
-        const indices = key === 'steel'
-          ? getInMemoryIndices(indexName, entrySteelTypes)
-          : getInMemoryIndices(indexName);
-          
-        const baseIndex = Math.round(indices.base * 100) / 100;
-        const currentIndex = Math.round(indices.current * 100) / 100;
-
-        if (baseIndex === 0) continue;
-        classificationPvcTotal += entryAmount * ((currentIndex - baseIndex) / baseIndex) * (percentage / 100);
-      }
-    }
-  } else if (classificationEntries && classificationEntries.length > 0) {
+  if (classificationEntries && classificationEntries.length > 0) {
     classificationPvcTotal = classificationEntries.reduce((sum: number, entry: any) => {
-      return sum + (entry.totalPvc || 0);
+      if (entry?.outsidePvc === true) return sum;
+      return sum + (Number(entry.totalPvc) || 0);
     }, 0);
-    if (classificationPvcTotal === 0) {
-      classificationPvcTotal = 
-        (pvcCalculation.labourPvc || 0) +
-        (pvcCalculation.plantMachineryPvc || 0) +
-        (pvcCalculation.fuelPowerPvc || 0) +
-        (pvcCalculation.otherMaterialsPvc || 0) +
-        (pvcCalculation.cementPvc || 0) +
-        (pvcCalculation.steelPvc || 0) +
-        (pvcCalculation.explosivesPvc || 0);
-    }
+  }
+  if (classificationPvcTotal === 0 && pvcCalculation) {
+    classificationPvcTotal =
+      (pvcCalculation.labourPvc || 0) +
+      (pvcCalculation.plantMachineryPvc || 0) +
+      (pvcCalculation.fuelPowerPvc || 0) +
+      (pvcCalculation.otherMaterialsPvc || 0) +
+      (pvcCalculation.cementPvc || 0) +
+      (pvcCalculation.steelPvc || 0) +
+      (pvcCalculation.explosivesPvc || 0);
   }
   
   const dedicatedCementPvc = pvcCalculation.dedicatedCementPvc || 0;
@@ -523,6 +502,42 @@ function ComponentPvcTable({
 
         const classCode = classification.code;
         const className = classification.name;
+
+        // An extra item ordered after the agreement (Cl.39): paid, but outside price
+        // variation (Cl.46A.1(b)). Listed so the reader sees it, priced at nothing.
+        if (entry.outsidePvc === true) {
+          return (
+            <div key={entry.id || entryIndex} className="border border-amber-200 dark:border-amber-900/50 rounded-2xl p-5 bg-amber-50/50 dark:bg-amber-950/20 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="bg-amber-500/10 text-amber-700 dark:text-amber-400 p-2 rounded-xl text-xs font-bold">#{entryIndex + 1}</div>
+                  <div>
+                    <h5 className="font-bold text-slate-800 dark:text-slate-200">{classCode} — {className}</h5>
+                    <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+                      Amount: ₹ {entryAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="inline-block rounded-full border border-amber-300 bg-white dark:bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300">Extra item · Cl.39 · outside PVC</span>
+                  <p className="text-xs text-muted-foreground mt-1">Paid in full, earns no price variation (Cl. 46A.1(b)).</p>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // The saved split of this entry's PVC, as the statement prints it.
+        const storedByKey: Record<string, number> = {
+          labour: Number(entry.labourPvc) || 0,
+          plantMachinery: Number(entry.plantMachineryPvc) || 0,
+          fuel: Number(entry.fuelPowerPvc) || 0,
+          otherMaterials: Number(entry.otherMaterialsPvc) || 0,
+          cement: Number(entry.cementPvc) || 0,
+          steel: Number(entry.steelPvc) || 0,
+          explosives: Number(entry.explosivesPvc) || 0,
+        };
+        const hasStored = Object.values(storedByKey).some(v => v !== 0) || Number(entry.totalPvc) !== 0;
         
         const componentRows: Array<{
           componentName: string;
@@ -558,11 +573,15 @@ function ComponentPvcTable({
           const baseIndex = Math.round(indices.base * 100) / 100;
           const currentIndex = Math.round(indices.current * 100) / 100;
 
-          const pvcAmount = calculateComponentPvc(entryAmount, percentage, baseIndex, currentIndex);
+          // The saved figure is the one that counts; the recompute is only a fallback
+          // for bills saved before per-entry components were stored.
+          const pvcAmount = hasStored
+            ? storedByKey[key] ?? 0
+            : calculateComponentPvc(entryAmount, percentage, baseIndex, currentIndex);
           
           const formula = baseIndex !== 0
             ? `${entryAmount.toLocaleString('en-IN')} × [(${currentIndex.toFixed(2)} - ${baseIndex.toFixed(2)}) ÷ ${baseIndex.toFixed(2)}] × ${percentage.toFixed(1)}%`
-            : 'N/A';
+            : (hasStored ? 'Per saved computation' : 'N/A');
 
           componentRows.push({
             componentName,
@@ -1283,6 +1302,14 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
                             </span>
                           )}
                           <span>{classComp?.code} — {classComp?.name}</span>
+                          {entry.outsidePvc === true && (
+                            <span
+                              className="rounded-full border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-300"
+                              title="Extra item ordered after the agreement (Cl. 39). Paid, but earns no price variation (Cl. 46A.1(b))."
+                            >
+                              Outside PVC · Cl.39
+                            </span>
+                          )}
                         </div>
                         
                         {entry.scheduleItem && (
