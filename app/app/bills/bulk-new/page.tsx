@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Trash2, Save, AlertCircle, Edit, Upload, Sparkles, ClipboardList, Loader2, Calculator } from 'lucide-react';
+import { Plus, Trash2, Save, AlertCircle, Edit, ClipboardList, Loader2, Calculator } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
@@ -137,8 +137,12 @@ export default function BulkBillCreationPage() {
   // Opens the PDF analyzer's file picker from the sticky bar, so the analyzer stays the
   // single place that knows how to take a bill PDF.
   const openPdfPickerRef = useRef<(() => void) | null>(null);
-  // How the user wants to build the bills: pick first, then show the rest.
-  const [billMode, setBillMode] = useState<'choose' | 'manual' | 'ai'>('choose');
+  // PDF upload is the way in; the contract is read off the bills. Manual entry stays a
+  // link away for a batch with no PDFs.
+  const [billMode, setBillMode] = useState<'manual' | 'ai'>('ai');
+  /** Agreement number read from a bill that matched none of the user's contracts. */
+  const [unmatchedAgreementNo, setUnmatchedAgreementNo] = useState<string | null>(null);
+  const [showContractPicker, setShowContractPicker] = useState(false);
 
   const [billRows, setBillRows] = useState<BillRow[]>([createEmptyBillRow()]);
 
@@ -557,7 +561,10 @@ export default function BulkBillCreationPage() {
         });
       if (matchedContract) {
         setSelectedContract(matchedContract);
+        setUnmatchedAgreementNo(null);
         toast.success(`Matched contract ${matchedContract.agreementNo} from the bill`, { icon: '🔗' });
+      } else {
+        setUnmatchedAgreementNo(extractedAgreementNo);
       }
     }
 
@@ -843,78 +850,85 @@ export default function BulkBillCreationPage() {
             </div>
           )}
 
-          {/* Step 0 — choose how to build the bills */}
-          {billMode === 'choose' && (
-            <div className="py-2">
-              <h2 className="text-lg font-bold text-slate-900 text-center">How do you want to create these bills?</h2>
-              <p className="text-sm text-muted-foreground text-center mt-1">Pick one option. You can change it later.</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 max-w-3xl mx-auto">
-                <button
-                  type="button"
-                  onClick={() => setBillMode('manual')}
-                  className="text-left rounded-2xl border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 transition-all p-5 group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="bg-slate-100 group-hover:bg-emerald-100 text-slate-600 group-hover:text-emerald-600 p-2.5 rounded-xl transition-colors">
-                      <Edit className="h-6 w-6" />
-                    </div>
-                    <div className="font-bold text-slate-900">Enter details manually</div>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-3">Add rows yourself or import an Excel sheet.</p>
+          {/* The way in: drop the signed bill PDFs. The contract is read off each bill's
+              agreement number, so nothing has to be picked first. Manual entry is a link. */}
+          {billMode === 'ai' && (
+            <div className="space-y-3">
+              <BillPdfCementAnalyzer
+                disabled={isSaving}
+                title="Upload signed bill PDFs"
+                multiple
+                contractId={selectedContract?.id}
+                contractSchedules={selectedContract?.schedules}
+                contractRebate={selectedContract?.rebatePercentage}
+                onApplyBillDetails={applyExtractedBillDetailsToBulkRow}
+                openFilePickerRef={openPdfPickerRef}
+              />
+              <p className="text-xs text-muted-foreground">
+                Pick the whole batch at once. Each PDF is read in turn and becomes its own bill; the contract is
+                picked from the agreement number printed on it. Charged the AI rate only when you save.{' '}
+                <button type="button" onClick={() => { setBillMode('manual'); setShowContractPicker(true); }} className="text-emerald-700 underline-offset-2 hover:underline">
+                  Prefer to type the bills in?
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => setBillMode('ai')}
-                  className="text-left rounded-2xl border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 transition-all p-5 group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="bg-emerald-50 group-hover:bg-emerald-100 text-emerald-600 p-2.5 rounded-xl transition-colors">
-                      <Sparkles className="h-6 w-6" />
-                    </div>
-                    <div className="font-bold text-slate-900">Upload signed bill PDFs</div>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-3">Pick the whole batch at once. Each PDF is read in turn and becomes its own bill. Charged the AI rate only when you save.</p>
-                </button>
-              </div>
+              </p>
             </div>
           )}
 
-          {billMode !== 'choose' && (
-            <div className="flex items-center justify-between rounded-xl border bg-muted/40 px-4 py-2.5">
-              <span className="text-sm text-muted-foreground">
-                Method: <span className="font-semibold text-slate-900">{billMode === 'ai' ? 'PDF upload (AI)' : 'Manual'}</span>
+          {billMode === 'manual' && (
+            <p className="text-xs text-muted-foreground">
+              Typing the bills in.{' '}
+              <button type="button" onClick={() => setBillMode('ai')} className="text-emerald-700 underline-offset-2 hover:underline">
+                Upload signed bill PDFs instead
+              </button>
+            </p>
+          )}
+
+          {/* Contract: read off the bill in PDF mode, picked by hand otherwise. The picker
+              appears only when it is needed — nothing matched, or the person asks. */}
+          {selectedContract && !showContractPicker ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-muted/40 px-4 py-2.5 text-sm">
+              <span className="min-w-0 truncate">
+                <span className="text-muted-foreground">Contract:</span>{' '}
+                <span className="font-semibold text-slate-900">{selectedContract.agreementNo}</span>
+                <span className="text-muted-foreground"> · {selectedContract.contractorName}</span>
+                <span className="text-muted-foreground"> · base month {new Date(selectedContract.baseMonth).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', year: 'numeric' })}</span>
               </span>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setBillMode('choose')}>Change</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setShowContractPicker(true)}>Change</Button>
             </div>
-          )}
-
-          {billMode !== 'choose' && (
-          <>
-          {/* Contract Selection */}
-          <div className="space-y-2">
-            <Label>Select Contract *</Label>
-            <Select value={selectedContract?.id} onValueChange={(value) => setSelectedContract(contracts.find(c => c.id === value) || null)}>
-              <SelectTrigger><SelectValue placeholder="Select a contract" /></SelectTrigger>
-              <SelectContent>
-                {contracts.length > 0 ? (
-                  contracts.map(contract => (
-                    <SelectItem key={contract.id} value={contract.id}>
-                      {contract.agreementNo} - {contract.contractorName}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <div className="px-2 py-1 text-sm text-muted-foreground">No contracts available</div>
-                )}
-              </SelectContent>
-            </Select>
-            {selectedContract && (
-              <div className="text-sm text-muted-foreground mt-2 p-3 bg-muted rounded-lg">
-                <p><strong>Work:</strong> {selectedContract.workDescription}</p>
-                <p><strong>Base Month:</strong> {new Date(selectedContract.baseMonth).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'long', year: 'numeric' })}</p>
-              </div>
-            )}
-          </div>
+          ) : (billMode === 'manual' || showContractPicker || unmatchedAgreementNo) ? (
+            <div className="space-y-2">
+              {unmatchedAgreementNo && !selectedContract && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  The bill is for agreement <span className="font-mono font-semibold">{unmatchedAgreementNo}</span>, which is not among your contracts.
+                  Pick the contract it belongs to, or create it first.
+                </div>
+              )}
+              <Label>Contract *</Label>
+              <Select
+                value={selectedContract?.id}
+                onValueChange={(value) => { setSelectedContract(contracts.find(c => c.id === value) || null); setShowContractPicker(false); setUnmatchedAgreementNo(null); }}
+              >
+                <SelectTrigger><SelectValue placeholder="Select a contract" /></SelectTrigger>
+                <SelectContent>
+                  {contracts.length > 0 ? (
+                    contracts.map(contract => (
+                      <SelectItem key={contract.id} value={contract.id}>
+                        {contract.agreementNo} - {contract.contractorName}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="px-2 py-1 text-sm text-muted-foreground">No contracts available</div>
+                  )}
+                </SelectContent>
+              </Select>
+              {selectedContract && (
+                <div className="text-sm text-muted-foreground mt-2 p-3 bg-muted rounded-lg">
+                  <p><strong>Work:</strong> {selectedContract.workDescription}</p>
+                  <p><strong>Base Month:</strong> {new Date(selectedContract.baseMonth).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'long', year: 'numeric' })}</p>
+                </div>
+              )}
+            </div>
+          ) : null}
 
           {/* Global Zone & Fuel — selected once for all bills */}
           {selectedContract && (
@@ -968,19 +982,6 @@ export default function BulkBillCreationPage() {
                   Each bill is charged at its own rate, and the exact total is deducted on submit.
                 </p>
               </div>
-
-              {billMode === 'ai' && (
-                <BillPdfCementAnalyzer
-                  disabled={isSaving}
-                  title="AI PDF Bill Extraction"
-                  multiple
-                  contractId={selectedContract?.id}
-                  contractSchedules={selectedContract?.schedules}
-                  contractRebate={selectedContract?.rebatePercentage}
-                  onApplyBillDetails={applyExtractedBillDetailsToBulkRow}
-                  openFilePickerRef={openPdfPickerRef}
-                />
-              )}
 
               {/* One card per bill. The table this replaced gave the bill number a 96px box
                   — every number in a batch shares the agreement prefix, so they all read
@@ -1164,8 +1165,6 @@ export default function BulkBillCreationPage() {
               </div>
             </div>
           )}
-          </>
-          )}
         </CardContent>
       </Card>
 
@@ -1237,7 +1236,7 @@ export default function BulkBillCreationPage() {
 
       {/* The two actions used over and over while filling a batch. A long list pushes
           them off the top of the screen, so they stay within reach at the bottom. */}
-      {selectedContract && billMode !== 'choose' && (
+      {selectedContract && (
         <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4 print:hidden">
           <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur">
             <Button type="button" size="sm" variant="outline" onClick={addBillRow} disabled={isSaving} className="rounded-full">
