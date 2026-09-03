@@ -14,6 +14,7 @@
 
 import { scheduleNames } from './contract-schedules';
 import { matchExtractedSchedule, scheduleWorkName } from './bill-schedule-matching';
+import { isAdditionalNsSchedule } from './extra-items';
 import { enforceSteelSubclassNature } from './work-classification';
 
 export interface ExtractedSubClassification {
@@ -96,6 +97,8 @@ export interface BuiltClassificationEntry {
   manualClassification?: boolean;
   isDerivedCement?: boolean;
   mainClassificationGroupId?: string;
+  /** Extra item ordered after the agreement (Cl.39): paid, outside PVC (Cl.46A.1(b)). */
+  outsidePvc?: boolean;
 }
 
 export interface BuildEntriesOptions {
@@ -177,7 +180,7 @@ export function buildClassificationEntriesFromExtractedBill(
 
   let ungroupedCounter = 0;
 
-  const rawEntries: Array<{ groupKey: string; entry: BuiltClassificationEntry }> = items.flatMap((item) => {
+  const rawEntries: Array<{ groupKey: string; entry: BuiltClassificationEntry }> = items.flatMap<{ groupKey: string; entry: BuiltClassificationEntry }>((item) => {
     const subClassification = findSubClassificationForExtractedItem(item, classificationGroups);
     if (!subClassification) return [];
 
@@ -187,7 +190,13 @@ export function buildClassificationEntriesFromExtractedBill(
       && Number(item.amountIncludingSpecialConditionSinceLastBill || item.amountSinceLastBill || 0) > 0;
 
     const groupName = (item.groupName || '').trim();
-    const baseKey = groupName || `__standalone_${ungroupedCounter++}`;
+    // An item the bill prints under an "Additional NS item" schedule was ordered after
+    // the agreement (Cl.39): paid in full, outside price variation (Cl.46A.1(b)). It is
+    // flagged here, at the source every form and the Telegram flow build from, so the
+    // exclusion is the default and the person only has to act when PVC WAS agreed.
+    // Kept in its own group so it never merges with the class's ordinary work.
+    const outsidePvc = isAdditionalNsSchedule(String(item.scheduleHeading || item.schedule || item.scheduleGroup || ''));
+    const baseKey = (groupName || `__standalone_${ungroupedCounter++}`) + (outsidePvc ? '::extra' : '');
 
     const originalAmount = item.originalAmount;
     const netAmount = Number(item.amountSinceLastBill || 0);
@@ -282,6 +291,7 @@ export function buildClassificationEntriesFromExtractedBill(
       entry: {
         subClassificationId: subClassification.id,
         subClassification,
+        outsidePvc,
         amount: Number(item.amountSinceLastBill || 0),
         description: (() => {
           // The A schedules print a "Group Name" heading over their items; the B

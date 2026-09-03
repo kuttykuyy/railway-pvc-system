@@ -2530,7 +2530,7 @@ function NewBillPageContent() {
                           <span className="font-semibold">Extra items outside PVC</span>
                           <span
                             className="inline-flex cursor-help"
-                            title="Cl. 39 extra items ordered after the agreement are paid but earn no PVC (GCC-2022 Cl. 46A.1(b)), unless PVC and a base month were agreed when their rates were fixed. Tick 'outside PVC' on any item card to exclude it. B-schedule items are part of the contract and do get PVC."
+                            title="Items the bill prints under an 'Additional NS item' schedule were ordered after the agreement (Cl. 39). They are paid but earn no PVC (GCC-2022 Cl. 46A.1(b)), so they are marked outside PVC automatically. Switch to In PVC if PVC and a base month were agreed when their rates were fixed. Any other item can be marked by hand on its card."
                           >
                             <Info className="h-3.5 w-3.5 text-amber-600" />
                           </span>
@@ -2560,7 +2560,6 @@ function NewBillPageContent() {
                                   onClick={() => {
                                     if (isOut) return;
                                     setExtraItemEntriesOutsidePvc(extraItemCandidates, true);
-                                    setExtraItemsOutsidePvc(extraItemCandidates.total.toFixed(2));
                                   }}
                                   className={`${seg} ${isOut ? 'bg-amber-600 text-white' : 'text-amber-900 hover:bg-amber-100'}`}
                                 >
@@ -2572,7 +2571,6 @@ function NewBillPageContent() {
                                   onClick={() => {
                                     if (!isOut) return;
                                     setExtraItemEntriesOutsidePvc(extraItemCandidates, false);
-                                    if (parseFloat(extraItemsOutsidePvc) === extraItemCandidates.total) setExtraItemsOutsidePvc('');
                                   }}
                                   className={`${seg} border-l border-amber-300 ${!isOut ? 'bg-emerald-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
                                 >
