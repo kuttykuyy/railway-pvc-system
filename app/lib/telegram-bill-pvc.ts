@@ -25,6 +25,7 @@ import {
 } from './telegram-api';
 import { extractBillDetailsDirect } from '@/app/api/bills/cement-analysis/route';
 import { getQuarterFromDate, getQuarterMonths, calculateClassificationEntryPvc } from './pvc-calculations';
+import { isAdditionalNsSchedule } from './extra-items';
 import { billRequiresExtension } from './extension-compliance';
 import { decideChatBillCharge, settleChatBill } from './chat-bill-charge';
 import { getQuarterlyAverages } from './db-utils';
@@ -135,7 +136,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   // with structural steelwork is priced row by row against each row's own steel index,
   // instead of one category being applied to the whole entry.
   type ItemRow = { itemNumber: string; quantity: number | ''; agreementRate: number | ''; cementMt?: number; amount?: number; steelTypes?: string[] };
-  type EntryAgg = { subClassificationId: string; amount: number; steel: number; steelTypes: Set<string>; rows: ItemRow[] };
+  type EntryAgg = { subClassificationId: string; amount: number; steel: number; steelTypes: Set<string>; rows: ItemRow[]; outsidePvc: boolean };
   const agg = new Map<string, EntryAgg>();
   let unclassifiedAmount = 0;
 
@@ -148,7 +149,12 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       unclassifiedAmount += amt;
       continue;
     }
-    const cur = agg.get(sub.id) || { subClassificationId: sub.id, amount: 0, steel: sub.steel, steelTypes: new Set<string>(), rows: [] as ItemRow[] };
+    // An item under an "Additional NS item" schedule was ordered after the agreement:
+    // paid, but outside price variation (GCC-2022 Cl.46A.1(b)). Kept apart from the
+    // class's ordinary work so it can be listed and priced at nothing.
+    const outsidePvc = isAdditionalNsSchedule(String(it.scheduleHeading || it.schedule || it.scheduleGroup || ''));
+    const aggKey = outsidePvc ? `${sub.id}|extra` : sub.id;
+    const cur = agg.get(aggKey) || { subClassificationId: sub.id, amount: 0, steel: sub.steel, steelTypes: new Set<string>(), rows: [] as ItemRow[], outsidePvc };
     cur.amount = round2(cur.amount + amt);
     if (it.isSteelItem && it.steelType) cur.steelTypes.add(it.steelType);
     // Keep the item detail so the report can show item no / qty / agreement rate.
@@ -161,7 +167,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       amount: amt,
       steelTypes: it.isSteelItem && it.steelType ? [String(it.steelType)] : undefined,
     });
-    agg.set(sub.id, cur);
+    agg.set(aggKey, cur);
   }
 
   const entries = [...agg.values()];
@@ -271,10 +277,12 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       ? [...e.steelTypes]
       : (e.steel > 0 && extractedSteelTypes.length > 0 ? extractedSteelTypes : []),
     rows: e.rows,
+    outsidePvc: e.outsidePvc,
   }));
 
   let totalPvc = 0, labour = 0, plant = 0, fuel = 0, materials = 0, cement = 0, steel = 0, explosives = 0;
   for (const pe of preparedEntries) {
+    if (pe.outsidePvc) continue; // Cl.39 extra item: on the bill, no variation
     const pvc = await calculateClassificationEntryPvc(
       { subClassificationId: pe.subClassificationId, amount: pe.amount, steelTypes: pe.steelTypes, itemRows: pe.rows as any },
       quarterlyAverages,
@@ -287,6 +295,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     const first = pe.rows[0];
     return {
       amount: pe.amount,
+      outsidePvc: pe.outsidePvc,
       steelTypes: pe.steelTypes,
       subClassification: subById.get(pe.subClassificationId),
       // Item detail so the report shows item no / quantity / agreement rate.
