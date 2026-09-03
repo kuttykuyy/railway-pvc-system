@@ -2550,7 +2550,20 @@ export default function BillsPage() {
                         <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200/50 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/30 font-semibold px-2.5 py-0.5 rounded-full text-xs">
                           {group.bills.length} Bills
                         </Badge>
+                        {(() => {
+                          const provisional = group.bills.filter(b => b.indicesStatus?.isProvisional).length;
+                          return provisional > 0 ? (
+                            <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 text-xs font-semibold" title="Bills whose quarter still has a provisional index">
+                              {provisional} provisional
+                            </Badge>
+                          ) : null;
+                        })()}
                       </div>
+                      {group.bills[0]?.contract?.contractorName && (
+                        <p className="text-sm text-slate-600 dark:text-slate-400 -mt-2 mb-3 truncate">
+                          {group.bills[0].contract.contractorName}
+                        </p>
+                      )}
                       
                       <div className="space-y-3 mb-4 bg-emerald-50/30 dark:bg-emerald-950/10 p-4 rounded-xl border border-emerald-100/50 dark:border-emerald-900/20">
                         {/* Work Description */}
@@ -2561,26 +2574,68 @@ export default function BillsPage() {
                           </p>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-emerald-100/30 dark:border-emerald-900/10 shadow-sm">
-                            <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-0.5">Total Bill Amount</p>
-                            <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">
-                              ₹{group.totalAmount.toLocaleString('en-IN')}
-                            </p>
-                          </div>
-                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-emerald-100/30 dark:border-emerald-900/10 shadow-sm">
-                            <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-0.5">Total PVC</p>
-                            <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">
-                              ₹{group.totalPvc.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                            </p>
-                          </div>
-                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-emerald-100/30 dark:border-emerald-900/10 shadow-sm">
-                            <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-0.5">Contract</p>
-                            <p className="text-sm font-semibold text-slate-850 dark:text-slate-200 truncate mt-0.5" title={group.bills[0]?.contract?.agreementNo}>
-                              {group.bills[0]?.contract?.agreementNo}
-                            </p>
-                          </div>
-                        </div>
+                        {(() => {
+                          const sorted = [...group.bills].sort((a, b) => new Date(a.dateOfMeasurement).getTime() - new Date(b.dateOfMeasurement).getTime());
+                          const first = sorted[0];
+                          const last = sorted[sorted.length - 1];
+                          const quarters = Array.from(new Set(sorted.map(b => b.quarter).filter(Boolean)));
+                          const quarterSpan = quarters.length <= 1 ? (quarters[0] || '-') : `${quarters[0]} → ${quarters[quarters.length - 1]}`;
+                          const fmtDate = (d?: string) => (d ? format(new Date(d), 'dd MMM yyyy') : '-');
+                          const dateSpan = first && last && first.id !== last.id
+                            ? `${fmtDate(first.dateOfMeasurement)} → ${fmtDate(last.dateOfMeasurement)}`
+                            : fmtDate(first?.dateOfMeasurement);
+                          const pvcShare = group.totalAmount > 0 ? (group.totalPvc / group.totalAmount) * 100 : 0;
+                          const statusCounts: Record<string, number> = {};
+                          for (const b of group.bills) {
+                            const key = (b.status || 'draft').replace(/_/g, ' ');
+                            statusCounts[key] = (statusCounts[key] || 0) + 1;
+                          }
+                          const statusText = Object.entries(statusCounts).map(([k, n]) => `${n} ${k}`).join(' · ');
+                          const provisional = group.bills.filter(b => b.indicesStatus?.isProvisional).length;
+                          const tile = 'bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-emerald-100/30 dark:border-emerald-900/10 shadow-sm min-w-0';
+                          const label = 'text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-0.5';
+                          return (
+                            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 pt-1">
+                              <div className={tile}>
+                                <p className={label}>Total Bill Amount</p>
+                                <p className="text-base font-bold text-emerald-600 dark:text-emerald-400 truncate">
+                                  ₹{group.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                              <div className={tile}>
+                                <p className={label}>Total PVC</p>
+                                <p className={`text-base font-bold truncate ${group.totalPvc < 0 ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                  ₹{group.totalPvc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                                <p className="text-[11px] text-slate-500">{pvcShare.toFixed(2)}% of bill value</p>
+                              </div>
+                              <div className={tile}>
+                                <p className={label}>Quarters</p>
+                                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate" title={quarters.join(', ')}>{quarterSpan}</p>
+                                <p className="text-[11px] text-slate-500">{quarters.length} quarter{quarters.length === 1 ? '' : 's'}</p>
+                              </div>
+                              <div className={tile}>
+                                <p className={label}>Measured</p>
+                                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate" title={dateSpan}>{dateSpan}</p>
+                                <p className="text-[11px] text-slate-500">{group.bills.length} bill{group.bills.length === 1 ? '' : 's'}</p>
+                              </div>
+                              <div className={tile}>
+                                <p className={label}>Indices</p>
+                                <p className={`text-sm font-semibold truncate ${provisional > 0 ? 'text-amber-700' : 'text-slate-800 dark:text-slate-200'}`}>
+                                  {provisional > 0 ? `${provisional} provisional` : 'All final'}
+                                </p>
+                                <p className="text-[11px] text-slate-500">{group.bills.length - provisional} final</p>
+                              </div>
+                              <div className={tile}>
+                                <p className={label}>Contract</p>
+                                <p className="text-sm font-semibold text-slate-850 dark:text-slate-200 truncate" title={group.bills[0]?.contract?.agreementNo}>
+                                  {group.bills[0]?.contract?.agreementNo}
+                                </p>
+                                <p className="text-[11px] text-slate-500 truncate" title={statusText}>{statusText}</p>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       <div className="flex gap-2 flex-wrap mb-1 items-center">
