@@ -897,7 +897,7 @@ async function buildIrReport(o: {
   // Monthly index history (base month → quarter end) and provisional status, so the
   // report's index sections are complete. Best-effort — the report still renders
   // from quarterlyAverages if these fail.
-  let allHistoricalMonthlyData: { indexName: string; month: string; value: number }[] = [];
+  let allHistoricalMonthlyData: { indexName: string; month: string; value: number; isProvisional?: boolean; isBorrowed?: boolean }[] = [];
   let isProvisional = false;
   let provisionalIndices: string[] = [];
   try {
@@ -916,6 +916,8 @@ async function buildIrReport(o: {
       indexName: mv.priceIndex.name,
       month: new Date(mv.month).toISOString().slice(0, 7),
       value: mv.value,
+      // Carried so the statement marks a provisional month "P" in amber, as the website's does.
+      isProvisional: !!(mv as any).isProvisional,
     }));
     const { getBillIndicesStatus } = await import('@/lib/index-status');
     // The fuel and steel names are already resolved for this bill, so pass them straight
