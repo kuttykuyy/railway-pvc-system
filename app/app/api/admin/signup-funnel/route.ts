@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { schemaQualified } from '@/lib/db-schema';
+import { isEmailVerificationRequired } from '@/lib/admin-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,11 @@ export async function GET(request: NextRequest) {
   if (!(await requireAdmin())) return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
   const days = Math.min(365, Math.max(1, Number(new URL(request.url).searchParams.get('days')) || 30));
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  // Verification is a rung on the ladder only when the product makes people climb it.
+  // With the setting off, a person signs in and creates bills unverified, and calling
+  // that "not verified" in red would be a false alarm on nearly every row.
+  const emailVerificationRequired = await isEmailVerificationRequired();
+  const stages: readonly FunnelStage[] = emailVerificationRequired ? FUNNEL_STAGES : FUNNEL_STAGES.filter(s => s !== 'email_verified');
 
   const users = await prisma.user.findMany({
     where: { createdAt: { gte: since }, role: { notIn: ['admin', 'superadmin'] } },
@@ -37,7 +43,7 @@ export async function GET(request: NextRequest) {
   });
   const ids = users.map(u => u.id);
   if (ids.length === 0) {
-    return NextResponse.json({ days, stages: FUNNEL_STAGES, counts: Object.fromEntries(FUNNEL_STAGES.map(s => [s, 0])), users: [], pageViewsAvailable: true });
+    return NextResponse.json({ days, stages, counts: Object.fromEntries(stages.map(s => [s, 0])), users: [], lastSeenPages: [], pageViewsAvailable: true, emailVerificationRequired });
   }
 
   const [contracts, bills, paid] = await Promise.all([
@@ -93,7 +99,7 @@ export async function GET(request: NextRequest) {
       : firstBill.has(u.id) ? 'bill_created'
       : contract ? 'contract_created'
       : u.lastLoginAt ? 'signed_in'
-      : u.emailVerified ? 'email_verified'
+      : (emailVerificationRequired && u.emailVerified) ? 'email_verified'
       : 'signed_up';
     const seen = lastSeen.get(u.id);
     return {
@@ -112,7 +118,7 @@ export async function GET(request: NextRequest) {
 
   // Cumulative: a person who paid also counts at every earlier stage.
   const rank = (s: FunnelStage) => FUNNEL_STAGES.indexOf(s);
-  const counts = Object.fromEntries(FUNNEL_STAGES.map(s => [s, rowsOut.filter(r => rank(r.stage) >= rank(s)).length]));
+  const counts = Object.fromEntries(stages.map(s => [s, rowsOut.filter(r => rank(r.stage) >= rank(s)).length]));
   // Where people who have NOT progressed were last seen — the pages that lose them.
   const dropPages = new Map<string, number>();
   for (const r of rowsOut) {
@@ -121,5 +127,5 @@ export async function GET(request: NextRequest) {
   }
   const lastSeenPages = [...dropPages.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([path, n]) => ({ path, users: n }));
 
-  return NextResponse.json({ days, stages: FUNNEL_STAGES, counts, users: rowsOut, lastSeenPages, pageViewsAvailable });
+  return NextResponse.json({ days, stages, counts, users: rowsOut, lastSeenPages, pageViewsAvailable, emailVerificationRequired });
 }

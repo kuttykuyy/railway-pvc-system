@@ -28,6 +28,7 @@ interface FunnelData {
   users: FunnelUser[];
   lastSeenPages: Array<{ path: string; users: number }>;
   pageViewsAvailable: boolean;
+  emailVerificationRequired: boolean;
 }
 
 const STAGE_LABEL: Record<Stage, string> = {
@@ -47,6 +48,13 @@ const STAGE_TONE: Record<Stage, string> = {
   bill_created: 'bg-amber-100 text-amber-800',
   paid: 'bg-emerald-100 text-emerald-800',
 };
+
+function VerificationNote({ u, required }: { u: FunnelUser; required: boolean }) {
+  if (!u.emailVerifiedAt && required) return <div className="mt-1 text-[10px] text-rose-600">Email not verified</div>;
+  if (!u.emailVerifiedAt) return <div className="mt-1 text-[10px] text-slate-400">Email unverified (not required)</div>;
+  if (!u.lastLoginAt) return <div className="mt-1 text-[10px] text-amber-700">Verified, never signed in</div>;
+  return null;
+}
 
 function ago(iso: string | null): string {
   if (!iso) return '—';
@@ -161,8 +169,49 @@ export default function SignupFunnelPage() {
         </div>
       )}
 
+      {/* One card per person on a phone — a six-column table cannot fit and was being
+          clipped at the left edge. */}
+      <div className="space-y-2 md:hidden">
+        {!loading && shown.length === 0 && (
+          <p className="rounded-xl border bg-white px-3 py-6 text-center text-xs text-muted-foreground">Nobody in this window{stageFilter !== 'all' ? ' at this step' : ''}.</p>
+        )}
+        {shown.map(u => (
+          <div key={u.id} className="rounded-xl border bg-white p-3 text-xs">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="font-medium text-slate-900 truncate">{u.name || '(no name)'}</div>
+                <div className="text-slate-500 truncate">{u.email}</div>
+                <div className="text-[10px] text-slate-400">{u.role}{u.phone ? '' : ' · no mobile'} · signed up {ago(u.signedUpAt)}</div>
+              </div>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 font-semibold ${STAGE_TONE[u.stage]}`}>{STAGE_LABEL[u.stage]}</span>
+            </div>
+            <VerificationNote u={u} required={!!data?.emailVerificationRequired} />
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+              <div>
+                <div className="text-slate-400">Contracts · bills</div>
+                <div className="tabular-nums text-slate-800">{u.contracts} · {u.bills}</div>
+              </div>
+              <div className="min-w-0">
+                <div className="text-slate-400">Last seen</div>
+                {u.lastPath ? (
+                  <>
+                    <div className="font-mono text-slate-800 truncate">{u.lastPath}</div>
+                    <div className="text-[10px] text-slate-400">{ago(u.lastSeenAt)} · {u.pageViews} page{u.pageViews === 1 ? '' : 's'}</div>
+                  </>
+                ) : (
+                  <div className="text-slate-400">{u.lastLoginAt ? `signed in ${ago(u.lastLoginAt)}` : 'never seen'}</div>
+                )}
+              </div>
+            </div>
+            {u.trail.length > 0 && (
+              <div className="mt-2 font-mono text-[10px] text-slate-500 break-words">{u.trail.join(' ← ')}</div>
+            )}
+          </div>
+        ))}
+      </div>
+
       {/* One row per person. */}
-      <div className="rounded-xl border bg-white overflow-x-auto">
+      <div className="hidden md:block rounded-xl border bg-white overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="bg-slate-50 text-slate-600">
             <tr>
@@ -191,8 +240,7 @@ export default function SignupFunnelPage() {
                 </td>
                 <td className="px-3 py-2">
                   <span className={`inline-block rounded-full px-2 py-0.5 font-semibold ${STAGE_TONE[u.stage]}`}>{STAGE_LABEL[u.stage]}</span>
-                  {!u.emailVerifiedAt && <div className="mt-1 text-[10px] text-rose-600">Email not verified</div>}
-                  {u.emailVerifiedAt && !u.lastLoginAt && <div className="mt-1 text-[10px] text-amber-700">Verified, never signed in</div>}
+                  <VerificationNote u={u} required={!!data?.emailVerificationRequired} />
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap tabular-nums text-slate-700">{u.contracts} · {u.bills}</td>
                 <td className="px-3 py-2 whitespace-nowrap">
