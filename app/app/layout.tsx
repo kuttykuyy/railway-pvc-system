@@ -6,6 +6,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Providers } from '@/components/providers';
+import { PageViewTracker } from '@/components/page-view-tracker';
 import ErrorBoundary from '@/components/error-boundary';
 import ChunkErrorHandler from '@/components/chunk-error-handler';
 import { SessionTimeoutWarning } from '@/components/session-timeout-warning';
@@ -168,6 +169,7 @@ export default function RootLayout({
             >
               <ChunkErrorHandler />
               <SessionTimeoutWarning />
+              <PageViewTracker />
               <LayoutWrapper>
                 {children}
               </LayoutWrapper>
