@@ -678,11 +678,27 @@ export async function POST(request: NextRequest) {
           },
           include: { priceIndex: true }
         });
-        const allHistoricalMonthlyData = bulkHistoricalRaw.map((mv: any) => ({
-          indexName: mv.priceIndex.name,
-          month: new Date(mv.month).toISOString().slice(0, 7),
-          value: mv.value
-        }));
+        // Same rows the single-bill route hands the report: the provisional flag on each
+        // month (the "P" and amber shading), and any month the average borrowed from an
+        // earlier one because the index was not yet published. Without the flag a batch
+        // download printed provisional figures as if they were final.
+        const allHistoricalMonthlyData: { indexName: string; month: string; value: number; isProvisional?: boolean; isBorrowed?: boolean }[] =
+          bulkHistoricalRaw.map((mv: any) => ({
+            indexName: mv.priceIndex.name,
+            month: new Date(mv.month).toISOString().slice(0, 7),
+            value: mv.value,
+            isProvisional: !!mv.isProvisional,
+          }));
+        const bulkRealKeys = new Set(allHistoricalMonthlyData.map(d => `${d.indexName}|${d.month}`));
+        for (const qa of (qaverages as any[])) {
+          for (const mv of (qa.monthlyValues || [])) {
+            const key = `${qa.indexName}|${mv.month}`;
+            if (!bulkRealKeys.has(key)) {
+              allHistoricalMonthlyData.push({ indexName: qa.indexName, month: mv.month, value: mv.value, isProvisional: true, isBorrowed: true });
+              bulkRealKeys.add(key);
+            }
+          }
+        }
 
         // Per-item JPC steel readings (fortnightly F1/F2 per size) for this bill's steel
         // city, which the report turns into the AVERAGE JPC STEEL INDICES page showing how
