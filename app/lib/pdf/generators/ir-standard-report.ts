@@ -51,6 +51,15 @@ interface ClassificationEntry {
   steelTypes?: string[] | null;
   classificationJustification?: string | null;
   subClassification?: SubClassification | null;
+  /** The PVC saved with the entry when the bill was created — what page 1 sums. */
+  labourPvc?: number | null;
+  plantMachineryPvc?: number | null;
+  fuelPowerPvc?: number | null;
+  cementPvc?: number | null;
+  steelPvc?: number | null;
+  otherMaterialsPvc?: number | null;
+  explosivesPvc?: number | null;
+  totalPvc?: number | null;
 }
 
 interface PvcCalculation {
@@ -612,10 +621,17 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   const idxMapForBasis = new Map(quarterlyAverages.map(q => [q.indexName, q]));
   const perClassComp: Array<{
     code: string; name: string; amount: number;
-    rows: Array<{ name: string; pct: number; base: number; avg: number; variation: number; pvcAmt: number }>;
+    rows: Array<{ name: string; pct: number; base: number; avg: number; variation: number; pvcAmt: number; perItem?: boolean }>;
     subtotal: number;
   }> = (() => {
-    const byCode = new Map<string, { code: string; name: string; amount: number; comps: any; steelTypes: Set<string> }>();
+    // Each block prints the figures SAVED with its entries — the same rupees page 1
+    // sums — so the blocks tie to the total exactly. Recomputing here from the class
+    // amount x class % x one blended steel basis drifted from the total whenever a class
+    // held steel of more than one kind (the engine prices each item row on its own
+    // section index), and a reviewer adding up Section D found Rs 15.21 unaccounted for.
+    // The recompute stays only for bills saved before per-entry components existed.
+    type Stored = { labour: number; plantMachinery: number; fuel: number; cement: number; steel: number; otherMaterials: number; explosives: number };
+    const byCode = new Map<string, { code: string; name: string; amount: number; comps: any; steelTypes: Set<string>; stored: Stored; hasStored: boolean }>();
     for (const e of varyingEntries) {
       const sub: any = (e as any).subClassification;
       const amt = Number(e.amount) || 0;
@@ -630,11 +646,23 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
             cement: sub.cement || 0, steel: sub.steel || 0, otherMaterials: sub.otherMaterials || 0,
             explosives: sub.explosives || 0,
           },
+          stored: { labour: 0, plantMachinery: 0, fuel: 0, cement: 0, steel: 0, otherMaterials: 0, explosives: 0 },
+          hasStored: false,
         };
         byCode.set(key, g);
       }
       g.amount += amt;
       for (const t of (e.steelTypes || [])) g.steelTypes.add(String(t));
+      if (e.totalPvc !== null && e.totalPvc !== undefined) {
+        g.hasStored = true;
+        g.stored.labour += Number(e.labourPvc) || 0;
+        g.stored.plantMachinery += Number(e.plantMachineryPvc) || 0;
+        g.stored.fuel += Number(e.fuelPowerPvc) || 0;
+        g.stored.cement += Number(e.cementPvc) || 0;
+        g.stored.steel += Number(e.steelPvc) || 0;
+        g.stored.otherMaterials += Number(e.otherMaterialsPvc) || 0;
+        g.stored.explosives += Number(e.explosivesPvc) || 0;
+      }
     }
     const compDefs: Array<[string, string, number, number, number]> = [
       ['labour', 'Labour', labourBase, labourAvg, labourVar],
@@ -645,11 +673,12 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       ['explosives', 'Explosives', explBase, explAvg, explVar],
     ];
     return [...byCode.values()].sort((a, b) => a.code.localeCompare(b.code)).map(g => {
-      const rows: Array<{ name: string; pct: number; base: number; avg: number; variation: number; pvcAmt: number }> = [];
+      const rows: Array<{ name: string; pct: number; base: number; avg: number; variation: number; pvcAmt: number; perItem?: boolean }> = [];
       for (const [key, label, base, avg, variation] of compDefs) {
         const pct = Number(g.comps[key]) || 0;
         if (pct <= 0 || base <= 0) continue;
-        rows.push({ name: label, pct, base, avg, variation, pvcAmt: g.amount * (pct / 100) * variation });
+        const computed = g.amount * (pct / 100) * variation;
+        rows.push({ name: label, pct, base, avg, variation, pvcAmt: g.hasStored ? (g.stored as any)[key] : computed });
       }
       // Steel on the class's own nature: …B = TMT, …D = the non-TMT categories, else the
       // categories its entries carry — the same rule the engine prices with.
@@ -658,10 +687,16 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
         const clsTypes = defaultSteelTypesForClass(g.code, [...g.steelTypes]);
         const basis = resolveSteelIndexBasis(idxMapForBasis, clsTypes);
         if (basis && basis.baseValue > 0) {
+          const computedSteel = g.amount * (steelPctCls / 100) * basis.variation;
+          const storedSteel = g.hasStored ? g.stored.steel : computedSteel;
+          // When the saved steel differs from the blended figure, the class held steel
+          // of more than one kind and each item was priced on its own section index.
+          const perItem = g.hasStored && Math.abs(storedSteel - computedSteel) > 0.5;
           rows.push({
-            name: 'Steel' + (basis.usedDefault ? ' (average of all four)' : ` (${basis.indexNames.map(shortSteel).join(', ')})`),
+            name: 'Steel' + (basis.usedDefault ? ' (average of all four)' : ` (${basis.indexNames.map(shortSteel).join(', ')})`)
+              + (perItem ? ' — each item on its own section index' : ''),
             pct: steelPctCls, base: basis.baseValue, avg: basis.averageValue, variation: basis.variation,
-            pvcAmt: g.amount * (steelPctCls / 100) * basis.variation,
+            pvcAmt: storedSteel, perItem,
           });
         }
       }
@@ -986,7 +1021,9 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
               fmt(amt),
               fmtIdx(r.base),
               fmtIdx(r.avg),
-              `${fmt(amt)} x [(${fmtIdx(r.avg)} - ${fmtIdx(r.base)}) / ${fmtIdx(r.base)}]`,
+              r.perItem
+                ? `Sum over items: item amount x ${r.pct.toFixed(2)}% x own section index change`
+                : `${fmt(amt)} x [(${fmtIdx(r.avg)} - ${fmtIdx(r.base)}) / ${fmtIdx(r.base)}] = ${fmt(amt)} x ${(r.variation * 100).toFixed(4)}%`,
               fmt(r.pvcAmt),
             ];
           }),
