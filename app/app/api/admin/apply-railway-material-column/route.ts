@@ -200,6 +200,17 @@ const PENDING_EXTRAS: Array<{
     check: { kind: 'table', name: 'parse_failures' },
   },
   {
+    label: 'page_views',
+    sql: (s) => `CREATE TABLE IF NOT EXISTS "${s}"."page_views" (
+        "id" BIGSERIAL PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        "path" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`,
+    why: 'Which page each signed-in person opened, so the signup funnel can say where a new user stalled instead of only what they created.',
+    check: { kind: 'table', name: 'page_views' },
+  },
+  {
     label: 'payment_transactions',
     sql: (s) => `CREATE TABLE IF NOT EXISTS "${s}"."payment_transactions" (
         "id" TEXT PRIMARY KEY,
