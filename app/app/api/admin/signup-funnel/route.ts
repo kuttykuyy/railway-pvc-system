@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ days, stages, counts: Object.fromEntries(stages.map(s => [s, 0])), users: [], lastSeenPages: [], pageViewsAvailable: true, emailVerificationRequired });
   }
 
-  const [contracts, bills, paid] = await Promise.all([
+  const [contracts, bills, paid, accounts] = await Promise.all([
     prisma.contract.groupBy({ by: ['userId'], where: { userId: { in: ids } }, _min: { createdAt: true }, _count: { _all: true } }),
     prisma.bill.findMany({
       where: { contract: { userId: { in: ids } } },
@@ -58,7 +58,11 @@ export async function GET(request: NextRequest) {
       select: { userId: true, paidAt: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     }),
+    // An Account row means an OAuth/SSO sign-up (Google); a password sign-up has none.
+    prisma.account.findMany({ where: { userId: { in: ids } }, select: { userId: true, provider: true } }),
   ]);
+  const ssoProvider = new Map<string, string>();
+  for (const a of accounts) if (!ssoProvider.has(a.userId)) ssoProvider.set(a.userId, a.provider);
   const firstContract = new Map<string, { at: Date; count: number }>();
   for (const c of contracts) if (c.userId) firstContract.set(c.userId, { at: c._min.createdAt!, count: c._count._all });
   const firstBill = new Map<string, Date>();
@@ -94,16 +98,21 @@ export async function GET(request: NextRequest) {
 
   const rowsOut = users.map(u => {
     const contract = firstContract.get(u.id);
+    const provider = ssoProvider.get(u.id) || null;
+    // An SSO account only exists because the person signed in; older rows predate the
+    // stamp, so the provider alone proves the sign-in.
+    const signedIn = !!u.lastLoginAt || !!provider;
     const stage: FunnelStage =
       firstPaid.has(u.id) ? 'paid'
       : firstBill.has(u.id) ? 'bill_created'
       : contract ? 'contract_created'
-      : u.lastLoginAt ? 'signed_in'
+      : signedIn ? 'signed_in'
       : (emailVerificationRequired && u.emailVerified) ? 'email_verified'
       : 'signed_up';
     const seen = lastSeen.get(u.id);
     return {
       id: u.id, name: u.name, email: u.email, role: u.role, companyName: u.companyName, phone: !!u.phone,
+      signupMethod: provider ? (provider === 'google' ? 'Google' : provider) : 'Email',
       signedUpAt: u.createdAt, emailVerifiedAt: u.emailVerified, lastLoginAt: u.lastLoginAt,
       firstContractAt: contract?.at || null, contracts: contract?.count || 0,
       firstBillAt: firstBill.get(u.id) || null, bills: billCount.get(u.id) || 0,
@@ -127,5 +136,6 @@ export async function GET(request: NextRequest) {
   }
   const lastSeenPages = [...dropPages.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([path, n]) => ({ path, users: n }));
 
-  return NextResponse.json({ days, stages, counts, users: rowsOut, lastSeenPages, pageViewsAvailable, emailVerificationRequired });
+  const byMethod = rowsOut.reduce<Record<string, number>>((acc, r) => { acc[r.signupMethod] = (acc[r.signupMethod] || 0) + 1; return acc; }, {});
+  return NextResponse.json({ days, stages, counts, users: rowsOut, lastSeenPages, pageViewsAvailable, emailVerificationRequired, byMethod });
 }
