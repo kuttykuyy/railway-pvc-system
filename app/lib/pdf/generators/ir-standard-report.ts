@@ -424,8 +424,19 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     sectionHeader('B. BILL DETAILS'),
     lv('Bill No.:',              bill.billNo || '-',
        'Date of Measurement:',   format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy')),
-    lv('Gross Bill Amount (W):', 'Rs. ' + fmt(billAmount),
-       'Quarter:',               bill.quarter || '-'),
+    ...(extraOutsidePvcTotal > 0
+      ? [
+          lv('Gross Bill Amount:',      'Rs. ' + fmt(billAmount),
+             'Quarter:',               bill.quarter || '-'),
+          // Cl.39 extra items are paid in full but earn no variation (Cl.46A.1(b)), so
+          // the value of work the Clause is applied to is the gross less those items.
+          lv('Less extra items (Cl.39):', 'Rs. ' + fmt(extraOutsidePvcTotal),
+             'Value of work (W):',      'Rs. ' + fmt(varyingAmount)),
+        ]
+      : [
+          lv('Gross Bill Amount (W):', 'Rs. ' + fmt(billAmount),
+             'Quarter:',               bill.quarter || '-'),
+        ]),
     lv('PVC No.:',               bill.pvcNumber || 'Not Assigned',
        'Fuel Pricing:',          bill.fuelPriceType === 'zone_city' ? 'Zone City Price' : '4-City Average'),
     lv('Indices Status:',        isProvisional ? 'PROVISIONAL' : 'FINAL',
@@ -514,9 +525,9 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   pdf.setTextColor(60, 60, 60);
   pdf.text('Formula (GCC Cl.46A):  Vn = W x SUM[ Pn x (In - I0) / I0 ]', mL + 2, y);
   pdf.setFont('helvetica', 'italic');
-  pdf.text(`where  W = Gross Bill Amount = ${fmtMoney(billAmount)},  Pn = Component Weight (%),  I0 = Base Month Index,  In = Quarter Average Index`, mL + 2, y + 4);
+  pdf.text(`where  W = Value of work = ${fmtMoney(varyingAmount)}${extraOutsidePvcTotal > 0 ? ` (gross ${fmtMoney(billAmount)} less extra items outside PVC ${fmtMoney(extraOutsidePvcTotal)})` : ''},  Pn = Component Weight (%),  I0 = Base Month Index,  In = Quarter Average Index`, mL + 2, y + 4);
   pdf.setFont('helvetica', 'normal');
-  pdf.text(`Component Amt = W x Pn.  Example: ${fmtMoney(billAmount)} x weighted % of each component below.`, mL + 2, y + 8);
+  pdf.text(`Component Amt = W x Pn.  Example: ${fmtMoney(varyingAmount)} x weighted % of each component below.`, mL + 2, y + 8);
   pdf.setTextColor(0, 0, 0);
   y += 13;
 
@@ -671,7 +682,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
   ]];
 
   const fixedPct = Math.max(0, 1 - totalPct);
-  const fixedAmt = billAmount * fixedPct;
+  const fixedAmt = varyingAmount * fixedPct;
 
   const tableBody: any[] = allComponents.map((c, i) => [
     i + 1,
@@ -1189,6 +1200,8 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     // Section C can be verified by the reader.
     const byCode = new Map<string, { sub: SubClassification; amount: number }>();
     for (const entry of detailEntries) {
+      // Extra items outside PVC carry no weight: they are listed above, not blended here.
+      if (entry.outsidePvc === true) continue;
       const sub = entry.subClassification;
       if (!sub?.code) continue;
       const existing = byCode.get(sub.code);
@@ -1206,7 +1219,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       const pctHead = [[
         'Classification',
         'Amount (Rs.)',
-        'Share of Bill',
+        'Share of W',
         'Fixed %',
         'Labour %',
         'P&M %',
@@ -1219,7 +1232,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       const pctBody: any[] = Array.from(byCode.values()).map(({ sub, amount }) => [
         sub.code || '-',
         fmt(amount),
-        billAmount > 0 ? ((amount / billAmount) * 100).toFixed(2) + '%' : '-',
+        varyingAmount > 0 ? ((amount / varyingAmount) * 100).toFixed(2) + '%' : '-',
         sub.fixed || 0,
         sub.labour || 0,
         sub.plantMachinery || 0,
@@ -1231,7 +1244,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       ]);
       pctBody.push([
         { content: 'WEIGHTED (Section C)', styles: { fontStyle: 'bold' as const } },
-        { content: fmt(billAmount), styles: { fontStyle: 'bold' as const, halign: 'right' as const } },
+        { content: fmt(varyingAmount), styles: { fontStyle: 'bold' as const, halign: 'right' as const } },
         { content: '100.00%', styles: { fontStyle: 'bold' as const, halign: 'center' as const } },
         ...([weights.fixed, weights.labour, weights.plantMachinery, weights.fuel,
           weights.cement, weights.steel, weights.otherMaterials, weights.explosives]
@@ -1290,7 +1303,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       pdf.setFont('helvetica', 'italic');
       pdf.setTextColor(80, 80, 80);
       pdf.text(
-        'Weighted % of a component = SUM over classifications of (classification amount / Gross Bill Amount) x classification %.',
+        'Weighted % of a component = SUM over classifications of (classification amount / value of work W) x classification %. Extra items outside PVC (Cl.39) carry no weight.',
         mL, y,
       );
       pdf.setTextColor(0, 0, 0);

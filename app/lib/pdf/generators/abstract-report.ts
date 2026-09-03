@@ -197,12 +197,19 @@ export async function generateAbstractPdf(contractId: string): Promise<{ pdfBuff
         const rowTotal = mainTotal + cement + steelTmt + steelAngleChannel + steelPlates + steelOtherSections;
         
         // Calculate bill amount as sum of all component allocations from bill creation
+        // Extra items ordered after the agreement (Cl.39) are paid but earn no PVC
+        // (Cl.46A.1(b)); the register's value of work leaves them out, as the bill's
+        // own statement does.
+        const extraOutsidePvc = (bill.classificationEntries || [])
+          .filter((entry: any) => entry?.outsidePvc === true)
+          .reduce((sum: number, entry: any) => sum + (Number(entry.amount) || 0), 0);
         const calculatedBillAmount = (bill.billAmount || 0) + 
                                       (bill.cementAmount || 0) + 
                                       (bill.steelTmtBarsAmount || 0) + 
                                       (bill.steelAngleChannelAmount || 0) + 
                                       (bill.steelPlatesAmount || 0) + 
-                                      (bill.steelOtherSectionsAmount || 0);
+                                      (bill.steelOtherSectionsAmount || 0)
+                                      - extraOutsidePvc;
         
         billDataArray.push({
           billNo: bill.billNo,
