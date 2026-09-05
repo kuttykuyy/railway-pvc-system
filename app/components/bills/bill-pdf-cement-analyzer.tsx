@@ -1,7 +1,7 @@
 'use client';
 
 import { ChangeEvent, DragEvent, MutableRefObject, useRef, useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Cpu, Download, FileSpreadsheet, FileText, HardDrive, Lightbulb, Loader2, Lock, Save, ScanText, Trash2, Unlock, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Cpu, Download, FileSpreadsheet, FileText, HardDrive, Lightbulb, Loader2, Lock, ScanText, Trash2, Unlock, Upload } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { Badge } from '@/components/ui/badge';
@@ -227,12 +227,9 @@ export function BillPdfCementAnalyzer({
     openSheetPickerRef.current = () => sheetInputRef.current?.click();
     return () => { openSheetPickerRef.current = null; };
   }, [openSheetPickerRef]);
-  const [coefficientDrafts, setCoefficientDrafts] = useState<Record<string, string>>({});
   // The unit the typed coefficient is quoted PER. DSR publishes cement consumption
   // per a block — "0.117 MT per 100 Sqm" — so this must be captured, not assumed to
   // be the bill's own unit, or the stored row means 100x more cement than the book.
-  const [coefficientUnitDrafts, setCoefficientUnitDrafts] = useState<Record<string, string>>({});
-  const [savingCoefficientCode, setSavingCoefficientCode] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [showAllItems, setShowAllItems] = useState(false);
@@ -270,17 +267,13 @@ export function BillPdfCementAnalyzer({
     'Mapping IREPS table columns and item codes...',
     'Verifying Qty x Agreement Rate values...',
     'Reading special-condition adjustments...',
-    'Calculating cement consumption coefficients...',
     'Finalizing summary statistics & previews...'
   ];
 
   // Rotating tips list
   const pvcTips = [
     'Tip: Keep your PDF scans straight and clean for 99% extraction accuracy.',
-    'Did you know? USSR 2021 cement coefficients are automatically derived based on mix codes.',
-    'Tip: Dedicated supply items (cement/steel) automatically bypass double calculation when active.',
     'Did you know? JPC steel price indices are updated monthly directly in the admin panel.',
-    'Tip: You can customize the base cement DSR rate manually if your contract uses a custom base rate.',
     'Did you know? The platform automatically highlights discrepancies between extracted item totals and schedule summaries.'
   ];
 
@@ -375,86 +368,6 @@ export function BillPdfCementAnalyzer({
     return list.findIndex(ci => coeffKey(ci) === key);
   };
 
-  const saveMissingCoefficient = async (item: CementAnalysisResultItem) => {
-    if (!result || !item.dsrCode) return;
-    const coefficient = Number(coefficientDrafts[item.dsrCode]);
-    if (!Number.isFinite(coefficient) || coefficient <= 0) {
-      toast.error('Enter a valid cement coefficient in MT.');
-      return;
-    }
-    // Copied straight from DSR this is a per-block figure ("0.117 MT per 100 Sqm").
-    // Default to the bill's own unit for books that quote per single unit.
-    const workUnit = (coefficientUnitDrafts[item.dsrCode] || item.unit).trim();
-    const blockSize = unitBlockSize(workUnit);
-
-    try {
-      setSavingCoefficientCode(item.dsrCode);
-      const response = await fetch('/api/admin/dsr-cement-coefficients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dsrCode: item.dsrCode,
-          description: item.description,
-          workUnit,
-          cementQuantityPerUnit: coefficient,
-        }),
-      });
-      const json = await response.json().catch(() => ({ error: 'Invalid server response.' }));
-      if (!response.ok) throw new Error(json.error || 'Failed to save coefficient.');
-
-      const updatedResults = result.results.map(existing => {
-        if (existing.dsrCode !== item.dsrCode) return existing;
-        // Divide the block out exactly as calculateDsrCementRequirement does on the
-        // server, so this preview can never disagree with the saved calculation.
-        const cementQuantity = existing.quantity * coefficient / blockSize;
-        return {
-          ...existing,
-          matched: true,
-          coefficient,
-          cementQuantity,
-          cementUnit: 'MT',
-          cementAmount: result.cementRatePerUnit && result.cementRatePerUnit > 0
-            ? cementQuantity * result.cementRatePerUnit
-            : null,
-          coefficientWorkUnit: workUnit,
-          coefficientSource: 'DSR 2021 Analysis of Rates - admin verified',
-          reason: `Quantity ${existing.quantity} x coefficient ${coefficient} MT/${workUnit}`
-            + (blockSize !== 1 ? ` (divided by the ${blockSize}-unit block)` : ''),
-        };
-      });
-      const matchedResults = updatedResults.filter(existing => existing.matched);
-      const unmatchedItemCount = updatedResults.length - matchedResults.length;
-      const cementQuantity = matchedResults.reduce((sum, existing) => sum + existing.cementQuantity, 0);
-      const cementAmount = matchedResults.reduce((sum, existing) => sum + (existing.cementAmount || 0), 0);
-      const warnings = (result.warnings || []).filter(warning => !/need DSR cement coefficients/i.test(warning));
-      if (unmatchedItemCount > 0) {
-        warnings.push(`${unmatchedItemCount} item(s) need DSR cement coefficients before cement amount can be finalized.`);
-      }
-
-      const updated: CementAnalysisData = {
-        ...result,
-        results: updatedResults,
-        summary: {
-          ...result.summary,
-          matchedItemCount: matchedResults.length,
-          unmatchedItemCount,
-          cementQuantity,
-          cementAmount: matchedResults.some(existing => existing.cementAmount !== null) ? cementAmount : null,
-          hasCementAmount: matchedResults.some(existing => existing.cementAmount !== null),
-        },
-        warnings,
-      };
-      setResult(updated);
-      setCoefficientDrafts(current => ({ ...current, [item.dsrCode]: '' }));
-      onApplyBillDetails?.(updated, activeUpload ?? undefined);
-      toast.success(`${item.dsrCode} coefficient saved for current and future bills.`);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save coefficient.');
-    } finally {
-      setSavingCoefficientCode(null);
-    }
-  };
-
   const deleteExtractedItem = (itemToRemove: ExtractedBillItem) => {
     if (!result) return;
     const items = result.billDetails?.items || result.extractedItems || [];
@@ -485,61 +398,6 @@ export function BillPdfCementAnalyzer({
     setResult(updated);
     onApplyBillDetails?.(updated, activeUpload ?? undefined);
     toast.success('Item removed from the extracted list.');
-  };
-
-  const deleteCementResultItem = (itemToRemove: CementAnalysisResultItem) => {
-    if (!result) return;
-    // `coefficientItems` and `results` are parallel arrays (a bill item is matched to
-    // its cement by the SAME index in both).
-    // Remove the row from BOTH so the arrays stay aligned — otherwise later items shift
-    // and get the wrong cement quantity.
-    const removeIndex = result.results.indexOf(itemToRemove);
-    const updatedResults = result.results.filter(item => item !== itemToRemove);
-    const updatedCoefficientItems = result.coefficientItems && removeIndex >= 0
-      ? result.coefficientItems.filter((_, index) => index !== removeIndex)
-      : result.coefficientItems;
-
-    const matchedResults = updatedResults.filter(item => item.matched);
-    const unmatchedItemCount = updatedResults.length - matchedResults.length;
-    const cementQuantity = matchedResults.reduce((sum, item) => sum + item.cementQuantity, 0);
-    const cementAmount = matchedResults.reduce((sum, item) => sum + (item.cementAmount || 0), 0);
-    const warnings = (result.warnings || []).filter(warning => !/need DSR cement coefficients/i.test(warning));
-    if (unmatchedItemCount > 0) {
-      warnings.push(`${unmatchedItemCount} item(s) need DSR cement coefficients before cement amount can be finalized.`);
-    }
-
-    // The cement deduction is baked onto the matching bill item (originalAmount /
-    // cementDeduction). Strip it and restore the item's full amount, so the rebuilt
-    // classification entries no longer carve out a cement portion for the removed row.
-    const stripCementFromItem = (item: ExtractedBillItem): ExtractedBillItem => {
-      if (coeffKey(item) !== coeffKey(itemToRemove)) return item;
-      const anyItem = item as any;
-      const restoredAmount = anyItem.originalAmount ?? item.amountSinceLastBill;
-      const { originalAmount, cementDeduction, cementQuantityQuintals, cementRatePerQuintal, ...rest } = anyItem;
-      return { ...(rest as ExtractedBillItem), amountSinceLastBill: restoredAmount, isCementAffected: false, requiresDsrCementCoefficient: false };
-    };
-
-    const updated: CementAnalysisData = {
-      ...result,
-      results: updatedResults,
-      coefficientItems: updatedCoefficientItems,
-      billDetails: result.billDetails
-        ? { ...result.billDetails, items: result.billDetails.items?.map(stripCementFromItem) }
-        : result.billDetails,
-      extractedItems: result.extractedItems?.map(stripCementFromItem) ?? result.extractedItems,
-      summary: {
-        ...result.summary,
-        matchedItemCount: matchedResults.length,
-        unmatchedItemCount,
-        cementQuantity,
-        cementAmount: matchedResults.some(item => item.cementAmount !== null) ? cementAmount : null,
-        hasCementAmount: matchedResults.some(item => item.cementAmount !== null),
-      },
-      warnings,
-    };
-    setResult(updated);
-    onApplyBillDetails?.(updated, activeUpload ?? undefined);
-    toast.success('Coefficient row removed. Its cement is excluded from the calculation.');
   };
 
   /** Outcome of one PDF. The reason is returned rather than shown, so a single upload can
@@ -1141,18 +999,6 @@ export function BillPdfCementAnalyzer({
                 <div className="text-[11px] text-muted-foreground">Bill items</div>
                 <Badge variant="secondary">{result.billDetails?.items?.length || result.extractedItems?.length || 0}</Badge>
               </div>
-              <div>
-                <div className="text-[11px] text-muted-foreground">Cement items</div>
-                <Badge variant="secondary">{result.cementItems?.length || result.summary.matchedItemCount}</Badge>
-              </div>
-              <div>
-                <div className="text-[11px] text-muted-foreground">Cement quantity</div>
-                <div className="text-sm font-semibold">{formatNumber(result.summary.cementQuantity * 10)} Qtl</div>
-              </div>
-              <div>
-                <div className="text-[11px] text-muted-foreground">Cement amount</div>
-                <div className="text-sm font-semibold">{formatAmount(result.summary.cementAmount)}</div>
-              </div>
             </div>
 
             {result.billDetails && (
@@ -1215,32 +1061,6 @@ export function BillPdfCementAnalyzer({
               </div>
             )}
 
-            {isUnlocked && (result.summary.cementAmount === null || result.summary.cementAmount === undefined) ? (
-              <div className="space-y-3">
-                {/* No separate cement item is not a problem: a DSR item's rate already
-                    includes its cement, so there is nothing to derive or enter. */}
-                <div className="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600">
-                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
-                  <div>
-                    <span className="font-medium text-slate-800">No separate cement item in this bill</span> —
-                    nothing to enter. Cement stays inside the DSR item rates, and is priced through
-                    each item&apos;s own classification under the GCC component table. Splitting it out
-                    would price the same cement twice.
-                  </div>
-                </div>
-              </div>
-            ) : isUnlocked && result.cementAmountSource === 'USSR_SEPARATE_SUPPLY' ? (
-              <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Cement amount was taken directly from the separate USSR cement supply item; no DSR coefficient was used.
-              </div>
-            ) : isUnlocked ? (
-              <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Cement amount was calculated from DSR coefficients and applied to the bill form.
-              </div>
-            ) : null}
-
             {(result.warnings || []).map((warning) => (
               <div key={warning} className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -1294,8 +1114,6 @@ export function BillPdfCementAnalyzer({
                                   Wording from {item.rateBookEdition} {item.rateBookCode}
                                 </Badge>
                               )}
-                              {item.isCementAffected && <Badge variant="outline">Cement</Badge>}
-                              {item.isCementAffected && item.sourceBook === 'USSR_2021' && <Badge variant="outline">Separate cement supply</Badge>}
                               {item.isSteelItem && <Badge variant="outline">Steel: {item.steelType || 'Review type'}</Badge>}
                             </div>
                           </td>
@@ -1370,121 +1188,6 @@ export function BillPdfCementAnalyzer({
                   </div>
                 )}
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="border-b bg-muted/60">
-                      <tr>
-                        <th className="px-2 py-2 text-left font-medium">DSR</th>
-                        <th className="px-2 py-2 text-left font-medium">Description</th>
-                        <th className="px-2 py-2 text-right font-medium">Qty</th>
-                        <th className="px-2 py-2 text-right font-medium">Coeff.</th>
-                        <th className="px-2 py-2 text-right font-medium">Cement</th>
-                        {!compact && <th className="px-2 py-2 text-right font-medium">Remove</th>}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {result.results.filter(row => row.coefficient != null && row.coefficient > 0).slice(0, compact ? 5 : undefined).map((item, index) => (
-                        <tr key={`${item.dsrCode}-${index}`}>
-                          <td className="whitespace-nowrap px-2 py-2 font-medium">{item.dsrCode || '-'}</td>
-                          <td className="max-w-[360px] px-2 py-2">
-                            <div className="line-clamp-2">{item.description}</div>
-                          </td>
-                          <td className="whitespace-nowrap px-2 py-2 text-right">
-                            {formatNumber(item.quantity, 2)} {item.unit}
-                          </td>
-                          <td className="whitespace-nowrap px-2 py-2 text-right">
-                            {item.coefficient ? (
-                              // Show what the coefficient is quoted PER. DSR gives cement
-                              // per a block, so the bare number reads as a wrong answer:
-                              // 4,443.92 Sqm x 0.117 looks like 519.94, not the correct
-                              // 5.199 MT that 0.117 per 100 Sqm gives.
-                              <span title={item.reason || undefined}>
-                                {formatNumber(item.coefficient, 5)}
-                                <span className="text-slate-400">
-                                  {' '}/ {item.coefficientWorkUnit || item.unit}
-                                </span>
-                              </span>
-                            ) : item.dsrCode && !item.dsrCode.startsWith('REVIEW-') ? (
-                              <div className="flex items-center justify-end gap-1">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.00001"
-                                  inputMode="decimal"
-                                  value={coefficientDrafts[item.dsrCode] || ''}
-                                  onChange={event => setCoefficientDrafts(current => ({
-                                    ...current,
-                                    [item.dsrCode]: event.target.value,
-                                  }))}
-                                  placeholder="MT"
-                                  aria-label={`Cement coefficient for ${item.dsrCode} in MT`}
-                                  title="Enter the cement figure exactly as DSR prints it, then the unit it is quoted per"
-                                  className="h-7 w-20 px-2 text-right text-xs"
-                                />
-                                <span className="text-xs text-slate-400">per</span>
-                                <Input
-                                  value={coefficientUnitDrafts[item.dsrCode] ?? item.unit}
-                                  onChange={event => setCoefficientUnitDrafts(current => ({
-                                    ...current,
-                                    [item.dsrCode]: event.target.value,
-                                  }))}
-                                  placeholder={item.unit}
-                                  aria-label={`Unit the coefficient for ${item.dsrCode} is quoted per`}
-                                  title={`DSR quotes cement per a block, e.g. "100 ${item.unit}". Enter it exactly as printed.`}
-                                  className="h-7 w-20 px-2 text-xs"
-                                />
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="outline"
-                                  className="h-7 w-7 shrink-0"
-                                  onClick={() => void saveMissingCoefficient(item)}
-                                  disabled={savingCoefficientCode === item.dsrCode}
-                                  title="Save to shared DSR coefficient library"
-                                  aria-label={`Save coefficient for ${item.dsrCode}`}
-                                >
-                                  {savingCoefficientCode === item.dsrCode
-                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    : <Save className="h-3.5 w-3.5" />}
-                                </Button>
-                              </div>
-                            ) : '-'}
-                          </td>
-                          <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
-                            {formatNumber(item.cementQuantity * 10)} Qtl
-                          </td>
-                          {!compact && (
-                            <td className="whitespace-nowrap px-2 py-2 text-right">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-red-500 hover:text-red-700"
-                                onClick={() => deleteCementResultItem(item)}
-                                title={`Remove ${item.dsrCode || 'this row'} from the coefficient list`}
-                                aria-label={`Remove ${item.dsrCode || 'this row'} from the coefficient list`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {result.results.some(item => !item.coefficient) && !compact && (
-                  <div className="text-xs text-muted-foreground">
-                    Items without a cement coefficient are treated as non-cement and are not shown here.
-                  </div>
-                )}
-
-                {compact && result.results.length > 5 && (
-                  <div className="text-xs text-muted-foreground">
-                    Showing first 5 of {result.results.length} extracted cement items.
-                  </div>
-                )}
               </>
             ) : (
               <div className="relative overflow-hidden rounded-xl border border-emerald-100 bg-slate-50/50 p-6 text-center shadow-sm">
@@ -1496,7 +1199,7 @@ export function BillPdfCementAnalyzer({
                   <div className="space-y-1">
                     <h4 className="text-sm font-semibold text-slate-800">Extraction Details Locked</h4>
                     <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                      Review the summary statistics above. Unlock to import all schedule items, steel types, and cement details directly into the bill form.
+                      Review the summary statistics above. Unlock to import all schedule items and steel types directly into the bill form.
                     </p>
                   </div>
                   <div className="flex justify-center pt-1">
