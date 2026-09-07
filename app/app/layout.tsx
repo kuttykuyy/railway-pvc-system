@@ -13,6 +13,7 @@ import { SessionTimeoutWarning } from '@/components/session-timeout-warning';
 import StructuredData from '@/components/structured-data';
 import LayoutWrapper from '@/components/layout-wrapper';
 import Script from 'next/script';
+import { Analytics } from '@vercel/analytics/next';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -177,6 +178,7 @@ export default function RootLayout({
             </ThemeProvider>
           </Providers>
         </ErrorBoundary>
+        <Analytics />
         
         {/* Service Worker Registration */}
         <Script id="service-worker-registration" strategy="afterInteractive">
