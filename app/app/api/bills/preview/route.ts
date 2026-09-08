@@ -123,14 +123,7 @@ export async function POST(request: NextRequest) {
     ]);
     const codeBySubId = new Map(subRows.map(r => [r.id, r.code]));
     const codeByLegacyId = new Map(legacyRows.map(r => [r.id, r.code]));
-    // Steel splits into its two natures: TMT (…B reinforcement supply, or entries whose
-    // steel types are TMT only) and OTHER-THAN-TMT (…D fabrication & erection, or
-    // structural/plates/sections types). Both stay out of the general comparison.
-    let steelTmtPvc = 0, steelTmtAmount = 0;
-    let steelOtherPvc = 0, steelOtherAmount = 0;
-    let cementSupplyPvc = 0, cementSupplyAmount = 0; // …C entries — the separate cement line
-    let generalPvc = 0, generalAmount = 0;           // everything else (compared below)
-    const generalByDigit: Record<string, number> = {}; // general value per main group
+    const singleClassInputs: import('@/lib/single-classification').SingleClassEntryInput[] = [];
 
     for (const entry of classificationEntries) {
       const hasAmount = entry.amount !== '' && entry.amount !== null && entry.amount !== undefined && parseFloat(entry.amount) > 0;
@@ -161,36 +154,13 @@ export async function POST(request: NextRequest) {
       explosivesPvc += pvc.explosivesPvc;
       totalPvc += pvc.totalPvc;
 
-      const amt = parseFloat(entry.amount);
-      const code = String(codeBySubId.get(entry.subClassificationId) || codeByLegacyId.get(entry.classificationId) || '').trim().toUpperCase();
-      const suffix = code.slice(-1);
-      // A STEEL item is a steel-natured entry: classified …B (TMT reinforcement supply)
-      // or …D (fabrication & erection — the other-than-TMT structural steel), or tagged
-      // with a steel type on a class whose steel share DOMINATES (>= 50%). A steel-type
-      // tag alone is NOT enough: general entries (e.g. 5A, steel 10%) carry a type tag
-      // merely so their small steel component prices on the right index — counting them
-      // as steel items emptied the "general work" bucket and hid the whole comparison.
-      const ownSteelTypes = Array.isArray(entry.steelTypes) ? entry.steelTypes : [];
-      const steelShare = components?.steel ?? 0;
-      const isSteelItem = suffix === 'B' || suffix === 'D' || (ownSteelTypes.length > 0 && steelShare >= 50);
-      const isCementItem = !isSteelItem && (suffix === 'C');
-      // TMT vs other-than-TMT: …B is TMT by definition; a typed entry is TMT only when
-      // every type on it is TMT; …D and anything structural/plates/sections is "other".
-      const isTmt = suffix === 'B'
-        || (suffix !== 'D' && ownSteelTypes.length > 0 && ownSteelTypes.every((t: any) => String(t).toUpperCase() === 'TMT'));
-      if (isSteelItem) {
-        if (isTmt) { steelTmtPvc += pvc.totalPvc; steelTmtAmount += amt; }
-        else { steelOtherPvc += pvc.totalPvc; steelOtherAmount += amt; }
-      }
-      else if (isCementItem) { cementSupplyPvc += pvc.totalPvc; cementSupplyAmount += amt; }
-      else {
-        generalPvc += pvc.totalPvc; generalAmount += amt;
-        // How much of the general value sits in each main group — the MATCH evidence the
-        // guideline shows beside each single-class candidate, so the pick is by fit,
-        // never by payout.
-        const d0 = code.charAt(0);
-        if (/[1-9]/.test(d0)) generalByDigit[d0] = (generalByDigit[d0] || 0) + amt;
-      }
+      singleClassInputs.push({
+        code: String(codeBySubId.get(entry.subClassificationId) || codeByLegacyId.get(entry.classificationId) || ''),
+        amount: parseFloat(entry.amount),
+        totalPvc: pvc.totalPvc,
+        steelTypes: Array.isArray(entry.steelTypes) ? entry.steelTypes : [],
+        steelShare: components?.steel ?? 0,
+      });
     }
 
     // Previous cumulative PVC (for new bill display)
@@ -226,115 +196,17 @@ export async function POST(request: NextRequest) {
     const billCost = isFreeRole ? 0 : isFreeTrial ? 0 : fullCost;
 
     // Single-classification comparison (TRANSPARENCY / what-if — NOT the tender method).
-    // The per-item split above is the GCC-2022 46A.6 method (classification fixed per BoQ
-    // item by the tender). Here we compare the GENERAL (non-steel-supply) work two ways:
-    // priced item-by-item vs priced under ONE class (the group's "All items" …A class).
-    // STEEL = the steel-supply (…B) items, priced at their own 85% steel-supply rate. It is
-    // pulled out as its own line (same either way) and never swings the comparison.
+    // Shared with the Telegram bot, see lib/single-classification.ts.
     let singleClassification: any = null;
     try {
-      if (generalAmount > 0) {
-        const { inferMainClassification, looksCompositeWork } = await import('@/lib/work-classification');
-        const { calculateDynamicClassificationPvc } = await import('@/lib/pvc-calculations');
-        const main = inferMainClassification(contract.workDescription || '');
-        const compositeInfo = looksCompositeWork(contract.workDescription || '');
-        const isCompositeWork = compositeInfo.isComposite || !!main.isMultiScope;
-        const allClasses = await prisma.subClassification.findMany({
-          where: { isActive: true },
-          select: {
-            id: true, code: true, name: true, groupId: true,
-            fixed: true, labour: true, steel: true, cement: true,
-            plantMachinery: true, fuel: true, otherMaterials: true, explosives: true,
-          },
-          orderBy: { code: 'asc' },
-        });
-        // Candidate SINGLE classes = each group's "All items" (…A) class — the genuine
-        // "treat all the general work as one class", never a specific-nature class picked
-        // for payout. A single-scope work has ONE candidate (its own group's …A). A
-        // COMPOSITE work spans groups, so every group its general items actually use is an
-        // equally arguable single class — try each and show the HIGHEST-paying one.
-        const candidateDigits = new Set<string>([String(main.code).charAt(0)]);
-        if (isCompositeWork) {
-          for (const e of classificationEntries) {
-            const c = String(codeBySubId.get(e.subClassificationId) || codeByLegacyId.get(e.classificationId) || '').trim();
-            const suf = c.slice(-1).toUpperCase();
-            if (suf === 'B' || suf === 'C' || suf === 'D') continue; // supply/steel classes are never single-class candidates
-            const d = c.charAt(0);
-            if (/[1-9]/.test(d)) candidateDigits.add(d);
-          }
-        }
-        const candidateClasses = [...candidateDigits]
-          .map(d => allClasses.find(c => String(c.code).trim().toUpperCase() === `${d}A`)
-            || allClasses.find(c => String(c.code).trim() === d))
-          .filter((c): c is NonNullable<typeof c> => !!c);
-        const scored: any[] = [];
-        for (const cls of candidateClasses) {
-          // Apply the …A class to the general amount only (steel supply already pulled out).
-          const r = await calculateDynamicClassificationPvc(generalAmount, quarterlyAverages, cls.code, extractedSteelTypes);
-          if (!r.isProcessingFee) {
-            scored.push({
-              cls, generalPvc: r.totalPvc,
-              // Share of the general value already classified in this group — the MATCH.
-              matchPct: Math.round(((generalByDigit[String(cls.code).charAt(0)] || 0) / generalAmount) * 100),
-            });
-          }
-        }
-        // The class SHOWN is picked by MATCH first, payout only as tie-break. Showing the
-        // highest payout headlined a class that fit 0% of the items while the guideline
-        // named another group — a contradiction on screen, and an invitation to pick by
-        // money. All candidates stay listed with their fit, so nothing is hidden.
-        scored.sort((a, b) => b.matchPct - a.matchPct || b.generalPvc - a.generalPvc);
-        const winner = scored[0];
-        if (winner) {
-          const allItemsClass = winner.cls;
-          const single = { totalPvc: winner.generalPvc };
-          {
-            singleClassification = {
-              mainCode: main.code,
-              mainLabel: main.label,
-              // A composite work (several enumerated sub-works) has no single class that
-              // fits every item — the card says so instead of implying 5A is an option.
-              composite: isCompositeWork ? { subWorkCount: compositeInfo.subWorkCount } : null,
-              generalAmount,
-              // Supply items pulled out and priced on their own class, same either way:
-              steel: {
-                pvc: steelTmtPvc + steelOtherPvc, amount: steelTmtAmount + steelOtherAmount,
-                tmt: { pvc: steelTmtPvc, amount: steelTmtAmount },       // …B / TMT-typed
-                other: { pvc: steelOtherPvc, amount: steelOtherAmount }, // …D / structural
-              },
-              cement: { pvc: cementSupplyPvc, amount: cementSupplyAmount },  // …C, cement supply
-              current: { general: generalPvc, total: totalPvc },
-              best: {
-                id: allItemsClass.id, code: allItemsClass.code, name: allItemsClass.name, groupId: allItemsClass.groupId,
-                fixed: allItemsClass.fixed, labour: allItemsClass.labour, steel: allItemsClass.steel, cement: allItemsClass.cement,
-                plantMachinery: allItemsClass.plantMachinery, fuel: allItemsClass.fuel,
-                otherMaterials: allItemsClass.otherMaterials, explosives: allItemsClass.explosives,
-                generalPvc: single.totalPvc,
-                total: single.totalPvc + steelTmtPvc + steelOtherPvc + cementSupplyPvc,
-              },
-              // Every candidate tried (composite work: one per group its items span),
-              // highest first — the card lists them so the pick is visible, not implied.
-              // matchPct = share of the general value already classified in that group:
-              // the guideline's evidence that a single class FITS, separate from payout.
-              candidates: scored.map((s) => ({
-                code: s.cls.code, name: s.cls.name,
-                total: s.generalPvc + steelTmtPvc + steelOtherPvc + cementSupplyPvc,
-                matchPct: s.matchPct,
-              })),
-              // The guideline the card prints: pick by MATCH, not payout.
-              guideline: (() => {
-                const entries = Object.entries(generalByDigit).sort((a, b) => b[1] - a[1]);
-                const top = entries[0];
-                return top ? {
-                  bestMatchDigit: top[0],
-                  bestMatchPct: Math.round((top[1] / generalAmount) * 100),
-                  inferredDigit: String(main.code).charAt(0),
-                } : null;
-              })(),
-            };
-          }
-        }
-      }
+      const { compareSingleClassification } = await import('@/lib/single-classification');
+      singleClassification = await compareSingleClassification({
+        workDescription: contract.workDescription || '',
+        entries: singleClassInputs,
+        quarterlyAverages,
+        extractedSteelTypes,
+        totalPvc,
+      });
     } catch (cmpErr) {
       console.error('Single-classification comparison failed (non-fatal):', cmpErr);
     }

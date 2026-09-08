@@ -338,6 +338,40 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   });
 
 
+  // The same bill priced the other allowed way — grouped under one class — so the
+  // chat shows both figures exactly as the website's comparison card does.
+  let groupedLines = '';
+  try {
+    const { compareSingleClassification } = await import('./single-classification');
+    const sc = await compareSingleClassification({
+      workDescription: contract.workDescription || '',
+      entries: preparedEntries.map((pe, i) => ({
+        code: subById.get(pe.subClassificationId)?.code || '',
+        amount: pe.outsidePvc ? 0 : pe.amount,
+        totalPvc: (pvcByEntry.get(i) || zeroPvc).totalPvc,
+        steelTypes: pe.steelTypes,
+        steelShare: subById.get(pe.subClassificationId)?.steel ?? 0,
+      })),
+      quarterlyAverages,
+      extractedSteelTypes,
+      totalPvc,
+    });
+    if (sc?.best) {
+      const best = sc.best;
+      groupedLines =
+        `\n\n⚖️ <b>Both allowed ways:</b>` +
+        `\n   Item by item (tender method): <b>₹${formatMoney(totalPvc)}</b> ✓` +
+        `\n   Grouped under one class (${escapeHtml(best.code)} ${escapeHtml(best.name)}): ₹${formatMoney(best.total)}` +
+        (sc.composite
+          ? `\n   <i>Composite work — no single class fits every item; item by item is the only compliant method.</i>`
+          : sc.guideline && sc.guideline.bestMatchPct < 100
+            ? `\n   <i>${sc.guideline.bestMatchPct}% of the general work fits group ${escapeHtml(String(sc.guideline.bestMatchDigit))} — pick a class by fit, not by payout.</i>`
+            : '');
+    }
+  } catch (err) {
+    console.error('[Telegram] single-class comparison failed (non-fatal):', err);
+  }
+
   // 5. Reply with the PVC estimate + component breakdown.
   const comp = (label: string, v: number) => (Math.abs(v) >= 0.005 ? `\n   ${label}: ₹${formatMoney(v)}` : '');
   const sign = totalPvc >= 0 ? '' : '-';
@@ -375,6 +409,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       comp('Steel', steel) +
       comp('Explosives', explosives) +
       `\n\n📋 <b>Classification of the bill value:</b>` + classLines +
+      groupedLines +
       `\n\n<i>⚠️ This is an automatic estimate from the AI's reading of your bill. ` +
       `Please verify it before filing.</i>` +
       (unclassifiedAmount > 0
