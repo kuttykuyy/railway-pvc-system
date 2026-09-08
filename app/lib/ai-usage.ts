@@ -1,4 +1,4 @@
-import { getAiModel } from './admin-settings';
+import { getAdminSetting } from './admin-settings';
 import { prisma } from './db';
 import { estimateCostUsd, rateForModel } from './ai-pricing';
 
@@ -197,7 +197,12 @@ export async function checkAiProviderStatus(): Promise<{ status: AiProviderStatu
     const response = await fetch(ABACUS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: await getAiModel(), messages: [{ role: 'user', content: 'ping' }], max_tokens: 1, temperature: 0 }),
+      // Resolve the configured model the light way (no model-spec import, which pulls
+      // node:async_hooks and must stay out of this widely-imported module).
+      body: JSON.stringify({
+        model: String((await getAdminSetting('AI_MODEL', '')) || '').trim() || String(process.env.BILL_AI_MODEL || '').trim() || 'gemini-3.8-flash',
+        messages: [{ role: 'user', content: 'ping' }], max_tokens: 1, temperature: 0,
+      }),
       signal: AbortSignal.timeout(20000),
     });
     if (response.ok) return { status: 'working', detail: 'AI extraction is available.' };
