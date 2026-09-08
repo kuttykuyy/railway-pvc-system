@@ -1,4 +1,4 @@
-import { abacusModelName } from './ai/model-spec';
+import { getAiModel } from './admin-settings';
 import { prisma } from './db';
 import { estimateCostUsd, rateForModel } from './ai-pricing';
 
@@ -197,7 +197,7 @@ export async function checkAiProviderStatus(): Promise<{ status: AiProviderStatu
     const response = await fetch(ABACUS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: abacusModelName(), messages: [{ role: 'user', content: 'ping' }], max_tokens: 1, temperature: 0 }),
+      body: JSON.stringify({ model: await getAiModel(), messages: [{ role: 'user', content: 'ping' }], max_tokens: 1, temperature: 0 }),
       signal: AbortSignal.timeout(20000),
     });
     if (response.ok) return { status: 'working', detail: 'AI extraction is available.' };

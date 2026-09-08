@@ -4,6 +4,7 @@
  */
 
 import { prisma, withPrismaErrorHandling } from '@/lib/db';
+import { pinnedModelSpec, isAnthropicSpec, abacusModelName, DEFAULT_MODEL_SPEC } from '@/lib/ai/model-spec';
 
 interface AdminSetting {
   key: string;
@@ -120,6 +121,23 @@ export async function getBillingSettings() {
     // Viewing the official JPC sheets on screen: a flat month, not a meter.
     jpcViewMonthlyCost:             Number(parse('JPC_VIEW_MONTHLY_COST', 249)),
   };
+}
+
+/**
+ * Which AI model every Abacus (RouteLLM) call uses. Resolved in order:
+ *   1. a per-call pin from withModelSpec() (evaluation / explicit override),
+ *   2. the AI_MODEL admin setting (changed from the admin page, no redeploy),
+ *   3. the BILL_AI_MODEL env var, then the hardcoded default.
+ * So the model can be switched from the admin page even with no environment variable.
+ */
+export async function getAiModel(): Promise<string> {
+  const pinned = pinnedModelSpec();
+  if (pinned) return isAnthropicSpec(pinned) ? DEFAULT_MODEL_SPEC : pinned;
+  try {
+    const fromAdmin = await getAdminSetting('AI_MODEL', '');
+    if (fromAdmin && String(fromAdmin).trim()) return String(fromAdmin).trim();
+  } catch { /* fall through to env / default */ }
+  return abacusModelName();
 }
 
 /**

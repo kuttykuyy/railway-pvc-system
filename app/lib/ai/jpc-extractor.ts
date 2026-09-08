@@ -11,7 +11,7 @@
  * the system, and unlike a bill there is no printed total to reconcile against.
  */
 
-import { abacusModelName } from './model-spec';
+import { getAiModel } from '@/lib/admin-settings';
 import { recordAiUsage, tokensFromUsage } from '@/lib/ai-usage';
 import { JPC_ITEMS } from '@/lib/jpc-items';
 
@@ -100,13 +100,14 @@ Rules:
 - Where the sheet prints "NA" (or the cell is empty), return null for that city — never 0, and never a guess.
 - Do not calculate, average or infer anything. Copy the digits you can see. If a digit is unclear, return null for that cell rather than guessing.`;
 
+  const model = await getAiModel();
   let response: Response;
   try {
     response = await fetch(ABACUS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: abacusModelName(),
+        model,
         messages: [{ role: 'user', content: [
           { type: 'file', file: { filename, file_data: dataUri } },
           { type: 'text', text: prompt },

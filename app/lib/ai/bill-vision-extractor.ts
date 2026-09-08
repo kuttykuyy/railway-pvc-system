@@ -1,4 +1,4 @@
-import { abacusModelName } from './model-spec';
+import { getAiModel } from '@/lib/admin-settings';
 import { recordAiUsage } from '@/lib/ai-usage';
 
 /**
@@ -101,13 +101,14 @@ export async function extractBillJsonWithVision(
     },
   ];
 
+  const model = await getAiModel();
   let response: Response;
   try {
     response = await fetch(ABACUS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: abacusModelName(),
+        model,
         messages,
         response_format: { type: 'json_object' },
         max_tokens: 9000,

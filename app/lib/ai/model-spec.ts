@@ -32,6 +32,14 @@ export function currentModelSpec(): string {
   return specStore.getStore() || String(process.env.BILL_AI_MODEL || '').trim() || DEFAULT_SPEC;
 }
 
+/** A model pinned for this call by withModelSpec(), or null. Beats the admin setting. */
+export function pinnedModelSpec(): string | null {
+  return specStore.getStore() || null;
+}
+
+/** The hardcoded fallback model, exported so the DB-backed resolver can reuse it. */
+export const DEFAULT_MODEL_SPEC = DEFAULT_SPEC;
+
 export function isAnthropicSpec(spec: string): boolean {
   return /^anthropic:/i.test(spec);
 }
