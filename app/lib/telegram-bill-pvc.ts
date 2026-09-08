@@ -67,6 +67,12 @@ export interface ProcessUploadedBillResult {
    * uploaded bill so the run can resume once they answer.
    */
   needsInput?: boolean;
+  /**
+   * True when the bill is fully priced but the run must wait for a choice before
+   * the payment link (with / without the JPC sheets). The bill is NOT kept queued —
+   * it must not be priced twice — the run just stops until the reply comes in.
+   */
+  awaitingChoice?: boolean;
 }
 
 export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Promise<ProcessUploadedBillResult> {
@@ -478,57 +484,51 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     pvcComponents: { labour, plant, fuel, materials, cement, steel, explosives, totalPvc },
   };
 
+  // The JPC steel sheets are a paid annex on the website (see admin billing settings).
+  // A steel bill asks first whether to include them, so the link charges the right
+  // amount; a bill with no steel has nothing to add and goes straight to the link.
+  const hasSteel = entriesForReport.some(
+    (e: any) => (Array.isArray(e.steelTypes) && e.steelTypes.length > 0) || (e.subClassification?.steel ?? 0) > 0,
+  );
+  payload.hasSteel = hasSteel;
+  let jpcCost = 0;
   try {
-    const { mutateTelegramConversationData, TelegramStep } = await import('./telegram-conversation');
-    const { getReportPriceRupees, createReportPaymentLink } = await import('./telegram-payment');
+    const { getBillingSettings } = await import('./admin-settings');
+    jpcCost = Number((await getBillingSettings()).jpcDocumentCost) || 0;
+  } catch { /* no annex on offer */ }
 
-    const price = await getReportPriceRupees();
-    const link = await createReportPaymentLink({
-      chatId,
-      amountRupees: price,
-      agreementNo: displayAgreementNo(contract.agreementNo),
-      billNo: payload.billNo,
+  if (hasSteel && jpcCost > 0) {
+    const { updateTelegramConversation, TelegramStep } = await import('./telegram-conversation');
+    const { getReportPriceRupees } = await import('./telegram-payment');
+    const { inlineKeyboard } = await import('./telegram-api');
+    const base = await getReportPriceRupees();
+    await updateTelegramConversation(args.conversationId, TelegramStep.AWAITING_REPORT_OPTION, {
+      docPendingReportChoice: payload as any,
     });
-
-    // Park it against its own payment link as well as in the single slot. Several
-    // bills for one agreement means several unpaid links at once, and the single slot
-    // alone would hand whoever pays the FIRST link the LAST bill's report.
-    const stored = await mutateTelegramConversationData(
-      args.conversationId,
-      (current) => ({
-        ...current,
-        docPendingReport: payload as any,
-        docPendingPaymentLinkId: link.id,
-        docPendingReports: [
-          ...(current.docPendingReports || []).filter((r) => r.linkId !== link.id),
-          { linkId: link.id, payload: payload as any },
-        ].slice(-MAX_PENDING_REPORTS),
-      }),
-      TelegramStep.IDLE,
-    );
-
-    // With more than one statement waiting, paying them one link at a time is a
-    // nuisance — point at the combined link.
-    const waitingCount = (stored.docPendingReports || []).length;
-    const payAllHint = waitingCount > 1
-      ? `\n\n🧾 <b>${waitingCount} statements are now waiting.</b> Send <b>/payall</b> for one link covering all of them.`
-      : '';
-
     await sendTelegramMessage(
       chatId,
-      `📎 <b>Get the full PVC statement (PDF) — ₹${formatMoney(price)}</b>\n\n` +
-        `Pay by UPI / card / net banking here:\n${link.url}\n\n` +
-        `The moment your payment is confirmed I'll send the signed-format PVC statement right here. No sign-up needed.` +
-        payAllHint +
-        `\n\n<i>Have a coupon? Send /coupon.\nAlready paid and nothing arrived? Send /paid.</i>`,
+      `📎 <b>Get the full PVC statement (PDF)</b>\n\n` +
+        `This bill has steel. The official <b>JPC steel index sheets</b> (the proof pages for the steel indices used) ` +
+        `are a paid annex of ₹${formatMoney(jpcCost)}, the same as on the website.\n\n` +
+        `• Statement only — <b>₹${formatMoney(base)}</b>\n` +
+        `• Statement + JPC steel sheets — <b>₹${formatMoney(base + jpcCost)}</b>\n\n` +
+        `Which one do you want?`,
+      {
+        replyMarkup: inlineKeyboard([
+          [{ text: `📄 Statement only — ₹${formatMoney(base)}`, callback_data: 'report_plain' }],
+          [{ text: `📄+📑 With JPC steel sheets — ₹${formatMoney(base + jpcCost)}`, callback_data: 'report_jpc' }],
+        ]),
+      },
     );
-  } catch (err: any) {
-    console.error('[Telegram] payment link creation failed:', err);
-    await sendTelegramMessage(
-      chatId,
-      `⚠️ The PVC amount above is ready, but I couldn't create the payment link just now. Please try sending the bill again in a moment.`,
-    );
+    return { awaitingChoice: true };
   }
+
+  await offerReportPayment({
+    conversationId: args.conversationId,
+    chatId,
+    payload,
+    agreementNo: displayAgreementNo(contract.agreementNo),
+  });
 
   return {};
 }
@@ -726,6 +726,89 @@ export interface StoredReportPayload {
   allIndices: string[];
   entriesForReport: any[];
   pvcComponents: { labour: number; plant: number; fuel: number; materials: number; cement: number; steel: number; explosives: number; totalPvc: number };
+  /** The bill has steel, so the JPC steel sheets are on offer as a paid annex. */
+  hasSteel?: boolean;
+  /** The user chose (and the link charges for) the JPC steel sheets. */
+  includeJpc?: boolean;
+}
+
+/** Price of one statement, plus the JPC annex when the payload asks for it. */
+export async function reportPriceForPayload(payload: { includeJpc?: boolean } | undefined): Promise<number> {
+  const { getReportPriceRupees } = await import('./telegram-payment');
+  const { getBillingSettings } = await import('./admin-settings');
+  const base = await getReportPriceRupees();
+  if (!payload?.includeJpc) return base;
+  const settings = await getBillingSettings();
+  return base + (Number(settings.jpcDocumentCost) || 0);
+}
+
+/**
+ * Creates the payment link for one priced bill's statement, parks the report data
+ * against it and posts the link in the chat. Split out of the pricing run so a steel
+ * bill can first ask whether the JPC sheets should be included.
+ */
+export async function offerReportPayment(o: {
+  conversationId: string;
+  chatId: string;
+  payload: StoredReportPayload;
+  agreementNo: string;
+}): Promise<void> {
+  const { chatId, payload } = o;
+  try {
+    const { mutateTelegramConversationData, TelegramStep } = await import('./telegram-conversation');
+    const { createReportPaymentLink } = await import('./telegram-payment');
+
+    const price = await reportPriceForPayload(payload);
+    const link = await createReportPaymentLink({
+      chatId,
+      amountRupees: price,
+      agreementNo: o.agreementNo,
+      billNo: payload.billNo,
+    });
+
+    // Park it against its own payment link as well as in the single slot. Several
+    // bills for one agreement means several unpaid links at once, and the single slot
+    // alone would hand whoever pays the FIRST link the LAST bill's report.
+    const stored = await mutateTelegramConversationData(
+      o.conversationId,
+      (current) => ({
+        ...current,
+        docPendingReport: payload as any,
+        docPendingReportChoice: undefined,
+        docPendingPaymentLinkId: link.id,
+        docPendingReports: [
+          ...(current.docPendingReports || []).filter((r) => r.linkId !== link.id),
+          { linkId: link.id, payload: payload as any },
+        ].slice(-MAX_PENDING_REPORTS),
+      }),
+      TelegramStep.IDLE,
+    );
+
+    // With more than one statement waiting, paying them one link at a time is a
+    // nuisance — point at the combined link.
+    const waitingCount = (stored.docPendingReports || []).length;
+    const payAllHint = waitingCount > 1
+      ? `\n\n🧾 <b>${waitingCount} statements are now waiting.</b> Send <b>/payall</b> for one link covering all of them.`
+      : '';
+    const what = payload.includeJpc
+      ? 'Get the full PVC statement (PDF) with the JPC steel sheets'
+      : 'Get the full PVC statement (PDF)';
+
+    await sendTelegramMessage(
+      chatId,
+      `📎 <b>${what} — ₹${formatMoney(price)}</b>\n\n` +
+        `Pay by UPI / card / net banking here:\n${link.url}\n\n` +
+        `The moment your payment is confirmed I'll send the signed-format PVC statement right here. No sign-up needed.` +
+        payAllHint +
+        `\n\n<i>Have a coupon? Send /coupon.\nAlready paid and nothing arrived? Send /paid.</i>`,
+    );
+  } catch (err: any) {
+    console.error('[Telegram] payment link creation failed:', err);
+    await sendTelegramMessage(
+      chatId,
+      `⚠️ The PVC amount above is ready, but I couldn't create the payment link just now. Please try sending the bill again in a moment.`,
+    );
+  }
 }
 
 /**
@@ -831,6 +914,7 @@ export async function renderAndSendPaidReport(chatId: string, paymentLinkId?: st
       entriesForReport: payload.entriesForReport,
       pvcComponents: payload.pvcComponents,
       allIndices: payload.allIndices,
+      includeJpc: !!payload.includeJpc,
     });
     console.log(`[Telegram] paid report built (${(pdfBuf.length / 1024).toFixed(0)} KB); sending…`);
 
@@ -911,6 +995,8 @@ async function buildIrReport(o: {
   entriesForReport: any[];
   pvcComponents: { labour: number; plant: number; fuel: number; materials: number; cement: number; steel: number; explosives: number; totalPvc: number };
   allIndices: string[];
+  /** The JPC steel sheets were paid for in the chat. */
+  includeJpc?: boolean;
 }): Promise<Buffer> {
   const { generateIRStandardReport } = await import('@/lib/pdf/generators/ir-standard-report');
   const { contract, pvcComponents: c } = o;
@@ -1054,8 +1140,8 @@ async function buildIrReport(o: {
     // in which case they ride along exactly as they would there. Any lookup failure
     // (e.g. the pending-DB column not applied yet) counts as unpaid — free beats
     // handing out the paid annex blind.
-    let jpcPaid = false;
-    if (hasSteel) {
+    let jpcPaid = !!o.includeJpc;
+    if (hasSteel && !jpcPaid) {
       try {
         const billsTable = await (await import('./db-schema')).schemaQualified('bills');
         const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
