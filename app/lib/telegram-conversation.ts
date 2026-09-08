@@ -23,6 +23,10 @@ export enum TelegramStep {
   // Document (PDF) PVC flow: the agreement had no tender closing date, or the
   // stored one is wrong (quarter came out Q0), so ask the user for it.
   AWAITING_TENDER_DATE = 'AWAITING_TENDER_DATE',
+  // Document (PDF) PVC flow: the bill is measured after the contract's completion
+  // date, so the time extension (GCC 17A/17B) is recorded in the chat first.
+  AWAITING_EXTENSION_TYPE = 'AWAITING_EXTENSION_TYPE',
+  AWAITING_EXTENSION_DATE = 'AWAITING_EXTENSION_DATE',
   // Contract creation steps
   AWAITING_AGREEMENT_NO = 'AWAITING_AGREEMENT_NO',
   AWAITING_CONTRACTOR_NAME = 'AWAITING_CONTRACTOR_NAME',
@@ -84,6 +88,16 @@ export interface TelegramConversationData {
   docPendingBills?: Array<{ fileId: string; fileName: string }>;
   /** Extracted agreement fields held back until the user supplies the tender closing date. */
   docPendingAgreement?: any;
+  /**
+   * A bill measured after the contract's completion date is waiting on its time
+   * extension. Holds what the questions need until the extension is saved.
+   */
+  docPendingExtension?: {
+    contractId: string;
+    coveredUntil: string;   // ISO date the contract currently covers up to
+    measuredOn: string;     // ISO date the bill is measured on
+    extensionType?: '17A' | '17B';
+  };
   /** Report data waiting on payment — rendered and sent by the Razorpay webhook. */
   docPendingReport?: any;
   /** Razorpay payment link id, so /paid can verify payment without the webhook. */

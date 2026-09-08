@@ -15,6 +15,8 @@ import {
 import { sendTelegramMessage, replyKeyboard, getPublicSiteUrl } from './telegram-api';
 import {
   handleTenderDateReply,
+  handleExtensionTypeReply,
+  handleExtensionDateReply,
   resumeDocumentFlow,
   startPvcFlow,
   remindToUpload,
@@ -83,6 +85,10 @@ export async function handleTelegramMessage(chatId: string, text: string) {
         return handlePhoneLinking(conversation, msg, chatId);
       case TelegramStep.AWAITING_TENDER_DATE:
         return handleTenderDateReply(conversation, msg, chatId);
+      case TelegramStep.AWAITING_EXTENSION_TYPE:
+        return handleExtensionTypeReply(conversation, msg, chatId);
+      case TelegramStep.AWAITING_EXTENSION_DATE:
+        return handleExtensionDateReply(conversation, msg, chatId);
       case TelegramStep.AWAITING_ZONE:
         return handleZoneReply(conversation, msg, chatId);
       case TelegramStep.AWAITING_FUEL_BASIS:
