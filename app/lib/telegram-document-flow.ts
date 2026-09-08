@@ -22,7 +22,7 @@ import {
   getTelegramConversationData,
   TelegramStep,
 } from './telegram-conversation';
-import { sendTelegramMessage, sendTelegramChatAction, downloadTelegramFile, inlineKeyboard, notifyTelegramAdmin } from './telegram-api';
+import { sendTelegramMessage, sendTelegramChatAction, downloadTelegramFile, inlineKeyboard, notifyTelegramAdmin, sendTelegramPhoto, getPublicSiteUrl } from './telegram-api';
 import { getRailwayZoneOptions } from './zone-steel-city-mapping';
 import { extractAgreementFromPdf, type ExtractedAgreement } from './ai/agreement-extractor';
 import { getTelegramGuestUserId } from './telegram-guest';
@@ -277,13 +277,21 @@ export async function startPvcFlow(conversationId: string, chatId: string) {
     // payment links, and someone starting a second agreement should still receive the
     // statement they pay for from the first.
   });
-  return sendTelegramMessage(
+  await sendTelegramMessage(
     chatId,
     `🚂 <b>Let's work out your PVC</b>\n\n` +
-      `📎 <b>Step 1 of 2:</b> send the <b>tender agreement PDF</b>.\n` +
-      `<i>No signed agreement yet? Send the <b>LOA</b> instead — that works too.</i>\n\n` +
+      `📎 <b>Step 1 of 2:</b> send your <b>LOA (Letter of Acceptance) PDF</b>.\n` +
+      `<i>Have the signed <b>tender agreement</b> instead? That works too — send whichever you have.</i>\n\n` +
       `Then send your <b>running bill</b>. You can send <b>several bills</b> for the same agreement and I'll price each one.\n\n` +
       `<i>Tap the 📎 clip button and choose the file. Type /cancel to stop.</i>`,
+  );
+  // A picture of a real LOA so a first-time user knows exactly what to send — the same
+  // sample the website shows. Best-effort; the flow works without it.
+  await sendTelegramPhoto(
+    chatId,
+    `${getPublicSiteUrl()}/samples/loa-page-1.jpg`,
+    `👆 <b>This is what an LOA looks like</b> (IREPS Letter of Acceptance).\n` +
+      `Look for "<b>Letter Of Acceptance</b>" near the top. Send the whole PDF — I read only the pages I need.`,
   );
 }
 

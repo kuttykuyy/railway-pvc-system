@@ -79,6 +79,31 @@ export async function sendTelegramMessage(
 }
 
 /**
+ * Send a photo to a Telegram chat, by URL. Telegram fetches the URL itself, so it
+ * must be publicly reachable (a /public asset on the deployed site works). Best-effort:
+ * a failure is logged, never thrown, so it can't block the message it accompanies.
+ */
+export async function sendTelegramPhoto(
+  chatId: string,
+  photoUrl: string,
+  caption?: string,
+): Promise<any> {
+  try {
+    const res = await fetch(apiUrl('sendPhoto'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption: caption || '', parse_mode: 'HTML' }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error('Telegram sendPhoto error:', JSON.stringify(data).slice(0, 300));
+    return data;
+  } catch (err) {
+    console.error('Telegram sendPhoto exception:', err);
+    return null;
+  }
+}
+
+/**
  * Send a document (PDF) to a Telegram chat
  */
 export async function sendTelegramDocument(
