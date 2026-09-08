@@ -1013,6 +1013,135 @@ export async function handleTenderDateReply(conversation: any, msg: string, chat
   return maybeProcess(conversation.id, chatId);
 }
 
+/**
+ * User picked the extension type (17A / 17B) for a bill measured after the
+ * contract's completion date. "Skip" drops that bill and carries on with the rest.
+ */
+export async function handleExtensionTypeReply(conversation: any, msg: string, chatId: string) {
+  const raw = String(msg).trim().toLowerCase();
+  const data = getTelegramConversationData(conversation);
+  const pending = data.docPendingExtension;
+  if (!pending) {
+    await updateTelegramConversation(conversation.id, TelegramStep.IDLE, {});
+    return sendTelegramMessage(chatId, 'Please send the bill PDF again.');
+  }
+
+  if (raw === 'ext_skip' || raw === 'skip' || raw === '3') {
+    await mutateTelegramConversationData(
+      conversation.id,
+      (current) => {
+        const queue = (current.docPendingBills || []).slice(1);
+        return {
+          ...current,
+          docPendingExtension: undefined,
+          docPendingBills: queue.length ? queue : undefined,
+          docBillFileId: queue.length ? queue[0].fileId : undefined,
+          docBillFileName: queue.length ? queue[0].fileName : undefined,
+        };
+      },
+      TelegramStep.IDLE,
+    );
+    await sendTelegramMessage(chatId, '⏭️ Skipped. Record the extension later and send that bill again whenever you like.');
+    return maybeProcess(conversation.id, chatId);
+  }
+
+  let extensionType: '17A' | '17B' | null = null;
+  if (raw === 'ext_17a' || raw.includes('17a') || raw === '1' || raw === 'a') extensionType = '17A';
+  else if (raw === 'ext_17b' || raw.includes('17b') || raw === '2' || raw === 'b') extensionType = '17B';
+  if (!extensionType) {
+    return sendTelegramMessage(chatId, 'Please tap one of the buttons above — <b>17A</b>, <b>17B</b> or <b>Skip</b>.');
+  }
+
+  const fmt = (d: Date) => d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
+  await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_EXTENSION_DATE, {
+    docPendingExtension: { ...pending, extensionType },
+  });
+  return sendTelegramMessage(
+    chatId,
+    `✅ Extension type: <b>${extensionType}</b>\n\n` +
+      `Now reply with the <b>extended completion date</b> in <b>DD/MM/YYYY</b> format ` +
+      `(on or after ${fmt(new Date(pending.measuredOn))}, since the bill is measured then):`,
+  );
+}
+
+/**
+ * User replied with the extended completion date. Saves the extension exactly the
+ * way the website's extension form does (same table, same contract fields), then
+ * the paused PVC run continues on its own.
+ */
+export async function handleExtensionDateReply(conversation: any, msg: string, chatId: string) {
+  const data = getTelegramConversationData(conversation);
+  const pending = data.docPendingExtension;
+  if (!pending?.extensionType) {
+    await updateTelegramConversation(conversation.id, TelegramStep.IDLE, {});
+    return sendTelegramMessage(chatId, 'Please send the bill PDF again.');
+  }
+
+  const extendedDate = parseDdMmYyyy(msg);
+  if (!extendedDate) {
+    return sendTelegramMessage(chatId, '❌ I need the date as <b>DD/MM/YYYY</b> (e.g. 31/03/2025). Please try again:');
+  }
+  const fmt = (d: Date) => d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
+  const coveredUntil = new Date(pending.coveredUntil);
+  const measuredOn = new Date(pending.measuredOn);
+  if (extendedDate.getTime() < coveredUntil.getTime()) {
+    return sendTelegramMessage(chatId, `❌ The extended date must be after <b>${fmt(coveredUntil)}</b>, the date the contract already covers. Please try again:`);
+  }
+  if (extendedDate.getTime() < measuredOn.getTime()) {
+    return sendTelegramMessage(
+      chatId,
+      `❌ That date is before the bill's measurement date (<b>${fmt(measuredOn)}</b>), so this bill would still fall outside the contract. ` +
+        `Reply with a later date, or type <b>cancel</b>:`,
+    );
+  }
+
+  try {
+    const contract = await prisma.contract.findUnique({ where: { id: pending.contractId } });
+    if (!contract) throw new Error('contract not found');
+    // The original completion date anchors a 17B freeze; keep the first one ever set.
+    const originalDate = contract.originalCompletionDate ? new Date(contract.originalCompletionDate) : coveredUntil;
+    const extensionDuration = Math.ceil((extendedDate.getTime() - coveredUntil.getTime()) / (1000 * 60 * 60 * 24));
+    const isPvcRestricted = pending.extensionType === '17B';
+
+    await prisma.contractExtension.create({
+      data: {
+        contractId: contract.id,
+        extensionType: pending.extensionType,
+        extensionReason: 'Recorded via Telegram',
+        originalCompletionDate: originalDate,
+        extendedCompletionDate: extendedDate,
+        extensionDuration,
+        isPvcRestricted,
+        pvcRestrictionDate: isPvcRestricted ? originalDate : null,
+        approvalDate: new Date(),
+        isLiquidatedDamages: isPvcRestricted,
+      },
+    });
+    await prisma.contract.update({
+      where: { id: contract.id },
+      data: {
+        originalCompletionDate: originalDate,
+        currentCompletionDate: extendedDate,
+        extensionType: pending.extensionType,
+        extensionGrantedDate: new Date(),
+        isExtended: true,
+      },
+    });
+  } catch (err: any) {
+    console.error('[Telegram] extension save failed:', err);
+    return sendTelegramMessage(chatId, `❌ Could not save the extension: ${escapeHtml(err?.message || 'unknown error')}`);
+  }
+
+  await updateTelegramConversation(conversation.id, TelegramStep.IDLE, { docPendingExtension: undefined });
+  await sendTelegramMessage(
+    chatId,
+    `✅ Extension saved: <b>${pending.extensionType}</b> up to <b>${fmt(extendedDate)}</b>` +
+      (pending.extensionType === '17B' ? ` (PVC frozen at <b>${fmt(new Date(pending.coveredUntil))}</b>)` : '') +
+      `. Calculating the PVC…`,
+  );
+  return maybeProcess(conversation.id, chatId);
+}
+
 // ─── small helpers ───────────────────────────────────
 function nonEmpty(value: unknown): boolean {
   return !!(value && String(value).trim());

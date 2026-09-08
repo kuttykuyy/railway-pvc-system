@@ -188,17 +188,34 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   // completion date out, and never fires on a contract with no completion date at all.
   const extensionGate = billRequiresExtension(contract, measurementDate);
   if (extensionGate.blocked) {
+    const { updateTelegramConversation, TelegramStep } = await import('./telegram-conversation');
+    const { inlineKeyboard } = await import('./telegram-api');
     const fmt = (d: Date) => new Date(d).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
+    await updateTelegramConversation(args.conversationId, TelegramStep.AWAITING_EXTENSION_TYPE, {
+      docPendingExtension: {
+        contractId: contract.id,
+        coveredUntil: new Date(extensionGate.coveredUntil!).toISOString(),
+        measuredOn: measurementDate.toISOString(),
+      },
+    });
     await sendTelegramMessage(
       chatId,
       `⚠️ This bill is measured <b>after the contract's completion date</b>.\n\n` +
         `📅 Bill measured: <b>${fmt(measurementDate)}</b>\n` +
         `📅 Contract covered until: <b>${fmt(extensionGate.coveredUntil!)}</b>\n\n` +
-        `Work in this period needs a recorded <b>time extension</b> (GCC 17A/17B), and the extension ` +
-        `decides how PVC applies to it. Please record the extension on the website first, then send the bill again:\n` +
-        `${getPublicSiteUrl()}/contracts/${contract.id}/extensions`,
+        `Work in this period needs a <b>time extension</b> (GCC 17A/17B), and the type decides how PVC applies:\n` +
+        `• <b>17A</b> — Railway's reasons. PVC continues normally.\n` +
+        `• <b>17B</b> — Contractor's reasons. PVC is frozen at the original completion date.\n\n` +
+        `Which extension was granted?`,
+      {
+        replyMarkup: inlineKeyboard([
+          [{ text: '🏛️ 17A — with PVC', callback_data: 'ext_17A' }],
+          [{ text: '🔒 17B — PVC frozen', callback_data: 'ext_17B' }],
+          [{ text: '⏭️ Skip this bill', callback_data: 'ext_skip' }],
+        ]),
+      },
     );
-    return {};
+    return { needsInput: true };
   }
 
   // 17B-extended contracts freeze the quarter at the original completion date.
