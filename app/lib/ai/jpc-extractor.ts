@@ -11,6 +11,7 @@
  * the system, and unlike a bill there is no printed total to reconcile against.
  */
 
+import { abacusModelName } from './model-spec';
 import { recordAiUsage, tokensFromUsage } from '@/lib/ai-usage';
 import { JPC_ITEMS } from '@/lib/jpc-items';
 
@@ -105,7 +106,7 @@ Rules:
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'route-llm',
+        model: abacusModelName(),
         messages: [{ role: 'user', content: [
           { type: 'file', file: { filename, file_data: dataUri } },
           { type: 'text', text: prompt },
