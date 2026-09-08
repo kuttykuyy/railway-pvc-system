@@ -12,7 +12,7 @@
 import { PDFDocument } from 'pdf-lib';
 import { recordAiUsage, tokensFromUsage } from '@/lib/ai-usage';
 import { findClosingDateInText, parseAgreementText } from './agreement-direct-parser';
-import { abacusModelName } from './model-spec';
+import { getAiModel } from '@/lib/admin-settings';
 
 // Every field we need (agreement no, LOA, contractor, work description, closing
 // date, values) is on the opening pages; a full 70+ page agreement overwhelms the
@@ -217,12 +217,13 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   }
 
   const ask = async (text: string, maxTokens: number, label: string): Promise<Ask> => {
+    const model = await getAiModel();
     let response: Response;
     try {
       response = await fetch(ABACUS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: abacusModelName(), messages: withPdf(text), response_format: { type: 'json_object' }, max_tokens: maxTokens, temperature: 0.1 }),
+        body: JSON.stringify({ model, messages: withPdf(text), response_format: { type: 'json_object' }, max_tokens: maxTokens, temperature: 0.1 }),
         signal: AbortSignal.timeout(90000),
       });
     } catch (err: any) {

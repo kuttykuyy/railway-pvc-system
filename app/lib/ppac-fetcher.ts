@@ -4,7 +4,7 @@
  * Automatically fetches diesel prices from ppac.gov.in
  */
 
-import { abacusModelName } from './ai/model-spec';
+import { getAiModel } from './admin-settings';
 import { prisma } from './db';
 import { recordAiUsage, tokensFromUsage } from './ai-usage';
 
@@ -202,8 +202,9 @@ export async function extractFuelPricesWithAI(base64: string): Promise<FuelPrice
 
   logger.log('[PPAC Fetcher] Calling RouteLLM to parse diesel prices from text...');
 
+  const model = await getAiModel();
   const requestBody = JSON.stringify({
-    model: abacusModelName(),
+    model,
     max_tokens: 16000,
     response_format: { type: 'json_object' },
     messages: [

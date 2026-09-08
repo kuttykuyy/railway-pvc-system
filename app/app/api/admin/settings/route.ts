@@ -87,6 +87,12 @@ const DEFAULT_SETTINGS = [
     dataType: 'number'
   },
   {
+    key: 'AI_MODEL',
+    value: 'gemini-3.8-flash',
+    description: 'Which AI model reads uploaded LOAs, agreements and bills (sent to Abacus RouteLLM). Examples: gemini-3.8-flash, route-llm (Abacus auto-router), gpt-4.1. Leave as the default unless you know the exact model name your Abacus account exposes.',
+    dataType: 'string'
+  },
+  {
     key: 'OCR_FALLBACK_ENABLED',
     value: 'false',
     description: 'PROTOTYPE. When a bill PDF has no readable text (Print-to-PDF, screenshot, or scan), read the page images with AI instead of rejecting it. The result is a draft the user must review. Off by default while accuracy and cost are measured.',

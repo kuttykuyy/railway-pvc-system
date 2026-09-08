@@ -11,6 +11,7 @@ const load = (importer: any) => dynamic(importer, { ssr: false, loading });
 
 const ParseFailures = load(() => import('../parse-failures/page'));
 const OcrFallback = load(() => import('../ocr-fallback/page'));
+const AiModel = load(() => import('../ai-model/page'));
 const SteelCityAudit = load(() => import('../steel-city-audit/page'));
 const JpcCrossCheck = load(() => import('../jpc-cross-check/page'));
 const ClassificationAudit = load(() => import('../classification-audit/page'));
@@ -24,6 +25,7 @@ export default function AdminChecksPage() {
       tabs={[
         { key: 'parse-failures', name: 'Parse failures', href: '/admin/parse-failures', render: () => <ParseFailures /> },
         { key: 'ocr-fallback', name: 'OCR fallback', href: '/admin/ocr-fallback', render: () => <OcrFallback /> },
+        { key: 'ai-model', name: 'AI model', href: '/admin/ai-model', render: () => <AiModel /> },
         { key: 'steel-city', name: 'Steel city audit', href: '/admin/steel-city-audit', render: () => <SteelCityAudit /> },
         { key: 'jpc', name: 'JPC cross-check', href: '/admin/jpc-cross-check', render: () => <JpcCrossCheck /> },
         { key: 'classification', name: 'Classification %', href: '/admin/classification-audit', render: () => <ClassificationAudit /> },
