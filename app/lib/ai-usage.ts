@@ -190,22 +190,33 @@ export async function getAiUsageSummary(): Promise<AiUsageSummary> {
  * available this costs a negligible amount; when it is exhausted the provider
  * returns 402 for free. Meant to be called on demand from the admin page.
  */
-export async function checkAiProviderStatus(): Promise<{ status: AiProviderStatus; detail: string }> {
+export async function checkAiProviderStatus(): Promise<{ status: AiProviderStatus; detail: string; requestedModel?: string; servedModel?: string | null }> {
   const apiKey = process.env.ABACUSAI_API_KEY;
   if (!apiKey) return { status: 'not_configured', detail: 'ABACUSAI_API_KEY is not set on the server.' };
+  // The model we ask for — the same one every real read uses. Reported back so the
+  // admin can see which model is configured, and which model actually answered.
+  const requestedModel = String((await getAdminSetting('AI_MODEL', '')) || '').trim() || String(process.env.BILL_AI_MODEL || '').trim() || 'gemini-3.8-flash';
   try {
     const response = await fetch(ABACUS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      // Resolve the configured model the light way (no model-spec import, which pulls
-      // node:async_hooks and must stay out of this widely-imported module).
       body: JSON.stringify({
-        model: String((await getAdminSetting('AI_MODEL', '')) || '').trim() || String(process.env.BILL_AI_MODEL || '').trim() || 'gemini-3.8-flash',
+        model: requestedModel,
         messages: [{ role: 'user', content: 'ping' }], max_tokens: 1, temperature: 0,
       }),
       signal: AbortSignal.timeout(20000),
     });
-    if (response.ok) return { status: 'working', detail: 'AI extraction is available.' };
+    if (response.ok) {
+      // Abacus echoes the model it actually routed to in `model`. That is the real
+      // proof of which model served the request — route-llm resolves to a concrete one.
+      const data = await response.json().catch(() => null);
+      const servedModel = data?.model ? String(data.model) : null;
+      return {
+        status: 'working',
+        detail: servedModel ? `Answered by ${servedModel}.` : 'AI extraction is available.',
+        requestedModel, servedModel,
+      };
+    }
     const body = await response.text().catch(() => '');
     // A missing payment method is distinct from running out of credit. The RouteLLM API
     // is billed to a card on the Abacus account and needs a payment method on file even
@@ -219,8 +230,8 @@ export async function checkAiProviderStatus(): Promise<{ status: AiProviderStatu
     if (response.status === 402 || /no remaining credits|insufficient credits|credit balance/i.test(body)) {
       return { status: 'out_of_credit', detail: 'Abacus reports credits are exhausted. Recharge the account to resume AI extraction.' };
     }
-    return { status: 'error', detail: `Provider returned HTTP ${response.status}. ${body.slice(0, 200)}` };
+    return { status: 'error', detail: `Provider returned HTTP ${response.status}. ${body.slice(0, 200)}`, requestedModel };
   } catch (error: any) {
-    return { status: 'error', detail: error?.message || 'The status request failed.' };
+    return { status: 'error', detail: error?.message || 'The status request failed.', requestedModel };
   }
 }
