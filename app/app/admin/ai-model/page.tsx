@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { toast } from 'react-hot-toast';
-import { Cpu, Info } from 'lucide-react';
+import { Cpu, Info, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 
 interface Setting {
   key: string;
@@ -31,6 +31,8 @@ export default function AiModelSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [model, setModel] = useState('gemini-3.8-flash');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; requested?: string; served?: string | null; detail: string } | null>(null);
 
   useEffect(() => {
     fetch('/api/admin/settings')
@@ -60,6 +62,28 @@ export default function AiModelSettingsPage() {
       toast.error('Could not save the setting');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Live check: pings the provider with the CONFIGURED model and shows which model
+  // actually answered. Save first if you changed the box — the test reads the saved value.
+  const test = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/admin/ai-usage', { method: 'POST' });
+      const data = await res.json();
+      const st = data?.status || {};
+      setTestResult({
+        ok: st.status === 'working',
+        requested: st.requestedModel,
+        served: st.servedModel,
+        detail: st.detail || 'No response',
+      });
+    } catch {
+      setTestResult({ ok: false, detail: 'The test request failed.' });
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -119,14 +143,42 @@ export default function AiModelSettingsPage() {
             />
           </div>
 
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving}
-            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-          >
-            {saving ? 'Saving…' : 'Save model'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving}
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {saving ? 'Saving…' : 'Save model'}
+            </button>
+            <button
+              type="button"
+              onClick={test}
+              disabled={testing}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 disabled:opacity-60"
+            >
+              {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {testing ? 'Testing…' : 'Test model'}
+            </button>
+          </div>
+
+          {testResult && (
+            <div className={`rounded-xl border px-4 py-3 text-sm ${testResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-red-200 bg-red-50 text-red-900'}`}>
+              <p className="flex items-center gap-1.5 font-semibold mb-1">
+                {testResult.ok ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                {testResult.ok ? 'Model is working' : 'Model check failed'}
+              </p>
+              {testResult.requested && (
+                <p>Requested: <strong className="font-mono">{testResult.requested}</strong></p>
+              )}
+              {testResult.ok && (
+                <p>Answered by: <strong className="font-mono">{testResult.served || 'unknown'}</strong></p>
+              )}
+              {!testResult.ok && <p className="mt-1">{testResult.detail}</p>}
+              <p className="mt-1 text-xs opacity-80">This is a live 1-token ping — it proves which model your Abacus account actually runs.</p>
+            </div>
+          )}
 
           <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-600">
             <p className="flex items-center gap-1.5 font-semibold text-slate-800 mb-1"><Info className="h-4 w-4" /> Good to know</p>
