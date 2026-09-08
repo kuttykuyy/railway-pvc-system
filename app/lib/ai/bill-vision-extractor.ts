@@ -1,3 +1,4 @@
+import { abacusModelName } from './model-spec';
 import { recordAiUsage } from '@/lib/ai-usage';
 
 /**
@@ -106,7 +107,7 @@ export async function extractBillJsonWithVision(
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'route-llm',
+        model: abacusModelName(),
         messages,
         response_format: { type: 'json_object' },
         max_tokens: 9000,

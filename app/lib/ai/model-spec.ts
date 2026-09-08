@@ -16,7 +16,10 @@ import { AsyncLocalStorage } from 'node:async_hooks';
  * environment variable, then "route-llm".
  */
 
-const DEFAULT_SPEC = 'route-llm';
+// The model every Abacus (RouteLLM) call uses by default. Overridable per-deploy with
+// BILL_AI_MODEL and per-call with withModelSpec(), so switching models needs no code
+// change. Set to Gemini Flash; use 'route-llm' to go back to Abacus's auto-router.
+const DEFAULT_SPEC = 'gemini-3.8-flash';
 const specStore = new AsyncLocalStorage<string>();
 
 /** Run `fn` with every extraction call inside it going to `spec`. No spec: unchanged. */
@@ -31,6 +34,16 @@ export function currentModelSpec(): string {
 
 export function isAnthropicSpec(spec: string): boolean {
   return /^anthropic:/i.test(spec);
+}
+
+/**
+ * The model name to send to the Abacus (RouteLLM) endpoint. Honours BILL_AI_MODEL and
+ * withModelSpec(), falling back to DEFAULT_SPEC. An anthropic:* spec is meaningless on
+ * the Abacus endpoint, so it maps to the default there.
+ */
+export function abacusModelName(): string {
+  const spec = currentModelSpec();
+  return isAnthropicSpec(spec) ? DEFAULT_SPEC : spec;
 }
 
 /** The Claude model id inside an "anthropic:<id>" spec. */
