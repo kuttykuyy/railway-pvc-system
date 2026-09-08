@@ -1,4 +1,4 @@
-import { getAiModel } from '@/lib/admin-settings';
+import { getAiModel } from './resolve-model';
 import { recordAiUsage } from '@/lib/ai-usage';
 
 /**

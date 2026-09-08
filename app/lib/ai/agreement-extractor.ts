@@ -12,7 +12,7 @@
 import { PDFDocument } from 'pdf-lib';
 import { recordAiUsage, tokensFromUsage } from '@/lib/ai-usage';
 import { findClosingDateInText, parseAgreementText } from './agreement-direct-parser';
-import { getAiModel } from '@/lib/admin-settings';
+import { getAiModel } from './resolve-model';
 
 // Every field we need (agreement no, LOA, contractor, work description, closing
 // date, values) is on the opening pages; a full 70+ page agreement overwhelms the

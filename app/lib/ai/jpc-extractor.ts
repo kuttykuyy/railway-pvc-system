@@ -11,7 +11,7 @@
  * the system, and unlike a bill there is no printed total to reconcile against.
  */
 
-import { getAiModel } from '@/lib/admin-settings';
+import { getAiModel } from './resolve-model';
 import { recordAiUsage, tokensFromUsage } from '@/lib/ai-usage';
 import { JPC_ITEMS } from '@/lib/jpc-items';
 

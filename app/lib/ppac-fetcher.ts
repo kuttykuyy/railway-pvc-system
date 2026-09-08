@@ -4,7 +4,7 @@
  * Automatically fetches diesel prices from ppac.gov.in
  */
 
-import { getAiModel } from './admin-settings';
+import { getAiModel } from './ai/resolve-model';
 import { prisma } from './db';
 import { recordAiUsage, tokensFromUsage } from './ai-usage';
 
