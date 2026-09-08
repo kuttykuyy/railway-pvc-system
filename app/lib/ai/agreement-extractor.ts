@@ -11,6 +11,7 @@
 
 import { PDFDocument } from 'pdf-lib';
 import { recordAiUsage, tokensFromUsage } from '@/lib/ai-usage';
+import { findClosingDateInText, parseAgreementText } from './agreement-direct-parser';
 
 // Every field we need (agreement no, LOA, contractor, work description, closing
 // date, values) is on the opening pages; a full 70+ page agreement overwhelms the
@@ -147,6 +148,19 @@ export async function extractAgreementFromPdf(
   }
   const dataUri = `data:application/pdf;base64,${Buffer.from(pdfBytes).toString('base64')}`;
 
+  // Read what we can straight from the PDF text FIRST. The AI is the primary reader
+  // when it has credit (it handles unusual letters better), but this direct pass is
+  // what lets a sign-up still get a pre-filled form when the AI is out of credit or
+  // unreachable — matching how the bill reader already works.
+  let pdfText = '';
+  try {
+    const { extractLayoutText } = await import('../pdf-layout-extract');
+    pdfText = await extractLayoutText(Buffer.from(pdfBytes));
+  } catch (err) {
+    console.warn('agreement-extractor: could not read PDF text for the direct parse:', err);
+  }
+  const direct = pdfText ? parseAgreementText(pdfText) : null;
+
   // What the contract cannot be set up without: who, what, which number, and the closing
   // date that fixes the base month. Small enough that the reply is never cut off.
   const essentialsPrompt = `You are extracting fields from an Indian Railway "Contract Agreement of Works" / e-tender agreement PDF to pre-fill a form. Read the whole document.
@@ -244,6 +258,38 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
     : await ask(essentialsPrompt + '\n\nCOMPACT RETRY: the previous reply was cut off. Keep every text value under 400 characters. No prose, nothing outside the JSON object.', 3000, 'essentials retry');
 
   if (!essentials.ok) {
+    // AI unavailable (out of credit, HTTP error, network, or an unreadable reply). If
+    // the direct text pass read the document AND got the key fields, hand that back so
+    // the user still gets a pre-filled form instead of a hard failure. "Enough" = it is
+    // an agreement/LOA and carries an agreement or LOA number, so the flow can proceed.
+    if (direct && direct.documentType === 'agreement' && (direct.agreementNo || direct.loaNo)) {
+      console.log(`agreement-extractor: AI failed (${essentials.detail}); using the direct text read (${direct.filledCount} fields).`);
+      const dateOfOpening = direct.closingDate || null;
+      return {
+        ok: true,
+        warnings: ['Read without AI (the AI service was unavailable). Please check the fields before saving.'],
+        data: {
+          documentType: 'agreement',
+          schedules: [],
+          acceptedPercentage: direct.acceptedPercentage,
+          rebatePercentage: null,
+          agreementNo: direct.agreementNo,
+          loaNo: direct.loaNo,
+          loaDate: direct.loaDate,
+          contractorName: direct.contractorName,
+          contractorPhone: null,
+          workDescription: direct.workDescription,
+          dateOfOpening,
+          closingDate: direct.closingDate,
+          completionDate: null,
+          completionPeriodMonths: direct.completionPeriodMonths,
+          tenderAdvertisedValue: null,
+          agreementAmount: null,
+          railwayName: direct.railwayName,
+          division: null,
+        },
+      };
+    }
     if (essentials.kind === 'network') {
       return { ok: false, status: 502, error: 'The AI request failed. Please try again.', detail: essentials.detail };
     }
@@ -268,11 +314,21 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   const warnings: string[] = [];
   const extracted: any = { ...essentials.extracted };
 
+  // Fill any essential the AI left blank from the direct text read — the AI stays the
+  // primary reader, this only patches gaps (e.g. a number the model missed).
+  if (direct) {
+    for (const k of ['agreementNo', 'loaNo', 'loaDate', 'contractorName', 'workDescription', 'completionPeriodMonths'] as const) {
+      if ((extracted[k] === null || extracted[k] === undefined || extracted[k] === '') && direct[k] != null) {
+        extracted[k] = direct[k];
+      }
+    }
+  }
+
   // The closing date decides the base month, and a base month that is out by a month
   // skews every quarter's PVC without ever looking wrong. Both agreements and LOAs
   // print it in plain words, so read it off the page and let that beat the model —
   // the AI is only the fallback here.
-  const printedClosingDate = await findPrintedClosingDate(Buffer.from(pdfBytes));
+  const printedClosingDate = pdfText ? findClosingDateInText(pdfText) : await findPrintedClosingDate(Buffer.from(pdfBytes));
   if (printedClosingDate && printedClosingDate !== extracted.closingDate) {
     console.log(`agreement-extractor: closing date from the document text (${printedClosingDate}) overrides the AI's (${extracted.closingDate ?? 'none'})`);
     extracted.closingDate = printedClosingDate;
