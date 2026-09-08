@@ -1056,11 +1056,22 @@ export async function handleExtensionTypeReply(conversation: any, msg: string, c
   await updateTelegramConversation(conversation.id, TelegramStep.AWAITING_EXTENSION_DATE, {
     docPendingExtension: { ...pending, extensionType },
   });
+  // Offer the dates the bot already knows: the bill's own measurement date is the
+  // least the extension must cover, and month-end is how most extension orders read.
+  const measuredOn = new Date(pending.measuredOn);
+  const monthEnd = new Date(measuredOn.getFullYear(), measuredOn.getMonth() + 1, 0);
+  const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const buttons = [[{ text: `📅 Up to ${fmt(measuredOn)} (bill date)`, callback_data: `extdate_${isoDay(measuredOn)}` }]];
+  if (monthEnd.getDate() !== measuredOn.getDate()) {
+    buttons.push([{ text: `📅 Up to ${fmt(monthEnd)} (month end)`, callback_data: `extdate_${isoDay(monthEnd)}` }]);
+  }
   return sendTelegramMessage(
     chatId,
     `✅ Extension type: <b>${extensionType}</b>\n\n` +
-      `Now reply with the <b>extended completion date</b> in <b>DD/MM/YYYY</b> format ` +
-      `(on or after ${fmt(new Date(pending.measuredOn))}, since the bill is measured then):`,
+      `The contract covers work up to <b>${fmt(new Date(pending.coveredUntil))}</b>, and this bill is measured on ` +
+      `<b>${fmt(measuredOn)}</b> — so the extension must run at least to that date.\n\n` +
+      `Tap a date below, or reply with the <b>extended completion date</b> from the extension order in <b>DD/MM/YYYY</b> format:`,
+    { replyMarkup: inlineKeyboard(buttons) },
   );
 }
 
@@ -1077,17 +1088,23 @@ export async function handleExtensionDateReply(conversation: any, msg: string, c
     return sendTelegramMessage(chatId, 'Please send the bill PDF again.');
   }
 
-  const extendedDate = parseDdMmYyyy(msg);
-  if (!extendedDate) {
-    return sendTelegramMessage(chatId, '❌ I need the date as <b>DD/MM/YYYY</b> (e.g. 31/03/2025). Please try again:');
+  // Either a tapped suggestion (extdate_YYYY-MM-DD) or a typed DD/MM/YYYY.
+  const tapped = String(msg).trim().match(/^extdate_(\d{4})-(\d{2})-(\d{2})$/);
+  const extendedDate = tapped
+    ? new Date(Number(tapped[1]), Number(tapped[2]) - 1, Number(tapped[3]))
+    : parseDdMmYyyy(msg);
+  if (!extendedDate || isNaN(extendedDate.getTime())) {
+    return sendTelegramMessage(chatId, '❌ I need the date as <b>DD/MM/YYYY</b> (e.g. 31/03/2025), or tap one of the dates above. Please try again:');
   }
   const fmt = (d: Date) => d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
   const coveredUntil = new Date(pending.coveredUntil);
   const measuredOn = new Date(pending.measuredOn);
-  if (extendedDate.getTime() < coveredUntil.getTime()) {
+  // Compare whole days: the stored dates may carry a time of day, the typed one never does.
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  if (day(extendedDate) < day(coveredUntil)) {
     return sendTelegramMessage(chatId, `❌ The extended date must be after <b>${fmt(coveredUntil)}</b>, the date the contract already covers. Please try again:`);
   }
-  if (extendedDate.getTime() < measuredOn.getTime()) {
+  if (day(extendedDate) < day(measuredOn)) {
     return sendTelegramMessage(
       chatId,
       `❌ That date is before the bill's measurement date (<b>${fmt(measuredOn)}</b>), so this bill would still fall outside the contract. ` +
@@ -1100,7 +1117,7 @@ export async function handleExtensionDateReply(conversation: any, msg: string, c
     if (!contract) throw new Error('contract not found');
     // The original completion date anchors a 17B freeze; keep the first one ever set.
     const originalDate = contract.originalCompletionDate ? new Date(contract.originalCompletionDate) : coveredUntil;
-    const extensionDuration = Math.ceil((extendedDate.getTime() - coveredUntil.getTime()) / (1000 * 60 * 60 * 24));
+    const extensionDuration = Math.round((day(extendedDate) - day(coveredUntil)) / (1000 * 60 * 60 * 24));
     const isPvcRestricted = pending.extensionType === '17B';
 
     await prisma.contractExtension.create({
