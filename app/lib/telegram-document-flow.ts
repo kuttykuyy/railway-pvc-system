@@ -522,6 +522,12 @@ export async function handleCoupon(conversation: any, chatId: string, code?: str
   const pending = data.docPendingReports || [];
   const waiting = pending.length || (data.docPendingReport ? 1 : 0);
 
+  if (!waiting && data.docPendingReportChoice) {
+    return sendTelegramMessage(
+      chatId,
+      `🎟️ Coupon noted. First tap <b>Statement only</b> or <b>With JPC steel sheets</b> above, then send the coupon again.`,
+    );
+  }
   if (!waiting) {
     return sendTelegramMessage(
       chatId,
@@ -624,9 +630,11 @@ export async function handlePayAll(conversation: any, chatId: string) {
   }
 
   try {
-    const { getReportPriceRupees, createReportPaymentLink } = await import('./telegram-payment');
-    const unitPrice = await getReportPriceRupees();
-    const total = unitPrice * pending.length;
+    const { createReportPaymentLink } = await import('./telegram-payment');
+    const { reportPriceForPayload } = await import('./telegram-bill-pvc');
+    // Each statement at its own price: one chosen with the JPC steel sheets costs more.
+    let total = 0;
+    for (const r of pending) total += await reportPriceForPayload(r.payload);
 
     // Unpaid statements survive a /pvc restart, so the set can span more than one
     // agreement — name them from the reports themselves rather than from whichever
@@ -659,15 +667,16 @@ export async function handlePayAll(conversation: any, chatId: string) {
       ].slice(-MAX_BUNDLE_LINKS),
     }));
 
+    const prices = await Promise.all(pending.map((r) => reportPriceForPayload(r.payload)));
     const billList = pending
-      .map((r) => `\n   • ${escapeHtml(String(r.payload?.billNo || 'RA Bill'))}`)
+      .map((r, i) => `\n   • ${escapeHtml(String(r.payload?.billNo || 'RA Bill'))}${r.payload?.includeJpc ? ' (with JPC sheets)' : ''} — ₹${formatRupees(prices[i])}`)
       .join('');
 
     return sendTelegramMessage(
       chatId,
       `🧾 <b>One payment for all ${pending.length} statements</b>\n\n` +
         `📄 Agreement: <b>${escapeHtml(agreementNo)}</b>${billList}\n\n` +
-        `💰 ₹${formatRupees(unitPrice)} × ${pending.length} = <b>₹${formatRupees(total)}</b>\n\n` +
+        `💰 Total: <b>₹${formatRupees(total)}</b>\n\n` +
         `Pay by UPI / card / net banking here:\n${link.url}\n\n` +
         `When this is paid I'll send all ${pending.length} statements together. ` +
         `<i>Use this link instead of the individual ones above — paying those as well would charge you twice.\n` +
@@ -798,6 +807,7 @@ async function processOneBill(
 
   await sendTelegramChatAction(chatId, 'upload_document');
   let needsInput = false;
+  let awaitingChoice = false;
   try {
     const result = await processUploadedBillPvc({
       chatId,
@@ -807,6 +817,7 @@ async function processOneBill(
       billFileName: bill.fileName,
     });
     needsInput = !!result?.needsInput;
+    awaitingChoice = !!result?.awaitingChoice;
   } catch (err: any) {
     console.error('[Telegram] PVC processing failed:', err);
     await sendTelegramMessage(chatId, `❌ PVC calculation failed for <b>${escapeHtml(bill.fileName)}</b>: ${escapeHtml(err.message || 'unknown error')}`);
@@ -828,9 +839,41 @@ async function processOneBill(
         docBillFileName: queue.length ? queue[0].fileName : undefined,
       };
     },
-    needsInput ? undefined : TelegramStep.IDLE,
+    // A pending with/without-JPC choice keeps its own step; the bill is retired.
+    needsInput || awaitingChoice ? undefined : TelegramStep.IDLE,
   );
-  return needsInput;
+  return needsInput || awaitingChoice;
+}
+
+/**
+ * User chose whether the statement should carry the paid JPC steel sheets. Makes the
+ * payment link for that choice, then carries on with any bills still queued.
+ */
+export async function handleReportOptionReply(conversation: any, msg: string, chatId: string) {
+  const raw = String(msg).trim().toLowerCase();
+  const data = getTelegramConversationData(conversation);
+  const payload = data.docPendingReportChoice;
+  if (!payload) {
+    await updateTelegramConversation(conversation.id, TelegramStep.IDLE, {});
+    return sendTelegramMessage(chatId, 'That statement is no longer waiting. Send the bill PDF again if you need it.');
+  }
+  let includeJpc: boolean | null = null;
+  if (raw === 'report_jpc' || raw.includes('jpc') || raw.includes('with') || raw === '2') includeJpc = true;
+  else if (raw === 'report_plain' || raw.includes('only') || raw.includes('plain') || raw.includes('statement') || raw === '1') includeJpc = false;
+  if (includeJpc === null) {
+    return sendTelegramMessage(chatId, 'Please tap one of the two buttons above — <b>Statement only</b> or <b>With JPC steel sheets</b>.');
+  }
+
+  const contract = await prisma.contract.findUnique({ where: { id: payload.contractId }, select: { agreementNo: true } });
+  const { offerReportPayment } = await import('./telegram-bill-pvc');
+  await offerReportPayment({
+    conversationId: conversation.id,
+    chatId,
+    payload: { ...payload, includeJpc },
+    agreementNo: displayAgreementNo(contract?.agreementNo || data.docContractAgreementNo || ''),
+  });
+  // Bills sent in the same burst were held back while the question was open.
+  return maybeProcess(conversation.id, chatId);
 }
 
 /**

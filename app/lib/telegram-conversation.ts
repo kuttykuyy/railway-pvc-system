@@ -27,6 +27,9 @@ export enum TelegramStep {
   // date, so the time extension (GCC 17A/17B) is recorded in the chat first.
   AWAITING_EXTENSION_TYPE = 'AWAITING_EXTENSION_TYPE',
   AWAITING_EXTENSION_DATE = 'AWAITING_EXTENSION_DATE',
+  // Document (PDF) PVC flow: a steel bill's statement can carry the paid JPC steel
+  // sheets; the user picks with or without before the payment link is made.
+  AWAITING_REPORT_OPTION = 'AWAITING_REPORT_OPTION',
   // Contract creation steps
   AWAITING_AGREEMENT_NO = 'AWAITING_AGREEMENT_NO',
   AWAITING_CONTRACTOR_NAME = 'AWAITING_CONTRACTOR_NAME',
@@ -100,6 +103,8 @@ export interface TelegramConversationData {
   };
   /** Report data waiting on payment — rendered and sent by the Razorpay webhook. */
   docPendingReport?: any;
+  /** Report data waiting on the with/without-JPC-sheets choice, before a link exists. */
+  docPendingReportChoice?: any;
   /** Razorpay payment link id, so /paid can verify payment without the webhook. */
   docPendingPaymentLinkId?: string;
   /**
