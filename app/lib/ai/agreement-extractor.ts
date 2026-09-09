@@ -117,16 +117,24 @@ export interface AgreementExtractionResult {
   detail?: string;
   /** Things the reader could not get that the form can do without — shown to the user. */
   warnings?: string[];
+  /** A scanned PDF the caller should read via the OCR service, then re-submit
+   * with `ocrText`. Set only when `allowOcr` is passed and the OCR service is up. */
+  needsOcr?: boolean;
 }
 
 /**
  * Extract contract fields from an agreement PDF.
  * @param original raw PDF bytes
  * @param filename original file name (sent to the AI as context)
+ * @param opts.ocrText  clean text of a scanned PDF read by the Docling service;
+ *   when present it is read instead of the (unreadable) page image.
+ * @param opts.allowOcr the caller can drive the async OCR round-trip, so a scan
+ *   with no text layer returns `{ needsOcr: true }` instead of a vision read.
  */
 export async function extractAgreementFromPdf(
   original: Buffer,
   filename: string,
+  opts: { ocrText?: string; allowOcr?: boolean } = {},
 ): Promise<AgreementExtractionResult> {
   const apiKey = process.env.ABACUSAI_API_KEY;
   if (!apiKey) {
@@ -159,6 +167,18 @@ export async function extractAgreementFromPdf(
     pdfText = await extractLayoutText(Buffer.from(pdfBytes));
   } catch (err) {
     console.warn('agreement-extractor: could not read PDF text for the direct parse:', err);
+  }
+  // A scanned LOA has no text layer, so the direct pass reads nothing and the
+  // vision model has only a blurry image. When the caller can OCR it, hand the
+  // scan to the Docling service and read the clean text instead.
+  const ocrText = (opts.ocrText || '').trim();
+  if (ocrText) {
+    pdfText = ocrText;
+  } else if (opts.allowOcr && pdfText.replace(/\s/g, '').length < 60) {
+    const { isDoclingConfigured } = await import('../ocr/docling');
+    if (isDoclingConfigured()) {
+      return { ok: false, needsOcr: true };
+    }
   }
   const direct = pdfText ? parseAgreementText(pdfText) : null;
 
@@ -193,13 +213,17 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   // is that those percentages are not needed from the document; anyone who wants them
   // types them on the contract form. The AI now reads the essentials and nothing else.
 
+  // For a scanned LOA read via OCR, send the clean text instead of the page
+  // image the model can't read; otherwise send the PDF as before.
   const withPdf = (text: string) => [
     {
       role: 'user',
-      content: [
-        { type: 'file', file: { filename, file_data: dataUri } },
-        { type: 'text', text },
-      ],
+      content: ocrText
+        ? [{ type: 'text', text: `${text}\n\n--- DOCUMENT TEXT (read from a scanned PDF) ---\n${ocrText}` }]
+        : [
+            { type: 'file', file: { filename, file_data: dataUri } },
+            { type: 'text', text },
+          ],
     },
   ];
 

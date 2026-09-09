@@ -263,14 +263,29 @@ export default function ContractForm({ initialData, isEdit = false, contractId }
         toast.error(tooLargeMessage(prepared), { id: toastId, duration: 8000 });
         return;
       }
-      const body = new FormData();
-      body.append('file', prepared.file, file.name);
-      const res = await fetch('/api/contracts/extract-agreement', { method: 'POST', body });
+      const post = (ocrText?: string) => {
+        const body = new FormData();
+        body.append('file', prepared.file, file.name);
+        body.append('allowOcr', 'true');
+        if (ocrText) body.append('ocrText', ocrText);
+        return fetch('/api/contracts/extract-agreement', { method: 'POST', body });
+      };
+      let res = await post();
       if (res.status === 413) {
         toast.error(tooLargeMessage(prepared), { id: toastId, duration: 8000 });
         return;
       }
-      const json = await res.json().catch(() => ({}));
+      let json = await res.json().catch(() => ({}));
+      // A scanned agreement (no text layer): read it through the OCR service, then
+      // re-submit the clean text for the same reader.
+      if (res.ok && json.needsOcr) {
+        const { runScannedOcr } = await import('@/lib/ocr/run-scanned-ocr');
+        const { text } = await runScannedOcr(prepared.file, {
+          onProgress: (s) => toast.loading(`${s} (scanned PDF)`, { id: toastId }),
+        });
+        res = await post(text);
+        json = await res.json().catch(() => ({}));
+      }
       if (!res.ok || !json.data) {
         toast.error(json.error || 'Could not read the agreement.', { id: toastId });
         return;
