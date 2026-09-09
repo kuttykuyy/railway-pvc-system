@@ -25,6 +25,7 @@ export default function OcrFallbackSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [enabled, setEnabled] = useState(false);
+  const [loaOcr, setLoaOcr] = useState(false);
 
   useEffect(() => {
     fetch('/api/admin/settings')
@@ -33,6 +34,8 @@ export default function OcrFallbackSettingsPage() {
         if (!settings) return;
         const s = settings.find(x => x.key === 'OCR_FALLBACK_ENABLED');
         if (s) setEnabled(s.value.toLowerCase() === 'true');
+        const l = settings.find(x => x.key === 'SCANNED_LOA_OCR_ENABLED');
+        if (l) setLoaOcr(l.value.toLowerCase() === 'true');
       })
       .catch(() => toast.error('Failed to load settings'))
       .finally(() => setLoading(false));
@@ -51,6 +54,25 @@ export default function OcrFallbackSettingsPage() {
       toast.success(next ? 'OCR fallback turned on' : 'OCR fallback turned off');
     } catch {
       setEnabled(!next);
+      toast.error('Could not save the setting');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleLoa = async (next: boolean) => {
+    setLoaOcr(next);
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: [{ key: 'SCANNED_LOA_OCR_ENABLED', value: String(next), dataType: 'boolean' }] }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      toast.success(next ? 'Scanned-LOA OCR turned on' : 'Scanned-LOA OCR turned off');
+    } catch {
+      setLoaOcr(!next);
       toast.error('Could not save the setting');
     } finally {
       setSaving(false);
@@ -105,6 +127,32 @@ export default function OcrFallbackSettingsPage() {
               <li>Every attempt is logged under <strong>Parse failures</strong> as &ldquo;RESCUED BY OCR&rdquo; with whether it reconciled — watch that to judge accuracy.</li>
               <li>Turn it off any time; bills with a real text layer are unaffected either way.</li>
             </ul>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-slate-200 shadow-sm mt-6">
+        <CardHeader className="border-b border-slate-100 pb-4">
+          <CardTitle className="text-base">Scanned LOA / agreement OCR (Docling)</CardTitle>
+          <CardDescription>
+            When an uploaded LOA or agreement PDF has no readable text (a scan), read it
+            through the Docling OCR service to pre-fill the contract form.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5 pt-6">
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 px-4 py-3">
+            <div>
+              <Label htmlFor="loaocr" className="text-sm font-semibold text-slate-800">Enable scanned-LOA OCR</Label>
+              <p className="text-xs text-slate-500 mt-0.5">Currently <strong>{loaOcr ? 'ON' : 'OFF'}</strong></p>
+            </div>
+            <Switch id="loaocr" checked={loaOcr} onCheckedChange={toggleLoa} disabled={saving} />
+          </div>
+
+          <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+            <p className="flex items-center gap-1.5 font-semibold mb-1"><AlertTriangle className="h-4 w-4" /> Accurate but slow</p>
+            <p>OCR runs on CPU and can take a few minutes per scan. Off by default. When off,
+              a scanned agreement is not sent to OCR — the user is asked to upload the original
+              text PDF from IREPS, which is instant.</p>
           </div>
         </CardContent>
       </Card>
