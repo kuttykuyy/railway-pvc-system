@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       purpose, packBills, creditAmount: body.creditAmount,
       customBillCost: fee?.customProcessingFee ?? null,
     });
-    if (!resolved.ok) {
+    if (resolved.ok === false) {
       logger.warn(`[${requestId}] Purchase rejected: ${resolved.code}`, { purpose, packBills, creditAmount: body.creditAmount });
       return NextResponse.json(
         { error: 'Invalid request', message: resolved.error, code: resolved.code },
