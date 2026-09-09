@@ -45,8 +45,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File too large. Maximum size is 100MB.' }, { status: 400 });
     }
 
+    // The contract form can drive the OCR round-trip (allowOcr) and re-submits a
+    // scanned LOA's clean text as `ocrText` after reading it via the OCR service.
+    const allowOcr = formData.get('allowOcr') === 'true';
+    const ocrText = ((formData.get('ocrText') as string | null) || '').trim();
+
     const original = Buffer.from(await file.arrayBuffer());
-    const result = await extractAgreementFromPdf(original, file.name);
+    const result = await extractAgreementFromPdf(original, file.name, { allowOcr, ocrText });
+    // A scanned PDF: tell the form to OCR it and call back with the text. Not a
+    // failure, so it is neither recorded nor stored.
+    if (result.needsOcr) {
+      return NextResponse.json({ needsOcr: true });
+    }
     if (!result.ok) {
       // Kept and reported exactly as a bill that could not be read is: the PDF, the
       // exact error, who hit it, and a Telegram ping to the admin. LOA failures used to
