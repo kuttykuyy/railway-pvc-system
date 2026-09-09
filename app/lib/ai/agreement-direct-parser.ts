@@ -127,6 +127,9 @@ export function parseAgreementText(text: string): DirectAgreementFields {
   const workRaw =
     firstMatch(flat, /name\s*of\s*(?:the\s*)?work\s*[:\-]?\s*([^\n]{5,300})/i) ||
     firstMatch(flat, /for\s+the\s+work\s+(?:of\s+)?[""“]?([^\n""”]{8,300})/i) ||
+    // "Tender No. ... closing date 13-07-2023 15:00 for <WORK>." — the work follows the
+    // tender/closing-date reference, introduced by a bare "for".
+    firstMatch(flat, /closing\s*date[^\n]*?\d{4}[^\n]*?\bfor\s+([A-Z][^\n]{8,300})/i) ||
     firstMatch(flat, /\bsub\s*[:\-]\s*(?:letter\s*of\s*acceptance\s*(?:for|of)?\s*)?(?:the\s*work\s*(?:of|:)?\s*)?[""“]?([A-Za-z][^\n""”]{8,300})/i);
   // Cut the trailing clause that isn't part of the name (e.g. "... is accepted").
   const workDescription = workRaw
