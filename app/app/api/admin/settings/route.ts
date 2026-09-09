@@ -93,6 +93,12 @@ const DEFAULT_SETTINGS = [
     dataType: 'string'
   },
   {
+    key: 'SCANNED_LOA_OCR_ENABLED',
+    value: 'false',
+    description: 'Read a scanned LOA/agreement (no text layer) through the Docling OCR service. Accurate but slow (minutes on CPU), so OFF by default. When off, a scanned agreement PDF is not sent to OCR — the user is asked to upload the original text PDF.',
+    dataType: 'boolean'
+  },
+  {
     key: 'OCR_FALLBACK_ENABLED',
     value: 'false',
     description: 'PROTOTYPE. When a bill PDF has no readable text (Print-to-PDF, screenshot, or scan), read the page images with AI instead of rejecting it. The result is a draft the user must review. Off by default while accuracy and cost are measured.',

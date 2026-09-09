@@ -175,9 +175,18 @@ export async function extractAgreementFromPdf(
   if (ocrText) {
     pdfText = ocrText;
   } else if (opts.allowOcr && pdfText.replace(/\s/g, '').length < 60) {
-    const { isDoclingConfigured } = await import('../ocr/docling');
-    if (isDoclingConfigured()) {
-      return { ok: false, needsOcr: true };
+    // Reading a scanned LOA through Docling OCR is accurate but slow (minutes on CPU),
+    // so it is gated behind an admin switch that is OFF by default. When off, a scanned
+    // PDF falls through to the normal read (and its "upload the original text PDF"
+    // message) instead of the long OCR round-trip. Turn it on from Admin → Checks &
+    // audits → OCR fallback when the wait is acceptable.
+    const { getAdminSetting } = await import('@/lib/admin-settings');
+    const ocrEnabled = await getAdminSetting('SCANNED_LOA_OCR_ENABLED', false);
+    if (ocrEnabled) {
+      const { isDoclingConfigured } = await import('../ocr/docling');
+      if (isDoclingConfigured()) {
+        return { ok: false, needsOcr: true };
+      }
     }
   }
   const direct = pdfText ? parseAgreementText(pdfText) : null;
