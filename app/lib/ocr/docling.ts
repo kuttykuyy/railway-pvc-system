@@ -88,6 +88,13 @@ export async function getDoclingJob(
     headers: authHeaders(),
     signal: opts.signal,
   });
+  // The service keeps jobs in memory, so a restart (or a different replica) no longer
+  // knows a job it once accepted and answers 404. That is recoverable — the caller can
+  // resubmit — so surface it as a distinct job error, not a thrown transport failure
+  // (which the poller would retry uselessly until its 15-minute deadline).
+  if (res.status === 404) {
+    return { status: 'error', error: 'JOB_NOT_FOUND' };
+  }
   if (!res.ok) {
     await res.text().catch(() => '');
     throw new Error(`Docling job poll failed (${res.status})`);
