@@ -1,4 +1,5 @@
 import { logger } from './logger';
+import { notifyTelegramAdmin } from './telegram-api';
 
 /**
  * Slack Webhook Notification Utility
@@ -72,7 +73,50 @@ interface CreditTopupRequestData {
 /**
  * Send a notification to Slack webhook
  */
+/**
+ * Flatten a Slack Block Kit (or plain-text) payload into a single message string —
+ * header, section text, section fields, and context lines, top to bottom.
+ */
+function slackPayloadToText(payload: SlackNotificationPayload): string {
+  if (payload.text) return payload.text;
+  const lines: string[] = [];
+  for (const b of payload.blocks || []) {
+    if (b.type === 'header' && b.text?.text) lines.push(b.text.text);
+    if (b.type === 'section') {
+      if (b.text?.text) lines.push(b.text.text);
+      for (const f of b.fields || []) if (f.text) lines.push(f.text);
+    }
+    if (b.type === 'context') for (const e of b.elements || []) if (e.text) lines.push(e.text);
+  }
+  return lines.join('\n');
+}
+
+/** Slack mrkdwn -> Telegram HTML: escape, then *bold* -> <b>bold</b>. */
+function toTelegramHtml(text: string): string {
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return escaped.replace(/\*([^*\n]+)\*/g, '<b>$1</b>');
+}
+
+/** Mirror the same message to the Telegram admin chat. Best-effort; never throws. */
+async function mirrorToTelegram(payload: SlackNotificationPayload): Promise<void> {
+  try {
+    const text = slackPayloadToText(payload).trim();
+    if (text) await notifyTelegramAdmin(toTelegramHtml(text));
+  } catch (error) {
+    console.error('❌ Failed to mirror notification to Telegram:', error);
+  }
+}
+
 async function sendSlackNotification(payload: SlackNotificationPayload): Promise<boolean> {
+  // Whatever we send to Slack we also send to the Telegram admin chat (no-op unless
+  // TELEGRAM_ADMIN_CHAT_ID is set). Done first, and independently, so it still arrives
+  // even when Slack is unconfigured or the Slack call fails.
+  await mirrorToTelegram(payload);
+
+  if (!SLACK_WEBHOOK_URL) {
+    logger.log('Slack webhook URL not set — skipped Slack (Telegram mirror still sent)');
+    return false;
+  }
   try {
     const response = await fetch(SLACK_WEBHOOK_URL, {
       method: 'POST',
