@@ -195,7 +195,7 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   "loaDate": "LOA Date (YYYY-MM-DD)",
   "contractorName": "Contractor's name",
   "contractorPhone": "Contractor phone/mobile if present, else null",
-  "workDescription": "The complete Name of Work / subject of the tender, copied verbatim from its start (keep leading words like 'Construction of', 'Provision of', 'Supply and'). On a Letter of Acceptance there is usually no 'Name of Work' label — read it from the 'Sub:' line or the sentence '...your tender for the work of <NAME> ... is accepted'. This must NOT be empty whenever any work is named, and must never begin mid-sentence.",
+  "workDescription": "The complete Name of Work / subject of the tender, copied verbatim from its start (keep leading words like 'Construction of', 'Provision of', 'Supply and'). On a Letter of Acceptance there is usually no 'Name of Work' label — read it from the 'Sub:' line, the sentence '...your tender for the work of <NAME> ... is accepted', or the tender reference 'Tender No. ... closing date <date> <time> for <NAME>'. This must NOT be empty whenever any work is named, and must never begin mid-sentence.",
   "closingDate": "Tender Closing Date, YYYY-MM-DD. On an agreement this is the 'Closing Date/Time' field. On a Letter of Acceptance it is written into the opening sentence, e.g. 'Tender No. TPJ-17-2025-01 closing date 17-11-2025 15:00' -> 2025-11-17. Ignore the time. This is NOT the LOA date and NOT the agreement date.",
   "completionDate": "Date of Completion, YYYY-MM-DD",
   "completionPeriodMonths": "Period of Completion in whole months (number)",
