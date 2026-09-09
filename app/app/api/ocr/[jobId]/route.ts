@@ -42,6 +42,11 @@ export async function GET(
       });
     }
     if (job.status === 'error') {
+      // The service lost the job (it restarted) — recoverable by resubmitting. Tag it so
+      // the browser resends the scan instead of failing.
+      if (job.error === 'JOB_NOT_FOUND') {
+        return NextResponse.json({ status: 'error', code: 'job_not_found', error: 'The scan reader restarted and lost this job.' });
+      }
       return NextResponse.json({ status: 'error', error: job.error || 'The scan could not be read.' });
     }
     return NextResponse.json({ status: job.status });
