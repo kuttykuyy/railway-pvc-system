@@ -195,7 +195,7 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
   "loaDate": "LOA Date (YYYY-MM-DD)",
   "contractorName": "Contractor's name",
   "contractorPhone": "Contractor phone/mobile if present, else null",
-  "workDescription": "Full name/description of the work",
+  "workDescription": "The complete Name of Work, copied verbatim from its very start. Include the leading words (e.g. 'Construction of', 'Provision of', 'Supply and'); NEVER begin mid-sentence or drop the first words.",
   "closingDate": "Tender Closing Date, YYYY-MM-DD. On an agreement this is the 'Closing Date/Time' field. On a Letter of Acceptance it is written into the opening sentence, e.g. 'Tender No. TPJ-17-2025-01 closing date 17-11-2025 15:00' -> 2025-11-17. Ignore the time. This is NOT the LOA date and NOT the agreement date.",
   "completionDate": "Date of Completion, YYYY-MM-DD",
   "completionPeriodMonths": "Period of Completion in whole months (number)",
@@ -347,6 +347,17 @@ Return ONLY raw JSON (no markdown, no code fences) with these keys. Use null whe
       if ((extracted[k] === null || extracted[k] === undefined || extracted[k] === '') && direct[k] != null) {
         extracted[k] = direct[k];
       }
+    }
+    // Work description: the model sometimes drops the leading words of the printed
+    // "Name of Work" — e.g. it returns "n place of manned LC No.42/C..." for the full
+    // "Construction of LHS in place of manned LC No.42/C...". When the direct text read
+    // the fuller line and the model's value is just a tail of it (same description,
+    // start missing), keep the fuller printed text.
+    const aiWork = String(extracted.workDescription || '').trim();
+    const directWork = String(direct.workDescription || '').trim();
+    if (aiWork && directWork && directWork.length > aiWork.length) {
+      const norm = (v: string) => v.toLowerCase().replace(/\s+/g, ' ').trim();
+      if (norm(directWork).includes(norm(aiWork))) extracted.workDescription = directWork;
     }
   }
 
