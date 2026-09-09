@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { verifyRazorpaySignature, fetchPaymentDetails } from '@/lib/razorpay';
+import { creditsGrantedFor } from '@/lib/bill-packs';
 import { prisma } from '@/lib/db';
 import { sendPaymentConfirmation } from '@/lib/whatsapp-mydreams';
 import { createZohoInvoice } from '@/lib/zoho-books';
@@ -96,8 +97,8 @@ export async function POST(request: NextRequest) {
       
       // Determine actual credits added based on GST option
       const transactionNotes = transaction.notes as any;
-      // Same rule as the crediting path below: report the credits bought.
-      const actualCreditsAdded = transaction.creditAmount;
+      // Same rule as the crediting path below: report the credits granted.
+      const actualCreditsAdded = creditsGrantedFor(transaction);
       
       // Get GST invoice
       const gstInvoice = await prisma.gstInvoice.findFirst({
@@ -108,6 +109,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'Payment already verified',
         creditAmount: actualCreditsAdded,
+        baseAmount: transaction.creditAmount,
         gstAmount: transaction.gstAmount,
         totalAmount: transaction.totalAmount,
         newBalance: 0, // Don't return balance as it may have changed
@@ -196,7 +198,9 @@ export async function POST(request: NextRequest) {
     // to the government. creditAmount is right under either basis: with tax on top it
     // is what was bought, and with tax inside it is both what was paid and what was
     // bought. Orders created before this still carry the old note, so read neither.
-    const creditsToAdd = transaction.creditAmount;
+    // A bill pack is the one case where the grant is larger than the money: its
+    // credits are recorded in notes.creditsGranted, read by creditsGrantedFor.
+    const creditsToAdd = creditsGrantedFor(transaction);
 
     // Flip the transaction to 'success' and credit the wallet in a single atomic
     // transaction. The conditional update (status not already 'success') guarantees the
@@ -254,6 +258,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'Payment already verified',
         creditAmount: creditsToAdd,
+        baseAmount: transaction.creditAmount,
         gstAmount: transaction.gstAmount,
         totalAmount: transaction.totalAmount,
         newBalance: 0,
@@ -399,6 +404,9 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Payment verified successfully',
       creditAmount: creditsToAdd,
+      // Rupees paid before tax — what the GST invoice is drawn on. For a pack this is
+      // smaller than creditAmount (the credits granted).
+      baseAmount: transaction.creditAmount,
       gstAmount: transaction.gstAmount,
       totalAmount: transaction.totalAmount,
       newBalance,

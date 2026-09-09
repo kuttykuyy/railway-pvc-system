@@ -3,6 +3,7 @@ import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { prisma } from '@/lib/db';
+import { creditsGrantedFor } from '@/lib/bill-packs';
 import { sendPaymentConfirmation } from '@/lib/whatsapp-mydreams';
 import { sendSlackAlert } from '@/lib/slack-webhook';
 import { processReferralReward } from '@/lib/referrals';
@@ -207,7 +208,7 @@ async function handlePaymentSuccess(requestId: string, payment: any) {
   // credit the same value regardless of which one wins the race.
   // The credits bought, never the gross paid -- see the matching note in
   // verify-payment. Both paths must grant the same value or the race guard is pointless.
-  const creditsToAdd = transaction.creditAmount;
+  const creditsToAdd = creditsGrantedFor(transaction);
 
   // Flip the transaction to 'success' and credit the wallet in a single atomic
   // transaction. The conditional update (status not already 'success') ensures the

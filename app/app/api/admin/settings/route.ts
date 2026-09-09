@@ -103,6 +103,12 @@ const DEFAULT_SETTINGS = [
     value: 'false',
     description: 'PROTOTYPE. When a bill PDF has no readable text (Print-to-PDF, screenshot, or scan), read the page images with AI instead of rejecting it. The result is a draft the user must review. Off by default while accuracy and cost are measured.',
     dataType: 'boolean'
+  },
+  {
+    key: 'BILL_PACKS',
+    value: JSON.stringify([{ bills: 10, price: 1499 }, { bills: 30, price: 3499 }]),
+    description: 'Bill packs offered in the top-up dialog, as JSON: [{"bills":10,"price":1499}, ...]. "price" is rupees before GST; the buyer is credited bills × BILL_PROCESSING_COST, so the discount arrives as extra credits. Set to [] to sell no packs.',
+    dataType: 'json'
   }
 ];
 

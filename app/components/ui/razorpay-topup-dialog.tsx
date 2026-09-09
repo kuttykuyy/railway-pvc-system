@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Loader2, CreditCard, CheckCircle, IndianRupee, AlertCircle } from 'lucide-react';
+import { Loader2, CreditCard, CheckCircle, IndianRupee, AlertCircle, Zap, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import Script from 'next/script';
 import { GstBillingDetailsDialog } from './gst-billing-details-dialog';
@@ -17,7 +17,26 @@ interface RazorpayTopupDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  /**
+   * Opened from a blocked bill: offer to pay exactly this bill's cost (below the
+   * normal top-up minimum) as the first choice, with the packs as the cheaper-per-bill
+   * alternative right next to it.
+   */
+  singleBillAmount?: number;
 }
+
+interface BillPack {
+  bills: number;
+  price: number;
+  credits: number;
+  perBill: number;
+}
+
+/** What the customer has picked: one bill, a pack, or their own amount. */
+type Selection =
+  | { kind: 'single' }
+  | { kind: 'pack'; bills: number }
+  | { kind: 'custom' };
 
 declare global {
   interface Window {
@@ -27,12 +46,16 @@ declare global {
 
 const MIN_TOPUP_AMOUNT = 1000;
 
-export function RazorpayTopupDialog({ 
-  open, 
+export function RazorpayTopupDialog({
+  open,
   onOpenChange,
-  onSuccess 
+  onSuccess,
+  singleBillAmount,
 }: RazorpayTopupDialogProps) {
   const [creditAmount, setCreditAmount] = useState<string>('1000');
+  const [packs, setPacks] = useState<BillPack[]>([]);
+  const [billCost, setBillCost] = useState<number>(199);
+  const [selection, setSelection] = useState<Selection>({ kind: 'custom' });
   const [loading, setLoading] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
   /** The checkout script never arrived — usually an ad-blocker or an office network. */
@@ -192,20 +215,47 @@ export function RazorpayTopupDialog({
       // Reset states when dialog opens
       setLoading(false);
       setCreditAmount('1000');
+      setSelection(singleBillAmount ? { kind: 'single' } : { kind: 'custom' });
       setConfigError(null);
       fetchConfig();
+      // The packs on sale. A failed fetch just leaves the plain amount box.
+      fetch('/api/payments/packs')
+        .then(res => (res.ok ? res.json() : null))
+        .then(data => {
+          if (!data) return;
+          setPacks(Array.isArray(data.packs) ? data.packs : []);
+          if (Number.isFinite(data.billCost)) setBillCost(data.billCost);
+        })
+        .catch(() => { /* no packs shown */ });
     }
-  }, [open]);
+  }, [open, singleBillAmount]);
+
+  // Packs and the one-bill shortcut only exist on the Razorpay route; Cashfree still
+  // takes a plain amount, so there the pick is always "custom" whatever was clicked.
+  const effectiveSelection: Selection = gateway === 'cashfree' ? { kind: 'custom' } : selection;
+  const selectedPack = effectiveSelection.kind === 'pack' ? packs.find(p => p.bills === effectiveSelection.bills) : undefined;
 
   const calculateTotalAmount = () => {
-    const baseAmount = parseFloat(creditAmount) || 0;
+    // The rupees before tax, and the credits it buys. Only a pack grants more than it costs.
+    let baseAmount: number;
+    let creditToReceive: number;
+    if (effectiveSelection.kind === 'single' && singleBillAmount) {
+      baseAmount = singleBillAmount;
+      creditToReceive = singleBillAmount;
+    } else if (selectedPack) {
+      baseAmount = selectedPack.price;
+      creditToReceive = selectedPack.credits;
+    } else {
+      baseAmount = parseFloat(creditAmount) || 0;
+      creditToReceive = baseAmount;
+    }
     const gst = baseAmount * 0.18;
     const totalToPay = baseAmount + gst;
 
     return {
       baseAmount,
       gst,
-      creditToReceive: baseAmount,
+      creditToReceive,
       totalToPay,
     };
   };
@@ -226,7 +276,7 @@ export function RazorpayTopupDialog({
       return;
     }
 
-    if (baseAmount < MIN_TOPUP_AMOUNT) {
+    if (effectiveSelection.kind === 'custom' && baseAmount < MIN_TOPUP_AMOUNT) {
       toast.error(`Minimum top-up amount is ₹${MIN_TOPUP_AMOUNT.toLocaleString('en-IN')}`);
       return;
     }
@@ -238,11 +288,18 @@ export function RazorpayTopupDialog({
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
+      // Say WHAT is being bought; the server prices it. The amounts sent along are
+      // only for its log.
+      const purchase =
+        effectiveSelection.kind === 'single' ? { purpose: 'single_bill', creditAmount: baseAmount }
+        : selectedPack ? { purpose: 'pack', packBills: selectedPack.bills }
+        : { purpose: 'topup', creditAmount: baseAmount };
+
       const orderRes = await fetch('/api/razorpay/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          creditAmount: creditToReceive,
+          ...purchase,
           totalAmount: totalToPay,
           gstAmount: gst,
         }),
@@ -269,7 +326,7 @@ export function RazorpayTopupDialog({
         amount: orderData.amount * 100, // Convert to paise
         currency: orderData.currency,
         name: 'Railway PVC System',
-        description: `Credit Top-up - ₹${baseAmount}`,
+        description: orderData.label || `Credit Top-up - ₹${baseAmount}`,
         order_id: orderData.orderId,
         handler: async function (response: any) {
           console.log('[Razorpay] Payment successful, verifying...', {
@@ -322,10 +379,11 @@ export function RazorpayTopupDialog({
               
               setLoading(false);
               
-              // Show GST billing details dialog
+              // Show GST billing details dialog. The invoice is drawn on the rupees
+              // paid (baseAmount), not the credits — for a pack those differ.
               setGstInvoiceData({
                 transactionId: verifyData.transactionId,
-                creditAmount: verifyData.creditAmount,
+                creditAmount: verifyData.baseAmount ?? verifyData.creditAmount,
                 invoiceNumber: verifyData.invoiceNumber,
               });
               setShowGstDialog(true);
@@ -512,26 +570,99 @@ export function RazorpayTopupDialog({
           )}
 
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="creditAmount">Credit Amount (₹)</Label>
-              <div className="relative">
-                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-                <Input
-                  id="creditAmount"
-                  type="number"
-                  min={MIN_TOPUP_AMOUNT}
-                  step="1"
-                  value={creditAmount}
-                  onChange={(e) => setCreditAmount(e.target.value)}
-                  className="pl-10"
-                  placeholder="Enter amount"
-                  disabled={loading || (gateway === 'razorpay' && !config?.enabled)}
-                />
+            {/* Packs and the one-bill shortcut are Razorpay-only; Cashfree keeps the plain amount. */}
+            {gateway === 'razorpay' && (singleBillAmount || packs.length > 0) && (
+              <div className="space-y-2">
+                <Label>Choose what to buy</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {singleBillAmount ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelection({ kind: 'single' })}
+                      disabled={loading}
+                      className={`rounded-lg border p-3 text-left transition ${
+                        selection.kind === 'single'
+                          ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500'
+                          : 'border-gray-200 hover:border-emerald-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                        <Zap className="h-4 w-4 text-amber-500" /> Just this bill
+                      </div>
+                      <div className="mt-1 text-lg font-bold text-emerald-700">₹{singleBillAmount.toLocaleString('en-IN')}</div>
+                      <div className="text-[11px] text-gray-500">+ GST · unblocks this bill now</div>
+                    </button>
+                  ) : null}
+                  {packs.map(p => {
+                    const saving = Math.max(0, p.credits - p.price);
+                    const active = selection.kind === 'pack' && selection.bills === p.bills;
+                    return (
+                      <button
+                        key={p.bills}
+                        type="button"
+                        onClick={() => setSelection({ kind: 'pack', bills: p.bills })}
+                        disabled={loading}
+                        className={`relative rounded-lg border p-3 text-left transition ${
+                          active
+                            ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500'
+                            : 'border-gray-200 hover:border-emerald-300'
+                        }`}
+                      >
+                        {saving > 0 && (
+                          <span className="absolute -top-2 right-2 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                            Save ₹{saving.toLocaleString('en-IN')}
+                          </span>
+                        )}
+                        <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                          <Package className="h-4 w-4 text-emerald-600" /> {p.bills} bills
+                        </div>
+                        <div className="mt-1 text-lg font-bold text-emerald-700">₹{p.price.toLocaleString('en-IN')}</div>
+                        <div className="text-[11px] text-gray-500">₹{p.perBill}/bill · ₹{p.credits.toLocaleString('en-IN')} credits</div>
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setSelection({ kind: 'custom' })}
+                    disabled={loading}
+                    className={`rounded-lg border p-3 text-left transition ${
+                      selection.kind === 'custom'
+                        ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500'
+                        : 'border-gray-200 hover:border-emerald-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                      <IndianRupee className="h-4 w-4 text-gray-500" /> Own amount
+                    </div>
+                    <div className="mt-1 text-lg font-bold text-gray-800">₹{MIN_TOPUP_AMOUNT.toLocaleString('en-IN')}+</div>
+                    <div className="text-[11px] text-gray-500">₹1 = 1 credit · ₹{billCost}/bill</div>
+                  </button>
+                </div>
               </div>
-              <p className="text-xs text-gray-500">
-                Minimum: ₹{MIN_TOPUP_AMOUNT.toLocaleString('en-IN')} | Suggested: ₹1000, ₹2000, ₹5000, ₹10000
-              </p>
-            </div>
+            )}
+
+            {effectiveSelection.kind === 'custom' && (
+              <div className="space-y-2">
+                <Label htmlFor="creditAmount">Credit Amount (₹)</Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                  <Input
+                    id="creditAmount"
+                    type="number"
+                    min={MIN_TOPUP_AMOUNT}
+                    step="1"
+                    value={creditAmount}
+                    onChange={(e) => setCreditAmount(e.target.value)}
+                    className="pl-10"
+                    placeholder="Enter amount"
+                    disabled={loading || (gateway === 'razorpay' && !config?.enabled)}
+                  />
+                </div>
+                <p className="text-xs text-gray-500">
+                  Minimum: ₹{MIN_TOPUP_AMOUNT.toLocaleString('en-IN')} | Suggested: ₹1000, ₹2000, ₹5000, ₹10000
+                </p>
+              </div>
+            )}
 
             {/* Price Breakdown */}
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 space-y-2">
@@ -549,7 +680,10 @@ export function RazorpayTopupDialog({
               </div>
               <div className="border-t border-emerald-300 pt-2 flex justify-between text-base font-bold">
                 <span className="text-green-700">Credits to Wallet:</span>
-                <span className="text-green-600">₹{creditToReceive.toFixed(2)}</span>
+                <span className="text-green-600">
+                  ₹{creditToReceive.toFixed(2)}
+                  {selectedPack && <span className="ml-1 text-xs font-medium text-amber-700">(covers {selectedPack.bills} bills)</span>}
+                </span>
               </div>
             </div>
 
@@ -577,7 +711,8 @@ export function RazorpayTopupDialog({
             <Button
               onClick={gateway === 'cashfree' ? handleCashfreePayment : handlePayment}
               disabled={
-                loading || baseAmount < MIN_TOPUP_AMOUNT ||
+                loading || baseAmount <= 0 ||
+                (effectiveSelection.kind === 'custom' && baseAmount < MIN_TOPUP_AMOUNT) ||
                 (gateway === 'cashfree'
                   ? false
                   : (!razorpayLoaded || !config?.enabled || configLoading || !!configError))

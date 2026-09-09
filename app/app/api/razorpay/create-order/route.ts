@@ -6,16 +6,17 @@ import { authOptions } from '@/lib/auth';
 import { createRazorpayOrder, getRazorpayKeyId } from '@/lib/razorpay';
 import { prisma } from '@/lib/db';
 import { calculateGst } from '@/lib/gst-invoice';
-
-const MIN_TOPUP_AMOUNT = 1000;
+import { resolvePurchase } from '@/lib/bill-packs';
 
 /**
  * POST /api/razorpay/create-order
  * Creates a Razorpay order for credit purchase
- * 
+ *
  * Request Body:
- * - creditAmount: number (required, positive) - Amount of credits to purchase in INR
- * 
+ * - purpose: 'topup' (default) | 'pack' | 'single_bill'
+ * - creditAmount: number - rupees of credit to buy (topup: >= ₹1,000; single_bill: exactly one bill's cost)
+ * - packBills: number - which pack, by its bill count (purpose 'pack' only)
+ *
  * Response:
  * - Success (200): { orderId, amount, currency, keyId, transactionId, creditAmount, gstAmount, cgst, sgst }
  * - Errors: Appropriate HTTP status codes with error details
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
     // and got both wrong: the wallet was credited the gross rather than the credits
     // bought, and the invoice was written up as tax-inside, recording a Rs 1,000 supply
     // with Rs 152.54 of tax when Rs 1,180 had been collected.
-    const { creditAmount, totalAmount, gstAmount, gstOption = 'exclude' } = body;
+    const { totalAmount, gstAmount, gstOption = 'exclude', purpose, packBills } = body;
 
     // Validate gstOption. 'without' is deliberately NOT accepted: it set the tax to
     // zero on a taxable supply, and the value arrives in the request body, so any
@@ -83,112 +84,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate creditAmount
-    if (creditAmount === undefined || creditAmount === null) {
-      logger.warn(`[${requestId}] Missing creditAmount in request`);
+    // 🔒 SECURITY: never trust the client's amounts. The customer only chooses WHAT to
+    // buy — a plain top-up amount, a named pack, or one bill — and the price, the
+    // credits granted and the GST are all worked out here from the admin settings, so
+    // a caller cannot pay ₹1 for a huge credit grant. resolvePurchase also enforces the
+    // ₹1,000 top-up minimum and the exact-cost rule for the single-bill shortcut.
+    const fee = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { customProcessingFee: true },
+    }).catch(() => null);
+    const resolved = await resolvePurchase({
+      purpose, packBills, creditAmount: body.creditAmount,
+      customBillCost: fee?.customProcessingFee ?? null,
+    });
+    if (!resolved.ok) {
+      logger.warn(`[${requestId}] Purchase rejected: ${resolved.code}`, { purpose, packBills, creditAmount: body.creditAmount });
       return NextResponse.json(
-        { 
-          error: 'Invalid request',
-          message: 'creditAmount is required',
-          code: 'MISSING_CREDIT_AMOUNT'
-        },
+        { error: 'Invalid request', message: resolved.error, code: resolved.code },
         { status: 400 }
       );
     }
+    const { purchase } = resolved;
+    // creditAmount is the rupees paid before tax — the invoice's taxable value. A pack
+    // grants more credits than that; the grant travels in the order notes.
+    const creditAmount = purchase.price;
 
-    if (typeof creditAmount !== 'number') {
-      logger.warn(`[${requestId}] Invalid creditAmount type:`, typeof creditAmount);
-      return NextResponse.json(
-        { 
-          error: 'Invalid request',
-          message: 'creditAmount must be a number',
-          code: 'INVALID_CREDIT_AMOUNT_TYPE'
-        },
-        { status: 400 }
-      );
-    }
+    logger.log(`[${requestId}] ${purchase.label}: ₹${creditAmount} → ${purchase.credits} credits (client said total ₹${totalAmount}, GST ₹${gstAmount}), Option: ${gstOption}`);
 
-    if (creditAmount <= 0) {
-      logger.warn(`[${requestId}] Invalid creditAmount value:`, creditAmount);
-      return NextResponse.json(
-        { 
-          error: 'Invalid request',
-          message: 'creditAmount must be greater than 0',
-          code: 'INVALID_CREDIT_AMOUNT_VALUE'
-        },
-        { status: 400 }
-      );
-    }
-
-    if (creditAmount < MIN_TOPUP_AMOUNT) {
-      logger.warn(`[${requestId}] creditAmount below minimum:`, creditAmount);
-      return NextResponse.json(
-        {
-          error: 'Invalid request',
-          message: `Minimum top-up amount is ₹${MIN_TOPUP_AMOUNT.toLocaleString('en-IN')}`,
-          code: 'MINIMUM_TOPUP_AMOUNT'
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!Number.isFinite(creditAmount)) {
-      logger.warn(`[${requestId}] Non-finite creditAmount:`, creditAmount);
-      return NextResponse.json(
-        { 
-          error: 'Invalid request',
-          message: 'creditAmount must be a finite number',
-          code: 'INVALID_CREDIT_AMOUNT_FINITE'
-        },
-        { status: 400 }
-      );
-    }
-
-    // Validate totalAmount
-    if (totalAmount === undefined || totalAmount === null) {
-      logger.warn(`[${requestId}] Missing totalAmount in request`);
-      return NextResponse.json(
-        { 
-          error: 'Invalid request',
-          message: 'totalAmount is required',
-          code: 'MISSING_TOTAL_AMOUNT'
-        },
-        { status: 400 }
-      );
-    }
-
-    if (typeof totalAmount !== 'number' || totalAmount <= 0 || !Number.isFinite(totalAmount)) {
-      logger.warn(`[${requestId}] Invalid totalAmount:`, totalAmount);
-      return NextResponse.json(
-        { 
-          error: 'Invalid request',
-          message: 'totalAmount must be a positive finite number',
-          code: 'INVALID_TOTAL_AMOUNT'
-        },
-        { status: 400 }
-      );
-    }
-
-    // Validate gstAmount
-    if (gstAmount === undefined || gstAmount === null || typeof gstAmount !== 'number' || !Number.isFinite(gstAmount)) {
-      logger.warn(`[${requestId}] Invalid gstAmount:`, gstAmount);
-      return NextResponse.json(
-        { 
-          error: 'Invalid request',
-          message: 'gstAmount must be a finite number',
-          code: 'INVALID_GST_AMOUNT'
-        },
-        { status: 400 }
-      );
-    }
-
-    logger.log(`[${requestId}] Amounts validated - Credit: ₹${creditAmount}, Total: ₹${totalAmount}, GST: ₹${gstAmount}, Option: ${gstOption}`);
-
-    // 🔒 SECURITY: never trust the client's totalAmount / gstAmount. The customer only
-    // chooses how many credits to buy (creditAmount) and the GST treatment (gstOption).
-    // Derive the amount actually charged from those, so a caller cannot pay ₹1 for a huge
-    // credit grant. Invariant: amount charged (serverTotalAmount) >= credits granted at
-    // redemption (which uses totalAmount for 'include', creditAmount otherwise).
     const serverGst = calculateGst(creditAmount, false);
     // Tax is not optional on a taxable supply — it is always charged and always
     // remitted, whatever the request asked for.
@@ -262,27 +184,8 @@ export async function POST(request: NextRequest) {
 
     logger.log(`[${requestId}] User found: ${user.id}`);
 
-    // Step 5: Calculate GST breakdown for invoice (CGST + SGST)
-    let gstCalc;
-    if (gstAmount > 0) {
-      gstCalc = calculateGst(creditAmount, false);
-      logger.log(`[${requestId}] GST breakdown calculated:`, {
-        creditAmount,
-        totalGst: gstAmount,
-        cgst: gstCalc.cgst,
-        sgst: gstCalc.sgst,
-      });
-    } else {
-      // No GST
-      gstCalc = {
-        baseAmount: creditAmount,
-        cgst: 0,
-        sgst: 0,
-        igst: 0,
-        totalGst: 0,
-        totalAmount: creditAmount,
-      };
-    }
+    // Step 5: GST breakdown for the invoice (CGST + SGST) — the server's figures.
+    const gstCalc = serverGst;
 
     // Step 6: Validate Razorpay credentials
     const keyId = getRazorpayKeyId();
@@ -340,6 +243,11 @@ export async function POST(request: NextRequest) {
           gstAmount: serverGstAmount.toString(),
           gstOption: gstOption,
           requestId,
+          purpose: purchase.purpose,
+          // Read back by creditsGrantedFor at verification. Razorpay note values are
+          // strings, and the DB copy is this same object.
+          ...(purchase.credits !== creditAmount ? { creditsGranted: purchase.credits.toString() } : {}),
+          ...(purchase.packBills ? { packBills: purchase.packBills.toString() } : {}),
         },
       });
 
@@ -394,7 +302,7 @@ export async function POST(request: NextRequest) {
       console.error(`[${requestId}] CRITICAL: Razorpay order created but DB save failed`, {
         razorpayOrderId: razorpayOrder.id,
         userId: user.id,
-        amount: totalAmount,
+        amount: serverTotalAmount,
         error: dbError.message,
       });
 
@@ -404,7 +312,7 @@ export async function POST(request: NextRequest) {
           message: 'Order created but not saved. Please contact support with order ID.',
           code: 'DB_SAVE_FAILED',
           orderId: razorpayOrder.id,
-          amount: totalAmount,
+          amount: serverTotalAmount,
           currency: 'INR',
           keyId,
         },
@@ -418,12 +326,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       orderId: razorpayOrder.id,
-      amount: totalAmount,
+      // The server's figures, not the client's echo: the checkout charges `amount`.
+      amount: serverTotalAmount,
       currency: 'INR',
       keyId,
       transactionId: transaction.id,
       creditAmount,
-      gstAmount: gstAmount,
+      creditsGranted: purchase.credits,
+      label: purchase.label,
+      gstAmount: serverGstAmount,
       cgst: gstCalc.cgst,
       sgst: gstCalc.sgst,
       requestId,
