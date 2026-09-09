@@ -54,12 +54,15 @@ function authHeaders(): Record<string, string> {
 export async function startDoclingJob(
   buffer: Buffer,
   filename: string,
-  opts: { signal?: AbortSignal } = {},
+  opts: { signal?: AbortSignal; maxPages?: number } = {},
 ): Promise<string> {
   if (!isDoclingConfigured()) throw new Error('Docling service is not configured');
   const form = new FormData();
   const bytes = new Uint8Array(buffer);
   form.append('file', new Blob([bytes], { type: 'application/pdf' }), filename || 'upload.pdf');
+  // OCR only the first N pages when asked — the LOA's fields are on the opening pages,
+  // and OCR cost is per page, so this is the biggest speed win for a long scan.
+  if (opts.maxPages && opts.maxPages > 0) form.append('max_pages', String(Math.floor(opts.maxPages)));
 
   const res = await fetch(`${BASE_URL}/jobs`, {
     method: 'POST',
