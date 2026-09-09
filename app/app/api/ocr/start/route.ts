@@ -47,10 +47,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File too large. Maximum size is 100MB.' }, { status: 400 });
     }
 
-    // OCR only the first pages of a scanned LOA/agreement — its fields are on the
-    // opening pages, so reading a whole 30-page scan just wastes minutes. Default 8.
+    // OCR only the first pages of a scanned LOA/agreement — its fields all sit on the
+    // opening page, so reading a whole 30-page scan just wastes minutes. Default 2.
     const maxPagesRaw = parseInt(String(formData.get('maxPages') || ''), 10);
-    const maxPages = Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? maxPagesRaw : 8;
+    const maxPages = Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? maxPagesRaw : 2;
     const buffer = Buffer.from(await file.arrayBuffer());
     const controller = new AbortController();
     const abortTimer = setTimeout(() => controller.abort(), 45_000);
