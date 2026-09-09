@@ -121,7 +121,17 @@ export function parseAgreementText(text: string): DirectAgreementFields {
     : null;
 
   // Name of Work — the description the GCC work group is inferred from.
-  const workDescription = firstMatch(flat, /name\s*of\s*(?:the\s*)?work\s*[:\-]?\s*([^\n]{5,300})/i);
+  // Name of Work — the description the GCC work group is inferred from. An LOA rarely
+  // has a "Name of Work" label: the work is in the "Sub:" line or the sentence
+  // "...your tender for the work of <NAME> ... is accepted". Try all three.
+  const workRaw =
+    firstMatch(flat, /name\s*of\s*(?:the\s*)?work\s*[:\-]?\s*([^\n]{5,300})/i) ||
+    firstMatch(flat, /for\s+the\s+work\s+(?:of\s+)?[""“]?([^\n""”]{8,300})/i) ||
+    firstMatch(flat, /\bsub\s*[:\-]\s*(?:letter\s*of\s*acceptance\s*(?:for|of)?\s*)?(?:the\s*work\s*(?:of|:)?\s*)?[""“]?([A-Za-z][^\n""”]{8,300})/i);
+  // Cut the trailing clause that isn't part of the name (e.g. "... is accepted").
+  const workDescription = workRaw
+    ? workRaw.replace(/\s+(?:is\s+(?:hereby\s+)?accepted|at\s+[-(]?\d|for\s+a\s+(?:total|value|sum)|amounting).*$/i, '').replace(/["”\s,;:.]+$/, '').trim() || null
+    : null;
 
   // Period of completion in whole months.
   const monthsRaw =
