@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { applySheetClassification, buildSheetClassificationPrompt } from './sheet-classification';
+import { applySheetClassification, buildSheetClassificationPrompt, type SheetClassificationItem } from './sheet-classification';
 
 describe('sheet classification', () => {
-  const items = () => [
+  const items = (): SheetClassificationItem[] => [
     { itemNo: '025082', description: 'Thermo-Mechanically Treated bars of grade Fe-500D', isSteelItem: true, steelType: 'TMT', amountSinceLastBill: 3370273 },
     { itemNo: '022032', description: '1:2:4 (1 cement : 2 coarse sand : 4 graded stone aggregate)', isCementAffected: true, amountSinceLastBill: 542893 },
     { itemNo: '10.2', description: 'Structural steel work riveted, bolted or welded in built up sections', isSteelItem: true, steelType: 'ANGLE_CHANNEL' },

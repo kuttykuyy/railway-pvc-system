@@ -14,7 +14,7 @@
  */
 
 export interface SheetClassificationItem {
-  itemNo: string;
+  itemNo?: string;
   description: string;
   unit?: string;
   amountSinceLastBill?: number;
@@ -41,7 +41,7 @@ export function buildSheetClassificationPrompt(o: {
 }): string {
   const rows = o.items.map((item, index) => ({
     n: index + 1,
-    itemNo: item.itemNo,
+    itemNo: String(item.itemNo || ''),
     description: String(item.description || '').replace(/\s+/g, ' ').slice(0, 240),
     unit: item.unit || '',
     amount: Number(item.amountSinceLastBill || 0),
