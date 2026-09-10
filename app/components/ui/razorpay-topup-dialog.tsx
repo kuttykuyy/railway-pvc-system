@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Loader2, CreditCard, CheckCircle, IndianRupee, AlertCircle, Zap, Package } from 'lucide-react';
+import { Loader2, CreditCard, CheckCircle, IndianRupee, AlertCircle, Zap, Package, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import Script from 'next/script';
 import { GstBillingDetailsDialog } from './gst-billing-details-dialog';
@@ -28,6 +28,8 @@ interface RazorpayTopupDialogProps {
 interface BillPack {
   bills: number;
   price: number;
+  /** An AI-read bill pack: credited at the AI per-bill cost. */
+  ai: boolean;
   credits: number;
   perBill: number;
 }
@@ -35,7 +37,7 @@ interface BillPack {
 /** What the customer has picked: one bill, a pack, or their own amount. */
 type Selection =
   | { kind: 'single' }
-  | { kind: 'pack'; bills: number }
+  | { kind: 'pack'; bills: number; ai: boolean }
   | { kind: 'custom' };
 
 declare global {
@@ -55,6 +57,7 @@ export function RazorpayTopupDialog({
   const [creditAmount, setCreditAmount] = useState<string>('1000');
   const [packs, setPacks] = useState<BillPack[]>([]);
   const [billCost, setBillCost] = useState<number>(199);
+  const [aiBillCost, setAiBillCost] = useState<number>(499);
   const [selection, setSelection] = useState<Selection>({ kind: 'custom' });
   const [loading, setLoading] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
@@ -225,6 +228,7 @@ export function RazorpayTopupDialog({
           if (!data) return;
           setPacks(Array.isArray(data.packs) ? data.packs : []);
           if (Number.isFinite(data.billCost)) setBillCost(data.billCost);
+          if (Number.isFinite(data.aiBillCost)) setAiBillCost(data.aiBillCost);
         })
         .catch(() => { /* no packs shown */ });
     }
@@ -233,7 +237,9 @@ export function RazorpayTopupDialog({
   // Packs and the one-bill shortcut only exist on the Razorpay route; Cashfree still
   // takes a plain amount, so there the pick is always "custom" whatever was clicked.
   const effectiveSelection: Selection = gateway === 'cashfree' ? { kind: 'custom' } : selection;
-  const selectedPack = effectiveSelection.kind === 'pack' ? packs.find(p => p.bills === effectiveSelection.bills) : undefined;
+  const selectedPack = effectiveSelection.kind === 'pack'
+    ? packs.find(p => p.bills === effectiveSelection.bills && p.ai === effectiveSelection.ai)
+    : undefined;
 
   const calculateTotalAmount = () => {
     // The rupees before tax, and the credits it buys. Only a pack grants more than it costs.
@@ -292,7 +298,7 @@ export function RazorpayTopupDialog({
       // only for its log.
       const purchase =
         effectiveSelection.kind === 'single' ? { purpose: 'single_bill', creditAmount: baseAmount }
-        : selectedPack ? { purpose: 'pack', packBills: selectedPack.bills }
+        : selectedPack ? { purpose: 'pack', packBills: selectedPack.bills, packAi: selectedPack.ai }
         : { purpose: 'topup', creditAmount: baseAmount };
 
       const orderRes = await fetch('/api/razorpay/create-order', {
@@ -595,12 +601,12 @@ export function RazorpayTopupDialog({
                   ) : null}
                   {packs.map(p => {
                     const saving = Math.max(0, p.credits - p.price);
-                    const active = selection.kind === 'pack' && selection.bills === p.bills;
+                    const active = selection.kind === 'pack' && selection.bills === p.bills && selection.ai === p.ai;
                     return (
                       <button
-                        key={p.bills}
+                        key={`${p.ai ? 'ai' : 'std'}-${p.bills}`}
                         type="button"
-                        onClick={() => setSelection({ kind: 'pack', bills: p.bills })}
+                        onClick={() => setSelection({ kind: 'pack', bills: p.bills, ai: p.ai })}
                         disabled={loading}
                         className={`relative rounded-lg border p-3 text-left transition ${
                           active
@@ -614,10 +620,14 @@ export function RazorpayTopupDialog({
                           </span>
                         )}
                         <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
-                          <Package className="h-4 w-4 text-emerald-600" /> {p.bills} bills
+                          {p.ai
+                            ? <><Sparkles className="h-4 w-4 text-violet-600" /> {p.bills} AI bills</>
+                            : <><Package className="h-4 w-4 text-emerald-600" /> {p.bills} bills</>}
                         </div>
                         <div className="mt-1 text-lg font-bold text-emerald-700">₹{p.price.toLocaleString('en-IN')}</div>
-                        <div className="text-[11px] text-gray-500">₹{p.perBill}/bill · ₹{p.credits.toLocaleString('en-IN')} credits</div>
+                        <div className="text-[11px] text-gray-500">
+                          ₹{p.perBill}/bill · ₹{p.credits.toLocaleString('en-IN')} credits
+                        </div>
                       </button>
                     );
                   })}
@@ -638,6 +648,9 @@ export function RazorpayTopupDialog({
                     <div className="text-[11px] text-gray-500">₹1 = 1 credit · ₹{billCost}/bill</div>
                   </button>
                 </div>
+                <p className="text-[11px] text-gray-500">
+                  Packs are credits: a normal bill uses ₹{billCost}, an AI-read bill uses ₹{aiBillCost}. Mix them any way you like.
+                </p>
               </div>
             )}
 

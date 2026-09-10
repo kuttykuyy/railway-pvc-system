@@ -25,7 +25,8 @@ export async function GET() {
     packs: packs.map((p) => ({
       bills: p.bills,
       price: p.price,
-      credits: p.bills * billCost,
+      ai: p.ai,
+      credits: p.bills * (p.ai ? aiBillCost : billCost),
       perBill: Math.round(p.price / p.bills),
     })),
   });

@@ -22,11 +22,15 @@ export interface BillPack {
   bills: number;
   /** Rupees charged before GST. */
   price: number;
+  /** An AI-read bill pack: credited at AI_BILL_PROCESSING_COST per bill instead. */
+  ai: boolean;
 }
 
 const DEFAULT_PACKS: BillPack[] = [
-  { bills: 10, price: 1499 },
-  { bills: 30, price: 3499 },
+  { bills: 10, price: 1499, ai: false },
+  { bills: 30, price: 3499, ai: false },
+  { bills: 10, price: 3999, ai: true },
+  { bills: 30, price: 9999, ai: true },
 ];
 
 /** The packs on sale, from the BILL_PACKS admin setting; the defaults if unset or malformed. */
@@ -34,7 +38,7 @@ export async function getBillPacks(): Promise<BillPack[]> {
   const raw = await getAdminSetting('BILL_PACKS', null);
   const list = Array.isArray(raw) ? raw : DEFAULT_PACKS;
   const packs = list
-    .map((p: any) => ({ bills: Math.floor(Number(p?.bills)), price: Math.round(Number(p?.price)) }))
+    .map((p: any) => ({ bills: Math.floor(Number(p?.bills)), price: Math.round(Number(p?.price)), ai: p?.ai === true }))
     .filter((p: BillPack) => Number.isFinite(p.bills) && p.bills >= 2 && Number.isFinite(p.price) && p.price > 0);
   return packs.length > 0 ? packs : DEFAULT_PACKS;
 }
@@ -47,8 +51,9 @@ export interface ResolvedPurchase {
   price: number;
   /** Credits added to the wallet on success. Equals price except for a pack. */
   credits: number;
-  /** For a pack: how many bills it covers. */
+  /** For a pack: how many bills it covers, and whether they are AI-read bills. */
   packBills: number | null;
+  packAi: boolean;
   /** One line for the checkout and the transaction record. */
   label: string;
 }
@@ -60,6 +65,8 @@ export interface ResolvedPurchase {
 export async function resolvePurchase(input: {
   purpose?: unknown;
   packBills?: unknown;
+  /** With packBills: pick the AI-bill pack of that size rather than the normal one. */
+  packAi?: unknown;
   creditAmount?: unknown;
   /** The buyer's negotiated per-bill fee (User.customProcessingFee), if they have one. */
   customBillCost?: number | null;
@@ -72,7 +79,8 @@ export async function resolvePurchase(input: {
 
   if (purpose === 'pack') {
     const bills = Number(input.packBills);
-    const pack = (await getBillPacks()).find((p) => p.bills === bills);
+    const ai = input.packAi === true;
+    const pack = (await getBillPacks()).find((p) => p.bills === bills && p.ai === ai);
     if (!pack) {
       return { ok: false, error: 'That bill pack is not available.', code: 'UNKNOWN_PACK' };
     }
@@ -81,9 +89,10 @@ export async function resolvePurchase(input: {
       purchase: {
         purpose,
         price: pack.price,
-        credits: pack.bills * billCost,
+        credits: pack.bills * (pack.ai ? aiBillCost : billCost),
         packBills: pack.bills,
-        label: `${pack.bills}-bill pack`,
+        packAi: pack.ai,
+        label: pack.ai ? `${pack.bills}-AI-bill pack` : `${pack.bills}-bill pack`,
       },
     };
   }
@@ -101,7 +110,7 @@ export async function resolvePurchase(input: {
     }
     return {
       ok: true,
-      purchase: { purpose, price: amount, credits: amount, packBills: null, label: 'One bill' },
+      purchase: { purpose, price: amount, credits: amount, packBills: null, packAi: false, label: 'One bill' },
     };
   }
 
@@ -114,7 +123,7 @@ export async function resolvePurchase(input: {
   }
   return {
     ok: true,
-    purchase: { purpose, price: amount, credits: amount, packBills: null, label: `Credit top-up - ₹${amount}` },
+    purchase: { purpose, price: amount, credits: amount, packBills: null, packAi: false, label: `Credit top-up - ₹${amount}` },
   };
 }
 

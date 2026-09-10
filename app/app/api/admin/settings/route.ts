@@ -106,8 +106,11 @@ const DEFAULT_SETTINGS = [
   },
   {
     key: 'BILL_PACKS',
-    value: JSON.stringify([{ bills: 10, price: 1499 }, { bills: 30, price: 3499 }]),
-    description: 'Bill packs offered in the top-up dialog, as JSON: [{"bills":10,"price":1499}, ...]. "price" is rupees before GST; the buyer is credited bills × BILL_PROCESSING_COST, so the discount arrives as extra credits. Set to [] to sell no packs.',
+    value: JSON.stringify([
+      { bills: 10, price: 1499 }, { bills: 30, price: 3499 },
+      { bills: 10, price: 3999, ai: true }, { bills: 30, price: 9999, ai: true },
+    ]),
+    description: 'Bill packs offered in the top-up dialog, as JSON: [{"bills":10,"price":1499}, {"bills":10,"price":3999,"ai":true}, ...]. "price" is rupees before GST. A normal pack credits bills × BILL_PROCESSING_COST; a pack with "ai": true credits bills × AI_BILL_PROCESSING_COST. The discount arrives as extra credits. Set to [] to sell no packs.',
     dataType: 'json'
   }
 ];

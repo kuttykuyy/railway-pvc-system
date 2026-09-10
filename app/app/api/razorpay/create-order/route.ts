@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     // and got both wrong: the wallet was credited the gross rather than the credits
     // bought, and the invoice was written up as tax-inside, recording a Rs 1,000 supply
     // with Rs 152.54 of tax when Rs 1,180 had been collected.
-    const { totalAmount, gstAmount, gstOption = 'exclude', purpose, packBills } = body;
+    const { totalAmount, gstAmount, gstOption = 'exclude', purpose, packBills, packAi } = body;
 
     // Validate gstOption. 'without' is deliberately NOT accepted: it set the tax to
     // zero on a taxable supply, and the value arrives in the request body, so any
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       select: { customProcessingFee: true },
     }).catch(() => null);
     const resolved = await resolvePurchase({
-      purpose, packBills, creditAmount: body.creditAmount,
+      purpose, packBills, packAi, creditAmount: body.creditAmount,
       customBillCost: fee?.customProcessingFee ?? null,
     });
     if (resolved.ok === false) {
@@ -247,7 +247,7 @@ export async function POST(request: NextRequest) {
           // Read back by creditsGrantedFor at verification. Razorpay note values are
           // strings, and the DB copy is this same object.
           ...(purchase.credits !== creditAmount ? { creditsGranted: purchase.credits.toString() } : {}),
-          ...(purchase.packBills ? { packBills: purchase.packBills.toString() } : {}),
+          ...(purchase.packBills ? { packBills: purchase.packBills.toString(), packAi: String(purchase.packAi) } : {}),
         },
       });
 
