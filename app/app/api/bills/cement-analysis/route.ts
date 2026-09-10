@@ -1690,6 +1690,20 @@ export async function POST(request: NextRequest) {
         item.description = sheetDescriptions.get(item.itemNo) || `Item ${item.itemNo}`;
       }
 
+      // The same steel and cement detection the PDF reader applies, run on the resolved
+      // description. Without it a typed-in bill carried no isSteelItem/steelType at
+      // all, so its TMT and structural steel — lakhs on a box-pushing bill — were never
+      // offered to the steel price variation, and its concrete never sought cement.
+      const { materialFlags } = await import('@/lib/ireps-direct-pdf-parser');
+      for (const item of typedItems) {
+        const flags = materialFlags(`${item.description} ${sheetDescriptions.get(item.itemNo) || ''}`);
+        item.isSteelItem = flags.isSteelItem;
+        item.steelType = flags.steelType;
+        item.steelTypesUsed = flags.steelTypes;
+        item.isCementAffected = flags.isCementAffected && cementIsSoughtIn(item.itemNo, item.sourceBook);
+        item.requiresDsrCementCoefficient = item.isCementAffected && item.sourceBook !== 'USSR_2021';
+      }
+
       const severalWorks = billCoversSeveralWorks(typedItems);
       const total = typedItems.reduce((sum, item) => sum + (item.amountSinceLastBill || 0), 0);
 
