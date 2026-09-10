@@ -111,6 +111,12 @@ const DEFAULT_SETTINGS = [
     dataType: 'boolean'
   },
   {
+    key: 'SHEET_AI_CLASSIFICATION_ENABLED',
+    value: 'true',
+    description: 'For a bill uploaded as a spreadsheet, ask the AI to suggest each item\'s PVC classification code (one call per upload), as the PDF reader does. When off or unavailable, the built-in keyword classifier is used.',
+    dataType: 'boolean'
+  },
+  {
     key: 'BILL_PACKS',
     value: JSON.stringify([
       { bills: 10, price: 1499 }, { bills: 30, price: 3499 },

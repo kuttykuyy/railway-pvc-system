@@ -1706,10 +1706,35 @@ export async function POST(request: NextRequest) {
 
       const severalWorks = billCoversSeveralWorks(typedItems);
       const total = typedItems.reduce((sum, item) => sum + (item.amountSinceLastBill || 0), 0);
+      const mainClassification = inferMainClassification(workDescription);
+
+      // One AI pass to suggest each item's classification code, as the PDF extraction
+      // does. The deterministic classifier below honours a valid suggested code, so
+      // this only has to get the suffix judgement right (steel supply B, cement C,
+      // fabrication with/without steel D/E); when the model is off, unavailable or
+      // unparseable, the deterministic result stands and the warning says so.
+      let aiClassified = 0;
+      let aiClassificationNote = '';
+      const { getAdminSetting } = await import('@/lib/admin-settings');
+      const aiClassificationOn = await getAdminSetting('SHEET_AI_CLASSIFICATION_ENABLED', true);
+      if (aiClassificationOn && typedItems.length > 0 && aiProviderConfigured()) {
+        const { buildSheetClassificationPrompt, applySheetClassification } = await import('@/lib/ai/sheet-classification');
+        try {
+          const prompt = buildSheetClassificationPrompt({ workDescription, mainCode: mainClassification.code, items: typedItems });
+          const result = await completeJson({ operation: 'sheet-classification', prompt, maxTokens: 4000 });
+          aiClassified = applySheetClassification(typedItems, parseAiJson(result.content));
+          aiClassificationNote = aiClassified > 0
+            ? `Classifications were suggested by AI for ${aiClassified} of ${typedItems.length} item(s) — check each before creating the bill.`
+            : 'The AI gave no usable classifications; the built-in classifier was used instead.';
+        } catch (err) {
+          console.warn('[cement-analysis] sheet AI classification failed; deterministic used', err instanceof Error ? err.message : err);
+          aiClassificationNote = 'AI classification was unavailable; the built-in classifier was used instead.';
+        }
+      }
 
       billDetails = {
         workDescription,
-        classificationGroupCode: inferMainClassification(workDescription).code,
+        classificationGroupCode: mainClassification.code,
         items: typedItems.map(item => applyDeterministicClassification(item, workDescription, severalWorks)),
         itemAmountTotal: Number(total.toFixed(2)),
         grossBillAmount: Number(total.toFixed(2)),
@@ -1721,6 +1746,7 @@ export async function POST(request: NextRequest) {
           + `${enriched} described from the schedule of rates`
           + (unmatched.length ? `, ${unmatched.length} not found in it — please check those descriptions` : '')
           + '. Amounts are quantity x rate. Check every row before creating the bill.',
+          ...(aiClassificationNote ? [aiClassificationNote] : []),
           ...sheet.notes,
           ...sheet.problems,
         ],
