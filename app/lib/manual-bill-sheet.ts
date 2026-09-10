@@ -61,6 +61,14 @@ const HEADER_ALIASES: Record<string, string[]> = {
   rate: ['rate', 'agreementrate', 'rateinrs', 'unitrate'],
 };
 
+/** The railway's sheets come out of a web page: "1:1&frac12;:3", "contractor&apos;s". */
+function decodeEntities(text: string): string {
+  return text
+    .replace(/&frac12;/g, '½').replace(/&frac14;/g, '¼').replace(/&frac34;/g, '¾')
+    .replace(/&apos;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+}
+
 /** A number as people actually type it: "1,234.50", "₹ 1234.5", " 12 ". */
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -326,7 +334,7 @@ export function parseManualBillWorkbook(data: Buffer | ArrayBuffer | Uint8Array)
     const itemNo = typeof itemNoCell === 'number' ? String(itemNoCell) : String(itemNoCell ?? '').trim();
     const quantityRaw = cell('quantity');
     const rateRaw = cell('rate');
-    const description = String(cell('description') ?? '').replace(/\s+/g, ' ').trim();
+    const description = decodeEntities(String(cell('description') ?? '')).replace(/\s+/g, ' ').trim();
     let schedule = String(cell('schedule') ?? '').trim();
     // A "Sdl Type" column holding serial numbers is not a schedule name; the total rows are.
     if ((!schedule || /^\d+(\.\d+)?$/.test(schedule)) && scheduleFromTotals.has(index)) {
@@ -369,7 +377,9 @@ export function parseManualBillWorkbook(data: Buffer | ArrayBuffer | Uint8Array)
       continue;
     }
 
-    rows.push({ rowNumber, schedule, itemNo, quantity, rate, ...(description ? { description } : {}) });
+    // Excel arithmetic leaves 317.20000000000005 behind; a bill quantity has no more
+    // than six decimals, so that is float noise, not information.
+    rows.push({ rowNumber, schedule, itemNo, quantity: Number(quantity.toFixed(6)), rate, ...(description ? { description } : {}) });
   }
 
   if (inferredSchedules.size) {
