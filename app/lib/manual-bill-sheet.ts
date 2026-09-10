@@ -35,12 +35,16 @@ export interface ManualSheetRow {
   itemNo: string;
   quantity: number;
   rate: number;
+  /** Only when the sheet carries one (the railway's does); the rate book is preferred. */
+  description?: string;
 }
 
 export interface ParsedManualSheet {
   rows: ManualSheetRow[];
   /** Row-by-row complaints, worded for the person who filled it in. */
   problems: string[];
+  /** What was decided about the layout (which quantity column, inferred schedules), for checking. */
+  notes: string[];
   /** Rows left entirely blank — expected, and not worth complaining about. */
   skippedBlankRows: number;
 }
@@ -51,9 +55,9 @@ function headerKey(value: unknown): string {
 }
 
 const HEADER_ALIASES: Record<string, string[]> = {
-  schedule: ['schedule', 'scheduleno', 'schedulename', 'sch'],
+  schedule: ['schedule', 'scheduleno', 'schedulename', 'sch', 'sdl', 'sdltype', 'scheduletype', 'sdlno'],
   itemNo: ['itemno', 'item', 'itemnumber', 'dsrno', 'dsrcode', 'code', 'ssorno'],
-  quantity: ['quantity', 'qty', 'qtythisbill', 'quantitythisbill'],
+  quantity: ['quantity', 'qty', 'qtythisbill', 'quantitythisbill', 'qtysthisbill', 'balqty', 'balqtys', 'balanceqty'],
   rate: ['rate', 'agreementrate', 'rateinrs', 'unitrate'],
 };
 
@@ -170,42 +174,107 @@ export function buildManualBillWorkbook(
 }
 
 /**
- * Read a filled-in workbook back.
+ * Read a filled-in workbook back — ours, or the railway's own quantity sheet.
  *
  * Tolerant on the way in and specific on the way out: headers are matched loosely, so a
  * renamed or reordered column still works, but anything it cannot use is reported
  * against the row number the person can see on their own screen.
+ *
+ * The railway's bill-quantity sheet (as a section office keeps it: "Sdl Type, Item No.,
+ * Item Desc., Unit, Base Rate, Agreement Rate, Final Variation, Amount, cc-9 bill qtys,
+ * bal qtys cc-10, Amount") is read too, because people hold their bill in exactly that
+ * shape and converting it to four columns by hand is where the confusion started. That
+ * layout has its header a few rows down under the work title, several quantity columns
+ * of which only one is this bill's, schedules marked by "SCHEDULE A TOTAL" rows rather
+ * than a column, and zero rows for items not billed this time. Each of those is handled,
+ * and what was decided is said back in `notes` so the person can check it.
  */
+const HEADER_SCAN_ROWS = 25;
+
+/** A header cell that names a quantity column — but never an amount. */
+function isQuantityHeader(key: string): boolean {
+  if (!key) return false;
+  if (/amount|amt|value|rate/.test(key)) return false;
+  return /qty|quantity/.test(key);
+}
+
+/**
+ * Of several quantity columns, the one that is THIS bill's. "bal qtys cc-10, final" over
+ * "cc-9 bill qtys" over "final variation": the balance / this-bill column wins, then the
+ * one naming the highest bill number, then the rightmost — a running-bill sheet reads
+ * left to right from the agreement to the current bill.
+ */
+function pickQuantityColumn(candidates: Array<{ index: number; key: string; label: string }>): { index: number; label: string } {
+  const score = (c: { index: number; key: string }): number => {
+    let n = 0;
+    if (/thisbill|balance|\bbal|balqty|balqtys|balqtyscc|current|present|now/.test(c.key)) n += 1000;
+    if (/final/.test(c.key)) n += 500;
+    const bill = c.key.match(/(?:cc|ra|bill|rab)(\d{1,3})/);
+    if (bill) n += Number(bill[1]);
+    return n + c.index / 1000;
+  };
+  return candidates.slice().sort((a, b) => score(b) - score(a))[0];
+}
+
 export function parseManualBillWorkbook(data: Buffer | ArrayBuffer | Uint8Array): ParsedManualSheet {
   const problems: string[] = [];
+  const notes: string[] = [];
   let workbook: XLSX.WorkBook;
   try {
     workbook = XLSX.read(data, { type: 'buffer' });
   } catch {
-    return { rows: [], problems: ['That file could not be opened as a spreadsheet.'], skippedBlankRows: 0 };
+    return { rows: [], problems: ['That file could not be opened as a spreadsheet.'], notes, skippedBlankRows: 0 };
   }
 
   // The sheet we shipped, or the first one — someone will paste into a new tab.
   const sheetName = workbook.SheetNames.includes(ITEMS_SHEET) ? ITEMS_SHEET : workbook.SheetNames[0];
   const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
   if (!sheet) {
-    return { rows: [], problems: ['The spreadsheet has no sheets in it.'], skippedBlankRows: 0 };
+    return { rows: [], problems: ['The spreadsheet has no sheets in it.'], notes, skippedBlankRows: 0 };
   }
 
   const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false, defval: '' });
   if (grid.length < 2) {
-    return { rows: [], problems: ['The sheet has a header but no rows filled in.'], skippedBlankRows: 0 };
+    return { rows: [], problems: ['The sheet has a header but no rows filled in.'], notes, skippedBlankRows: 0 };
   }
 
+  // Which row is the header: the first one (within reach) that names both an item
+  // number and a rate. The railway sheet puts the work title and the bill name above it.
+  let headerIndex = -1;
+  for (let i = 0; i < Math.min(grid.length, HEADER_SCAN_ROWS); i += 1) {
+    const keys = ((grid[i] || []) as unknown[]).map(headerKey);
+    const hasItem = keys.some(k => HEADER_ALIASES.itemNo.includes(k));
+    const hasRate = keys.some(k => HEADER_ALIASES.rate.includes(k));
+    const hasQty = keys.some(k => HEADER_ALIASES.quantity.includes(k) || isQuantityHeader(k));
+    if (hasItem && (hasRate || hasQty)) { headerIndex = i; break; }
+  }
+  if (headerIndex < 0) headerIndex = 0;
+
   // Which column is which, found by name rather than by position.
-  const headerRow = grid[0] as unknown[];
+  const headerRow = (grid[headerIndex] || []) as unknown[];
   const columnOf: Record<string, number> = {};
+  const quantityCandidates: Array<{ index: number; key: string; label: string }> = [];
   headerRow.forEach((cell, index) => {
     const key = headerKey(cell);
     for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
       if (aliases.includes(key) && columnOf[field] === undefined) columnOf[field] = index;
     }
+    if (isQuantityHeader(key)) quantityCandidates.push({ index, key, label: String(cell ?? '').replace(/\s+/g, ' ').trim() });
+    if (/^(itemdesc|description|desc|particulars|descriptionofitem|itemdescription|nameofitem)$/.test(key) && columnOf.description === undefined) {
+      columnOf.description = index;
+    }
   });
+  // Several quantity columns (a running-bill sheet): choose this bill's and say which.
+  if (quantityCandidates.length > 1) {
+    const picked = pickQuantityColumn(quantityCandidates);
+    columnOf.quantity = picked.index;
+    notes.push(`Quantities were read from the column "${picked.label}" (the sheet has ${quantityCandidates.length} quantity columns). If this bill's quantities are in a different column, rename it "Quantity this bill".`);
+  } else if (columnOf.quantity === undefined && quantityCandidates.length === 1) {
+    columnOf.quantity = quantityCandidates[0].index;
+  }
+  // The template's exact aliases first; a plain "Rate" column that is not the agreement
+  // rate (e.g. "Base Rate") is never taken by mistake because it does not alias.
+  const railwayLayout = headerIndex > 0 || quantityCandidates.length > 1;
 
   const missing = (['itemNo', 'quantity', 'rate'] as const).filter(f => columnOf[f] === undefined);
   if (missing.length) {
@@ -215,27 +284,69 @@ export function parseManualBillWorkbook(data: Buffer | ArrayBuffer | Uint8Array)
         `The sheet needs columns for ${missing.map(f => (f === 'itemNo' ? 'Item No' : f === 'quantity' ? 'Quantity' : 'Rate')).join(', ')}. `
         + `Found: ${headerRow.filter(Boolean).join(', ') || '(nothing)'}.`,
       ],
+      notes,
       skippedBlankRows: 0,
     };
   }
 
+  // Schedules on a railway sheet are marked by "SCHEDULE A TOTAL" rows below their items
+  // (sometimes a "Schedule A" heading above). Map every item row to its schedule first.
+  const rowText = (raw: unknown[]) => raw.map(v => String(v ?? '')).join(' ').replace(/\s+/g, ' ').trim();
+  const totalRe = /\bsc?hedule\s*[-:.]?\s*([a-z0-9]{1,3}?)\s*[-:.]?\s*total\b/i;
+  const headingRe = /^\s*sc?hedule\s*[-:.]?\s*([a-z0-9]{1,3})\s*$/i;
+  const scheduleFromTotals = new Map<number, string>();
+  let pendingFrom = headerIndex + 1;
+  let headingAbove: string | null = null;
+  for (let index = headerIndex + 1; index < grid.length; index += 1) {
+    const text = rowText((grid[index] || []) as unknown[]);
+    const heading = text.match(headingRe);
+    if (heading) { headingAbove = heading[1].toUpperCase(); pendingFrom = index + 1; continue; }
+    const total = text.match(totalRe);
+    if (total) {
+      const name = (headingAbove || total[1]).toUpperCase();
+      for (let r = pendingFrom; r < index; r += 1) scheduleFromTotals.set(r, name);
+      pendingFrom = index + 1;
+      headingAbove = null;
+    }
+  }
+  if (headingAbove) for (let r = pendingFrom; r < grid.length; r += 1) scheduleFromTotals.set(r, headingAbove);
+  const inferredSchedules = new Set(scheduleFromTotals.values());
+
   const rows: ManualSheetRow[] = [];
   let skippedBlankRows = 0;
+  let skippedZeroRows = 0;
 
-  for (let index = 1; index < grid.length; index += 1) {
+  for (let index = headerIndex + 1; index < grid.length; index += 1) {
     const raw = (grid[index] || []) as unknown[];
-    const rowNumber = index + 1; // 1-based, and row 1 is the header
+    const rowNumber = index + 1; // 1-based, as the person sees it
     const cell = (field: string) => (columnOf[field] === undefined ? '' : raw[columnOf[field]]);
 
-    const itemNo = String(cell('itemNo') ?? '').trim();
+    const itemNoCell = cell('itemNo');
+    // Excel keeps "15.30" as the number 15.3 and "13070" as 13070; both are item codes.
+    const itemNo = typeof itemNoCell === 'number' ? String(itemNoCell) : String(itemNoCell ?? '').trim();
     const quantityRaw = cell('quantity');
     const rateRaw = cell('rate');
-    const schedule = String(cell('schedule') ?? '').trim();
+    const description = String(cell('description') ?? '').replace(/\s+/g, ' ').trim();
+    let schedule = String(cell('schedule') ?? '').trim();
+    // A "Sdl Type" column holding serial numbers is not a schedule name; the total rows are.
+    if ((!schedule || /^\d+(\.\d+)?$/.test(schedule)) && scheduleFromTotals.has(index)) {
+      schedule = `Schedule ${scheduleFromTotals.get(index)}`;
+    }
+
+    // Total, grand-total and deduction rows are the sheet's arithmetic, not items. A
+    // schedule total carries its label in the item column, so that one is matched on
+    // the whole row; the rest only when the row has no item number, so an item whose
+    // description says "deduct" is never dropped.
+    const text = rowText(raw);
+    if (totalRe.test(text)) continue;
+    if (!itemNo && /\bgrand\s*total\b|\btotal\b|\bdeduct\b/i.test(text)) continue;
 
     const isBlank = !itemNo && !String(quantityRaw ?? '').trim() && !String(rateRaw ?? '').trim();
     if (isBlank) { skippedBlankRows += 1; continue; }
 
     if (!itemNo) {
+      // On the railway's sheet an item-less row is a label or a spacer, not a mistake.
+      if (railwayLayout) continue;
       problems.push(`Row ${rowNumber}: an item number is needed. Nothing on this row was used.`);
       continue;
     }
@@ -250,17 +361,27 @@ export function parseManualBillWorkbook(data: Buffer | ArrayBuffer | Uint8Array)
       continue;
     }
     if (quantity <= 0 || rate <= 0) {
-      // Not dropped silently: a zero here is usually a row someone meant to finish.
+      // On the railway's sheet a zero is an item not billed this time — expected, and
+      // counted once below. On our four-column template a zero is usually a row someone
+      // meant to finish, so it is named.
+      if (railwayLayout && rate > 0 && quantity <= 0.0005) { skippedZeroRows += 1; continue; }
       problems.push(`Row ${rowNumber} (item ${itemNo}): quantity and rate must both be more than zero.`);
       continue;
     }
 
-    rows.push({ rowNumber, schedule, itemNo, quantity, rate });
+    rows.push({ rowNumber, schedule, itemNo, quantity, rate, ...(description ? { description } : {}) });
+  }
+
+  if (inferredSchedules.size) {
+    notes.push(`Schedules were read from the "Schedule … total" rows: ${[...inferredSchedules].map(n => `Schedule ${n}`).join(', ')}.`);
+  }
+  if (skippedZeroRows) {
+    notes.push(`${skippedZeroRows} item(s) with no quantity this bill were left out.`);
   }
 
   if (!rows.length && !problems.length) {
     problems.push('Every row was blank — nothing to read.');
   }
 
-  return { rows, problems, skippedBlankRows };
+  return { rows, problems, notes, skippedBlankRows };
 }
