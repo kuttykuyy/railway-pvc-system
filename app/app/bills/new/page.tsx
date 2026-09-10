@@ -297,6 +297,17 @@ function NewBillPageContent() {
     setPickerRequested(false);
     open();
   }, [pickerRequested, billMode]);
+  /** Same for the spreadsheet: the Excel input also lives in the analyzer. The
+   *  spreadsheet route used to be reachable only from a band under the PDF drop-zone,
+   *  which is how people with a bill in Excel concluded there was no Excel upload. */
+  const [sheetPickerRequested, setSheetPickerRequested] = useState(false);
+  useEffect(() => {
+    if (!sheetPickerRequested || billMode !== 'ai') return;
+    const open = analyzerSheetPickerRef.current;
+    if (!open) return;
+    setSheetPickerRequested(false);
+    open();
+  }, [sheetPickerRequested, billMode]);
 
   // Insufficient credit dialog state
   const [showInsufficientCredit, setShowInsufficientCredit] = useState(false);
@@ -1885,6 +1896,16 @@ function NewBillPageContent() {
       {billMode === 'choose' && (() => {
         const hi = language === 'hi';
         const openUpload = () => { setBillMode('ai'); setPickerRequested(true); };
+        const openSheet = () => { setBillMode('ai'); setSheetPickerRequested(true); };
+        const SheetLine = ({ className = '' }: { className?: string }) => (
+          <span className={className}>
+            {hi ? 'बिल Excel में है? ' : 'Have the bill as a spreadsheet? '}
+            <button type="button" className="font-semibold text-emerald-700 hover:underline" onClick={openSheet}>
+              {hi ? 'Excel शीट अपलोड करें →' : 'Upload an Excel sheet →'}
+            </button>
+            <span className="text-slate-400"> {hi ? '(कॉलम: शेड्यूल, आइटम नं, मात्रा, दर)' : '(columns: schedule, item no, quantity, rate)'}</span>
+          </span>
+        );
         const ticks = hi
           ? ['कुछ टाइप नहीं — आइटम, मात्रा और रकम PDF से पढ़ी जाती हैं', 'जोड़ बिल के अपने छपे टोटल से मिलाया जाता है', 'न पढ़ पाए तो कुछ सेव नहीं होता; आपका मुफ़्त बिल बना रहता है']
           : ['Nothing to type — items, quantities and amounts come off the PDF', 'The total is checked against the bill’s own printed total', 'If it can’t be read, nothing is saved and your free bill stays'];
@@ -1926,7 +1947,8 @@ function NewBillPageContent() {
 
               <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden mb-4">
                 <button type="button" className="px-4 py-2 text-sm font-semibold bg-emerald-600 text-white">{hi ? 'साइन किया बिल PDF अपलोड करें' : 'Upload the signed bill PDF'}</button>
-                <button type="button" className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50" onClick={() => setBillMode('manual')}>{hi ? 'टाइप करें' : 'Type it in'}</button>
+                <button type="button" className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 border-l border-slate-200" onClick={openSheet}>{hi ? 'Excel अपलोड करें' : 'Upload a spreadsheet'}</button>
+                <button type="button" className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 border-l border-slate-200" onClick={() => setBillMode('manual')}>{hi ? 'टाइप करें' : 'Type it in'}</button>
               </div>
 
               <div className="rounded-2xl border-2 border-dashed border-emerald-200 bg-gradient-to-b from-emerald-50 to-white p-7 sm:p-9 text-center">
@@ -1944,6 +1966,7 @@ function NewBillPageContent() {
                   <SampleDocumentDialog kind="bill" className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline" />
                 </div>
               </div>
+              <SheetLine className="block mt-3 text-sm text-slate-600" />
             </div>
           );
         }
@@ -1973,6 +1996,7 @@ function NewBillPageContent() {
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 mt-4 text-sm text-slate-600">
+              <SheetLine />
               <span>
                 {hi ? 'टाइप करना पसंद है? ' : 'Prefer to type it in? '}
                 <button type="button" className="font-semibold text-emerald-700 hover:underline" onClick={() => setBillMode('manual')}>
