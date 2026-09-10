@@ -336,14 +336,19 @@ function steelCategoriesFor(text: string): SteelCategory[] {
   return order.filter(category => found.has(category));
 }
 
-function materialFlags(description: string) {
+/**
+ * Exported for the spreadsheet route as well: a bill typed into a sheet goes through
+ * the same steel and cement detection as one read off the IREPS PDF, so TMT and
+ * structural steel are offered for the steel price variation either way.
+ */
+export function materialFlags(description: string) {
   const text = description.toLowerCase();
   // Cement being supplied as its own item, rather than consumed by a work item.
   // The spelled-out grade names matter as much as the abbreviations: IREPS prints
   // "Pozzolana Portland Cement approved brands/makes" with no "PPC" anywhere, and
   // that was being read as a work item that merely uses cement.
   const directCement = /\b(?:supply|supplying)\b.{0,80}\bcement\b|ordinary portland cement|(?:portland pozzolana|pozzolana portland) cement|portland slag cement|\bopc\b|\bppc\b|\bpsc\b/.test(text);
-  const isCementAffected = !directCement && /\b(?:cement|concrete|rcc|pcc|mortar|grout|shotcrete|1\s*:\s*\d)\b/.test(text);
+  let isCementAffected = !directCement && /\b(?:cement|concrete|rcc|pcc|mortar|grout|shotcrete|1\s*:\s*\d)\b/.test(text);
   const steelTypes = steelCategoriesFor(text);
   let steelType: DeterministicBillItem['steelType'] = steelTypes[0] || '';
   // Recognising a steel type IS what makes this a steel item. The two used to be
@@ -368,11 +373,28 @@ function materialFlags(description: string) {
     /\b(?:supplied|issued|provided)\s+(?:free\s+)?(?:of\s+cost\s+)?by\s+(?:the\s+)?railways?\b/.test(text)
     || /\bfree\s+(?:issue|supply)\b/.test(text)
     || /\bdepartmental(?:ly)?\s+suppl/.test(text);
-  if (railwaySupplied) {
+
+  // A material this item's own note says is PAID FOR ELSEWHERE is not this item's
+  // material. USSOR 024010 (design-mix concrete for an RCC box) ends "Payment for
+  // cement, reinforcement and shuttering shall be made extra under relevant item";
+  // 031120/031130 (box pushing) except "cost of reinforced cement concrete, cement,
+  // reinforcement & shuttering ... which shall be paid extra". Reading "reinforcement"
+  // there made a concrete item a TMT item worth lakhs, and its cement was sought twice —
+  // once here and once under the cement supply item it is actually paid under.
+  const paidExtra = (material: RegExp) =>
+    new RegExp(`(?:payment|cost)\\s+(?:for|of)\\b[^.]{0,200}?${material.source}[^.]{0,200}?\\b(?:paid|made)\\s+(?:extra|separately)\\b`).test(text)
+    || new RegExp(`${material.source}[^.]{0,200}?\\b(?:shall|will)\\s+be\\s+(?:paid|made)\\s+(?:extra|separately)\\b`).test(text);
+  const steelPaidElsewhere = paidExtra(/\b(?:reinforcement|steel)\b/);
+  const cementPaidElsewhere = paidExtra(/\bcement\b/);
+  // Taking a structure down is not supplying steel, whatever it was built from.
+  const demolition = /\b(?:demolish(?:ing|ed)?|dismantl(?:ing|ed)?)\b/.test(text);
+
+  if (railwaySupplied || steelPaidElsewhere || demolition) {
     isSteelItem = false;
     steelType = '';
     steelTypes.length = 0;
   }
+  if (cementPaidElsewhere) isCementAffected = false;
 
   return { isSteelItem, isCementAffected, steelType, steelTypes: isSteelItem ? steelTypes : [], railwaySupplied };
 }
