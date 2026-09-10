@@ -21,7 +21,8 @@ import {
   Mail,
   Clock,
   Copy,
-  Check
+  Check,
+  Zap
 } from 'lucide-react';
 
 interface InsufficientCreditDialogProps {
@@ -42,8 +43,13 @@ export function InsufficientCreditDialog({
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [showTopupDialog, setShowTopupDialog] = useState(false);
+  /** Set when the top-up opens from "pay for this bill", so it leads with that amount. */
+  const [topupForBill, setTopupForBill] = useState<number | undefined>(undefined);
 
   const actualShortfall = shortfall || (requiredAmount - currentBalance);
+  // The shortcut buys exactly one bill's cost. Any balance already in the wallet simply
+  // stays there for the next bill.
+  const canPayForThisBill = requiredAmount > 0;
 
   const copyToClipboard = async (text: string, type: 'phone' | 'email') => {
     try {
@@ -101,17 +107,34 @@ export function InsufficientCreditDialog({
           {/* Top-up Action */}
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 space-y-3">
             <div className="text-sm text-emerald-900 font-medium">
-              Top up your credits instantly via Razorpay to continue processing bills.
+              {canPayForThisBill
+                ? 'Pay for just this bill, or top up once and save on every bill after it.'
+                : 'Top up your credits instantly via Razorpay to continue processing bills.'}
             </div>
-            <Button 
-              className="w-full" 
+            {canPayForThisBill && (
+              <Button
+                className="w-full"
+                onClick={() => {
+                  onClose();
+                  setTopupForBill(requiredAmount);
+                  setShowTopupDialog(true);
+                }}
+              >
+                <Zap className="h-4 w-4 mr-2" />
+                Pay ₹{requiredAmount.toLocaleString('en-IN')} for this bill
+              </Button>
+            )}
+            <Button
+              className="w-full"
+              variant={canPayForThisBill ? 'outline' : 'default'}
               onClick={() => {
                 onClose();
+                setTopupForBill(undefined);
                 setShowTopupDialog(true);
               }}
             >
               <CreditCard className="h-4 w-4 mr-2" />
-              Top-up Credits via Razorpay
+              {canPayForThisBill ? 'Buy a bill pack / top up' : 'Top-up Credits via Razorpay'}
             </Button>
           </div>
         </div>
@@ -127,6 +150,7 @@ export function InsufficientCreditDialog({
     <RazorpayTopupDialog
       open={showTopupDialog}
       onOpenChange={setShowTopupDialog}
+      singleBillAmount={topupForBill}
       onSuccess={() => {
         window.location.reload();
       }}
