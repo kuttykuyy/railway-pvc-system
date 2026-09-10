@@ -1679,12 +1679,15 @@ export async function POST(request: NextRequest) {
         sourceBook: bookFor(row.itemNo) as ExtractedBillItem['sourceBook'],
       }));
 
+      // The railway's own sheet carries a description; it stands in for an item the
+      // rate book does not have. The book's wording is still preferred when it has one.
+      const sheetDescriptions = new Map(sheet.rows.map(row => [row.itemNo, row.description || '']));
       const { enriched } = await enrichItemsFromRateBook(typedItems);
       const unmatched = typedItems.filter(item => !String(item.description || '').trim());
       for (const item of unmatched) {
         // Kept, never dropped. The person typed a real item; the app simply does not
         // hold that code, and they can write the description on the review screen.
-        item.description = `Item ${item.itemNo}`;
+        item.description = sheetDescriptions.get(item.itemNo) || `Item ${item.itemNo}`;
       }
 
       const severalWorks = billCoversSeveralWorks(typedItems);
@@ -1704,6 +1707,7 @@ export async function POST(request: NextRequest) {
           + `${enriched} described from the schedule of rates`
           + (unmatched.length ? `, ${unmatched.length} not found in it — please check those descriptions` : '')
           + '. Amounts are quantity x rate. Check every row before creating the bill.',
+          ...sheet.notes,
           ...sheet.problems,
         ],
       };

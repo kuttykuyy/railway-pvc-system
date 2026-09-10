@@ -112,6 +112,58 @@ describe('parseManualBillWorkbook', () => {
   });
 });
 
+describe("the railway's own quantity sheet", () => {
+  /** As a section office keeps it: title rows, then the header, schedule totals, zero rows. */
+  function railwaySheet() {
+    const aoa: Array<Array<string | number>> = [
+      ['Construction of Limited Height Subway in lieu of LC No. RB-37'],
+      ['CC-10 & FINAL BILL-31.07.2026'],
+      ['Sdl Type', 'Item No.', 'Item Desc.', 'Unit', 'Base Rate(Rs.)', 'Agreement Rate', 'FINAL VARIATION', 'Amount (Rs.)\nas per Orig. Agmt.', 'cc-9 bill qtys', 'bal qtys cc-10,final', 'Amount (Rs.)\nas per Orig. Agmt.'],
+      [1, '4.1.3', '1:2:4 concrete', 'cum', 7365.15, 7449.849225, 393.16, 2928982.72, 50, 343.16, 2556490.26],
+      [2, 15.3, 'Demolishing R.C.C. work', 'cum', 2928.1, 2961.77315, 44.39, 131473.11, 10, 34.39, 101855.38],
+      [3, '5.9.5', 'Lintels, beams', 'Sqm', 608.35, 615.346025, 13.1, 8061.03, 13.1, 0, 0],
+      ['', 'SHEDULE  A TOTAL', '', '', '', '', '', 3068516.86, '', '', 2658345.64],
+      [18, 25072, 'OPC 53 grade', 'MT', 8964.18, 10010.389448, 177.483, 1776673.95, 177.4831, -0.0001, -1],
+      [19, 25073, 'PPC', 'MT', 8429.01, 9412.759757, 3318.686, 31237994.03, 3115.7409, 202.9451, 1910273.47],
+      ['', 'SHEDULE  B TOTAL', '', '', '', '', '', 33014667.98, '', '', 1910272.47],
+      ['', 'SHEDULE  CTOTAL', '', '', '', '', '', 0, '', '', 0],
+      ['GRAND TOTAL', '', '', '', '', 127409609.57, '', 36083184.84, '', '', 4568618.11],
+      ['DEDUCT TENDER DECRESE ', '', '', '', -2, '', '', -721663.7, '', '', -91372.36],
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(aoa), 'final bill qtys');
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  }
+
+  it('finds the header under the title rows and reads this bill\'s quantity column', () => {
+    const { rows, problems, notes } = parseManualBillWorkbook(railwaySheet());
+    expect(problems).toEqual([]);
+    expect(rows.map(r => [r.itemNo, r.quantity, r.rate])).toEqual([
+      ['4.1.3', 343.16, 7449.849225],
+      ['15.3', 34.39, 2961.77315],
+      ['25073', 202.9451, 9412.759757],
+    ]);
+    expect(notes.join(' ')).toMatch(/read from the column "bal qtys cc-10,final"/);
+  });
+
+  it('takes the schedule from the "SCHEDULE A TOTAL" rows, not the serial-number column', () => {
+    const { rows } = parseManualBillWorkbook(railwaySheet());
+    expect(rows.map(r => r.schedule)).toEqual(['Schedule A', 'Schedule A', 'Schedule B']);
+  });
+
+  it('leaves out total rows and items with no quantity this bill, and says how many', () => {
+    const { rows, notes, problems } = parseManualBillWorkbook(railwaySheet());
+    expect(rows).toHaveLength(3);
+    expect(problems).toEqual([]);
+    expect(notes.join(' ')).toMatch(/2 item\(s\) with no quantity this bill were left out/);
+  });
+
+  it('keeps the sheet\'s description as a fallback', () => {
+    const { rows } = parseManualBillWorkbook(railwaySheet());
+    expect(rows[0].description).toBe('1:2:4 concrete');
+  });
+});
+
 describe('when no contract has been chosen yet', () => {
   /**
    * The case that actually broke: on the New Bill page the PDF is uploaded BEFORE a

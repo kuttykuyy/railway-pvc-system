@@ -301,6 +301,17 @@ export async function POST(request: NextRequest) {
     // ===== STEP 2: Payment Validation =====
     const paymentValidation = await validateBillProcessing(request, isAiUploaded);
     if (!paymentValidation.canProcess) {
+      // The person wanted this bill and was shown a price. Remembered, so the
+      // payment-reminder cron can follow up if they leave without paying.
+      const { recordPaymentIntent } = await import('@/lib/payment-intent');
+      const blockedContract = contractId
+        ? await prisma.contract.findUnique({ where: { id: contractId }, select: { agreementNo: true } }).catch(() => null)
+        : null;
+      await recordPaymentIntent({
+        userId: user.id, userEmail: user.email || null, kind: 'bill_blocked',
+        amount: Number(paymentValidation.requiredPayment) || 0,
+        context: blockedContract?.agreementNo || null,
+      });
       return NextResponse.json({
         error: 'Payment required',
         reason: paymentValidation.reason,
@@ -570,6 +581,11 @@ export async function POST(request: NextRequest) {
             calculatedBillCost = costToCharge;
             logger.log(`⚠️ Agreement ${contract.agreementNo} already claimed a trial globally. User has ₹${currentBalance} credits, charging ₹${costToCharge} instead of free trial.`);
           } else {
+            const { recordPaymentIntent } = await import('@/lib/payment-intent');
+            await recordPaymentIntent({
+              userId: user.id, userEmail: user.email || null, kind: 'bill_blocked',
+              amount: costToCharge, context: contract.agreementNo || null,
+            });
             return NextResponse.json({
               error: 'Payment required',
               reason: 'A free trial has already been used for this Agreement Number. Please add credits to continue.',

@@ -107,6 +107,11 @@ export interface TelegramConversationData {
   docPendingReportChoice?: any;
   /** Razorpay payment link id, so /paid can verify payment without the webhook. */
   docPendingPaymentLinkId?: string;
+  /** That link's URL and when it was offered, so the 2h payment reminder can restate it. */
+  docPendingPaymentUrl?: string;
+  docPendingReportOfferedAt?: string;
+  /** ISO time the 2h payment reminder went out, so it goes once per offer. */
+  payReminder2hAt?: string;
   /**
    * Every unpaid report, keyed by its own payment link. With several bills in flight
    * for one agreement the single slot above would hand whoever paid the last bill's
@@ -176,7 +181,7 @@ export async function getOrCreateTelegramConversation(chatId: string) {
     // /paid found nothing waiting. Those survive the reset; only the step state goes.
     const staleData = (conversation.conversationData as TelegramConversationData) || {};
     const kept: Record<string, unknown> = {};
-    for (const key of ['linkedAt', 'docPendingReports', 'docPendingReport', 'docBundlePayments', 'dailyUsage'] as const) {
+    for (const key of ['linkedAt', 'docPendingReports', 'docPendingReport', 'docBundlePayments', 'dailyUsage', 'docPendingPaymentLinkId', 'docPendingPaymentUrl', 'docPendingReportOfferedAt', 'payReminder2hAt'] as const) {
       if ((staleData as any)[key] !== undefined) kept[key] = (staleData as any)[key];
     }
     conversation = await prisma.telegramConversation.update({
@@ -329,7 +334,7 @@ export async function resetTelegramConversation(conversationId: string) {
   const current = await prisma.telegramConversation.findUnique({ where: { id: conversationId } });
   const data = (current?.conversationData as TelegramConversationData) || {};
   const kept: Record<string, unknown> = {};
-  for (const key of ['linkedAt', 'docPendingReports', 'docPendingReport', 'docBundlePayments', 'dailyUsage'] as const) {
+  for (const key of ['linkedAt', 'docPendingReports', 'docPendingReport', 'docBundlePayments', 'dailyUsage', 'docPendingPaymentLinkId', 'docPendingPaymentUrl', 'docPendingReportOfferedAt', 'payReminder2hAt'] as const) {
     if ((data as any)[key] !== undefined) kept[key] = (data as any)[key];
   }
   return await prisma.telegramConversation.update({

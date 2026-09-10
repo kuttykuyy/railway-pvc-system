@@ -105,6 +105,12 @@ const DEFAULT_SETTINGS = [
     dataType: 'boolean'
   },
   {
+    key: 'ABANDONED_PAYMENT_REMINDER_ENABLED',
+    value: 'true',
+    description: 'Follow up on payments people started and did not finish: a bill blocked on credits, or a top-up opened and never paid. Email (and Telegram if linked) about 2 hours later and once more after a day; stops the moment they pay. Runs hourly.',
+    dataType: 'boolean'
+  },
+  {
     key: 'BILL_PACKS',
     value: JSON.stringify([
       { bills: 10, price: 1499 }, { bills: 30, price: 3499 },
