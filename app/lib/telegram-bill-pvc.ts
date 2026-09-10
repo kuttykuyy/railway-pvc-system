@@ -776,6 +776,9 @@ export async function offerReportPayment(o: {
         docPendingReport: payload as any,
         docPendingReportChoice: undefined,
         docPendingPaymentLinkId: link.id,
+        docPendingPaymentUrl: link.url,
+        docPendingReportOfferedAt: new Date().toISOString(),
+        payReminder2hAt: undefined,
         docPendingReports: [
           ...(current.docPendingReports || []).filter((r) => r.linkId !== link.id),
           { linkId: link.id, payload: payload as any },

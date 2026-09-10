@@ -200,6 +200,29 @@ const PENDING_EXTRAS: Array<{
     check: { kind: 'table', name: 'parse_failures' },
   },
   {
+    label: 'payment_intents',
+    sql: (s) => `CREATE TABLE IF NOT EXISTS "${s}"."payment_intents" (
+        "id" BIGSERIAL PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        "userEmail" TEXT,
+        "kind" TEXT NOT NULL,
+        "amount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "context" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "reminder1At" TIMESTAMP(3),
+        "reminder2At" TIMESTAMP(3),
+        "resolvedAt" TIMESTAMP(3)
+      )`,
+    why: 'Payments people started and did not finish (a bill blocked on credits, a top-up opened and never paid), so the payment-reminder cron can follow up after 2 hours and a day instead of losing them.',
+    check: { kind: 'table', name: 'payment_intents' },
+  },
+  {
+    label: 'payment_intents_open_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "payment_intents_open_idx" ON "${s}"."payment_intents" ("createdAt") WHERE "resolvedAt" IS NULL`,
+    why: 'The reminder cron reads only open intents, oldest first.',
+    check: { kind: 'index', name: 'payment_intents_open_idx' },
+  },
+  {
     label: 'page_views',
     sql: (s) => `CREATE TABLE IF NOT EXISTS "${s}"."page_views" (
         "id" BIGSERIAL PRIMARY KEY,

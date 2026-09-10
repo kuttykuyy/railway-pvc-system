@@ -294,6 +294,14 @@ export async function POST(request: NextRequest) {
       });
 
       logger.log(`[${requestId}] Transaction saved to database: ${transaction.id}`);
+
+      // An order opened is a payment started; if it is never paid, the reminder cron
+      // follows up. Resolved automatically by the credit the payment adds.
+      const { recordPaymentIntent } = await import('@/lib/payment-intent');
+      await recordPaymentIntent({
+        userId: user.id, userEmail: user.email, kind: 'topup_started',
+        amount: creditAmount, context: purchase.label,
+      });
     } catch (dbError: any) {
       console.error(`[${requestId}] Database error saving transaction:`, dbError);
       
