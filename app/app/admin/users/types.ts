@@ -11,6 +11,8 @@ export interface User {
   emailVerified: string | null;
   role: string;
   totalBillsProcessed: number;
+  /** Bills that actually exist now (totalBillsProcessed is a lifetime counter). */
+  billsCount?: number;
   freeTrialUsed: number;
   isTrialActive: boolean;
   customProcessingFee: number | null;
