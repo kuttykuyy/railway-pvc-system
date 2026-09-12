@@ -55,9 +55,16 @@ export interface ExtraItemsReport {
 export function isAdditionalNsSchedule(heading: string): boolean {
   const text = String(heading || '').toUpperCase().replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
   if (!text) return false;
-  const later = /\b(ADDITIONAL|EXTRA|NEW|SUPPLEMENTARY)\b/;
-  const ns = /\b(NS|N S|NON SCHEDULE|NON SCHEDULED|EXTRA ITEMS?)\b/;
-  return later.test(text) && ns.test(text);
+  const later = /\b(ADDITIONAL|ADDL|EXTRA|NEW|NEWLY|SUPPLEMENTARY|SUPPL)\b/;
+  const ns = /\b(NS|N S|NSI|NON SCHEDULE|NON SCHEDULED|NONSCHEDULE|EXTRA ITEMS?)\b/;
+  if (later.test(text) && ns.test(text)) return true;
+  // "Schedule E - Newly added items", "Additional items", "Items added during execution":
+  // the "added later" sense without the letters NS. The later-word must sit right by
+  // ITEM(S) so "New BG line works items" — a work title — is not read as an addition.
+  if (/\b(?:ADDITIONAL|ADDL|EXTRA|NEW|NEWLY ADDED|SUPPLEMENTARY|SUPPL)\s+(?:NON\s+SCHEDULED?\s+|N\s?S\s+)?ITEMS?\b/.test(text)) return true;
+  if (/\bITEMS?\s+(?:ADDED|INTRODUCED|SANCTIONED)\s+(?:DURING|AFTER|SUBSEQUENT|LATER|UNDER)\b/.test(text)) return true;
+  if (/\b(?:CL|CLAUSE)\s*39\b/.test(text)) return true;
+  return false;
 }
 
 export function findAdditionalNsItems(items: BillItemForExtraCheck[]): ExtraItemsReport {

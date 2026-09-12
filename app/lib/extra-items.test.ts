@@ -11,12 +11,22 @@ describe('isAdditionalNsSchedule', () => {
     expect(isAdditionalNsSchedule('Schedule E - Extra NS Items')).toBe(true);
     expect(isAdditionalNsSchedule('Schedule C: New Non-Schedule items')).toBe(true);
     expect(isAdditionalNsSchedule('Schedule F - Extra items')).toBe(true);
+    // Wordings without the letters "NS" that still mean "added after the agreement".
+    expect(isAdditionalNsSchedule('Schedule E - Newly added items')).toBe(true);
+    expect(isAdditionalNsSchedule('Schedule G: Additional Items')).toBe(true);
+    expect(isAdditionalNsSchedule('Schedule-E (New N.S. Items)')).toBe(true);
+    expect(isAdditionalNsSchedule('Items added during execution')).toBe(true);
+    expect(isAdditionalNsSchedule('Schedule H - Items under Cl. 39')).toBe(true);
+    expect(isAdditionalNsSchedule('Schedule D - Addl. NS Items')).toBe(true);
   });
 
   it("leaves the tender's own schedules alone", () => {
     expect(isAdditionalNsSchedule(B2)).toBe(false);
     expect(isAdditionalNsSchedule(A4)).toBe(false);
     expect(isAdditionalNsSchedule('Schedule B - NS items')).toBe(false);
+    // A work title that happens to say "new" is not an addition to the contract.
+    expect(isAdditionalNsSchedule('Schedule A - New BG line works items')).toBe(false);
+    expect(isAdditionalNsSchedule('Schedule A - Construction of new station building')).toBe(false);
     expect(isAdditionalNsSchedule('')).toBe(false);
   });
 });
