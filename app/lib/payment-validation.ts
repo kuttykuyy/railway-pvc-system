@@ -163,6 +163,16 @@ export async function validateBillProcessingForUser(
  * The bill's contract is the source; the caller's agreementNo is kept as a fallback
  * for callers that pass one before the bill can be read back.
  */
+/**
+ * Only an identifier long enough to name one agreement may pin the free trial for
+ * everyone. A contract whose LOA number was mis-read as "3723" pinned that fragment
+ * globally, so any other contractor whose agreement or LOA number normalised to
+ * "3723" would have been refused a free bill for somebody else's claim.
+ */
+export function isPinnableAgreementIdentifier(normalized: string): boolean {
+  return normalized.replace(/[^A-Z0-9]/g, '').length >= 6;
+}
+
 export async function trialIdentifiersForBill(
   billId: string,
   agreementNo?: string,
@@ -170,7 +180,7 @@ export async function trialIdentifiersForBill(
   const names = new Set<string>();
   const add = (value?: string | null) => {
     const normalized = normalizeAgreementNo(String(value || ''));
-    if (normalized) names.add(normalized);
+    if (isPinnableAgreementIdentifier(normalized)) names.add(normalized);
   };
 
   add(agreementNo);

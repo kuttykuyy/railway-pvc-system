@@ -266,13 +266,15 @@ export async function POST(request: NextRequest) {
     // (this route never consulted trialClaimedAgreement, so one agreement could farm a
     // fresh trial from any number of accounts through a batch of one).
     const { normalizeAgreementNo } = await import('@/lib/railway-division-helper');
+    const { isPinnableAgreementIdentifier } = await import('@/lib/payment-validation');
     // Both names the agreement answers to — its own number and the LOA number a
     // contract stands on until its first bill. Claiming one and not the other let the
-    // same agreement take a second free bill under its other name.
+    // same agreement take a second free bill under its other name. A fragment too
+    // short to name one agreement is never pinned (see isPinnableAgreementIdentifier).
     const trialNames = Array.from(new Set(
       [contract.agreementNo, contract.loaNo]
         .map(value => normalizeAgreementNo(String(value || '')))
-        .filter(Boolean) as string[],
+        .filter(name => isPinnableAgreementIdentifier(name)) as string[],
     ));
     let trialCount = 0;
     let trialAgreementClaimed = false;

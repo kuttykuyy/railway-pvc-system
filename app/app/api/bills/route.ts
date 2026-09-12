@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db';
 import { getQuarterFromDate, calculateClassificationBasedPvcWithComponents, calculateDedicatedCementPvc, calculateDedicatedSteelPvc, calculateWeightedComponents } from '@/lib/pvc-calculations';
 import { getQuarterlyAverages } from '@/lib/db-utils';
 import { getSteelIndexNamesForZone, getSteelCityForZone, getFuelIndexNameForBill, DEFAULT_FUEL_PRICE_TYPE } from '@/lib/zone-steel-city-mapping';
-import { validateApiAccess, validateBillProcessing } from '@/lib/payment-validation';
+import { validateApiAccess, validateBillProcessing, isPinnableAgreementIdentifier } from '@/lib/payment-validation';
 import { calculateExtensionCompliantPvc } from '@/lib/extension-compliance';
 import { getBillingSettings } from '@/lib/admin-settings';
 import { billAccessWhere, compareBillAccessPaths, checkUserContractAccess } from '@/lib/permissions';
@@ -554,7 +554,7 @@ export async function POST(request: NextRequest) {
       // refused later at claim time — after the bill had been built.
       const claimNames = [contract.agreementNo, contract.loaNo]
         .map(value => normalizeAgreementNo(String(value || '')))
-        .filter(Boolean) as string[];
+        .filter(name => isPinnableAgreementIdentifier(name)) as string[];
       if (claimNames.length > 0) {
         const alreadyClaimed = await prisma.trialClaimedAgreement.findFirst({
           where: { normalizedAgreementNo: { in: claimNames } }
