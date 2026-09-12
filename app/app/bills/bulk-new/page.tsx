@@ -466,10 +466,14 @@ export default function BulkBillCreationPage() {
   const findSubClassificationForExtractedItem = (item: ExtractedBillItem) =>
     findSubClassificationForItem(item, classificationGroups as any);
 
-  const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData): ClassificationEntry[] =>
+  // `contractOverride` is the contract matched from the bill's own agreement number a
+  // moment ago — for the first file of a batch React state has not caught up, and
+  // building from the stale selectedContract would decide "added after the agreement"
+  // against no LOA at all.
+  const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData, contractOverride?: Contract | null): ClassificationEntry[] =>
     buildEntriesFromExtractedBill(data, {
       classificationGroups: classificationGroups as any,
-      contractSchedules: selectedContract?.schedules,
+      contractSchedules: (contractOverride ?? selectedContract)?.schedules,
     }) as ClassificationEntry[];
 
   // Compares PVC across the sub-classifications of the entry's group and keeps the one
@@ -551,6 +555,7 @@ export default function BulkBillCreationPage() {
     // Auto-select the contract from the extracted Agreement No. when none is chosen yet
     // (parity with the single-bill form, so bulk fills the contract for you).
     const extractedAgreementNo = (billDetails?.agreementNo || '').trim();
+    let contractForBuild: Contract | null = selectedContract;
     if (extractedAgreementNo && !selectedContract) {
       const normalize = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const target = normalize(extractedAgreementNo);
@@ -560,6 +565,7 @@ export default function BulkBillCreationPage() {
           return code.length > 0 && (code.includes(target) || target.includes(code));
         });
       if (matchedContract) {
+        contractForBuild = matchedContract;
         setSelectedContract(matchedContract);
         setUnmatchedAgreementNo(null);
         toast.success(`Matched contract ${matchedContract.agreementNo} from the bill`, { icon: '🔗' });
@@ -568,7 +574,7 @@ export default function BulkBillCreationPage() {
       }
     }
 
-    let mappedEntries = buildClassificationEntriesFromExtractedBill(data);
+    let mappedEntries = buildClassificationEntriesFromExtractedBill(data, contractForBuild);
     mappedEntries = await applyPvcComparisonToEntries(
       mappedEntries,
       normalizeExtractedDate(billDetails?.measurementDate) || '',
