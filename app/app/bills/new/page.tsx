@@ -683,10 +683,13 @@ function NewBillPageContent() {
   const findSubClassificationForExtractedItem = (item: ExtractedBillItem) =>
     findSubClassificationForItem(item, classificationGroups as any);
 
-  const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData): ClassificationEntry[] =>
+  // `contractOverride` is the contract matched from the bill's own agreement number a
+  // moment ago: React state has not caught up yet, and building from the stale
+  // selectedContract would decide "added after the agreement" against no LOA at all.
+  const buildClassificationEntriesFromExtractedBill = (data: CementAnalysisData, contractOverride?: { schedules?: unknown } | null): ClassificationEntry[] =>
     buildEntriesFromExtractedBill(data, {
       classificationGroups: classificationGroups as any,
-      contractSchedules: selectedContract?.schedules,
+      contractSchedules: (contractOverride ?? selectedContract)?.schedules,
     }) as ClassificationEntry[];
 
   // Compares PVC across the sub-classifications of the entry's group and keeps the one
@@ -803,9 +806,6 @@ function NewBillPageContent() {
     setUploadedDocumentId(context?.documentId ?? null);
     // A read has landed, so any earlier "it did not fill the form" notice is stale.
     setExtractionNotice(null);
-    // Items added after the agreement, if the bill prints any under their own schedule.
-    const additional = findAdditionalNsItems((data.billDetails?.items || data.extractedItems || []) as any[]);
-    setExtraItemCandidates(additional.candidates.length > 0 ? additional : null);
     // The derived-cement tools are ADVISORY only (user directive, 2026-08-30): they never
     // block Preview or Create. Deriving cement from items remains available on the form
     // for whoever wants it.
@@ -827,6 +827,9 @@ function NewBillPageContent() {
     // the user picked DURING extraction would be silently overwritten otherwise.
     const extractedAgreementNo = (billDetails?.agreementNo || '').trim();
     if (extractedAgreementNo) extractedAgreementNoRef.current = extractedAgreementNo;
+    // The contract the entries are built against: the one already chosen, or the one
+    // matched from the bill just below.
+    let contractForBuild: any = selectedContract;
     if (extractedAgreementNo && !selectedContractIdRef.current) {
       const normalize = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const target = normalize(extractedAgreementNo);
@@ -846,6 +849,7 @@ function NewBillPageContent() {
             ? contracts[0]
             : undefined);
       if (matchedContract) {
+        contractForBuild = matchedContract;
         setFormData(prev => (prev.contractId ? prev : { ...prev, contractId: matchedContract.id }));
         await fetchPreviousBills(matchedContract.id);
         toast.success(`Matched contract ${matchedContract.agreementNo} from the bill`, { icon: '🔗' });
@@ -880,7 +884,15 @@ function NewBillPageContent() {
       }
     }
 
-    let mappedEntries = buildClassificationEntriesFromExtractedBill(data);
+    // Items added after the agreement: under an "additional NS" heading, or under an NS
+    // schedule the contract's LOA does not carry. Decided with the contract in hand.
+    const additional = findAdditionalNsItems(
+      (data.billDetails?.items || data.extractedItems || []) as any[],
+      scheduleNames(contractForBuild?.schedules),
+    );
+    setExtraItemCandidates(additional.candidates.length > 0 ? additional : null);
+
+    let mappedEntries = buildClassificationEntriesFromExtractedBill(data, contractForBuild);
 
     // Entries are rebuilt from the extracted items every time the analyzer changes
     // (item deleted, cement cost applied, ...). Carry the user's manual classification
@@ -2554,7 +2566,7 @@ function NewBillPageContent() {
                           <span className="font-semibold">Extra items outside PVC</span>
                           <span
                             className="inline-flex cursor-help"
-                            title="Items the bill prints under an 'Additional NS item' schedule were ordered after the agreement (Cl. 39). They are paid but earn no PVC (GCC-2022 Cl. 46A.1(b)), so they are marked outside PVC automatically. Switch to In PVC if PVC and a base month were agreed when their rates were fixed. Any other item can be marked by hand on its card."
+                            title="Items the bill prints under an 'Additional NS item' schedule — or under an NS schedule the contract's LOA does not carry — were ordered after the agreement (Cl. 39). They are paid but earn no PVC (GCC-2022 Cl. 46A.1(b)), so they are marked outside PVC automatically. Switch to In PVC if PVC and a base month were agreed when their rates were fixed. Any other item can be marked by hand on its card."
                           >
                             <Info className="h-3.5 w-3.5 text-amber-600" />
                           </span>
