@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findAdditionalNsItems, isAddedSchedule, isAdditionalNsSchedule, scheduleTag } from './extra-items';
+import { findAdditionalNsItems, isAddedItem, isAddedItemNumber, isAddedSchedule, isAdditionalNsSchedule, scheduleTag } from './extra-items';
 
 const D = 'Schedule D-Additional NS item';
 const B2 = 'Schedule B2-Items which are not covered by Unified Standard Schedule of rates 2021 and CPWD-DSR-2021 for Tiruchirappalli Division.';
@@ -97,5 +97,38 @@ describe('isAddedSchedule — the LOA decides when the heading does not', () => 
     ], tender);
     expect(report.candidates.map(c => c.itemNo)).toEqual(['NS23']);
     expect(report.total).toBe(111850);
+  });
+});
+
+
+describe('isAddedItemNumber — the NS serial IREPS gives an item ordered during execution', () => {
+  it('recognises the NS numbering in its printed forms', () => {
+    expect(isAddedItemNumber('NS01')).toBe(true);
+    expect(isAddedItemNumber('NS-02(I)')).toBe(true);
+    expect(isAddedItemNumber('NS23')).toBe(true);
+    expect(isAddedItemNumber(' ns 7 ')).toBe(true);
+  });
+
+  it("leaves the tender's own items alone, NS schedule or not", () => {
+    expect(isAddedItemNumber('1 (I)')).toBe(false);
+    expect(isAddedItemNumber('5.22.6')).toBe(false);
+    expect(isAddedItemNumber('025082')).toBe(false);
+    expect(isAddedItemNumber('NSI-4')).toBe(false); // not the NS-serial form
+    expect(isAddedItemNumber('')).toBe(false);
+  });
+
+  it('flags NS23 under "Schedule F-CIVIL NS ITEM" even with no LOA schedules recorded', () => {
+    expect(isAddedItem({ itemNo: 'NS23', scheduleHeading: 'Schedule F-CIVIL NS ITEM' }, [])).toBe(true);
+    // The tender's NS item under the same kind of heading is not.
+    expect(isAddedItem({ itemNo: '3 (I)', scheduleHeading: 'Schedule B-NS SCHEDULE' }, [])).toBe(false);
+  });
+
+  it('findAdditionalNsItems reports NS-numbered items with the heading they sat under', () => {
+    const report = findAdditionalNsItems([
+      { itemNo: 'NS23', scheduleHeading: 'Schedule F-CIVIL NS ITEM', amountSinceLastBill: 111850 },
+      { itemNo: '3 (I)', scheduleHeading: 'Schedule B-NS SCHEDULE', amountSinceLastBill: 5000 },
+    ]);
+    expect(report.candidates.map(c => c.itemNo)).toEqual(['NS23']);
+    expect(report.schedules).toEqual(['Schedule F-CIVIL NS ITEM']);
   });
 });

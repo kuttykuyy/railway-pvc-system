@@ -108,15 +108,38 @@ export function isAddedSchedule(heading: string, tenderSchedules: readonly strin
   return !inTender;
 }
 
+/**
+ * Whether the item NUMBER marks an item added after the agreement.
+ *
+ * IREPS numbers the items ordered during execution "NS01", "NS-02(I)", "NS23" — the
+ * letters NS then a serial — whatever schedule heading they are printed under. The
+ * tender's own non-schedule items carry plain serials ("1 (I)", "2 (I)") even when
+ * their schedule is called "NS SCHEDULE". Bill SR/MAS/GS/2023/0010/B23 shows both side
+ * by side, so the number is the most direct signal there is.
+ */
+export function isAddedItemNumber(itemNo: string | undefined | null): boolean {
+  return /^\s*NS\s*[-.]?\s*\d+/i.test(String(itemNo || ''));
+}
+
+/** Added after the agreement by any of the signals: item number, heading, or the LOA's schedule list. */
+export function isAddedItem(item: BillItemForExtraCheck, tenderSchedules: readonly string[] = []): boolean {
+  if (isAddedItemNumber(item.itemNo) || isAddedItemNumber(item.dsrCode)) return true;
+  return [item.scheduleHeading, item.schedule, item.scheduleGroup]
+    .map(value => String(value || '').trim())
+    .some(h => isAddedSchedule(h, tenderSchedules));
+}
+
 export function findAdditionalNsItems(items: BillItemForExtraCheck[], tenderSchedules: readonly string[] = []): ExtraItemsReport {
   const candidates: ExtraItemCandidate[] = [];
   const schedules = new Set<string>();
 
   for (const item of items || []) {
+    if (!isAddedItem(item, tenderSchedules)) continue;
     const heading = [item.scheduleHeading, item.schedule, item.scheduleGroup]
       .map(value => String(value || '').trim())
-      .find(h => isAddedSchedule(h, tenderSchedules));
-    if (!heading) continue;
+      .find(h => isAddedSchedule(h, tenderSchedules))
+      || [item.scheduleHeading, item.schedule, item.scheduleGroup].map(v => String(v || '').trim()).find(Boolean)
+      || 'NS items';
     const amount = Number(item.amountSinceLastBill) || 0;
     if (amount === 0) continue;
     schedules.add(heading);

@@ -14,7 +14,7 @@
 
 import { scheduleNames } from './contract-schedules';
 import { matchExtractedSchedule, scheduleWorkName } from './bill-schedule-matching';
-import { isAddedSchedule } from './extra-items';
+import { isAddedItem } from './extra-items';
 import { enforceSteelSubclassNature } from './work-classification';
 
 export interface ExtractedSubClassification {
@@ -196,7 +196,8 @@ export function buildClassificationEntriesFromExtractedBill(
     // at the source every form and the Telegram flow build from, so the exclusion is
     // the default and the person only has to act when PVC WAS agreed. Kept in its own
     // group so it never merges with the class's ordinary work.
-    const outsidePvc = isAddedSchedule(String(item.scheduleHeading || item.schedule || item.scheduleGroup || ''), schedules);
+    // Or numbered NS01, NS02 … — the number IREPS gives an item ordered during execution.
+    const outsidePvc = isAddedItem(item, schedules);
     const baseKey = (groupName || `__standalone_${ungroupedCounter++}`) + (outsidePvc ? '::extra' : '');
 
     const originalAmount = item.originalAmount;

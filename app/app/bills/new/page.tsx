@@ -2566,7 +2566,7 @@ function NewBillPageContent() {
                           <span className="font-semibold">Extra items outside PVC</span>
                           <span
                             className="inline-flex cursor-help"
-                            title="Items the bill prints under an 'Additional NS item' schedule — or under an NS schedule the contract's LOA does not carry — were ordered after the agreement (Cl. 39). They are paid but earn no PVC (GCC-2022 Cl. 46A.1(b)), so they are marked outside PVC automatically. Switch to In PVC if PVC and a base month were agreed when their rates were fixed. Any other item can be marked by hand on its card."
+                            title="Items numbered NS01, NS02 … — or printed under an 'Additional NS item' schedule, or under an NS schedule the contract's LOA does not carry — were ordered after the agreement (Cl. 39). They are paid but earn no PVC (GCC-2022 Cl. 46A.1(b)), so they are marked outside PVC automatically. Switch to In PVC if PVC and a base month were agreed when their rates were fixed. Any other item can be marked by hand on its card."
                           >
                             <Info className="h-3.5 w-3.5 text-amber-600" />
                           </span>
