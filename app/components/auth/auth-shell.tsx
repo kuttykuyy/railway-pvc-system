@@ -56,10 +56,9 @@ function Fact({ children }: { children: ReactNode }) {
 function Logo() {
   return (
     <Link href="/" className="inline-flex items-center gap-2.5">
-      <span className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-600">
-        <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 17 9 8l4 6 3-4 4 7" /><path d="M3 20h18" /></svg>
-      </span>
-      <span className="text-lg font-extrabold tracking-tight text-gray-900">IR-PVC</span>
+      {/* The real brand mark, the same file the top navigation uses. */}
+      <img src="/logo.png" alt="IR-PVC logo" className="h-10 w-auto object-contain" />
+      <span className="text-lg font-extrabold tracking-tight text-emerald-600">IR-PVC</span>
     </Link>
   );
 }
