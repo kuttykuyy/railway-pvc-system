@@ -230,6 +230,7 @@ export function buildClassificationEntriesFromExtractedBill(
             entry: {
               subClassificationId: subClassification.id,
               subClassification,
+              outsidePvc,
               amount: netAmount,
               description: groupName ? groupName : `${item.description || ''} (Excluding Cement)`,
               steelTypes: steelCategoriesOf(item),
@@ -258,6 +259,7 @@ export function buildClassificationEntriesFromExtractedBill(
             entry: {
               subClassificationId: cementSub.id,
               subClassification: cementSub,
+              outsidePvc,
               amount: cementCost,
               description: groupName ? `${groupName} (Cement Portion)` : `${item.description || ''} (Cement Portion)`,
               steelTypes: [],
