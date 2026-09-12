@@ -116,7 +116,7 @@ export function UserCard({
               <div className="flex flex-wrap items-center gap-2 pt-1.5">
                 <Badge variant="outline" className="text-[10px] font-medium border-slate-100 bg-slate-50 text-slate-600 rounded-lg">
                   <FileText className="h-3 w-3 mr-1 text-slate-400" />
-                  {user.totalBillsProcessed} bills
+                  {user.billsCount ?? user.totalBillsProcessed} bills
                 </Badge>
 
                 <Badge variant="outline" className="text-[10px] font-medium border-slate-100 bg-slate-50 text-slate-600 rounded-lg">

@@ -100,7 +100,23 @@ export async function GET(request: NextRequest) {
     if (total > USER_LIST_CAP) {
       console.warn(`[admin/users] list capped: returned ${USER_LIST_CAP} of ${total}`);
     }
-    return NextResponse.json(users, {
+
+    // The LIVE bill count. totalBillsProcessed is a lifetime counter bumped on create
+    // and never reduced on delete, so a user who made one bill and deleted it (contract
+    // and all) still read "1 bills" on the card — which looked like a bill hidden from
+    // the admin. Count the bills that actually exist, through the user's contracts.
+    const contractCounts = await prisma.contract.findMany({
+      where: { userId: { in: users.map(u => u.id) } },
+      select: { userId: true, _count: { select: { bills: true } } },
+    });
+    const liveByUser = new Map<string, number>();
+    for (const c of contractCounts) {
+      if (!c.userId) continue;
+      liveByUser.set(c.userId, (liveByUser.get(c.userId) || 0) + c._count.bills);
+    }
+    const usersWithCount = users.map(u => ({ ...u, billsCount: liveByUser.get(u.id) || 0 }));
+
+    return NextResponse.json(usersWithCount, {
       headers: {
         'X-Total-Count': String(total),
         'X-Returned-Count': String(users.length),
