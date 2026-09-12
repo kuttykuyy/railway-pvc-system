@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import dynamic from 'next/dynamic';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,7 +20,20 @@ import { TurnstileWidget } from '@/components/ui/turnstile-widget';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getRailwayZoneOptions } from '@/lib/zone-steel-city-mapping';
 import { getOfficialRailwayEmailDomainHelp, isOfficialRailwayEmail } from '@/lib/official-email';
+import { AuthShell, GoogleButton, OrDivider, ErrorBanner } from '@/components/auth/auth-shell';
 
+const inputCls = 'h-11 px-3.5 bg-gray-50 border-gray-200 focus:bg-white transition-colors';
+
+/**
+ * Sign-up, cut to what the server actually needs: name, WhatsApp, email, password.
+ *
+ * Google first, because it is one click and no fields. The account-type tiles are
+ * gone from the main path — almost everyone is a contractor — and department staff
+ * open that section from one link, where the zone and the railnet-email rule appear
+ * only for them. The referral code is a link too (opened automatically when the URL
+ * carries ?ref=). Same handlers and same request body as before; only the shape
+ * of the page changed.
+ */
 export function SignUpForm() {
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [email, setEmail] = useState('');
@@ -32,6 +44,9 @@ export function SignUpForm() {
   const [accountType, setAccountType] = useState<'contractor' | 'railway_official' | 'accounts_official'>('contractor');
   const [railwayZone, setRailwayZone] = useState('');
   const [referralCode, setReferralCode] = useState('');
+  /** The two folded-away sections. */
+  const [officialOpen, setOfficialOpen] = useState(false);
+  const [referralOpen, setReferralOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   /** Turnstile's proof this is a person. Empty until the check passes, and again once
@@ -51,11 +66,39 @@ export function SignUpForm() {
   const searchParams = useSearchParams();
   const tryBillDraftParam = searchParams?.get('tryBillDraft');
   const zoneOptions = getRailwayZoneOptions();
+  const isDepartmentUser = accountType === 'railway_official' || accountType === 'accounts_official';
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get('ref');
-    if (code) setReferralCode(code.toUpperCase());
+    if (code) {
+      setReferralCode(code.toUpperCase());
+      setReferralOpen(true);
+    }
   }, []);
+
+  const openOfficial = () => {
+    setOfficialOpen(true);
+    if (accountType === 'contractor') setAccountType('railway_official');
+  };
+  const closeOfficial = () => {
+    setOfficialOpen(false);
+    setAccountType('contractor');
+    setRailwayZone('');
+    setFieldErrors((prev) => ({ ...prev, railwayZone: '', email: '' }));
+  };
+
+  const handleGoogle = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      // A brand-new account has nothing in it, so /contracts is an empty table and a
+      // shrug. Send them to the two uploads that end in a real statement instead.
+      await signIn('google', { callbackUrl: '/welcome', redirect: true });
+    } catch {
+      setError('Could not continue with Google. Please try again.');
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,7 +116,6 @@ export function SignUpForm() {
       setLoading(false);
       return;
     }
-    const isDepartmentUser = accountType === 'railway_official' || accountType === 'accounts_official';
     if (isDepartmentUser && !railwayZone) {
       setFieldErrors({ railwayZone: 'Railway zone is required for department users' });
       setLoading(false);
@@ -180,248 +222,205 @@ export function SignUpForm() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute inset-0 bg-grid-slate-200/50 [mask-image:linear-gradient(to_bottom,white,transparent)] pointer-events-none" />
-      <div className="absolute top-20 left-10 w-72 h-72 bg-emerald-200/20 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute bottom-20 right-10 w-96 h-96 bg-emerald-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
+    <AuthShell title="Create your free account" subtitle="Four details. Your first bill is on us.">
+      <div className="space-y-5">
+        {error && <ErrorBanner>{error}</ErrorBanner>}
 
-      <div className="w-full max-w-md mx-auto relative z-10">
-        <Card className="w-full shadow-2xl border-0 bg-white/95 backdrop-blur-sm mt-12 mb-12">
-          <CardHeader className="text-center pb-4 pt-8">
-            <CardTitle className="text-2xl font-bold text-gray-900">
-              Create Account
-            </CardTitle>
-            <CardDescription className="text-base text-gray-600 mt-2">
-              Sign up for IR-PVC
-            </CardDescription>
-          </CardHeader>
+        <GoogleButton onClick={handleGoogle} disabled={loading} label="Continue with Google" />
+        <OrDivider>or with email</OrDivider>
 
-          <CardContent className="px-8 pb-8">
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start space-x-2 mb-4">
-                <svg className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-                <span>{error}</span>
-              </div>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="fullName" className="text-sm font-semibold text-gray-700">Full name</Label>
+              <Input
+                id="fullName"
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+                autoComplete="name"
+                placeholder="Ramesh Kumar"
+                className={inputCls}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="whatsappNumber" className="text-sm font-semibold text-gray-700">WhatsApp number</Label>
+              <Input
+                id="whatsappNumber"
+                type="tel"
+                value={whatsappNumber}
+                onChange={(e) => { setWhatsappNumber(e.target.value); setFieldErrors((prev) => ({ ...prev, whatsappNumber: '' })); }}
+                required
+                autoComplete="tel"
+                placeholder="+919876543210"
+                className={`${inputCls} ${fieldErrors.whatsappNumber ? 'border-red-500' : ''}`}
+              />
+              {fieldErrors.whatsappNumber && <p className="text-sm text-red-600">{fieldErrors.whatsappNumber}</p>}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-sm font-semibold text-gray-700">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setFieldErrors((prev) => ({ ...prev, email: '' })); }}
+              required
+              autoComplete="email"
+              placeholder={isDepartmentUser ? 'name@sr.railnet.gov.in' : 'you@example.com'}
+              className={`${inputCls} ${fieldErrors.email ? 'border-red-500' : ''}`}
+            />
+            {isDepartmentUser && (
+              <p className="text-xs text-gray-500">
+                Department users must use an official railway email ending in {getOfficialRailwayEmailDomainHelp()}.
+                Admin approval is required after email verification.
+              </p>
             )}
+            {fieldErrors.email && <p className="text-sm text-red-600">{fieldErrors.email}</p>}
+          </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="fullName" className="text-sm font-semibold text-gray-700">Full Name</Label>
-                <Input
-                  id="fullName"
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required
-                  placeholder="John Doe"
-                  className="h-11 px-4 bg-gray-50 border-gray-200 focus:bg-white transition-colors"
-                  autoFocus
-                />
-              </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="password" className="text-sm font-semibold text-gray-700">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+              placeholder="Choose a strong password"
+              className={inputCls}
+            />
+            <PasswordStrengthIndicator password={password} onValidationChange={setPasswordValidation} />
+          </div>
 
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-gray-700">Account Type</Label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div
-                    onClick={() => {
-                      setAccountType('contractor');
-                      setRailwayZone('');
-                    }}
-                    className={`cursor-pointer p-3 rounded-lg border text-center transition-all ${
-                      accountType === 'contractor'
-                        ? 'border-emerald-600 bg-emerald-50/50 text-emerald-700 font-semibold shadow-sm'
-                        : 'border-gray-200 hover:border-gray-300 text-gray-600 bg-gray-50'
-                    }`}
-                  >
-                    Contractor
-                  </div>
-                  <div
-                    onClick={() => setAccountType('railway_official')}
-                    className={`cursor-pointer p-3 rounded-lg border text-center transition-all ${
-                      accountType === 'railway_official'
-                        ? 'border-emerald-600 bg-emerald-50/50 text-emerald-700 font-semibold shadow-sm'
-                        : 'border-gray-200 hover:border-gray-300 text-gray-600 bg-gray-50'
-                    }`}
-                  >
-                    <span className="block">Executive</span>
-                    <span className="block text-[11px] font-normal opacity-75">approves the bill</span>
-                  </div>
-                  {/* The accounts/audit office vets the proposal after the executive
-                      approves it, and passes it for payment. */}
-                  <div
-                    onClick={() => setAccountType('accounts_official')}
-                    className={`cursor-pointer p-3 rounded-lg border text-center transition-all ${
-                      accountType === 'accounts_official'
-                        ? 'border-emerald-600 bg-emerald-50/50 text-emerald-700 font-semibold shadow-sm'
-                        : 'border-gray-200 hover:border-gray-300 text-gray-600 bg-gray-50'
-                    }`}
-                  >
-                    <span className="block">Accounts / Audit</span>
-                    <span className="block text-[11px] font-normal opacity-75">passes it for payment</span>
-                  </div>
+          {/* Department staff: which office, and which zone. Folded away because almost
+              everyone signing up is a contractor, and three tiles at the top of the form
+              were the first thing every one of them had to read past. */}
+          {officialOpen && (
+            <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Railway department account</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Free for department staff. Approved by an admin after email verification.</p>
                 </div>
+                <button type="button" onClick={closeOfficial} className="text-xs font-semibold text-gray-500 hover:text-gray-700">I&rsquo;m a contractor</button>
               </div>
-
-              {(accountType === 'railway_official' || accountType === 'accounts_official') && (
-                <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                  <Label htmlFor="railwayZone" className="text-sm font-semibold text-gray-700">Railway Zone *</Label>
-                  <Select
-                    value={railwayZone}
-                    onValueChange={(value) => {
-                      setRailwayZone(value);
-                      setFieldErrors((prev) => ({ ...prev, railwayZone: '' }));
-                    }}
-                  >
-                    <SelectTrigger id="railwayZone" className="h-11 bg-gray-50 border-gray-200 focus:bg-white text-left">
-                      <SelectValue placeholder="Select your railway zone" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {zoneOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {fieldErrors.railwayZone && (
-                    <p className="text-sm text-red-600">{fieldErrors.railwayZone}</p>
-                  )}
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-semibold text-gray-700">Email Address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setFieldErrors((prev) => ({ ...prev, email: '' }));
-                  }}
-                  required
-                  placeholder={accountType === 'contractor' ? 'you@example.com' : 'name@sr.railnet.gov.in'}
-                  className={`h-11 px-4 bg-gray-50 border-gray-200 focus:bg-white transition-colors ${
-                    fieldErrors.email ? 'border-red-500' : ''
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAccountType('railway_official')}
+                  className={`rounded-lg border p-3 text-center text-sm transition-colors ${
+                    accountType === 'railway_official'
+                      ? 'border-emerald-600 bg-emerald-50/60 text-emerald-800 font-semibold'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                   }`}
-                />
-                {accountType !== 'contractor' && (
-                  <p className="text-xs text-gray-500">
-                    Department users must use an official railway email ending in {getOfficialRailwayEmailDomainHelp()}.
-                    Admin approval is required after email verification.
-                  </p>
-                )}
-                {fieldErrors.email && (
-                  <p className="text-sm text-red-600">{fieldErrors.email}</p>
-                )}
-              </div>
-
-              {accountType === 'contractor' && (
-                <div className="space-y-2">
-                  <Label htmlFor="referralCode" className="text-sm font-semibold text-gray-700">
-                    Referral Code <span className="font-normal text-gray-400">(optional)</span>
-                  </Label>
-                  <Input
-                    id="referralCode"
-                    type="text"
-                    value={referralCode}
-                    onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-                    placeholder="IRXXXXXXXXXX"
-                    className="h-11 px-4 bg-gray-50 border-gray-200 focus:bg-white transition-colors uppercase"
-                    maxLength={16}
-                  />
-                  <p className="text-xs text-gray-500">
-                    After your first qualifying Rs. 1,000 top-up, both accounts receive Rs. 199 credit.
-                  </p>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="whatsappNumber" className="text-sm font-semibold text-gray-700">WhatsApp Number</Label>
-                <Input
-                  id="whatsappNumber"
-                  type="tel"
-                  value={whatsappNumber}
-                  onChange={(e) => { setWhatsappNumber(e.target.value); setFieldErrors({}); }}
-                  required
-                  placeholder="+919876543210"
-                  className={`h-11 px-4 bg-gray-50 border-gray-200 focus:bg-white transition-colors ${
-                    fieldErrors.whatsappNumber ? 'border-red-500' : ''
+                >
+                  <span className="block">Executive</span>
+                  <span className="block text-[11px] font-normal opacity-75">approves the bill</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccountType('accounts_official')}
+                  className={`rounded-lg border p-3 text-center text-sm transition-colors ${
+                    accountType === 'accounts_official'
+                      ? 'border-emerald-600 bg-emerald-50/60 text-emerald-800 font-semibold'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                   }`}
-                />
-                {fieldErrors.whatsappNumber && (
-                  <p className="text-sm text-red-600">{fieldErrors.whatsappNumber}</p>
-                )}
-                <p className="text-xs text-slate-500">
-                  Your bills and PVC statements are sent to this number, so use one that can receive WhatsApp messages.
-                </p>
+                >
+                  <span className="block">Accounts / Audit</span>
+                  <span className="block text-[11px] font-normal opacity-75">passes it for payment</span>
+                </button>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-semibold text-gray-700">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="Create a strong password"
-                  className="h-11 px-4 bg-gray-50 border-gray-200 focus:bg-white transition-colors"
-                />
-                <PasswordStrengthIndicator
-                  password={password}
-                  onValidationChange={setPasswordValidation}
-                />
-              </div>
-
-              <TurnstileWidget onToken={setTurnstileToken} resetSignal={turnstileReset} />
-
-              <Button
-                type="submit"
-                className="w-full h-12 bg-gradient-to-r from-emerald-600 via-emerald-600 to-emerald-700 hover:from-emerald-700 hover:via-emerald-700 hover:to-emerald-800 text-white font-semibold shadow-lg shadow-emerald-500/30 transition-all duration-200 hover:shadow-xl hover:shadow-emerald-500/40"
-                disabled={loading}
-              >
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Creating Account...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    Create Account
-                    <ArrowRight className="h-5 w-5" />
-                  </span>
-                )}
-              </Button>
-            </form>
-
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white text-gray-500">Already have an account?</span>
+              <div className="space-y-1.5">
+                <Label htmlFor="railwayZone" className="text-sm font-semibold text-gray-700">Railway zone</Label>
+                <Select
+                  value={railwayZone}
+                  onValueChange={(value) => { setRailwayZone(value); setFieldErrors((prev) => ({ ...prev, railwayZone: '' })); }}
+                >
+                  <SelectTrigger id="railwayZone" className="h-11 bg-white border-gray-200 text-left">
+                    <SelectValue placeholder="Select your railway zone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {zoneOptions.map((zone) => (
+                      <SelectItem key={zone.value} value={zone.value}>{zone.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {fieldErrors.railwayZone && <p className="text-sm text-red-600">{fieldErrors.railwayZone}</p>}
               </div>
             </div>
+          )}
 
-            <div className="text-center">
-              <Link
-                href="/auth/signin"
-                className="inline-flex items-center justify-center space-x-2 text-emerald-600 hover:text-emerald-700 font-semibold text-sm transition-colors"
-              >
-                <span>Sign in instead</span>
-                <ArrowRight className="h-4 w-4" />
-              </Link>
+          {referralOpen && (
+            <div className="space-y-1.5">
+              <Label htmlFor="referralCode" className="text-sm font-semibold text-gray-700">
+                Referral code <span className="font-normal text-gray-400">(optional)</span>
+              </Label>
+              <Input
+                id="referralCode"
+                type="text"
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                placeholder="IRXXXXXXXXXX"
+                className={`${inputCls} uppercase`}
+                maxLength={16}
+              />
+              <p className="text-xs text-gray-500">After your first qualifying Rs. 1,000 top-up, both accounts receive Rs. 199 credit.</p>
             </div>
+          )}
 
-            <p className="text-xs text-center text-gray-500 mt-4">
-              By creating an account, you agree to our Terms of Service and Privacy Policy
-            </p>
-          </CardContent>
-        </Card>
+          <TurnstileWidget onToken={setTurnstileToken} resetSignal={turnstileReset} />
+
+          <Button
+            type="submit"
+            className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[15px] shadow-[0_8px_20px_-8px_rgba(5,150,105,0.5)]"
+            disabled={loading}
+          >
+            {loading ? (
+              <span className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" />Creating account…</span>
+            ) : (
+              <span className="flex items-center gap-2">Create free account<ArrowRight className="h-[18px] w-[18px]" /></span>
+            )}
+          </Button>
+
+          <div className="space-y-2 text-[13px] leading-[18px] text-gray-500">
+            {!officialOpen && (
+              <p>
+                Railway official or accounts staff?{' '}
+                <button type="button" onClick={openOfficial} className="font-semibold text-emerald-700 hover:text-emerald-800">
+                  Sign up with your railnet email &rarr;
+                </button>
+              </p>
+            )}
+            {!referralOpen && (
+              <p>
+                Have a referral code?{' '}
+                <button type="button" onClick={() => setReferralOpen(true)} className="font-semibold text-emerald-700 hover:text-emerald-800">
+                  Enter it
+                </button>
+              </p>
+            )}
+          </div>
+        </form>
+
+        <div className="h-px bg-gray-200" />
+
+        <div className="space-y-2.5 text-center">
+          <p className="text-sm text-gray-600">
+            Already have an account?{' '}
+            <Link href="/auth/signin" className="font-semibold text-emerald-700 hover:text-emerald-800">Sign in</Link>
+          </p>
+          <p className="text-xs leading-[18px] text-gray-400">
+            By creating an account you agree to the{' '}
+            <Link href="/terms" className="text-gray-500 hover:text-gray-700">Terms</Link> and{' '}
+            <Link href="/privacy" className="text-gray-500 hover:text-gray-700">Privacy Policy</Link>.
+          </p>
+        </div>
       </div>
-    </div>
+    </AuthShell>
   );
 }
