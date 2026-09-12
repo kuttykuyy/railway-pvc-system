@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findAdditionalNsItems, isAdditionalNsSchedule } from './extra-items';
+import { findAdditionalNsItems, isAddedSchedule, isAdditionalNsSchedule, scheduleTag } from './extra-items';
 
 const D = 'Schedule D-Additional NS item';
 const B2 = 'Schedule B2-Items which are not covered by Unified Standard Schedule of rates 2021 and CPWD-DSR-2021 for Tiruchirappalli Division.';
@@ -53,5 +53,49 @@ describe('findAdditionalNsItems', () => {
   it('falls back to the schedule name when no heading was kept', () => {
     const report = findAdditionalNsItems([{ itemNo: 'NS03', schedule: D, amountSinceLastBill: 10 }]);
     expect(report.candidates).toHaveLength(1);
+  });
+});
+
+
+describe('isAddedSchedule — the LOA decides when the heading does not', () => {
+  // Bill SR/MAS/GS/2023/0010/B23 (CC23): the tender awarded A–D; E, F, G were added.
+  const tender = ['Schedule A-DSR GENERAL ITEMS', 'Schedule B-NS SCHEDULE', 'Schedule C-Elecrical utilities', 'Schedule D-S&T utilities'];
+
+  it('reads the schedule letter off a heading', () => {
+    expect(scheduleTag('Schedule F-CIVIL NS ITEM')).toBe('F');
+    expect(scheduleTag('Sch. B2 - Items not covered by USSOR')).toBe('B2');
+    expect(scheduleTag('CIVIL NS ITEM')).toBe('');
+  });
+
+  it("treats an NS schedule the tender did not carry as added, whatever its wording", () => {
+    expect(isAddedSchedule('Schedule F-CIVIL NS ITEM', tender)).toBe(true);
+    expect(isAddedSchedule('Schedule E-NS New Items', tender)).toBe(true);
+    expect(isAddedSchedule('Schedule G-New NS Electrical', tender)).toBe(true);
+  });
+
+  it("leaves the tender's own NS schedule, and its non-NS schedules, alone", () => {
+    expect(isAddedSchedule('Schedule B-NS SCHEDULE', tender)).toBe(false);
+    expect(isAddedSchedule('Schedule A-DSR GENERAL ITEMS', tender)).toBe(false);
+    expect(isAddedSchedule('Schedule C-Elecrical utilities', tender)).toBe(false);
+  });
+
+  it('falls back to the heading wording when the contract has no schedules recorded', () => {
+    expect(isAddedSchedule('Schedule F-CIVIL NS ITEM', [])).toBe(false);
+    expect(isAddedSchedule('Schedule E-NS New Items', [])).toBe(true);
+  });
+
+  it('matches a tender schedule by name when the bill heading carries no letter', () => {
+    expect(isAddedSchedule('NS SCHEDULE', ['Schedule B-NS SCHEDULE'])).toBe(false);
+    expect(isAddedSchedule('CIVIL NS ITEM', ['Schedule B-NS SCHEDULE'])).toBe(true);
+  });
+
+  it('findAdditionalNsItems reports the added schedules with the LOA in hand', () => {
+    const report = findAdditionalNsItems([
+      { itemNo: 'NS23', scheduleHeading: 'Schedule F-CIVIL NS ITEM', amountSinceLastBill: 111850 },
+      { itemNo: '5.1', scheduleHeading: 'Schedule A-DSR GENERAL ITEMS', amountSinceLastBill: 916976 },
+      { itemNo: 'NS-B1', scheduleHeading: 'Schedule B-NS SCHEDULE', amountSinceLastBill: 5000 },
+    ], tender);
+    expect(report.candidates.map(c => c.itemNo)).toEqual(['NS23']);
+    expect(report.total).toBe(111850);
   });
 });

@@ -37,7 +37,7 @@ export interface ExtraItemCandidate {
 }
 
 export interface ExtraItemsReport {
-  /** Items printed under an "additional / extra NS item" schedule. */
+  /** Items printed under an "additional / extra NS item" schedule, or an NS schedule the LOA does not carry. */
   candidates: ExtraItemCandidate[];
   /** Their total, ready to be offered as the amount outside PVC. */
   total: number;
@@ -67,14 +67,55 @@ export function isAdditionalNsSchedule(heading: string): boolean {
   return false;
 }
 
-export function findAdditionalNsItems(items: BillItemForExtraCheck[]): ExtraItemsReport {
+/** Whether a heading names a non-schedule (NS) schedule at all, added later or not. */
+export function isNsSchedule(heading: string): boolean {
+  const text = String(heading || '').toUpperCase().replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return /\b(NS|N S|NSI|NON SCHEDULE|NON SCHEDULED|NONSCHEDULE|NOT COVERED)\b/.test(text);
+}
+
+const squash = (value: string) => String(value || '').toUpperCase().replace(/[^A-Z0-9]+/g, '');
+/** "Schedule F-CIVIL NS ITEM" -> "F"; "Sch. B2 - ..." -> "B2"; '' when the heading has no letter. */
+export function scheduleTag(heading: string): string {
+  return String(heading || '').match(/\bSCH(?:EDULE)?\.?\s*[-:]?\s*([A-Z]\d?)\b/i)?.[1]?.toUpperCase() || '';
+}
+
+/**
+ * Whether a bill schedule holds items added after the agreement, given the schedules
+ * the contract itself carries (from its LOA).
+ *
+ * The heading alone is not enough. Bill SR/MAS/GS/2023/0010/B23 prints the tender's
+ * NS items under "Schedule B-NS SCHEDULE" and the items ordered during execution under
+ * "Schedule E-NS New Items", "Schedule F-CIVIL NS ITEM" and "Schedule G-New NS
+ * Electrical" — and F says nothing about being new, so its Rs 1.1 lakh earned PVC. What
+ * tells them apart is the LOA: the tender awarded schedules A to D, so an NS schedule
+ * lettered E, F or G was not in the tender. When the contract's schedules are known,
+ * an NS schedule that is not one of them is an addition; when they are not known, only
+ * the heading's own wording can decide.
+ */
+export function isAddedSchedule(heading: string, tenderSchedules: readonly string[] = []): boolean {
+  if (isAdditionalNsSchedule(heading)) return true;
+  if (!isNsSchedule(heading)) return false;
+  const known = (tenderSchedules || []).map(s => String(s || '').trim()).filter(Boolean);
+  if (known.length === 0) return false;
+  const tag = scheduleTag(heading);
+  const flat = squash(heading);
+  const inTender = known.some(name => {
+    const knownTag = scheduleTag(name);
+    if (tag && knownTag) return tag === knownTag;
+    const k = squash(name);
+    return k.length > 0 && (k === flat || flat.includes(k) || k.includes(flat));
+  });
+  return !inTender;
+}
+
+export function findAdditionalNsItems(items: BillItemForExtraCheck[], tenderSchedules: readonly string[] = []): ExtraItemsReport {
   const candidates: ExtraItemCandidate[] = [];
   const schedules = new Set<string>();
 
   for (const item of items || []) {
     const heading = [item.scheduleHeading, item.schedule, item.scheduleGroup]
       .map(value => String(value || '').trim())
-      .find(isAdditionalNsSchedule);
+      .find(h => isAddedSchedule(h, tenderSchedules));
     if (!heading) continue;
     const amount = Number(item.amountSinceLastBill) || 0;
     if (amount === 0) continue;

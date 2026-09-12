@@ -25,7 +25,8 @@ import {
 } from './telegram-api';
 import { extractBillDetailsDirect } from '@/app/api/bills/cement-analysis/route';
 import { getQuarterFromDate, getQuarterMonths, calculateClassificationEntryPvc } from './pvc-calculations';
-import { isAdditionalNsSchedule } from './extra-items';
+import { isAddedSchedule } from './extra-items';
+import { scheduleNames as contractScheduleNames } from './contract-schedules';
 import { billRequiresExtension } from './extension-compliance';
 import { getQuarterlyAverages } from './db-utils';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill, getSteelCityForZone } from './zone-steel-city-mapping';
@@ -157,7 +158,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     // An item under an "Additional NS item" schedule was ordered after the agreement:
     // paid, but outside price variation (GCC-2022 Cl.46A.1(b)). Kept apart from the
     // class's ordinary work so it can be listed and priced at nothing.
-    const outsidePvc = isAdditionalNsSchedule(String(it.scheduleHeading || it.schedule || it.scheduleGroup || ''));
+    const outsidePvc = isAddedSchedule(String(it.scheduleHeading || it.schedule || it.scheduleGroup || ''), contractScheduleNames(contract.schedules));
     const aggKey = outsidePvc ? `${sub.id}|extra` : sub.id;
     const cur = agg.get(aggKey) || { subClassificationId: sub.id, amount: 0, steel: sub.steel, steelTypes: new Set<string>(), rows: [] as ItemRow[], outsidePvc };
     cur.amount = round2(cur.amount + amt);
