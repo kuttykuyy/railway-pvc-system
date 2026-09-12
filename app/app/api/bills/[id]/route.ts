@@ -79,7 +79,7 @@ export async function DELETE(
     // invoice is corrected by the same amount, in one transaction with the removal.
     const billTx = await prisma.billTransaction.findUnique({
       where: { billId: id },
-      select: { id: true },
+      select: { id: true, userId: true, isFree: true, discountType: true, amount: true },
     });
     if (billTx) {
       const items = await prisma.invoiceItem.findMany({
@@ -119,6 +119,40 @@ export async function DELETE(
     // the bucket until then, and "deleted" should mean deleted.
     const { purgeUploadedDocuments } = await import('@/lib/uploaded-documents');
     await purgeUploadedDocuments({ billId: id });
+
+    // Write the record that outlives the bill, and ping the admin — BEFORE the delete,
+    // so the facts (was it free, how old, whose) are read while they still exist.
+    try {
+      const [contract, owner] = await Promise.all([
+        prisma.contract.findUnique({ where: { id: bill.contractId }, select: { agreementNo: true, userId: true } }),
+        billTx?.userId ? prisma.user.findUnique({ where: { id: billTx.userId }, select: { email: true } }) : Promise.resolve(null),
+      ]);
+      const ownerUserId = billTx?.userId || contract?.userId || null;
+      const ownerEmail = owner?.email
+        || (ownerUserId ? (await prisma.user.findUnique({ where: { id: ownerUserId }, select: { email: true } }))?.email : null)
+        || null;
+      const { recordBillDeletion } = await import('@/lib/bill-deletions');
+      await recordBillDeletion({
+        billId: id,
+        billNo: bill.billNo,
+        contractId: bill.contractId,
+        agreementNo: contract?.agreementNo || null,
+        ownerUserId,
+        ownerEmail,
+        deletedByUserId: user.id,
+        deletedByEmail: session.user.email,
+        deletedByRole: user.role,
+        wasFree: billTx?.isFree === true,
+        freeReason: billTx?.isFree ? (billTx.discountType || 'free') : null,
+        chargedAmount: billTx?.isFree ? 0 : Number(billTx?.amount || 0),
+        billAmount: Number.isFinite(Number(bill.billAmount)) ? Number(bill.billAmount) : null,
+        totalPvc: bill.pvcCalculation ? Number(bill.pvcCalculation.totalPvc) : null,
+        dateOfMeasurement: bill.dateOfMeasurement || null,
+        billCreatedAt: bill.createdAt || null,
+      });
+    } catch (err) {
+      console.error('bill delete: could not record the deletion', err);
+    }
 
     // Delete the bill — cascades handle PvcCalculation, BillTransaction, BillClassificationEntry, etc.
     await prisma.bill.delete({
@@ -286,7 +320,7 @@ export async function PUT(
     // ===== STEP 3: Check Bill Exists and User Can Edit =====
     const existingBill = await prisma.bill.findUnique({
       where: { id },
-      include: { contract: true, pvcCalculation: true }
+      include: { contract: true, pvcCalculation: true, billTransaction: { select: { isFree: true, discountType: true } } }
     });
 
     if (!existingBill) {
@@ -301,6 +335,24 @@ export async function PUT(
     const { allowed, reason } = await canUserEditBill(user.id, id, user.role);
     if (!allowed) {
       return NextResponse.json({ error: reason || 'You do not have permission to edit this bill' }, { status: 403 });
+    }
+
+    // The free-trial bill can be corrected, not swapped. Editing is free, so moving a
+    // trial bill to another measurement month turned one free bill into two: make the
+    // trial bill, download it, edit it into next month's bill, download again. A
+    // correction keeps the month; a different month is a different bill, and is paid
+    // for. Admins are not bound — they fix things on the customer's behalf.
+    const isTrialBill = existingBill.billTransaction?.isFree === true && existingBill.billTransaction?.discountType === 'trial';
+    const isAdmin = user.role === 'admin' || user.role === 'superadmin';
+    if (isTrialBill && !isAdmin && dateOfMeasurement) {
+      const was = new Date(existingBill.dateOfMeasurement);
+      const now = new Date(dateOfMeasurement);
+      const sameMonth = was.getFullYear() === now.getFullYear() && was.getMonth() === now.getMonth();
+      if (!sameMonth) {
+        return NextResponse.json({
+          error: 'Your free trial bill can be corrected, but its measurement month cannot be changed. For a different month, create a new bill.',
+        }, { status: 403 });
+      }
     }
 
     const normalizedBillNo = String(billNo).trim();
