@@ -7,6 +7,7 @@ import { PreviewCard } from '@/try-bill/components/preview-card';
 import type { GuestBillDraft, GuestPreviewResult } from '@/try-bill/types';
 import { GUEST_DRAFT_STORAGE_KEY } from '@/try-bill/types';
 import { toast } from 'react-hot-toast';
+import { TryBillContent } from '@/components/seo/try-bill-content';
 
 export default function TryBillPage() {
   const router = useRouter();
@@ -73,6 +74,7 @@ export default function TryBillPage() {
         <TryBillForm initialDraft={draft} onSubmit={handleSubmit} isLoading={isLoading} />
         {preview && <PreviewCard preview={preview} onSignup={handleSignup} />}
       </div>
+      <TryBillContent />
     </div>
   );
 }
