@@ -746,11 +746,25 @@ export default function ContractsPage() {
                     )}
                   </div>
 
-                  {/* Attention notice */}
+                  {/* Completeness flags — one chip per thing this contract still needs */}
                   {reasons.length > 0 && (
-                    <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-                      <span><strong>Needs:</strong> {reasons.join(' · ')}</span>
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                      {reasons.map((reason) => {
+                        const info = reason === 'No bills';
+                        return (
+                          <span
+                            key={reason}
+                            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold ${
+                              info
+                                ? 'bg-slate-100 text-slate-600'
+                                : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200/70'
+                            }`}
+                          >
+                            {info ? <Receipt className="h-3 w-3 shrink-0" /> : <AlertTriangle className="h-3 w-3 shrink-0" />}
+                            {reason}
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -834,7 +848,18 @@ export default function ContractsPage() {
                       <td className="px-4 py-3.5 font-semibold text-slate-700">{contract._count.pvcCalculations}</td>
                       <td className="px-4 py-3.5">
                         <StatusBadge contract={contract} />
-                        {reasons.length > 0 && <p className="mt-1 text-xs text-amber-600">{reasons[0]}</p>}
+                        {reasons.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                            {reasons.slice(0, 2).map((reason) => (
+                              <span key={reason} className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/70">
+                                <AlertTriangle className="h-2.5 w-2.5 shrink-0" />{reason}
+                              </span>
+                            ))}
+                            {reasons.length > 2 && (
+                              <span className="text-[10px] font-semibold text-amber-600">+{reasons.length - 2}</span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center justify-end gap-1">
