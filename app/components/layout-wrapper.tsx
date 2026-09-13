@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import Script from 'next/script';
+import Link from 'next/link';
 import Navigation from '@/components/navigation';
 import MobileNavigation from '@/components/mobile/mobile-navigation';
 import InstallPrompt from '@/components/pwa/install-prompt';
@@ -29,6 +30,28 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     pathname === '/help';
 
   const showAds = AD_ELIGIBLE_PAGES.includes(pathname || '');
+
+  // First-run onboarding: no navigation, nothing to click away to. Just the logo
+  // and the two uploads, so a brand-new user does one thing at a time.
+  if (pathname === '/welcome') {
+    return (
+      <div className="min-h-screen bg-white flex flex-col w-full overflow-x-hidden">
+        <header className="border-b border-slate-100">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center">
+            <Link href="/" className="flex items-center gap-2">
+              <img src="/logo.png" alt="IR-PVC" className="h-8 w-auto object-contain" />
+              <span className="font-extrabold tracking-tight text-emerald-800">IR-PVC</span>
+            </Link>
+          </div>
+        </header>
+        <main className="flex-grow w-full">{children}</main>
+        <InstallPrompt />
+        <PushNotifications />
+        <OfflineIndicator />
+        <ServiceWorkerUpdate />
+      </div>
+    );
+  }
 
   const adsenseScript = showAds ? (
     <Script
