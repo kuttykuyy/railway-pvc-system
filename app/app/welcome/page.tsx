@@ -24,6 +24,7 @@ import { FileUp, Receipt, CheckCircle2, Loader2, AlertTriangle, Lock } from 'luc
 import { normalizeSchedules } from '@/lib/contract-schedules';
 import { shortScheduleName } from '@/lib/bill-schedule-matching';
 import { SampleDocumentDialog } from '@/components/onboarding/sample-document-dialog';
+import { AgreementReadingInfographic } from '@/components/onboarding/agreement-reading-infographic';
 
 type AgreementStage =
   | { step: 'idle' }
@@ -246,6 +247,9 @@ export default function WelcomePage() {
                 : <><FileUp className="h-4 w-4 mr-2" />{agreementDone ? 'Add another' : 'Choose the LOA PDF'}</>}
             </Button>
           </div>
+
+          {/* While the LOA is being read, show what's happening instead of a bare spinner. */}
+          {agreement.step === 'reading' && <AgreementReadingInfographic />}
 
           {agreement.step === 'confirm' && (
             <div className="border border-emerald-300 bg-emerald-50 rounded-md p-3 space-y-2 mt-4">
