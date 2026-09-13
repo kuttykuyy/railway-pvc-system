@@ -2152,7 +2152,7 @@ export default function BillsPage() {
             if (group.type === 'single') {
               const bill = group.bills[0];
               return [(
-            <Card key={bill.id} className={`group relative overflow-hidden rounded-2xl border border-slate-150 bg-white/80 backdrop-blur-md shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:border-slate-300/80 dark:border-slate-800 dark:bg-slate-950/70 dark:hover:border-slate-700/80 ${selectedBills.includes(bill.id) ? 'ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900 border-emerald-200 dark:border-emerald-800' : ''}`}>
+            <Card key={bill.id} className={`group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:shadow-md hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 ${selectedBills.includes(bill.id) ? 'ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900 border-emerald-200 dark:border-emerald-800' : ''}`}>
               <CardContent className="p-6">
                 <div className="flex flex-col lg:flex-row lg:items-stretch justify-between gap-6">
                   <div className="flex items-start gap-4 flex-1">
@@ -2266,7 +2266,7 @@ export default function BillsPage() {
                       {/* Financial Summary Grid */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
                         {/* Bill Amount */}
-                        <div className="bg-gradient-to-br from-emerald-50/40 to-emerald-100/10 dark:from-emerald-950/20 dark:to-emerald-900/5 border border-emerald-100/50 dark:border-emerald-900/30 rounded-xl p-3 hover:bg-emerald-50/20 transition-all duration-200">
+                        <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-xl p-3">
                           <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-1">Bill Amount</p>
                           <p className="text-base font-bold text-emerald-700 dark:text-emerald-300" suppressHydrationWarning>
                             ₹{bill.billAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
@@ -2274,7 +2274,7 @@ export default function BillsPage() {
                         </div>
 
                         {/* PVC Amount */}
-                        <div className="bg-gradient-to-br from-emerald-50/40 to-emerald-100/10 dark:from-emerald-950/20 dark:to-emerald-900/5 border border-emerald-100/50 dark:border-emerald-900/30 rounded-xl p-3 hover:bg-emerald-50/20 transition-all duration-200">
+                        <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-xl p-3">
                           <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-1">PVC Amount</p>
                           {bill.pvcCalculation ? (
                             bill.contract?.isExtended && bill.contract?.extensionType === '17B' && bill.pvcCalculation.isIndexCapped && bill.pvcCalculation.originalPvcAmount && bill.pvcCalculation.restrictedPvcAmount ? (
@@ -2297,7 +2297,7 @@ export default function BillsPage() {
                         </div>
 
                         {/* Cumulative PVC */}
-                        <div className="bg-gradient-to-br from-emerald-50/40 to-emerald-100/10 dark:from-emerald-950/20 dark:to-emerald-900/5 border border-emerald-100/50 dark:border-emerald-900/30 rounded-xl p-3 hover:bg-emerald-50/20 transition-all duration-200">
+                        <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-xl p-3">
                           <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-1">Cumulative PVC</p>
                           {bill.pvcCalculation ? (
                             <p className="text-base font-bold text-emerald-700 dark:text-emerald-300" suppressHydrationWarning>
@@ -2309,7 +2309,7 @@ export default function BillsPage() {
                         </div>
 
                         {/* Processing Fee */}
-                        <div className="bg-gradient-to-br from-emerald-50/40 to-emerald-100/10 dark:from-emerald-950/20 dark:to-emerald-900/5 border border-emerald-100/50 dark:border-emerald-900/30 rounded-xl p-3 hover:bg-emerald-50/20 transition-all duration-200">
+                        <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-xl p-3">
                           <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-1">Processing Fee</p>
                           {bill.billTransaction ? (
                             bill.billTransaction.isFree ? (
@@ -2526,7 +2526,7 @@ export default function BillsPage() {
               const batchId = group.batchId!;
               const isExpanded = expandedBatches.has(batchId);
               return [(
-            <Card key={`batch-${batchId}`} className="group relative overflow-hidden rounded-2xl border border-emerald-100/70 bg-gradient-to-br from-emerald-50/20 to-emerald-50/10 dark:border-emerald-900/30 dark:from-emerald-950/20 dark:to-emerald-950/10 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg">
+            <Card key={`batch-${batchId}`} className="group relative overflow-hidden rounded-2xl border border-emerald-100/70 bg-emerald-50/30 dark:border-emerald-900/30 dark:bg-emerald-950/10 shadow-sm transition-all duration-200 hover:shadow-md">
               <CardContent className="p-6">
                 <div className="flex flex-col gap-4">
                   <div className="flex items-start gap-4">
