@@ -26,7 +26,6 @@ import {
   FileSpreadsheet,
   CheckCircle,
   AlertTriangle,
-  Clock,
   ChevronRight,
   ShieldCheck,
   Briefcase,
@@ -823,20 +822,20 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
         </div>
       )}
 
-      {/* 1. Header with glassmorphism */}
-      <div className="backdrop-blur-md bg-white/70 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800/80 shadow-lg rounded-3xl p-5 md:p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 transition-all duration-300">
-        <div className="flex items-center gap-4 flex-1 min-w-0">
-          <Button 
-            variant="outline" 
-            size="icon" 
+      {/* 1. Header — clean command bar */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-2xl p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <Button
+            variant="outline"
+            size="icon"
             onClick={() => router.back()}
-            className="h-11 w-11 rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-850 border-slate-200 dark:border-slate-800 transition-transform active:scale-95 flex-shrink-0"
+            className="h-10 w-10 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-800 flex-shrink-0"
           >
-            <ArrowLeft size={18} className="text-slate-600 dark:text-slate-300" />
+            <ArrowLeft size={18} className="text-slate-500 dark:text-slate-300" />
           </Button>
           <div className="space-y-1 min-w-0">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight truncate">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight truncate">
                 {bill.billNo}
               </h1>
               <BillStatusBadge status={bill.status} size="lg" />
@@ -909,100 +908,62 @@ export function BillDetailClient({ bill, user, indicesData, monthlyIndicesData, 
         </div>
       </div>
 
-      {/* 2. Premium Hero Overview Cards (Visual Centerpiece) */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Total PVC Hero Card - Dark Glowing Gradient */}
-        <div className="bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-950 text-white rounded-3xl p-6 shadow-2xl relative overflow-hidden group hover:scale-[1.02] transition-all duration-300">
-          {/* Ambient Glow */}
-          <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full blur-3xl opacity-25 group-hover:opacity-40 transition-opacity duration-300"></div>
-          
-          <div className="flex justify-between items-start relative z-10">
-            <div className="space-y-1">
-              <span className="text-xs font-bold text-emerald-300 uppercase tracking-widest">
-                Net Price Variation (PVC)
-              </span>
-              <h2 className={`text-3xl md:text-4xl font-extrabold font-mono tracking-tight flex items-baseline gap-1 mt-2 ${isPvcNegative ? 'text-rose-400' : 'text-emerald-400'}`}>
-                {isPvcNegative ? '-' : ''}₹{Math.abs(grandTotalCalculated).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </h2>
-            </div>
-            <div className={`p-3.5 rounded-2xl ${isPvcNegative ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
-              <TrendingUp size={22} className={isPvcNegative ? 'rotate-180' : ''} />
+      {/* 2. Summary band — the payable figure, then the facts worth checking */}
+      <div className="grid gap-4 lg:grid-cols-[1.05fr_1.45fr]">
+        {/* Net PVC payable — the one figure this page exists to show */}
+        <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 overflow-hidden flex flex-col justify-between">
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500" aria-hidden />
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+              Net price variation payable — this bill
+            </span>
+            <div className={`text-4xl md:text-5xl font-semibold font-mono tracking-tight mt-2 ${isPvcNegative ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+              <span className="text-slate-400 dark:text-slate-500 text-[0.5em] font-medium align-top mr-0.5">₹</span>
+              {isPvcNegative ? '-' : ''}{Math.abs(grandTotalCalculated).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
-
-          <div className="mt-8 flex items-center justify-between text-xs text-slate-400 border-t border-white/5 pt-4 relative z-10">
-            <span className="font-semibold flex items-center gap-1">
-              <Clock size={12} className="text-emerald-400" />
-              Escalation Rate:
-            </span>
-            <span className="font-mono text-white font-bold">
-              {bill.billAmount > 0 
-                ? `${((grandTotalCalculated / bill.billAmount) * 100).toFixed(2)}%`
-                : '0.00%'}
-            </span>
+          <div className="flex flex-wrap gap-x-10 gap-y-3 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Escalation rate</div>
+              <div className={`text-base font-bold font-mono mt-0.5 ${isPvcNegative ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                {bill.billAmount > 0
+                  ? `${isPvcNegative ? '-' : '+'}${Math.abs((grandTotalCalculated / bill.billAmount) * 100).toFixed(2)}%`
+                  : '0.00%'}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Worked under</div>
+              <div className="text-base font-bold text-slate-800 dark:text-slate-200 mt-0.5">GCC 2022 · Cl. 46A</div>
+            </div>
           </div>
         </div>
 
-        {/* Bill Amount Card */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-[1.01]">
-          <div className="flex justify-between items-start">
-            <div className="space-y-1">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                Agreement Bill Amount
-              </span>
-              <h2 className="text-3xl font-extrabold font-mono text-slate-800 dark:text-white tracking-tight flex items-baseline gap-1 mt-2">
-                ₹{bill.billAmount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
-              </h2>
+        {/* The facts worth checking, in one calm grid */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-slate-100 dark:bg-slate-800 h-full">
+            <div className="bg-white dark:bg-slate-900 p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5"><IndianRupee size={12} className="text-slate-400" /> Bill value (W)</div>
+              <div className="text-[15px] font-bold text-slate-800 dark:text-slate-100 mt-1 font-mono">₹{bill.billAmount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}</div>
             </div>
-            <div className="p-3.5 rounded-2xl bg-emerald-500/10 text-emerald-500 dark:text-emerald-400">
-              <IndianRupee size={22} />
+            <div className="bg-white dark:bg-slate-900 p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5"><Layers size={12} className="text-slate-400" /> Agreement value</div>
+              <div className="text-[15px] font-bold text-slate-800 dark:text-slate-100 mt-1 font-mono">₹{bill.contract.agreementValue?.toLocaleString('en-IN', { maximumFractionDigits: 0 }) || '0'}</div>
             </div>
-          </div>
-
-          <div className="mt-8 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 dark:border-slate-800 pt-4">
-            <span className="font-semibold flex items-center gap-1">
-              <Layers size={12} className="text-emerald-500" />
-              Agreement Value:
-            </span>
-            <span className="font-mono text-slate-800 dark:text-slate-200 font-bold">
-              ₹{bill.contract.agreementValue?.toLocaleString('en-IN', { maximumFractionDigits: 0 }) || '0'}
-            </span>
-          </div>
-        </div>
-
-        {/* Pricing Factors / Details Card */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 shadow-md hover:shadow-lg transition-all duration-300 md:col-span-2 lg:col-span-1">
-          <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4 block">
-            Pricing Configuration
-          </span>
-          <div className="space-y-3.5">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground flex items-center gap-1.5">
-                <MapPin size={14} className="text-slate-400" /> Railway Zone
-              </span>
-              <span className="font-bold text-slate-800 dark:text-slate-200">
-                {bill.zone || 'N/A'} {bill.zone && `(${getSteelCityForZone(bill.zone)})`}
-              </span>
+            <div className="bg-white dark:bg-slate-900 p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5"><Calendar size={12} className="text-slate-400" /> Base month</div>
+              <div className="text-[15px] font-bold text-slate-800 dark:text-slate-100 mt-1">{bill.contract?.baseMonth ? format(toISTDate(new Date(bill.contract.baseMonth)), 'MMM yyyy') : '—'}</div>
             </div>
-
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground flex items-center gap-1.5">
-                <Flame size={14} className="text-slate-400" /> Fuel Basis
-              </span>
-              <Badge variant="secondary" className="font-bold text-xs">
-                {bill.fuelPriceType === 'zone_city' && bill.zone
-                  ? `Diesel: ${getSteelCityForZone(bill.zone)}`
-                  : 'Diesel: 4-City Avg'}
-              </Badge>
+            <div className="bg-white dark:bg-slate-900 p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5"><Calendar size={12} className="text-slate-400" /> Measurement</div>
+              <div className="text-[15px] font-bold text-slate-800 dark:text-slate-100 mt-1">{bill.dateOfMeasurement ? format(toISTDate(new Date(bill.dateOfMeasurement)), 'dd MMM yyyy') : '—'} <span className="font-semibold text-slate-400 text-xs font-mono">· {bill.quarter}</span></div>
             </div>
-
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground flex items-center gap-1.5">
-                <Calendar size={14} className="text-slate-400" /> Meas. Quarter
-              </span>
-              <span className="font-bold text-slate-800 dark:text-slate-200 font-mono">
-                {bill.quarter}
-              </span>
+            <div className="bg-white dark:bg-slate-900 p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5"><MapPin size={12} className="text-slate-400" /> Railway zone</div>
+              <div className="text-[15px] font-bold text-slate-800 dark:text-slate-100 mt-1">{bill.zone || 'N/A'}{bill.zone && <span className="font-semibold text-slate-400 text-xs"> · steel {getSteelCityForZone(bill.zone)}</span>}</div>
+            </div>
+            <div className="bg-white dark:bg-slate-900 p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5"><Flame size={12} className="text-slate-400" /> Fuel basis</div>
+              <div className="text-[15px] font-bold text-slate-800 dark:text-slate-100 mt-1">{bill.fuelPriceType === 'zone_city' && bill.zone ? `Diesel: ${getSteelCityForZone(bill.zone)}` : 'Diesel: 4-city avg'}</div>
             </div>
           </div>
         </div>
