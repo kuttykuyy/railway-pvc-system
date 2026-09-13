@@ -1286,6 +1286,14 @@ export default function BillsPage() {
           <p className="text-sm sm:text-base text-slate-500 max-w-2xl">
             Process running account bills with automatic PVC calculations.
           </p>
+          {/* Net PVC across the bills currently in view (respects the filters). */}
+          <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+            <span className="font-semibold text-slate-500">Net PVC in view</span>
+            <span className={`font-bold tabular-nums ${totalPvcAmount < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+              {totalPvcAmount < 0 ? '-' : '+'}₹{Math.abs(totalPvcAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+            <span className="text-slate-400">· {filteredBills.length} bill{filteredBills.length === 1 ? '' : 's'}</span>
+          </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           {creditBalance && creditBalance.trialInfo.isActive && creditBalance.trialInfo.billsRemaining > 0 && userRole !== 'admin' && userRole !== 'railway_official' && (
