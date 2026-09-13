@@ -102,8 +102,9 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         <MobileNavigation />
       </div>
       
-      {/* Main Content */}
-      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-7xl lg:pt-4 pt-2 pb-6 flex-grow w-full min-w-0 overflow-x-clip">
+      {/* Main Content — full width, with just a small side gutter so content
+          is never glued to the screen edge. */}
+      <main className="px-3 sm:px-6 py-4 sm:py-8 lg:pt-4 pt-2 pb-6 flex-grow w-full min-w-0 overflow-x-clip">
         {children}
       </main>
       

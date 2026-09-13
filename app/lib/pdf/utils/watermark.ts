@@ -4,66 +4,47 @@ import { PDFDocument, rgb, degrees } from 'pdf-lib';
  * Stamps a free-trial statement so it cannot pass as an official document.
  *
  * The point of the trial is to prove the tool works and let the contractor check the
- * figures — not to hand out one submission-ready statement per account. The earlier
- * mark was "TRIAL COPY" at 0.12 opacity: so faint it was effectively a clean PDF, so
- * people downloaded it, deleted the bill and never paid. This reads clearly across
- * every page — a repeated diagonal band that cannot be cropped off — while staying
- * legible enough to verify the numbers. Applied only to free-trial bills, and waived
- * the moment the owner tops up, when the official (unmarked) copy is generated.
+ * figures — not to hand out one submission-ready statement per account. So the mark
+ * has to be clearly visible, but not so heavy it looks like junk or hides the numbers.
+ * One light diagonal line across each page, plus a single footer strip on every page —
+ * enough that nobody would submit it, calm enough that the figures stay easy to read.
+ * Applied only to free-trial bills, and waived the moment the owner tops up, when the
+ * official (unmarked) copy is generated.
  */
 export async function applyTrialWatermark(pdfBytes: Uint8Array): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.load(pdfBytes);
   const pages = pdfDoc.getPages();
 
-  const mark = 'TRIAL - NOT FOR SUBMISSION';
+  const mark = 'TRIAL COPY - NOT FOR SUBMISSION';
   // Muted red: unmistakably "not official", without drowning the page in ink.
-  const ink = rgb(0.80, 0.16, 0.16);
+  const ink = rgb(0.82, 0.24, 0.24);
   const footer =
     'FREE TRIAL PREVIEW - not valid for official submission. Add credits to download the clean, official copy.';
 
   for (const page of pages) {
     const { width, height } = page.getSize();
 
-    // A repeated diagonal band, corner to corner, tiled down the page so no single
-    // crop removes it. Visible but light (0.10) so the figures underneath stay readable.
-    const step = 150;
-    for (let y = -step; y < height + step; y += step) {
-      page.drawText(mark, {
-        x: 40,
-        y,
-        size: 26,
-        color: ink,
-        opacity: 0.10,
-        rotate: degrees(30),
-      });
-      page.drawText(mark, {
-        x: width / 2 - 20,
-        y: y + step / 2,
-        size: 26,
-        color: ink,
-        opacity: 0.10,
-        rotate: degrees(30),
-      });
-    }
-
-    // One bold, solid stamp across the middle — the thing a glance lands on.
-    page.drawText('TRIAL COPY', {
-      x: width / 2 - 150,
-      y: height / 2,
-      size: 46,
+    // One faint diagonal line running across the middle of the page. Size scales to the
+    // page width so the whole line fits; opacity 0.07 keeps every figure underneath
+    // clearly readable while the page still reads, at a glance, as a trial copy.
+    const size = Math.max(20, Math.min(34, width / 17));
+    page.drawText(mark, {
+      x: width * 0.11,
+      y: height * 0.34,
+      size,
       color: ink,
-      opacity: 0.22,
-      rotate: degrees(30),
+      opacity: 0.10,
+      rotate: degrees(38),
     });
 
-    // A clear footer strip on every page.
-    page.drawRectangle({ x: 0, y: 0, width, height: 20, color: ink, opacity: 0.08 });
+    // A single quiet footer strip, on every page so it can't be cropped out.
+    page.drawRectangle({ x: 0, y: 0, width, height: 18, color: ink, opacity: 0.06 });
     page.drawText(footer, {
       x: 20,
-      y: 6,
-      size: 8.5,
+      y: 5.5,
+      size: 8,
       color: ink,
-      opacity: 0.95,
+      opacity: 0.9,
     });
   }
 
