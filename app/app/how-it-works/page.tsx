@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Walkthrough } from '@/components/how-it-works/walkthrough';
+import { HowItWorksContent } from '@/components/seo/how-it-works-content';
 
 export const metadata: Metadata = {
   // The root layout appends "| IR-PVC" itself.
@@ -29,6 +30,7 @@ export default function HowItWorksPage() {
         </header>
         <Walkthrough />
       </div>
+      <HowItWorksContent />
     </div>
   );
 }
