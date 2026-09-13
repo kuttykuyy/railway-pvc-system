@@ -63,7 +63,7 @@ export default function PaymentSettingsPage() {
 
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-4xl">
+    <div className="w-full px-4 py-6">
       <div className="space-y-6">
         {/* /admin/settings never existed — this was a 404. The screen lives in the
             Money & Billing hub now, so that is "back". */}

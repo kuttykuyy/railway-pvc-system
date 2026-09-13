@@ -265,7 +265,7 @@ export default function JpcCrossCheckPage() {
   );
 
   return (
-    <div className="container mx-auto p-4 max-w-5xl space-y-4">
+    <div className="w-full p-4 space-y-4">
       <div>
         <h1 className="text-2xl font-bold">JPC Rate Cross-check</h1>
         <p className="text-sm text-gray-500 mt-1">

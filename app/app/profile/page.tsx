@@ -253,7 +253,7 @@ export default function ProfilePage() {
 
   /* ── Render ────────────────────────────────────────────────────────── */
   return (
-    <div className="container mx-auto py-8 px-4 max-w-5xl">
+    <div className="w-full py-8 px-4">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">

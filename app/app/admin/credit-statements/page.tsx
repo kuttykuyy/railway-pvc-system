@@ -84,7 +84,7 @@ export default function CreditStatementsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-6">
+    <div className="w-full p-4 md:p-6 space-y-6">
       <div className="flex items-center gap-3">
         <Wallet className="h-6 w-6 text-slate-700" />
         <h1 className="text-2xl font-bold text-slate-900">Credit Statements</h1>

@@ -948,7 +948,7 @@ export default function ComponentDocumentsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50/50 pb-12">
-      <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+      <div className="w-full px-4 py-8 space-y-6">
         
         {/* Navigation & Header */}
         <div className="flex items-center justify-between flex-wrap gap-4">

@@ -126,7 +126,7 @@ export default function Pre2022BillPage() {
 
   if (error && !pricing) {
     return (
-      <div className="p-6 max-w-3xl">
+      <div className="p-6 w-full">
         <Card className="border-red-300">
           <CardHeader><CardTitle className="text-red-700 text-base">This bill cannot be priced yet</CardTitle></CardHeader>
           <CardContent className="text-sm space-y-3">

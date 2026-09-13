@@ -119,7 +119,7 @@ export default function ClassificationsPage() {
   if (loading) return <div className="flex justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" /></div>;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
+    <div className="w-full px-4 py-6 space-y-5">
 
       {/* Header */}
       <div className="flex items-center justify-between">

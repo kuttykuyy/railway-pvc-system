@@ -811,7 +811,7 @@ export default function BulkBillCreationPage() {
 
   return (
     // pb-24 keeps the page's own submit button clear of the sticky bar below.
-    <div className="container mx-auto p-6 pb-24 max-w-7xl">
+    <div className="w-full p-6 pb-24">
       <nav className="text-sm text-gray-500 flex items-center gap-1.5 mb-6" aria-label="Breadcrumb">
         <Link href="/bills" className="text-emerald-700 font-semibold hover:underline">Bills</Link>
         <span aria-hidden>›</span>

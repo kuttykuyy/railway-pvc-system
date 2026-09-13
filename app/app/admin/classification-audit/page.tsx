@@ -58,7 +58,7 @@ export default function ClassificationAuditPage() {
   };
 
   return (
-    <div className="p-6 max-w-3xl space-y-6">
+    <div className="p-6 w-full space-y-6">
       <div className="flex items-center gap-2">
         <Percent className="h-5 w-5 text-slate-600" />
         <h1 className="text-xl font-semibold">Classification percentages</h1>

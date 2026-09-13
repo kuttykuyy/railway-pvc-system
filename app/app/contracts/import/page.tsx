@@ -208,7 +208,7 @@ export default function ContractImportPage() {
   const failed = results.filter(r => r.status === 'error').length;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
+    <div className="w-full px-4 py-8 space-y-6">
 
       {/* Header */}
       <div className="flex items-center gap-3">
