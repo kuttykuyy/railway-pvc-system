@@ -84,7 +84,7 @@ export default async function ContractDetailPage({ params }: Props) {
   const agreementZone = contract.agreementNo.split('/')[0]?.trim().toUpperCase() || null;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+    <div className="w-full px-4 py-6 space-y-6">
       {/* Default the UI language from this contract's zone, unless the user chose one. */}
       <ZoneLanguage zone={administeringZone} />
 

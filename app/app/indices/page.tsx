@@ -150,7 +150,7 @@ export default function IndicesPage() {
   ];
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="p-6 w-full space-y-8 animate-in fade-in duration-500">
       {/* Decorative background gradients */}
       <div className="absolute top-0 right-0 -z-10 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
       <div className="absolute bottom-0 left-10 -z-10 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl" />

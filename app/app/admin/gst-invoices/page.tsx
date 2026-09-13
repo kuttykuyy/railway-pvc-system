@@ -300,7 +300,7 @@ export default function AdminGstInvoicesPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <div className="w-full px-4 py-8">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">

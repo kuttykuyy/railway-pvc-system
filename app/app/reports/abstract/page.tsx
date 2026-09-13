@@ -244,7 +244,7 @@ function AbstractPageContent() {
   const withoutBills = contracts.filter(c => (c._count?.bills ?? 0) === 0);
 
   return (
-    <div className="space-y-5 max-w-7xl mx-auto">
+    <div className="space-y-5 w-full">
       {/* Header — what this document is, not just what it is called. */}
       <div className="print:hidden">
         <nav className="text-sm text-gray-500 flex items-center gap-1.5" aria-label="Breadcrumb">

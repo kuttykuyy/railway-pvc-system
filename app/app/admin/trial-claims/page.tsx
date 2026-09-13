@@ -73,7 +73,7 @@ export default function TrialClaimsPage() {
   const orphaned = claims.filter((c) => c.claimerDeleted).length;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
+    <div className="w-full px-4 py-6 space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Free bills already used</h1>

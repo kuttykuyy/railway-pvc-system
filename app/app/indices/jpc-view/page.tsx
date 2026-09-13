@@ -173,7 +173,7 @@ export default function JpcViewPage() {
   }
 
   return (
-    <div className="p-4 max-w-7xl mx-auto">
+    <div className="p-4 w-full">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <BackButton href="/indices/view" label="Price indices" variant="outline" />

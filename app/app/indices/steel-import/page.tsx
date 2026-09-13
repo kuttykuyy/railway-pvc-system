@@ -365,7 +365,7 @@ export default function SteelImportPage() {
     });
 
   return (
-    <div className="container mx-auto py-6 px-4 max-w-6xl">
+    <div className="w-full py-6 px-4">
       <BackButton href="/indices" label="Back to Indices" />
 
       <div className="mb-6">

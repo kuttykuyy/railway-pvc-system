@@ -103,7 +103,7 @@ export default function ReferralsPage() {
 
   if (!data) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-10">
+      <div className="w-full px-4 py-10">
         {/* This used to be the sentence alone: no retry and no link, so a passing server
             error left the page unusable until someone thought to reload. */}
         <p className="text-sm text-red-600">Referral information could not be loaded.</p>
@@ -122,7 +122,7 @@ export default function ReferralsPage() {
   };
 
   return (
-    <main className="mx-auto max-w-6xl space-y-7 px-4 py-8 sm:px-6">
+    <main className="w-full space-y-7 px-4 py-8 sm:px-6">
       <header>
         <div className="flex items-center gap-3">
           <Gift className="h-7 w-7 text-emerald-600" />

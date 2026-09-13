@@ -77,7 +77,7 @@ export default function DashboardPage() {
 
   if (loading) return <DashboardSkeleton />;
   if (error || !data) return (
-    <div className="max-w-4xl mx-auto py-8">
+    <div className="w-full py-8">
       <ErrorDisplay title="Failed to Load Dashboard" message={error || 'Dashboard data unavailable.'} onRetry={() => fetchDashboardData()} retryText="Reload" showHomeButton={false} variant="full" />
     </div>
   );
@@ -85,7 +85,7 @@ export default function DashboardPage() {
   const isNewUser = data.overview.totalContracts === 0 && data.overview.totalBills === 0;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <div className="w-full px-4 py-6 space-y-6">
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
