@@ -115,9 +115,9 @@ export default function JurisdictionPage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr] items-start">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-start">
         {/* Pick contracts */}
-        <section className="rounded-xl border border-gray-200 bg-white">
+        <section className="min-w-0 rounded-xl border border-gray-200 bg-white">
           <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100">
             <div className="relative flex-1 min-w-[220px]">
               <Search className="h-4 w-4 absolute left-2.5 top-2.5 text-gray-400" />
@@ -150,7 +150,7 @@ export default function JurisdictionPage() {
         </section>
 
         {/* The transfer */}
-        <section className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+        <section className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 space-y-3">
           <h2 className="font-bold">Transfer {picked.size > 0 ? `${picked.size} contract${picked.size === 1 ? '' : 's'}` : '…'}</h2>
           <label className="block text-sm">
             <span className="text-gray-600">To zone</span>
