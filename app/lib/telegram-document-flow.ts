@@ -443,8 +443,18 @@ interface CouponDef { code: string; expiry: string | null; maxReports: number | 
 const COUPON_DEFAULT_PER_CHAT = 10;
 const COUPON_DEFAULT_TOTAL = 25;
 
-function couponDefs(): CouponDef[] {
-  return String(process.env.TELEGRAM_REPORT_COUPONS || '')
+async function couponDefs(): Promise<CouponDef[]> {
+  // Coupons come from BOTH the TELEGRAM_REPORT_COUPONS env var AND the admin setting of
+  // the same name, joined. The admin setting is the one an operator can edit in the UI
+  // and it takes effect at once (no redeploy) — the env var stays supported so nothing
+  // that already relied on it breaks.
+  let fromDb = '';
+  try {
+    const { getAdminSetting } = await import('./admin-settings');
+    fromDb = String((await getAdminSetting('TELEGRAM_REPORT_COUPONS', '')) || '');
+  } catch { /* settings unavailable — fall back to the env var alone */ }
+  const raw = [String(process.env.TELEGRAM_REPORT_COUPONS || ''), fromDb].filter(Boolean).join(',');
+  return raw
     .split(',')
     .map((part) => {
       const [code, expiry, max, total] = part.split(':');
@@ -465,7 +475,7 @@ function couponDefs(): CouponDef[] {
  * the all-chats cap, each less what the redemption rows say has already gone out.
  */
 async function couponRemaining(code: string | undefined, chatId: string): Promise<{ remaining: number; perChat: number; total: number } | null> {
-  const def = code ? couponDefs().find((c) => c.code === String(code).trim().toLowerCase()) : undefined;
+  const def = code ? (await couponDefs()).find((c) => c.code === String(code).trim().toLowerCase()) : undefined;
   if (!def) return null;
   const [usedTotal, usedByChat] = await Promise.all([
     prisma.telegramCouponRedemption.count({ where: { code: def.code } }),
@@ -483,14 +493,14 @@ function couponExpired(expiry: string | null): boolean {
 }
 
 /** True if any coupon codes are configured at all. */
-export function couponsEnabled(): boolean {
-  return couponDefs().length > 0;
+export async function couponsEnabled(): Promise<boolean> {
+  return (await couponDefs()).length > 0;
 }
 
 /** True if the text is a valid, unexpired waiver coupon. */
-export function isCoupon(text: string): boolean {
+export async function isCoupon(text: string): Promise<boolean> {
   const t = String(text).trim().toLowerCase();
-  const def = couponDefs().find((c) => c.code === t);
+  const def = (await couponDefs()).find((c) => c.code === t);
   return !!def && !couponExpired(def.expiry);
 }
 
@@ -499,7 +509,7 @@ export function isCoupon(text: string): boolean {
  * misconfigured env or a missing pending report is obvious.
  */
 export async function startCoupon(conversation: any, chatId: string) {
-  if (!couponsEnabled()) {
+  if (!(await couponsEnabled())) {
     return sendTelegramMessage(
       chatId,
       `🎟️ Coupons aren't set up on this bot yet. (Admin: set TELEGRAM_REPORT_COUPONS in the environment and redeploy.)`,
@@ -524,7 +534,7 @@ export async function startCoupon(conversation: any, chatId: string) {
 
 /** Validates a code typed after /coupon. */
 export async function handleCouponInput(conversation: any, msg: string, chatId: string) {
-  if (!isCoupon(msg)) {
+  if (!(await isCoupon(msg))) {
     await updateTelegramConversation(conversation.id, TelegramStep.IDLE, {});
     return sendTelegramMessage(chatId, `❌ That coupon code isn't valid. You can pay with the link above, or send /coupon to try another code.`);
   }

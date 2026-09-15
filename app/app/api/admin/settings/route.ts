@@ -124,6 +124,12 @@ const DEFAULT_SETTINGS = [
     ]),
     description: 'Bill packs offered in the top-up dialog, as JSON: [{"bills":10,"price":1499}, {"bills":10,"price":3999,"ai":true}, ...]. "price" is rupees before GST. A normal pack credits bills × BILL_PROCESSING_COST; a pack with "ai": true credits bills × AI_BILL_PROCESSING_COST. The discount arrives as extra credits. Set to [] to sell no packs.',
     dataType: 'json'
+  },
+  {
+    key: 'TELEGRAM_REPORT_COUPONS',
+    value: '',
+    description: 'Waiver coupon codes for the Telegram bot\'s paid PVC report, comma-separated. Each is CODE, or CODE:YYYY-MM-DD (last valid day), or CODE:YYYY-MM-DD:N (max statements per chat), or CODE:YYYY-MM-DD:N:T (also a cap across all chats). Case-insensitive. Codes set here take effect immediately — no redeploy — and the same-named environment variable still works too. Leave blank to disable coupons.',
+    dataType: 'string'
   }
 ];
 
