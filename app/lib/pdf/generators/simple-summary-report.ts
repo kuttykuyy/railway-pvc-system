@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import type { ChecklistItem } from '@/lib/accounts-checklist';
+import { displayAgreementNo } from '@/lib/agreement-display';
 
 /**
  * A ONE-PAGE, plain-language PVC summary for the department (accounts / executive) user.
@@ -126,7 +127,7 @@ export function generateSimpleSummaryReport(input: SimpleSummaryInput): Uint8Arr
     startY: y,
     body: [
       [{ content: 'Work:', styles: { fontStyle: 'bold' as const, textColor: ink } }, { content: pdfSafe(input.workDescription) || '-', colSpan: 3 }],
-      lv('Agreement No.:', pdfSafe(input.agreementNo) || '-', 'Contractor:', pdfSafe(input.contractorName) || '-'),
+      lv('Agreement No.:', pdfSafe(displayAgreementNo(input.agreementNo)) || '-', 'Contractor:', pdfSafe(input.contractorName) || '-'),
       lv('Bill No.:', pdfSafe(input.billNo) || '-', 'PVC No.:', pdfSafe(input.pvcNumber) || 'Not assigned'),
       lv('Measured on:', format(input.dateOfMeasurement, 'dd MMM yyyy'), 'Quarter:', input.quarter || '-'),
       lv('Base month:', format(input.baseMonth, 'MMM yyyy'), 'Indices:', input.isProvisional ? 'PROVISIONAL (may change)' : 'Final'),

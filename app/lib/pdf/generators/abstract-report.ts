@@ -7,6 +7,7 @@
  */
 
 import { getServerSession } from 'next-auth';
+import { displayAgreementNo } from '@/lib/agreement-display';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getQuarterFromDate } from '@/lib/pvc-calculations';
@@ -324,7 +325,7 @@ export async function generateAbstractPdf(contractId: string): Promise<{ pdfBuff
     pdf.setFont('helvetica', 'bold');
     pdf.text('Agreement No:', marginLeft, yPosition);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(contract.agreementNo, marginLeft + 90, yPosition);
+    pdf.text(displayAgreementNo(contract.agreementNo), marginLeft + 90, yPosition);
     yPosition += 12;
     
     // Contractor

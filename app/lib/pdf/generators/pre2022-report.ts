@@ -13,6 +13,7 @@
  */
 
 import jsPDF from 'jspdf';
+import { displayAgreementNo } from '@/lib/agreement-display';
 import autoTable from 'jspdf-autotable';
 import type { Pre2022BillPricing } from '@/lib/pre2022-bill-pvc';
 
@@ -71,7 +72,7 @@ export function generatePre2022Report(opts: Pre2022ReportOptions): Buffer {
     theme: 'grid',
     styles: { fontSize: 8.5, cellPadding: 1.8 },
     body: [
-      [{ content: 'Agreement No.', styles: { fontStyle: 'bold' as const } }, pdfSafe(opts.agreementNo),
+      [{ content: 'Agreement No.', styles: { fontStyle: 'bold' as const } }, pdfSafe(displayAgreementNo(opts.agreementNo)),
        { content: 'Bill No.', styles: { fontStyle: 'bold' as const } }, pdfSafe(opts.billNo)],
       [{ content: 'Contractor', styles: { fontStyle: 'bold' as const } }, pdfSafe(opts.contractorName),
        { content: 'Date of Measurement', styles: { fontStyle: 'bold' as const } },

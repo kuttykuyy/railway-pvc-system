@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import type { SteelBreakdownSection } from '@/lib/jpc-items';
 import { findSubWorkRates } from '@/lib/contract-schedules';
 import { resolvePre2022Setup } from '@/lib/pre2022-contract';
+import { displayAgreementNo } from '@/lib/agreement-display';
 import { resolveSteelIndexBasis, defaultSteelTypesForClass } from '@/lib/pvc-calculations';
 
 declare module 'jspdf' {
@@ -422,7 +423,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
       { content: 'Name of Work:', styles: { fontStyle: 'bold' as const, textColor: [30,30,30] as [number,number,number] } },
       { content: pdfSafe(bill.contract.workDescription || '-'), colSpan: 3 },
     ],
-    lv('Agreement No.:',   bill.contract.agreementNo || '-',
+    lv('Agreement No.:',   displayAgreementNo(bill.contract.agreementNo) || '-',
        'Date of Opening:', format(new Date(bill.contract.dateOfOpening), 'dd MMM yyyy')),
     lv('Contractor:',      bill.contract.contractorName || '-',
        'Base Month (T0):',  format(baseMonth, 'MMM yyyy')),
@@ -2311,7 +2312,7 @@ export async function generateIRStandardReport(opts: IRStandardReportOptions): P
     pdf.text(nowLines, mL, y);
     y += nowLines.length * 3.6 + 1;
     const loaBits = [
-      bill.contract.loaNo ? `LOA No.: ${bill.contract.loaNo}` : `Agreement No.: ${bill.contract.agreementNo}`,
+      bill.contract.loaNo ? `LOA No.: ${bill.contract.loaNo}` : `Agreement No.: ${displayAgreementNo(bill.contract.agreementNo)}`,
       bill.contract.loaDate ? `dtd: ${format(new Date(bill.contract.loaDate), 'dd.MM.yyyy')}` : '',
     ].filter(Boolean).join('   ');
     pdf.text(loaBits, mL, y);
