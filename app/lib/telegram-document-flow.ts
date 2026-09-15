@@ -29,6 +29,7 @@ import { getTelegramGuestUserId } from './telegram-guest';
 import { getBaseMonth } from './pvc-calculations';
 import type { ContractSchedule } from './contract-schedules';
 import { processUploadedBillPvc } from './telegram-bill-pvc';
+import { storeUploadedDocument } from './uploaded-documents';
 
 export interface TelegramDocument {
   file_id: string;
@@ -132,7 +133,7 @@ export async function handleTelegramDocument(chatId: string, doc: TelegramDocume
     !!data && data.documentType === 'agreement' && !!(nonEmpty(data.agreementNo) || nonEmpty(data.loaNo));
 
   if (looksLikeAgreement) {
-    return handleAgreementDoc(conversation.id, chatId, data, doc);
+    return handleAgreementDoc(conversation.id, chatId, data, doc, bytes);
   }
 
   // Not an agreement → treat as the bill PDF. Keep its file_id for the PVC step.
@@ -143,7 +144,8 @@ async function handleAgreementDoc(
   conversationId: string,
   chatId: string,
   data: ExtractedAgreement | null,
-  _doc: TelegramDocument,
+  doc: TelegramDocument,
+  bytes?: Buffer | null,
 ) {
   if (!data) {
     return sendTelegramMessage(chatId, '❌ I could not read the agreement clearly. Please try a clearer PDF.');
@@ -164,6 +166,21 @@ async function handleAgreementDoc(
   }
   try {
     const contract = await findOrCreateContractFromAgreement(conversationId, data);
+    // Keep the agreement/LOA PDF and attach it to the contract, so the web app shows
+    // the source document like a contract set up on the website. Best-effort.
+    if (bytes) {
+      try {
+        await storeUploadedDocument({
+          kind: 'agreement',
+          buffer: bytes,
+          fileName: doc.file_name || `Agreement_${displayAgreementNo(contract.agreementNo) || 'contract'}.pdf`,
+          userId: (contract as any).userId ?? null,
+          contractId: contract.id,
+        });
+      } catch (err) {
+        console.error('[Telegram] could not attach agreement PDF:', err);
+      }
+    }
     await updateTelegramConversation(conversationId, TelegramStep.AWAITING_ZONE, {
       docContractId: contract.id,
       docContractAgreementNo: displayAgreementNo(contract.agreementNo),

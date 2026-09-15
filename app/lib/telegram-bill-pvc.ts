@@ -31,6 +31,7 @@ import { getSteelIndexNamesForZone, getFuelIndexNameForBill, getSteelCityForZone
 import { extractSteelTypesFromEntries } from './steel-type-handler';
 import { buildClassificationEntriesFromExtractedBill } from './extracted-bill-entries';
 import { getAllClassificationGroups } from './classification-helper';
+import { storeUploadedDocument } from './uploaded-documents';
 
 /** Strip the internal per-chat namespace suffix from a guest contract's agreement
  *  number for display. (Kept local to avoid a circular import with the flow.) */
@@ -477,6 +478,9 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       fuelPriceType: fuelPriceTypeChosen,
       components: { labour, plant, fuel, materials, cement, steel, explosives, totalPvc },
       classificationEntries: classificationEntryRows,
+      billPdf: pdfBytes,
+      billFileName,
+      userId: contract.userId,
     });
     if (saved.note) await sendTelegramMessage(chatId, saved.note);
   } catch (err) {
@@ -668,9 +672,32 @@ async function persistTelegramBill(o: {
   components: { labour: number; plant: number; fuel: number; materials: number; cement: number; steel: number; explosives: number; totalPvc: number };
   /** Per-item classification breakdown, so the saved bill isn't an empty shell. */
   classificationEntries?: any[];
+  /** The bill PDF, kept and attached so it shows in the web app like a web-made bill. */
+  billPdf?: Buffer | null;
+  billFileName?: string | null;
+  /** The contract owner, if any — the document is scoped to them. */
+  userId?: string | null;
 }): Promise<{ saved: boolean; note?: string }> {
   const c = o.components;
   const entryRows = Array.isArray(o.classificationEntries) ? o.classificationEntries : [];
+
+  // Keep the bill PDF and attach it to the bill, so the web app shows the source
+  // document exactly as it does for a bill made on the website. Best-effort.
+  const attachBillPdf = async (billId: string) => {
+    if (!o.billPdf) return;
+    try {
+      await storeUploadedDocument({
+        kind: 'bill',
+        buffer: o.billPdf,
+        fileName: o.billFileName || `Bill_${o.billNo || 'RA'}.pdf`,
+        userId: o.userId ?? null,
+        billId,
+        contractId: o.contractId,
+      });
+    } catch (err) {
+      console.error('[Telegram] could not attach bill PDF:', err);
+    }
+  };
   const existing = await prisma.bill.findFirst({
     where: { contractId: o.contractId, billNo: o.billNo, dateOfMeasurement: o.dateOfMeasurement },
     select: { id: true },
@@ -727,6 +754,7 @@ async function persistTelegramBill(o: {
         data: entryRows.map((r) => ({ ...r, billId: existing.id })),
       });
     }
+    await attachBillPdf(existing.id);
     return { saved: true };
   }
 
@@ -743,6 +771,7 @@ async function persistTelegramBill(o: {
       data: entryRows.map((r) => ({ ...r, billId: bill.id })),
     });
   }
+  await attachBillPdf(bill.id);
   return { saved: true };
 }
 
