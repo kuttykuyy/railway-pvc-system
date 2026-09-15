@@ -25,13 +25,12 @@ import {
 } from './telegram-api';
 import { extractBillDetailsDirect } from '@/app/api/bills/cement-analysis/route';
 import { getQuarterFromDate, getQuarterMonths, calculateClassificationEntryPvc } from './pvc-calculations';
-import { isAddedItem } from './extra-items';
-import { scheduleNames as contractScheduleNames } from './contract-schedules';
 import { billRequiresExtension } from './extension-compliance';
 import { getQuarterlyAverages } from './db-utils';
 import { getSteelIndexNamesForZone, getFuelIndexNameForBill, getSteelCityForZone } from './zone-steel-city-mapping';
 import { extractSteelTypesFromEntries } from './steel-type-handler';
-import { inferMainClassification } from './work-classification';
+import { buildClassificationEntriesFromExtractedBill } from './extracted-bill-entries';
+import { getAllClassificationGroups } from './classification-helper';
 
 /** Strip the internal per-chat namespace suffix from a guest contract's agreement
  *  number for display. (Kept local to avoid a circular import with the flow.) */
@@ -125,64 +124,49 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   // agreement PDF didn't yield. Only ever fills blanks; never overwrites.
   contract = (await backfillContractFromBill(contract, billDetails, chatId, args.conversationId)) || contract;
 
-  // 3. Map each item to a PVC sub-classification by its suggested code, summing
-  //    amounts per classification. Blank/unknown codes fall back to the bill's main
-  //    group ("<group>A"), then to the work-description inferred group.
-  const subs = await prisma.subClassification.findMany({ where: { isActive: true } });
-  const byCode = new Map(subs.map((s) => [s.code.toUpperCase(), s]));
-  const subById = new Map(subs.map((s) => [s.id, s]));
+  // 3. Turn the bill's items into classification entries with the SAME builder the
+  //    website uses (one source of truth) — so the cement split (a cement-affected work
+  //    item becomes a work entry excluding cement PLUS a cement-portion entry priced on
+  //    the cement index) and the steel categories come out identical to a web-made bill,
+  //    instead of the whole amount sitting on the work index. This is the same builder
+  //    the single-bill and bulk pages use; a copy here would drift and lose the split.
+  const classificationGroups = await getAllClassificationGroups();
+  const subById = new Map<string, any>(
+    (classificationGroups as any[]).flatMap((g) => (g.subClassifications || []).map((s: any) => [s.id, s] as const)),
+  );
 
-  const groupCode = String(billDetails.classificationGroupCode || inferMainClassification(contract.workDescription).code || '').trim();
-  const defaultSub =
-    (groupCode && byCode.get(`${groupCode}A`)) ||
-    (groupCode ? subs.find((s) => s.code.toUpperCase().startsWith(groupCode)) : undefined) ||
-    subs.find((s) => s.code.toUpperCase().endsWith('A'));
+  const builtEntries = buildClassificationEntriesFromExtractedBill(
+    { billDetails },
+    { classificationGroups: classificationGroups as any, contractSchedules: contract.schedules },
+  );
 
-  // amount and steelTypes are carried per row so a single entry that mixes reinforcement
-  // with structural steelwork is priced row by row against each row's own steel index,
-  // instead of one category being applied to the whole entry.
-  type ItemRow = { itemNumber: string; quantity: number | ''; agreementRate: number | ''; cementMt?: number; amount?: number; steelTypes?: string[] };
-  type EntryAgg = { subClassificationId: string; amount: number; steel: number; steelTypes: Set<string>; rows: ItemRow[]; outsidePvc: boolean };
-  const agg = new Map<string, EntryAgg>();
-  let unclassifiedAmount = 0;
+  // Re-shape the built entries the way the rest of this flow already consumes them
+  // (a steelTypes Set and per-row detail), so nothing downstream has to change.
+  const entries = builtEntries.map((be) => ({
+    subClassificationId: be.subClassificationId,
+    amount: Number(be.amount) || 0,
+    steel: Number(subById.get(be.subClassificationId)?.steel ?? 0),
+    steelTypes: new Set<string>(be.steelTypes || []),
+    outsidePvc: !!be.outsidePvc,
+    rows: (be.itemRows || []).map((r) => {
+      const q = Number(r.quantity);
+      const rate = Number(r.agreementRate);
+      return {
+        itemNumber: String(r.itemNumber || '').trim(),
+        quantity: Number.isFinite(q) && q > 0 ? q : ('' as number | ''),
+        agreementRate: Number.isFinite(rate) && rate > 0 ? rate : ('' as number | ''),
+        amount: Number(r.amount) || 0,
+        steelTypes: r.steelTypes,
+      };
+    }),
+  }));
 
-  for (const it of items) {
-    const code = String(it.suggestedClassificationCode || '').toUpperCase().trim();
-    const sub = (code && byCode.get(code)) || defaultSub;
-    const amt = round2(Number(it.amountSinceLastBill ?? it.amountIncludingSpecialConditionSinceLastBill ?? 0));
-    if (amt <= 0) continue;
-    if (!sub) {
-      unclassifiedAmount += amt;
-      continue;
-    }
-    // An item under an "Additional NS item" schedule was ordered after the agreement:
-    // paid, but outside price variation (GCC-2022 Cl.46A.1(b)). Kept apart from the
-    // class's ordinary work so it can be listed and priced at nothing.
-    const outsidePvc = isAddedItem(it, contractScheduleNames(contract.schedules));
-    const aggKey = outsidePvc ? `${sub.id}|extra` : sub.id;
-    const cur = agg.get(aggKey) || { subClassificationId: sub.id, amount: 0, steel: sub.steel, steelTypes: new Set<string>(), rows: [] as ItemRow[], outsidePvc };
-    cur.amount = round2(cur.amount + amt);
-    if (it.isSteelItem && it.steelType) cur.steelTypes.add(it.steelType);
-    // Keep the item detail so the report can show item no / qty / agreement rate.
-    const q = Number(it.quantitySinceLastBill);
-    const r = Number(it.agreementRate);
-    cur.rows.push({
-      itemNumber: String(it.itemNo || it.dsrCode || '').trim(),
-      quantity: Number.isFinite(q) && q > 0 ? q : '',
-      agreementRate: Number.isFinite(r) && r > 0 ? r : '',
-      amount: amt,
-      steelTypes: it.isSteelItem && it.steelType ? [String(it.steelType)] : undefined,
-    });
-    agg.set(aggKey, cur);
-  }
-
-  const entries = [...agg.values()];
   if (!entries.length) {
     await sendTelegramMessage(chatId, '❌ I read the bill but could not work out a PVC classification for its items. Please check it is the correct running bill and try /pvc again.');
     return {};
   }
 
-  const grossFromItems = round2(entries.reduce((s, e) => s + e.amount, 0) + unclassifiedAmount);
+  const grossFromItems = round2(entries.reduce((s, e) => s + e.amount, 0));
   const grossBillAmount = round2(Number(billDetails.grossBillAmount) || grossFromItems);
 
   // 4. Run the PVC engine over the entries for the bill's quarter.
@@ -416,7 +400,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
 
   // Classification list — how the bill value was split across GCC classifications.
   // Shown in the chat so the user can sanity-check it without logging in anywhere.
-  const classLines = [...agg.values()]
+  const classLines = entries
     .map((e) => {
       const sub = subById.get(e.subClassificationId);
       const code = sub?.code || '—';
@@ -448,8 +432,10 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       groupedLines +
       `\n\n<i>⚠️ This is an automatic estimate from the AI's reading of your bill. ` +
       `Please verify it before filing.</i>` +
-      (unclassifiedAmount > 0
-        ? `\n\n<i>Note: ₹${formatMoney(unclassifiedAmount)} of items couldn't be classified and were left out of the PVC.</i>`
+      // Anything on the bill the classifier could not place is left out of the PVC;
+      // the gap between the bill's gross and what was classified says how much.
+      (round2(grossBillAmount - grossFromItems) > 1
+        ? `\n\n<i>Note: ₹${formatMoney(round2(grossBillAmount - grossFromItems))} of items couldn't be classified and were left out of the PVC.</i>`
         : ''),
   );
 
