@@ -69,7 +69,7 @@ export async function handleTelegramMessage(chatId: string, text: string) {
     if (lower === '/coupon' || lower === 'coupon') {
       return startCoupon(conversation, chatId);
     }
-    if (isCoupon(msg)) {
+    if (await isCoupon(msg)) {
       return handleCoupon(conversation, chatId, msg);
     }
     if (lower === '/cancel' || lower === 'cancel' || lower === 'stop') {
