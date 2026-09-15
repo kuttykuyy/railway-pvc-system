@@ -344,6 +344,35 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     };
   });
 
+  // The same rows shaped for storage, so a saved Telegram bill carries its
+  // classification breakdown exactly like a web-made bill (item no, quantity,
+  // agreement rate, per-entry PVC) rather than opening as an empty shell — which
+  // is what made a chat bill's report read "0 sub-classifications".
+  const numOrNull = (v: any) => (v === '' || v === null || v === undefined || isNaN(Number(v)) ? null : Number(v));
+  const classificationEntryRows = preparedEntries.map((pe, i) => {
+    const saved = pvcByEntry.get(i) || zeroPvc;
+    const first = pe.rows[0];
+    return {
+      subClassificationId: pe.subClassificationId || null,
+      classificationId: null as string | null,
+      amount: pe.amount,
+      steelTypes: pe.steelTypes,
+      itemNumber: first?.itemNumber || null,
+      quantity: numOrNull(first?.quantity),
+      agreementRate: numOrNull(first?.agreementRate),
+      itemRows: pe.rows ? JSON.parse(JSON.stringify(pe.rows)) : null,
+      outsidePvc: pe.outsidePvc === true,
+      labourPvc: saved.labourPvc,
+      plantMachineryPvc: saved.plantMachineryPvc,
+      fuelPowerPvc: saved.fuelPowerPvc,
+      otherMaterialsPvc: saved.otherMaterialsPvc,
+      cementPvc: saved.cementPvc,
+      steelPvc: saved.steelPvc,
+      explosivesPvc: saved.explosivesPvc,
+      totalPvc: saved.totalPvc,
+    };
+  });
+
 
   // The same bill priced the other allowed way — grouped under one class — so the
   // chat shows both figures exactly as the website's comparison card does.
@@ -461,6 +490,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       zone,
       fuelPriceType: fuelPriceTypeChosen,
       components: { labour, plant, fuel, materials, cement, steel, explosives, totalPvc },
+      classificationEntries: classificationEntryRows,
     });
     if (saved.note) await sendTelegramMessage(chatId, saved.note);
   } catch (err) {
@@ -650,8 +680,11 @@ async function persistTelegramBill(o: {
   zone: string | null;
   fuelPriceType: string;
   components: { labour: number; plant: number; fuel: number; materials: number; cement: number; steel: number; explosives: number; totalPvc: number };
+  /** Per-item classification breakdown, so the saved bill isn't an empty shell. */
+  classificationEntries?: any[];
 }): Promise<{ saved: boolean; note?: string }> {
   const c = o.components;
+  const entryRows = Array.isArray(o.classificationEntries) ? o.classificationEntries : [];
   const existing = await prisma.bill.findFirst({
     where: { contractId: o.contractId, billNo: o.billNo, dateOfMeasurement: o.dateOfMeasurement },
     select: { id: true },
@@ -700,6 +733,14 @@ async function persistTelegramBill(o: {
       update: pvcData,
       create: { ...pvcData, contractId: o.contractId, billId: existing.id },
     });
+    // Replace the classification breakdown wholesale — the re-read of the bill may
+    // have split its items differently, and stale rows would misreport the split.
+    await prisma.billClassificationEntry.deleteMany({ where: { billId: existing.id } });
+    if (entryRows.length > 0) {
+      await prisma.billClassificationEntry.createMany({
+        data: entryRows.map((r) => ({ ...r, billId: existing.id })),
+      });
+    }
     return { saved: true };
   }
 
@@ -711,6 +752,11 @@ async function persistTelegramBill(o: {
     },
   });
   await prisma.pvcCalculation.create({ data: { ...pvcData, contractId: o.contractId, billId: bill.id } });
+  if (entryRows.length > 0) {
+    await prisma.billClassificationEntry.createMany({
+      data: entryRows.map((r) => ({ ...r, billId: bill.id })),
+    });
+  }
   return { saved: true };
 }
 
