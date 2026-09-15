@@ -4,6 +4,7 @@
  * and a formal recovery-claim letter.
  */
 import jsPDF from 'jspdf';
+import { displayAgreementNo } from '@/lib/agreement-display';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import type { ShortfallResult } from '@/lib/shortfall';
@@ -69,7 +70,7 @@ export function generateShortfallReport(opts: ShortfallReportOptions): Buffer {
   autoTable(pdf, {
     startY: y,
     body: [
-      lv('Contractor:', opts.contractorName || '-', 'Agreement No.:', opts.agreementNo || '-'),
+      lv('Contractor:', opts.contractorName || '-', 'Agreement No.:', displayAgreementNo(opts.agreementNo) || '-'),
       lv('Bill No.:', opts.billNo || '-', 'PVC No.:', opts.pvcNumber || 'Not Assigned'),
       lv('Quarter:', opts.quarter || '-', 'Measurement Date:',
         opts.dateOfMeasurement ? format(new Date(opts.dateOfMeasurement), 'dd MMM yyyy') : '-'),
@@ -179,7 +180,7 @@ export function generateShortfallReport(opts: ShortfallReportOptions): Buffer {
     const letter =
       `To,\nThe Concerned Engineering / Accounts Authority,\n${opts.organizationName || 'Indian Railways'}.\n\n`
       + `Sub: Recovery of short-paid Price Variation Clause (PVC) amount for Bill No. ${opts.billNo}`
-      + `${opts.pvcNumber ? ` (PVC No. ${opts.pvcNumber})` : ''} under Agreement No. ${opts.agreementNo}.\n\n`
+      + `${opts.pvcNumber ? ` (PVC No. ${opts.pvcNumber})` : ''} under Agreement No. ${displayAgreementNo(opts.agreementNo)}.\n\n`
       + `Sir/Madam,\n\n`
       + `The Price Variation payable on the above bill, computed as per GCC Clause 17 / 46A on the published `
       + `Labour, Fuel, Cement, Steel and WPI indices for the quarter${opts.quarter ? ` ${opts.quarter}` : ''}, works out to `
