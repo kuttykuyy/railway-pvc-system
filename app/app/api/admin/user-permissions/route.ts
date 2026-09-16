@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
       select: { role: true, id: true }
     });
 
-    if (user?.role !== 'admin') {
+    if (user?.role !== 'admin' && user?.role !== 'superadmin') {
       return NextResponse.json({ error: 'Access denied - Admin required' }, { status: 403 });
     }
 
@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
       select: { role: true, id: true }
     });
 
-    if (user?.role !== 'admin') {
+    if (user?.role !== 'admin' && user?.role !== 'superadmin') {
       return NextResponse.json({ error: 'Access denied - Admin required' }, { status: 403 });
     }
 
@@ -375,7 +375,7 @@ export async function DELETE(req: NextRequest) {
       select: { role: true, id: true }
     });
 
-    if (user?.role !== 'admin') {
+    if (user?.role !== 'admin' && user?.role !== 'superadmin') {
       return NextResponse.json({ error: 'Access denied - Admin required' }, { status: 403 });
     }
 
