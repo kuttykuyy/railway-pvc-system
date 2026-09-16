@@ -1143,6 +1143,22 @@ async function buildIrReport(o: {
       // Carried so the statement marks a provisional month "P" in amber, as the website's does.
       isProvisional: !!(mv as any).isProvisional,
     }));
+
+    // The billing quarter is usually still provisional, so its months have no published
+    // MonthlyIndexValue rows — the PVC calc borrows the last available value and averages
+    // it in. Surface those borrowed figures (from the quarter averages' own monthly
+    // values) so the MONTHLY PRICE INDICES table shows the real number behind the average
+    // instead of dropping the whole section. This mirrors the website's report exactly.
+    const realKeys = new Set(allHistoricalMonthlyData.map((d) => `${d.indexName}|${d.month}`));
+    for (const qa of (o.quarterlyAverages as any[]) || []) {
+      for (const mv of (qa?.monthlyValues || [])) {
+        const key = `${qa.indexName}|${mv.month}`;
+        if (!realKeys.has(key)) {
+          allHistoricalMonthlyData.push({ indexName: qa.indexName, month: mv.month, value: mv.value, isProvisional: true, isBorrowed: true });
+          realKeys.add(key);
+        }
+      }
+    }
     const { getBillIndicesStatus } = await import('@/lib/index-status');
     // The fuel and steel names are already resolved for this bill, so pass them straight
     // through rather than re-deriving them from the zone.
