@@ -460,6 +460,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
   // real web bills, and it was charged against the account's credits on top of the
   // statement's own price. The web account's bills are made on the website; the bot
   // gives the estimate and sells the statement, the same for everyone.
+  let savedPvcNumber: string | null = null;
   try {
     const fuelPriceTypeChosen = fuelPriceType;
     const conv = await prisma.telegramConversation.findUnique({
@@ -483,6 +484,7 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       userId: contract.userId,
     });
     if (saved.note) await sendTelegramMessage(chatId, saved.note);
+    savedPvcNumber = (saved as any).pvcNumber ?? null;
   } catch (err) {
     console.error('[Telegram] persist bill failed:', err);
   }
@@ -499,6 +501,8 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     quarter,
     zone,
     fuelIndexName,
+    fuelPriceType,
+    pvcNumber: savedPvcNumber,
     steelIndexNames,
     allIndices,
     entriesForReport,
@@ -677,7 +681,7 @@ async function persistTelegramBill(o: {
   billFileName?: string | null;
   /** The contract owner, if any — the document is scoped to them. */
   userId?: string | null;
-}): Promise<{ saved: boolean; note?: string }> {
+}): Promise<{ saved: boolean; note?: string; pvcNumber?: string | null }> {
   const c = o.components;
   const entryRows = Array.isArray(o.classificationEntries) ? o.classificationEntries : [];
 
@@ -700,7 +704,7 @@ async function persistTelegramBill(o: {
   };
   const existing = await prisma.bill.findFirst({
     where: { contractId: o.contractId, billNo: o.billNo, dateOfMeasurement: o.dateOfMeasurement },
-    select: { id: true },
+    select: { id: true, pvcNumber: true },
   });
 
   // Cumulative continues from the contract's OTHER bills (exclude this one on update).
@@ -755,12 +759,27 @@ async function persistTelegramBill(o: {
       });
     }
     await attachBillPdf(existing.id);
-    return { saved: true };
+    return { saved: true, pvcNumber: existing.pvcNumber };
   }
+
+  // PVC number, the same scheme the website uses: PVC/<agreement>/<seq>, the sequence
+  // continuing from the contract's existing bills so deletes don't cause a clash. The
+  // agreement number is cleaned of the tg: guest suffix so the chat id never shows on it.
+  const numbered = await prisma.bill.findMany({
+    where: { contractId: o.contractId },
+    select: { pvcNumber: true },
+  });
+  let maxSeq = 0;
+  for (const b of numbered) {
+    const seq = parseInt((b.pvcNumber || '').split('/').pop() || '', 10);
+    if (!Number.isNaN(seq) && seq > maxSeq) maxSeq = seq;
+  }
+  const pvcNumber = `PVC/${displayAgreementNo(o.agreementNo)}/${String(maxSeq + 1).padStart(3, '0')}`;
 
   const bill = await prisma.bill.create({
     data: {
       ...billData,
+      pvcNumber,
       contractId: o.contractId,
       createdVia: 'telegram',
     },
@@ -772,7 +791,7 @@ async function persistTelegramBill(o: {
     });
   }
   await attachBillPdf(bill.id);
-  return { saved: true };
+  return { saved: true, pvcNumber };
 }
 
 /** Everything needed to render the report later, once payment is confirmed. */
@@ -784,6 +803,10 @@ export interface StoredReportPayload {
   quarter: string;
   zone: string | null;
   fuelIndexName: string;
+  /** The agreement's diesel basis ('zone_city' or 'four_city_avg'), so the report labels it right. */
+  fuelPriceType?: string | null;
+  /** The saved bill's PVC number (PVC/<agreement>/<seq>), shown on the statement. */
+  pvcNumber?: string | null;
   steelIndexNames: string[];
   allIndices: string[];
   entriesForReport: any[];
@@ -974,6 +997,8 @@ export async function renderAndSendPaidReport(chatId: string, paymentLinkId?: st
       quarter: payload.quarter,
       zone: payload.zone,
       fuelIndexName: payload.fuelIndexName,
+      fuelPriceType: payload.fuelPriceType,
+      pvcNumber: payload.pvcNumber,
       steelIndexNames: payload.steelIndexNames,
       quarterlyAverages,
       entriesForReport: payload.entriesForReport,
@@ -1055,6 +1080,8 @@ async function buildIrReport(o: {
   quarter: string;
   zone: string | null;
   fuelIndexName: string;
+  fuelPriceType?: string | null;
+  pvcNumber?: string | null;
   steelIndexNames: string[];
   quarterlyAverages: any[];
   entriesForReport: any[];
@@ -1116,6 +1143,22 @@ async function buildIrReport(o: {
       // Carried so the statement marks a provisional month "P" in amber, as the website's does.
       isProvisional: !!(mv as any).isProvisional,
     }));
+
+    // The billing quarter is usually still provisional, so its months have no published
+    // MonthlyIndexValue rows — the PVC calc borrows the last available value and averages
+    // it in. Surface those borrowed figures (from the quarter averages' own monthly
+    // values) so the MONTHLY PRICE INDICES table shows the real number behind the average
+    // instead of dropping the whole section. This mirrors the website's report exactly.
+    const realKeys = new Set(allHistoricalMonthlyData.map((d) => `${d.indexName}|${d.month}`));
+    for (const qa of (o.quarterlyAverages as any[]) || []) {
+      for (const mv of (qa?.monthlyValues || [])) {
+        const key = `${qa.indexName}|${mv.month}`;
+        if (!realKeys.has(key)) {
+          allHistoricalMonthlyData.push({ indexName: qa.indexName, month: mv.month, value: mv.value, isProvisional: true, isBorrowed: true });
+          realKeys.add(key);
+        }
+      }
+    }
     const { getBillIndicesStatus } = await import('@/lib/index-status');
     // The fuel and steel names are already resolved for this bill, so pass them straight
     // through rather than re-deriving them from the zone.
@@ -1129,14 +1172,34 @@ async function buildIrReport(o: {
     console.warn('[Telegram] report index enrichment skipped:', err);
   }
 
+  // The saved bill's PVC number, so the statement shows it as a web-made bill does. If it
+  // wasn't threaded through (e.g. a linked-owner bill that isn't persisted), fall back to
+  // the same PVC/<agreement>/<seq> scheme the website and the saved Telegram bill use.
+  let pvcNumber: string | null = o.pvcNumber ?? null;
+  if (!pvcNumber) {
+    try {
+      const numbered = await prisma.bill.findMany({ where: { contractId: contract.id }, select: { pvcNumber: true } });
+      let maxSeq = 0;
+      for (const b of numbered) {
+        const seq = parseInt((b.pvcNumber || '').split('/').pop() || '', 10);
+        if (!Number.isNaN(seq) && seq > maxSeq) maxSeq = seq;
+      }
+      pvcNumber = `PVC/${displayAgreementNo(contract.agreementNo)}/${String(maxSeq + 1).padStart(3, '0')}`;
+    } catch { /* leave unset — the statement then shows "Not Assigned" as before */ }
+  }
+
   const bill = {
     billNo: o.billNo,
+    pvcNumber,
     dateOfMeasurement: o.measurementDate,
     grossBillAmount: o.grossBillAmount,
     billAmount: o.grossBillAmount,
     quarter: o.quarter,
     zone: o.zone,
-    fuelPriceType: 'four_city_avg',
+    // The agreement's real diesel basis, so the statement header matches the index the
+    // PVC was actually priced on (zone-city vs the PPAC four-city average). Older parked
+    // payloads carry no fuelPriceType, so fall back to the contract's stored choice.
+    fuelPriceType: o.fuelPriceType || (contract as any).fuelPriceType || 'four_city_avg',
     contract: {
       agreementNo: displayAgreementNo(contract.agreementNo),
       contractorName: contract.contractorName,
@@ -1221,6 +1284,12 @@ async function buildIrReport(o: {
       startDate: baseMonth,
       endDate: new Date(o.measurementDate),
       componentTypes: hasSteel && jpcPaid ? undefined : NON_STEEL,
+      // Switch on marking for every attached sheet — the billing-period months on the
+      // labour/cement/fuel sheets, and the steel rows + city on any JPC sheet — exactly
+      // as the website's report does. Without a city passed, every sheet attaches plain.
+      // The caption is cleaned of the tg: guest suffix so the chat id never shows on it.
+      jpcCity: getSteelCityForZone(o.zone),
+      jpcCaption: `${displayAgreementNo(contract.agreementNo)} — ${o.billNo}`,
     });
     return Buffer.from(withDocs);
   } catch (err) {
