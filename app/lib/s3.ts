@@ -391,7 +391,17 @@ export async function objectExists(key: string): Promise<'present' | 'missing' |
  * Database-backed files are always served through the authenticated
  * /api/public/uploads endpoint. S3-backed files use presigned URLs.
  */
-export async function getFileUrl(key: string, expiresIn: number = 3600): Promise<string> {
+export async function getFileUrl(
+  key: string,
+  expiresIn: number = 3600,
+  /**
+   * Force what the browser sees when it follows this link, regardless of how the object
+   * was stored. Needed because a kept PDF whose bucket object was saved as
+   * application/octet-stream would otherwise come back as a nameless generic file rather
+   * than a PDF the person can open or save.
+   */
+  opts?: { contentType?: string; downloadFileName?: string; disposition?: 'inline' | 'attachment' },
+): Promise<string> {
   // The site's own address: this URL is handed to a person to click. NEXTAUTH_URL names
   // the platform host on this deployment, which is a link to a domain they cannot use.
   const baseUrl = emailLinkOrigin();
@@ -405,10 +415,18 @@ export async function getFileUrl(key: string, expiresIn: number = 3600): Promise
     throw new Error('S3 is not configured and no local public fallback is available');
   }
 
+  const safeDownloadName = opts?.downloadFileName?.replace(/[^A-Za-z0-9._-]+/g, '_');
+  const contentDisposition = safeDownloadName
+    ? `${opts?.disposition || 'inline'}; filename="${safeDownloadName}"`
+    : undefined;
+
   try {
     const command = new GetObjectCommand({
       Bucket: bucketName,
       Key: key,
+      // response-content-* override the object's own stored headers on this one link.
+      ResponseContentType: opts?.contentType,
+      ResponseContentDisposition: contentDisposition,
     });
 
     const url = await getSignedUrl(s3Client, command, { expiresIn });
@@ -420,7 +438,9 @@ export async function getFileUrl(key: string, expiresIn: number = 3600): Promise
     // that might as well not have been kept.
     try {
       const { isRestUploadAvailable, createRestSignedDownloadUrl } = await import('./supabase-storage');
-      if (isRestUploadAvailable()) return await createRestSignedDownloadUrl(bucketName, key, expiresIn);
+      // Supabase honours a ?download filename to force an attachment; used when saving.
+      const download = opts?.disposition === 'attachment' ? (safeDownloadName || true) : undefined;
+      if (isRestUploadAvailable()) return await createRestSignedDownloadUrl(bucketName, key, expiresIn, download);
     } catch (restError) {
       logger.warn(`⚠️ REST signing also failed for key ${key}:`, restError);
     }

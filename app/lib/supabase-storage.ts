@@ -103,7 +103,13 @@ export function getRestUploadDiagnostics() {
  * anything that must READ the bytes in the page — a canvas PDF viewer, for one — needs
  * a URL from the REST door, which speaks CORS.
  */
-export async function createRestSignedDownloadUrl(bucket: string, key: string, expiresInSeconds = 600): Promise<string> {
+export async function createRestSignedDownloadUrl(
+  bucket: string,
+  key: string,
+  expiresInSeconds = 600,
+  /** true forces an attachment; a string also sets the saved filename. */
+  download?: string | boolean,
+): Promise<string> {
   const base = restBase();
   const token = serviceKey();
   if (!base || !token) {
@@ -138,7 +144,16 @@ export async function createRestSignedDownloadUrl(bucket: string, key: string, e
   }
   const url: string | undefined = data?.signedURL || data?.signedUrl || data?.url;
   if (!url) throw new Error('Supabase returned no download URL');
-  return url.startsWith('http') ? url : `${base}${url.startsWith('/') ? '' : '/'}${url}`;
+  let full = url.startsWith('http') ? url : `${base}${url.startsWith('/') ? '' : '/'}${url}`;
+  // Supabase serves the object as an attachment when the link carries ?download, and uses
+  // the given value as the saved filename — so a kept PDF saves as a .pdf, not a nameless blob.
+  if (download) {
+    const param = typeof download === 'string' && download
+      ? `download=${encodeURIComponent(download)}`
+      : 'download';
+    full += (full.includes('?') ? '&' : '?') + param;
+  }
+  return full;
 }
 
 export async function createRestSignedUploadUrl(bucket: string, key: string): Promise<string> {
