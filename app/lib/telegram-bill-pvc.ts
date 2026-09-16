@@ -39,6 +39,36 @@ function displayAgreementNo(stored: string | null | undefined): string {
   return String(stored || '').replace(/\s*·\s*tg:\S+$/i, '').trim();
 }
 
+/**
+ * Best-effort read of the bill's OWN printed grand total, straight from the PDF text and
+ * independent of the AI item extraction. Used only to warn when what we priced is well
+ * short of what the bill itself totals — a sign the reader missed items on a big
+ * multi-schedule bill (PVC is a percentage of the value, so a short value silently
+ * understates the PVC). Returns null when nothing trustworthy is found.
+ */
+async function readPrintedBillGrandTotal(pdfBytes: Buffer | null | undefined): Promise<number | null> {
+  if (!pdfBytes) return null;
+  try {
+    const { extractLayoutText } = await import('./pdf-layout-extract');
+    const text = await extractLayoutText(pdfBytes);
+    if (!text) return null;
+    // IR e-MB bills print a grand total labelled "Bill Amount (Rs.)" or "Total Amount(Rs.)"
+    // (sometimes "Grand Total"). Label and number can sit on separate lines, so allow a
+    // short run of non-digits — newlines included — between them. The grand total is the
+    // largest such figure, so take the max of what matches.
+    const re = /(?:bill amount|total amount|grand total|g\.?\s*total)[^\d]{0,60}([0-9][0-9,]*\.\d{2})/gi;
+    let best = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const v = Number(m[1].replace(/,/g, ''));
+      if (Number.isFinite(v) && v > best) best = v;
+    }
+    return best > 0 ? best : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface ProcessUploadedBillArgs {
   chatId: string;
   conversationId: string;
@@ -412,6 +442,26 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     .map((c) => `\n   <b>${escapeHtml(c.code)}</b> ${escapeHtml(c.name)} — ₹${formatMoney(c.amount)}`)
     .join('');
 
+  // Safeguard: warn when what we priced is well short of the bill's OWN printed total.
+  // On a big multi-schedule bill the AI reader can miss items; because PVC is a
+  // percentage of the value, a short value quietly understates the PVC. Take the larger
+  // of the extractor's schedule-summary total and an independent read of the printed
+  // grand total, and if the priced value falls materially below it, say so plainly.
+  let shortReadNote = '';
+  try {
+    const printedTotal = Math.max(
+      Number(billDetails.scheduleSummaryTotal) || 0,
+      (await readPrintedBillGrandTotal(pdfBytes)) || 0,
+    );
+    const shortfall = round2(printedTotal - grossBillAmount);
+    if (printedTotal > 0 && shortfall > Math.max(0.02 * printedTotal, 5000)) {
+      shortReadNote =
+        `\n\n<i>⚠️ Heads up: your bill totals about ₹${formatMoney(printedTotal)}, but I could only read ₹${formatMoney(grossBillAmount)} of it ` +
+        `— about ₹${formatMoney(shortfall)} may be missing. On a big multi-schedule bill I can miss items, and the PVC above is worked out only on what I read. ` +
+        `Please create this bill on the website (irpvc.in), where you can check every item, before filing.</i>`;
+    }
+  } catch { /* best-effort — never block the estimate */ }
+
   await sendTelegramMessage(
     chatId,
     `✅ <b>PVC estimate${billNoLabel}</b>\n\n` +
@@ -437,7 +487,8 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
       // the gap between the bill's gross and what was classified says how much.
       (round2(grossBillAmount - grossFromItems) > 1
         ? `\n\n<i>Note: ₹${formatMoney(round2(grossBillAmount - grossFromItems))} of items couldn't be classified and were left out of the PVC.</i>`
-        : ''),
+        : '') +
+      shortReadNote,
   );
 
   // Tell the admin someone used the bot (no-op unless TELEGRAM_ADMIN_CHAT_ID is set).
