@@ -11,6 +11,7 @@ const load = (importer: any) => dynamic(importer, { ssr: false, loading });
 
 const WhatsappLogs = load(() => import('../whatsapp-logs/page'));
 const Telegram = load(() => import('../telegram/page'));
+const TelegramCoupons = load(() => import('../telegram-coupons/page'));
 const ApiKeys = load(() => import('../api-keys/page'));
 
 export default function AdminIntegrationsPage() {
@@ -21,6 +22,7 @@ export default function AdminIntegrationsPage() {
       tabs={[
         { key: 'whatsapp', name: 'WhatsApp logs', href: '/admin/whatsapp-logs', render: () => <WhatsappLogs /> },
         { key: 'telegram', name: 'Telegram usage', href: '/admin/telegram', render: () => <Telegram /> },
+        { key: 'telegram-coupons', name: 'Telegram coupons', href: '/admin/telegram-coupons', render: () => <TelegramCoupons /> },
         { key: 'api-keys', name: 'API keys', href: '/admin/api-keys', render: () => <ApiKeys /> },
       ]}
       extraLinks={[{ name: 'API documentation', href: '/docs/external-api' }]}
