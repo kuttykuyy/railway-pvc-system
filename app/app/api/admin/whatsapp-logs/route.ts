@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
       select: { role: true },
     });
 
-    if (user?.role !== 'admin') {
+    if (user?.role !== 'admin' && user?.role !== 'superadmin') {
       return NextResponse.json({ error: 'Access denied. Admin only.' }, { status: 403 });
     }
 

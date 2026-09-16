@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     logger.log('[Admin GST Invoices] User found:', user ? `${user.email} (${user.role})` : 'not found');
 
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
       logger.log('[Admin GST Invoices] User not admin or not found');
       return NextResponse.json(
         { error: 'Unauthorized. Admin access required.' },
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const admin = await prisma.user.findUnique({ where: { email: session.user.email } });
-    if (!admin || admin.role !== 'admin') {
+    if (!admin || (admin.role !== 'admin' && admin.role !== 'superadmin')) {
       return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 });
     }
 
