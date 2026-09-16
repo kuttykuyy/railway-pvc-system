@@ -53,6 +53,22 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     );
   }
 
+  // Sign-in, sign-up and password-reset pages carry their own brand mark inside the
+  // AuthShell (the logo sits over the form, and on top on a phone). Showing the global
+  // top navigation as well put the IR-PVC logo on the screen twice, which read as a
+  // mistake — so these pages render on their own, without the top nav.
+  if (pathname?.startsWith('/auth/')) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col w-full overflow-x-hidden">
+        <main className="flex-grow w-full">{children}</main>
+        <InstallPrompt />
+        <PushNotifications />
+        <OfflineIndicator />
+        <ServiceWorkerUpdate />
+      </div>
+    );
+  }
+
   const adsenseScript = showAds ? (
     <Script
       async
