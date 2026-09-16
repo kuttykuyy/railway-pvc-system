@@ -61,12 +61,25 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   }
 
   const disposition = request.nextUrl.searchParams.get('download') === '1' ? 'attachment' : 'inline';
-  const safeName = (doc.fileName || `document-${documentId}.pdf`).replace(/[^A-Za-z0-9._-]+/g, '_');
+  let safeName = (doc.fileName || `document-${documentId}.pdf`).replace(/[^A-Za-z0-9._-]+/g, '_');
+  // A kept bill/agreement is a PDF; make sure it saves with a .pdf so the OS opens it as
+  // one even when the original upload's name had no extension (common from the bot).
+  if ((doc.contentType || 'application/pdf') === 'application/pdf' && !/\.pdf$/i.test(safeName)) {
+    safeName += '.pdf';
+  }
 
   if (doc.storagePath) {
     try {
       const { getFileUrl } = await import('@/lib/s3');
-      return NextResponse.redirect(await getFileUrl(doc.storagePath, 300));
+      // Force the PDF type and a real filename onto the signed link. Without this the
+      // bucket serves the object with whatever type it was stored as — often
+      // application/octet-stream — so "Save" hands back a nameless generic file instead
+      // of a PDF. The disposition matches Open (inline) vs Save (attachment).
+      return NextResponse.redirect(await getFileUrl(doc.storagePath, 300, {
+        contentType: doc.contentType || 'application/pdf',
+        downloadFileName: safeName,
+        disposition,
+      }));
     } catch {
       return NextResponse.json({ error: 'The file could not be opened right now.' }, { status: 502 });
     }
