@@ -1284,6 +1284,12 @@ async function buildIrReport(o: {
       startDate: baseMonth,
       endDate: new Date(o.measurementDate),
       componentTypes: hasSteel && jpcPaid ? undefined : NON_STEEL,
+      // Switch on marking for every attached sheet — the billing-period months on the
+      // labour/cement/fuel sheets, and the steel rows + city on any JPC sheet — exactly
+      // as the website's report does. Without a city passed, every sheet attaches plain.
+      // The caption is cleaned of the tg: guest suffix so the chat id never shows on it.
+      jpcCity: getSteelCityForZone(o.zone),
+      jpcCaption: `${displayAgreementNo(contract.agreementNo)} — ${o.billNo}`,
     });
     return Buffer.from(withDocs);
   } catch (err) {
