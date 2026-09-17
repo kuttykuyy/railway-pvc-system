@@ -445,6 +445,17 @@ export async function generateAbstractPdf(contractId: string): Promise<{ pdfBuff
 
     yPosition = ((pdf as any).lastAutoTable?.finalY ?? yPosition) + 16;
 
+    // With many bills the table fills the page and ends near the bottom. Everything below
+    // — the steel breakdown line, the Total box, the amount in words, the GST note, the
+    // certification and the signatures — is one block that must stay together; if it does
+    // not fit under the table it starts on a fresh page rather than running off the edge
+    // and being cut. (autoTable already paged the table itself.)
+    const summaryBlockHeight = 220;
+    if (yPosition + summaryBlockHeight > pageHeight - marginTop) {
+      pdf.addPage();
+      yPosition = marginTop;
+    }
+
     // The four steel categories price against different JPC baskets, so the single Steel
     // column above is broken out rather than dropped.
     pdf.setFontSize(8);
