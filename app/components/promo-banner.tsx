@@ -14,6 +14,29 @@
 import { useState, useEffect } from 'react';
 import { X, ArrowUpRight, Boxes, MousePointerClick } from 'lucide-react';
 
+/**
+ * Each product carries its own accent so two ads sitting side by side don't read as the
+ * same thing. They used to share IR-PVC's emerald throughout — icon, pill and button —
+ * and a glance couldn't tell them apart. Full class strings (not built by hand) so
+ * Tailwind keeps them. Cool for the ERP, warm for the extension: distinct at a glance.
+ */
+const THEMES = {
+  indigo: {
+    border: 'border-indigo-200 hover:border-indigo-300',
+    icon: 'from-indigo-600 to-indigo-700',
+    badge: 'text-indigo-700 border-indigo-200',
+    pill: 'text-indigo-800 bg-indigo-100',
+    cta: 'bg-indigo-600 hover:bg-indigo-700',
+  },
+  amber: {
+    border: 'border-amber-200 hover:border-amber-300',
+    icon: 'from-amber-500 to-amber-600',
+    badge: 'text-amber-700 border-amber-200',
+    pill: 'text-amber-900 bg-amber-100',
+    cta: 'bg-amber-600 hover:bg-amber-700',
+  },
+} as const;
+
 const PRODUCTS = [
   {
     key: 'primerp',
@@ -24,6 +47,7 @@ const PRODUCTS = [
     pill: '14-day free trial',
     cta: 'Start free trial',
     href: 'https://primerp.in?ref=irpvc',
+    theme: THEMES.indigo,
   },
   {
     key: 'irwcms',
@@ -34,33 +58,34 @@ const PRODUCTS = [
     pill: 'Free trial',
     cta: 'Add to Chrome',
     href: 'https://irwcms.primerp.in?ref=irpvc',
+    theme: THEMES.amber,
   },
 ] as const;
 
 type Product = (typeof PRODUCTS)[number];
 
-function Chip({ badge, Icon, name, tagline, pill, cta, href }: Product) {
+function Chip({ badge, Icon, name, tagline, pill, cta, href, theme }: Product) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex flex-none items-center gap-3 rounded-xl border border-emerald-200 bg-white py-2 pl-2.5 pr-3.5 no-underline shadow-[0_1px_2px_rgba(6,78,59,.06)] hover:border-emerald-300"
+      className={`flex flex-none items-center gap-3 rounded-xl border bg-white py-2 pl-2.5 pr-3.5 no-underline shadow-[0_1px_2px_rgba(6,78,59,.06)] ${theme.border}`}
     >
-      <span className="relative flex-none h-10 w-10 rounded-[10px] bg-gradient-to-br from-emerald-600 to-emerald-700 text-white grid place-items-center shadow-sm">
+      <span className={`relative flex-none h-10 w-10 rounded-[10px] bg-gradient-to-br ${theme.icon} text-white grid place-items-center shadow-sm`}>
         <Icon className="h-5 w-5" />
-        <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-white text-emerald-700 text-[8px] font-black rounded px-1 border border-emerald-200">
+        <span className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-white ${theme.badge} text-[8px] font-black rounded px-1 border`}>
           {badge}
         </span>
       </span>
       <span className="flex flex-col gap-0.5 min-w-0">
         <span className="flex items-center gap-2">
           <span className="text-sm font-bold text-slate-900 leading-tight">{name}</span>
-          <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 rounded-full px-2 py-px whitespace-nowrap">{pill}</span>
+          <span className={`text-[10px] font-bold rounded-full px-2 py-px whitespace-nowrap ${theme.pill}`}>{pill}</span>
         </span>
         <span className="text-[12.5px] text-slate-600 whitespace-nowrap">{tagline}</span>
       </span>
-      <span className="ml-1 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 whitespace-nowrap">
+      <span className={`ml-1 inline-flex items-center gap-1.5 rounded-lg text-white text-xs font-semibold px-3 py-1.5 whitespace-nowrap ${theme.cta}`}>
         {cta} <ArrowUpRight className="h-3.5 w-3.5" />
       </span>
     </a>
@@ -68,7 +93,7 @@ function Chip({ badge, Icon, name, tagline, pill, cta, href }: Product) {
 }
 
 function Dot() {
-  return <span aria-hidden className="flex-none h-1.5 w-1.5 rounded-full bg-emerald-300" />;
+  return <span aria-hidden className="flex-none h-1.5 w-1.5 rounded-full bg-slate-300" />;
 }
 
 /**
