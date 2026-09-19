@@ -6,6 +6,9 @@ ALTER TABLE "bill_classification_entries"
 ALTER TABLE "bill_classification_entries"
   ADD COLUMN IF NOT EXISTS "manualClassification" BOOLEAN NOT NULL DEFAULT false;
 
--- The corrections report reads the entries a person changed, newest first.
-CREATE INDEX IF NOT EXISTS "bill_classification_entries_manual_idx"
-  ON "bill_classification_entries" ("manualClassification", "createdAt" DESC);
+-- The corrections report reads every entry the app proposed a classification for.
+-- Partial, because the column is null on every entry saved before it existed and on
+-- every one a person added by hand.
+CREATE INDEX IF NOT EXISTS "bill_classification_entries_suggested_idx"
+  ON "bill_classification_entries" ("suggestedSubClassificationId")
+  WHERE "suggestedSubClassificationId" IS NOT NULL;
