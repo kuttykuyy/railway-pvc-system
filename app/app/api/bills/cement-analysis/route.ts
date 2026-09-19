@@ -14,6 +14,7 @@ import {
   normalizeDsrCode,
   summarizeCementCalculation,
 } from '@/lib/dsr-cement-calculation';
+import type { MainWorkClassification } from '@/lib/work-classification';
 import { inferMainClassification } from '@/lib/work-classification';
 import { enrichItemsFromRateBook } from '@/lib/rate-book-lookup';
 import { composeJustification, repairAiJustification, officialGroupName } from '@/lib/classification-justification';
@@ -67,6 +68,8 @@ export interface ExtractedBillItem {
   rateBookEdition?: string;
   rateBookCode?: string;
   rateBookDescription?: string;
+  /** The book's row and the bill describe different work — the officer must check. */
+  rateBookWordingMismatch?: boolean;
   /** Which page of the bill PDF this item was read from. */
   pageNumber?: number;
 }
@@ -134,6 +137,7 @@ function normalizeExtractedItem(item: any): ExtractedBillItem {
     rateBookEdition: String(item?.rateBookEdition || '').trim() || undefined,
     rateBookCode: String(item?.rateBookCode || '').trim() || undefined,
     rateBookDescription: String(item?.rateBookDescription || '').trim() || undefined,
+    rateBookWordingMismatch: item?.rateBookWordingMismatch === true,
     requiresDsrCementCoefficient: isCementAffected && sourceBook !== 'USSR_2021',
     isCementAffected,
     isSteelItem: item?.isSteelItem === true,
@@ -239,11 +243,20 @@ function applyDeterministicClassification(
   const sourceNote = item.rateBookDescription && item.rateBookEdition && item.rateBookCode
     ? `Wording per ${item.rateBookEdition} item ${item.rateBookCode}.`
     : undefined;
+  // What the app could not settle on its own, put to the officer rather than hidden.
+  const checks: string[] = [];
+  if (item.rateBookWordingMismatch) {
+    checks.push(
+      `the ${item.rateBookEdition || 'rate book'} row for item ${item.rateBookCode || item.itemNo || ''} `
+      + 'describes different work from what the bill prints, so the classification rests on the bill\'s wording alone',
+    );
+  }
   const justify = (code: string, groupReason: string, subReason?: string) => composeJustification({
     code,
     groupReason,
     subReason,
     sourceNote,
+    checkNote: checks.length ? checks.join('; ') : undefined,
   });
 
   // 2. Infer main group code from the item description itself
@@ -324,9 +337,14 @@ function applyDeterministicClassification(
     // work each item belongs to.
     && !billCoversSeveralWorksFlag;
 
+  // Which signal actually decided the group, so a tie inside it can be put to the
+  // officer rather than settled by the order the rules happen to be written in.
+  let decidedBy: MainWorkClassification | undefined = groupNamesScope ? groupMain : contractMain;
+
   if (contractGovernsGroup) {
     resolvedCode = contractMain.code;
     resolvedReason = `Name of Work names ${quoteKeywords(contractMain.matchedKeywords)}.`;
+    decidedBy = contractMain;
   } else if (subHead && subHead.gccGroup !== DSR_CONTEXT
     && !(subHead.gccGroup === '9' && groupNamesScope)) {
     // Group 9 is the "any other works" bucket — the sub-head reaching it means it
@@ -335,27 +353,44 @@ function applyDeterministicClassification(
     // painting shed's own items away from the shed.
     resolvedCode = subHead.gccGroup;
     resolvedReason = `Item ${item.itemNo} is ${scheduleLabel} ${subHead.number} — ${subHead.name}.`;
+    // The schedule's own structure, not a keyword count — nothing to be tied about.
+    decidedBy = undefined;
   } else if (descriptionMain.code !== '9'
     && (descriptionScore >= 2 || (descriptionScore >= 1 && (!subHead || subHead.gccGroup === '9')))) {
     resolvedCode = descriptionMain.code;
     resolvedReason = `Item description names ${quoteKeywords(descriptionMain.matchedKeywords)}.`;
+    decidedBy = descriptionMain;
   } else if (subHead && subHead.gccGroup === DSR_CONTEXT) {
     // Context-dependent sub-head/chapter (e.g. Earth Work, Level Crossings): its GCC
     // group depends on the nature of the overall work, so resolve it from the
     // contract's Name of Work rather than a fixed mapping.
     resolvedCode = groupNamesScope ? groupMain.code : contractMain.code;
+    decidedBy = groupNamesScope ? groupMain : contractMain;
     resolvedReason = groupNamesScope
       ? `Item ${item.itemNo} is ${scheduleLabel} ${subHead.number} — ${subHead.name}, which takes its group from the work; sub-work "${String(item.groupName || '').trim()}".`
       : `Item ${item.itemNo} is ${scheduleLabel} ${subHead.number} — ${subHead.name}, which takes its group from the work; Name of Work names ${quoteKeywords(contractMain.matchedKeywords)}.`;
   } else if (groupNamesScope) {
     resolvedCode = groupMain.code;
     resolvedReason = `Billed under sub-work "${String(item.groupName || '').trim()}".`;
+    decidedBy = groupMain;
   } else if (itemMain.code !== '9') {
     resolvedCode = itemMain.code;
     resolvedReason = `Item description names ${quoteKeywords(itemMain.matchedKeywords)}.`;
+    decidedBy = itemMain;
   } else if (isValidAiCode) {
     resolvedCode = aiCode.charAt(0);
     resolvedReason = `No group keyword matched the item or the schedule; group taken from AI review of the item text.`;
+    decidedBy = undefined;
+  }
+
+  // A tie is not a decision. Where the winning signal named two groups equally often,
+  // the winner is only the one declared first in the rules, so the officer is told.
+  if (decidedBy?.isTied && decidedBy.code === resolvedCode) {
+    const alsoNamed = (decidedBy.tiedWith || []).map(other => `${other.code} ${other.label}`).join(' and ');
+    checks.push(
+      `the wording this group was read from names ${decidedBy.label} and ${alsoNamed} exactly as often, `
+      + 'so group ' + resolvedCode + ' was picked only because it is checked first',
+    );
   }
 
   if (resolvedCode === '2' || resolvedCode === '7') {

@@ -3,6 +3,14 @@ export interface MainWorkClassification {
   contenders?: { code: string; label: string; score: number }[];
   /** True when the work covers several GCC groups, so no one group fits every item. */
   isMultiScope?: boolean;
+  /**
+   * Another group scored exactly as highly as the winner, so the winner is only the
+   * one declared first in the rules below. The caller must not present a tied result
+   * as settled — it says "check this one" instead.
+   */
+  isTied?: boolean;
+  /** The groups that tied with the winner, for the message that asks for a check. */
+  tiedWith?: { code: string; label: string }[];
   code: string;
   label: string;
   reason: string;
@@ -189,6 +197,15 @@ export function inferMainClassification(workDescription: string): MainWorkClassi
     rule.score > 0 && (rule.code === best.code || (rule.score >= 2 && rule.score >= best.score * 0.5)),
   );
 
+  // A tie at the top is not a decision. The sort above is stable, so two groups on the
+  // same score leave the winner to be whichever rule happens to be written first in
+  // MAIN_CLASSIFICATION_RULES — Building Works, because it is declared before Bridges.
+  // A real bill was classified that way: "Improvement to drainage by providing various
+  // infrastructures like drain, cover shed, sealing of joints and sump for RUB/Subways"
+  // names Building once on "shed" and Bridges once on "RUB", and every item of the bill
+  // went to Building without anything on the screen saying it had been a coin toss.
+  const tiedWith = scored.filter(rule => rule.code !== best.code && rule.score === best.score);
+
   return {
     code: best.code,
     label: best.label,
@@ -196,6 +213,8 @@ export function inferMainClassification(workDescription: string): MainWorkClassi
     matchedKeywords: best.matchedKeywords,
     contenders: contenders.map(rule => ({ code: rule.code, label: rule.label, score: rule.score })),
     isMultiScope: contenders.length > 1,
+    isTied: tiedWith.length > 0,
+    tiedWith: tiedWith.map(rule => ({ code: rule.code, label: rule.label })),
   };
 }
 

@@ -105,6 +105,7 @@ export async function enrichItemsFromRateBook<T extends {
   itemNo?: string; dsrCode?: string; description: string; unit?: string;
   schedule?: string; chapter?: string; sourceBook?: string;
   rateBookEdition?: string; rateBookCode?: string; rateBookDescription?: string;
+  rateBookWordingMismatch?: boolean;
 }>(items: T[]): Promise<{ enriched: number; edition?: string }> {
   const wanted: Array<{ code: string; edition: RateBookEdition }> = [];
   const editionByItem = new Map<T, RateBookEdition>();
@@ -148,6 +149,13 @@ export async function enrichItemsFromRateBook<T extends {
     item.rateBookEdition = entry.edition;
     item.rateBookCode = entry.code;
 
+    // Recorded before the wording is replaced, while the bill's own text is still
+    // there to compare. An officer needs to be told when the book and the bill do not
+    // describe the same work, rather than being handed the two glued together.
+    if (rateBookWordingDisagrees(item.description, entry.description)) {
+      item.rateBookWordingMismatch = true;
+    }
+
     const better = enrichDescription(item.description, entry);
     if (better && better !== item.description) {
       item.description = better;
@@ -175,6 +183,43 @@ export async function enrichItemsFromRateBook<T extends {
   return { enriched, edition: [...editionsUsed].join(', ') || undefined };
 }
 
+/** Words too common in a schedule of rates to say anything about which item this is. */
+const EMPTY_WORDS = new Set([
+  'with', 'and', 'the', 'for', 'from', 'all', 'any', 'etc', 'shall', 'including', 'include',
+  'complete', 'required', 'directed', 'engineer', 'charge', 'above', 'below', 'other', 'per',
+  'type', 'types', 'work', 'works', 'item', 'items', 'rate', 'rates', 'size', 'over', 'under',
+  'specified', 'approved', 'position', 'necessary', 'respects', 'respect', 'making', 'made',
+]);
+
+function tellingWordsOf(text: string): Set<string> {
+  const words = String(text || '').toLowerCase().match(/[a-z]{4,}/g) || [];
+  return new Set(words.filter(word => !EMPTY_WORDS.has(word)));
+}
+
+/**
+ * Do the bill and the rate book disagree about what this item IS?
+ *
+ * They normally do not: the book prints the full wording and the bill prints part of
+ * it, or an abbreviation of it. Where the book's row is wrong, though, the two describe
+ * different work entirely — USSOR 041370 was stored as "Longitudinally slewing of steel
+ * plate girders ..." while the bill printed "Supplying fabricating and erecting welded
+ * and/or bolted and/or riveted steel work ...". Nothing compared them, so the book's
+ * wording went in front of the bill's and the item was classified as girder slewing.
+ *
+ * Measured on the telling words the two share, as a share of the bill's own. A bill line
+ * has to carry enough of them to be a description at all: a sub-item line such as "For
+ * Span above 18.3 M to 24.4 M" names no work of its own and is meant to sit under the
+ * book's heading, so it is never a disagreement.
+ */
+export function rateBookWordingDisagrees(billDescription: string, bookDescription: string): boolean {
+  const bill = tellingWordsOf(billDescription);
+  const book = tellingWordsOf(bookDescription);
+  if (bill.size < 5 || book.size < 5) return false;
+  let shared = 0;
+  for (const word of bill) if (book.has(word)) shared += 1;
+  return shared / bill.size < 0.35;
+}
+
 export function enrichDescription(billDescription: string, entry: RateBookEntry): string | null {
   const raw = (billDescription || '').replace(/\s+/g, ' ').trim();
   // "IREPS item 082012" is what the reader writes when a row's wording is not on the
@@ -186,5 +231,9 @@ export function enrichDescription(billDescription: string, entry: RateBookEntry)
   const squash = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
   if (bill && squash(book).includes(squash(bill))) return book;
   if (bill && squash(bill).includes(squash(book))) return null;
+  // The two describe different work. The bill is the authority for what was actually
+  // billed, so its wording stays in front and the book's is kept behind it for the
+  // officer to see. Putting the book's first is what let one bad row rename an item.
+  if (bill && rateBookWordingDisagrees(bill, book)) return `${bill} — ${book}`;
   return bill ? `${book} — ${bill}` : book;
 }

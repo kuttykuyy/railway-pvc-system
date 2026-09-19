@@ -890,6 +890,13 @@ export async function POST(request: NextRequest) {
               agreementRate: entry.agreementRate ? parseFloat(entry.agreementRate) : null,
               itemRows: entry.itemRows ? JSON.parse(JSON.stringify(entry.itemRows)) : null,
               outsidePvc: entry.outsidePvc === true,
+              // What the app proposed, and whether a person changed it. Kept so the
+              // corrections themselves show which items the rules keep getting wrong.
+              // Where the client sent no suggestion — an entry a person added by hand —
+              // the accepted classification is its own suggestion only if the app made
+              // it, so it stays null.
+              suggestedSubClassificationId: entry.suggestedSubClassificationId || null,
+              manualClassification: entry.manualClassification === true,
               labourPvc: entryPvc.labourPvc,
               plantMachineryPvc: entryPvc.plantMachineryPvc,
               fuelPowerPvc: entryPvc.fuelPowerPvc,

@@ -132,6 +132,8 @@ interface ClassificationEntry {
   itemRows?: ItemRow[];
   aiReviewed?: boolean;
   manualClassification?: boolean;
+  /** What the app itself proposed, kept when a person overrides the classification. */
+  suggestedSubClassificationId?: string;
   isDerivedCement?: boolean;
   /** Extra item ordered after the agreement (Cl.39): paid, but earns no PVC (Cl.46A.1(b)). */
   outsidePvc?: boolean;

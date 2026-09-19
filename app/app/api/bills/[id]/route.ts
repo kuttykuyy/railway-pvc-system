@@ -596,6 +596,11 @@ export async function PUT(
               agreementRate: entry.agreementRate ? parseFloat(entry.agreementRate) : null,
               itemRows: entry.itemRows ? JSON.parse(JSON.stringify(entry.itemRows)) : null,
               outsidePvc: entry.outsidePvc === true,
+              // A bill is re-saved by deleting its entries and writing them again, so
+              // the suggestion has to be carried back in or every edit would erase the
+              // record of what the app originally proposed.
+              suggestedSubClassificationId: entry.suggestedSubClassificationId || null,
+              manualClassification: entry.manualClassification === true,
               labourPvc: entryPvc.labourPvc,
               plantMachineryPvc: entryPvc.plantMachineryPvc,
               fuelPowerPvc: entryPvc.fuelPowerPvc,

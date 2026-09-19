@@ -153,6 +153,18 @@ const PENDING: PendingColumn[] = [
     ddlType: "JSONB NOT NULL DEFAULT '[]'",
     why: 'The record of each transfer: when, from which zone to which, the order it was made under, and who did it.',
   },
+  {
+    table: 'bill_classification_entries',
+    column: 'suggestedSubClassificationId',
+    ddlType: 'TEXT',
+    why: 'What the app proposed for the entry, kept even when a person changed it. Without it a correction left no trace, so nobody could see which items the rules keep getting wrong and the same item had to be fixed again on the next bill.',
+  },
+  {
+    table: 'bill_classification_entries',
+    column: 'manualClassification',
+    ddlType: 'BOOLEAN NOT NULL DEFAULT false',
+    why: 'Whether a person set this entry\'s classification rather than accepting the app\'s. Read with the column above to tell a correction from an agreement.',
+  },
 ];
 
 /**
@@ -489,6 +501,14 @@ const PENDING_EXTRAS: Array<{
       ON "${s}"."parse_failures" ("userEmail", "createdAt" DESC)`,
     why: '"Ask IR-PVC to check this bill" finds the latest failure for one user and file.',
     check: { kind: 'index', name: 'parse_failures_userEmail_createdAt_idx' },
+  },
+  {
+    label: 'bill_classification_entries_suggested_idx',
+    sql: (s) => `CREATE INDEX IF NOT EXISTS "bill_classification_entries_suggested_idx"
+      ON "${s}"."bill_classification_entries" ("suggestedSubClassificationId")
+      WHERE "suggestedSubClassificationId" IS NOT NULL`,
+    why: 'The corrections report reads every entry the app proposed a classification for. Partial, because the column is null on every entry saved before it existed and on every one a person added by hand.',
+    check: { kind: 'index', name: 'bill_classification_entries_suggested_idx' },
   },
   {
     label: 'contracts_administeringZone_idx',

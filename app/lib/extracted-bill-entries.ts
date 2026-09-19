@@ -95,6 +95,12 @@ export interface BuiltClassificationEntry {
   itemRows?: ExtractedItemRow[];
   aiReviewed?: boolean;
   manualClassification?: boolean;
+  /**
+   * The sub-classification the app itself picked for this entry, recorded as the entry
+   * is built and never changed afterwards. When the user overrides the classification,
+   * this is what they overrode — which is the whole record of the app being wrong.
+   */
+  suggestedSubClassificationId?: string;
   isDerivedCement?: boolean;
   mainClassificationGroupId?: string;
   /** Extra item ordered after the agreement (Cl.39): paid, outside PVC (Cl.46A.1(b)). */
@@ -229,6 +235,7 @@ export function buildClassificationEntriesFromExtractedBill(
             groupKey: `${subClassification.id}::${baseKey}`,
             entry: {
               subClassificationId: subClassification.id,
+              suggestedSubClassificationId: subClassification.id,
               subClassification,
               outsidePvc,
               amount: netAmount,
@@ -258,6 +265,7 @@ export function buildClassificationEntriesFromExtractedBill(
             groupKey: `${cementSub.id}::${baseKey}`,
             entry: {
               subClassificationId: cementSub.id,
+              suggestedSubClassificationId: cementSub.id,
               subClassification: cementSub,
               outsidePvc,
               amount: cementCost,
@@ -294,6 +302,7 @@ export function buildClassificationEntriesFromExtractedBill(
       groupKey: `${subClassification.id}::${baseKey}`,
       entry: {
         subClassificationId: subClassification.id,
+        suggestedSubClassificationId: subClassification.id,
         subClassification,
         outsidePvc,
         amount: Number(item.amountSinceLastBill || 0),
