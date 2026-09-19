@@ -27,14 +27,27 @@ export async function hasProvisionalIndicesForMeasurement(
   details: string;
 }> {
   try {
-    // Calculate the quarter for the measurement date
-    const quarter = getQuarterFromMeasurementDate(measurementDate, baseMonth);
-    const quarterParts = quarter.split('-');
-    const year = parseInt(quarterParts[1]);
-    const quarterNum = parseInt(quarterParts[0].replace('Q', ''));
+    // The quarter, and the three months it averages, straight from the functions the PVC
+    // amount itself is worked out with. This used to repeat that arithmetic locally and
+    // got it wrong twice: it counted the base month into Q1, so a month on a quarter
+    // boundary landed in the next quarter (Aug 2026 read as Q14 on a May 2023 base, not
+    // Q13), and the months it returned started at the base month, one month early. The
+    // gate then let bills through, or blocked them, on months the bill never prices
+    // against.
+    const { getQuarterFromDate, getQuarterMonths } = await import('@/lib/pvc-calculations');
+    const quarter = getQuarterFromDate(measurementDate, baseMonth);
 
-    // Calculate the months in this quarter
-    const quarterMonths = getQuarterMonths(quarterNum, year, baseMonth);
+    // A measurement on or before the base month has no quarter to check; the measurement
+    // date validation elsewhere is what rejects it.
+    if (quarter === 'Q0') {
+      return {
+        hasProvisionalIndices: false,
+        provisionalIndices: [],
+        details: 'Measurement date is on or before the contract base month',
+      };
+    }
+
+    const quarterMonths = getQuarterMonths(quarter, baseMonth);
     
     // Get all required indices for PVC calculation
     const requiredIndices = [
@@ -96,54 +109,6 @@ export async function hasProvisionalIndicesForMeasurement(
       details: 'Error checking provisional indices status'
     };
   }
-}
-
-/**
- * Get quarter string from measurement date (similar to existing function)
- */
-function getQuarterFromMeasurementDate(measurementDate: Date, baseMonth: Date): string {
-  const baseMonthValue = baseMonth.getMonth() + 1; // 1-12
-  const baseYear = baseMonth.getFullYear();
-  
-  const measurementMonthValue = measurementDate.getMonth() + 1; // 1-12
-  const measurementYear = measurementDate.getFullYear();
-
-  // Calculate months since base month
-  const monthsDiff = (measurementYear - baseYear) * 12 + (measurementMonthValue - baseMonthValue);
-  
-  // Calculate quarter number (1-based)
-  const quarterNumber = Math.ceil((monthsDiff + 1) / 3);
-  
-  // Calculate the year for this quarter
-  const quarterStartMonth = baseMonthValue + (quarterNumber - 1) * 3;
-  const quarterYear = baseYear + Math.floor((quarterStartMonth - 1) / 12);
-  const adjustedQuarterYear = quarterStartMonth > 12 ? quarterYear : baseYear;
-
-  return `Q${quarterNumber}-${adjustedQuarterYear}`;
-}
-
-/**
- * Get the three months that make up a quarter
- */
-function getQuarterMonths(quarterNum: number, year: number, baseMonth: Date): Date[] {
-  const baseMonthValue = baseMonth.getMonth() + 1; // 1-12
-  const baseYear = baseMonth.getFullYear();
-
-  const months: Date[] = [];
-  
-  // Calculate the starting month for this quarter
-  const startingMonth = baseMonthValue + (quarterNum - 1) * 3;
-  
-  for (let i = 0; i < 3; i++) {
-    const monthValue = startingMonth + i;
-    const adjustedYear = baseYear + Math.floor((monthValue - 1) / 12);
-    const adjustedMonth = ((monthValue - 1) % 12) + 1;
-    
-    const monthDate = new Date(Date.UTC(adjustedYear, adjustedMonth - 1, 1));
-    months.push(monthDate);
-  }
-  
-  return months;
 }
 
 /**

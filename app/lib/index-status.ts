@@ -55,32 +55,24 @@ export async function isBillUsingProvisionalIndices(
 }
 
 /**
- * Extract months from a quarter string (e.g., "Q1-2023" -> array of Date objects)
+ * The three months a quarter averages, for the contract's base month.
+ *
+ * Quarters run from the month AFTER the base month, so this has to agree with
+ * getQuarterMonths() in pvc-calculations — the one the PVC amount itself is worked out
+ * from. It used to do its own arithmetic starting at the base month, which made every
+ * quarter it looked at one month early (base May 2023, Q13 read as May-Jul 2026 instead
+ * of Jun-Aug 2026). A bill's Final/Provisional status was then read off the wrong three
+ * months: a stale flag on the month before the quarter held the bill provisional, and a
+ * missing last month of the real quarter went unnoticed.
  */
-function getQuarterMonthsFromQuarter(quarter: string, baseMonth: Date): Date[] {
+async function getQuarterMonthsFromQuarter(quarter: string, baseMonth: Date): Promise<Date[]> {
   try {
-    // Parse quarter string like "Q1-2023"
-    const match = quarter.match(/Q(\d+)-(\d+)/);
-    if (!match) return [];
-    
-    const quarterNum = parseInt(match[1]);
-    const year = parseInt(match[2]);
-    
-    // Calculate base month number (0-11)
-    const baseMonthNum = baseMonth.getMonth();
-    
-    // Calculate starting month for this quarter
-    const startMonthNum = (baseMonthNum + (quarterNum - 1) * 3) % 12;
-    
-    // Generate 3 months for the quarter using UTC to avoid timezone mismatches
-    const months: Date[] = [];
-    for (let i = 0; i < 3; i++) {
-      const monthNum = (startMonthNum + i) % 12;
-      const monthYear = monthNum < startMonthNum ? year + 1 : year;
-      months.push(new Date(Date.UTC(monthYear, monthNum, 1)));
-    }
-    
-    return months;
+    // Q0 (a measurement on or before the base month) and anything unparseable have no
+    // quarter months to check, same as before.
+    if (!/^Q[1-9]\d*-\d{4}$/.test(quarter)) return [];
+
+    const { getQuarterMonths } = await import('./pvc-calculations');
+    return getQuarterMonths(quarter, baseMonth);
   } catch (error) {
     console.error('Error parsing quarter:', error);
     return [];
@@ -264,7 +256,7 @@ export async function getBillIndicesStatus(
   details: string;
 }> {
   try {
-    const months = getQuarterMonthsFromQuarter(quarter, baseMonth);
+    const months = await getQuarterMonthsFromQuarter(quarter, baseMonth);
     
     if (months.length === 0) {
       return {
