@@ -310,6 +310,15 @@ function applyDeterministicClassification(
   const contractGovernsGroup = contractMain.code !== '9'
     && contractMain.matchedKeywords.length > 0
     && !contractMain.isMultiScope
+    // ...and only when the Name of Work names that group more than once, the same bar
+    // a sub-work heading has to clear below. One word in a long sentence is not a
+    // statement of scope, and it silently outranked the schedule the bill itself files
+    // the item under: "Improvement to drainage by providing various infrastructures
+    // like drain, cover shed, sealing of joints and sump for RUB/Subways..." names
+    // Building Works once, on "shed", and Bridges once, on "RUB" — a tie settled by
+    // the order of the rules — and that put every item of a bill whose own schedules
+    // read "CHAPTER - 2/4/5 : Bridge Works" into Building Works.
+    && (contractMain.contenders?.[0]?.score ?? 0) >= 2
     // ...and only when the bill is billing one work. Where it prints a heading per
     // sub-work, those headings — not one sentence covering all of them — say which
     // work each item belongs to.

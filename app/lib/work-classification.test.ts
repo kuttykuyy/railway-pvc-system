@@ -48,6 +48,20 @@ describe('inferMainClassification', () => {
     expect(r.matchedKeywords).toEqual([]);
   });
 
+  it('scores a Name of Work that names its group once as the weak evidence it is', () => {
+    // A real agreement: "cover shed" names Building Works once and "RUB" names Bridges
+    // once, and the winner of that tie is decided by the order of the rules. The bill
+    // itself files every item under "CHAPTER - 2/4/5 : Bridge Works". The caller in the
+    // bill reader therefore requires a score of 2 before the Name of Work is allowed to
+    // govern the group; this pins down the score it actually gets.
+    const result = inferMainClassification(
+      'Improvement to drainage by providing various infrastructures like drain, cover shed, sealing of joints '
+      + 'and sump for RUB/Subways as per shortfall at LC No. RV-20, RV-33 including provision of RCC wall at RV-62 '
+      + 'and approach road at RV-91 between LAE-LKNA section of Sambalpur division.',
+    );
+    expect(result.contenders?.[0]?.score).toBe(1);
+  });
+
   it('handles empty / nullish input safely', () => {
     expect(inferMainClassification('').code).toBe('9');
     expect(inferMainClassification(undefined as unknown as string).code).toBe('9');
