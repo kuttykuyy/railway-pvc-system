@@ -426,15 +426,18 @@ export async function PUT(
     
     // Quarter derivation, exactly as creation does it. This route used the plain
     // GCC-2022 rule for everyone, so editing a bill on a pre-2022-clause contract
-    // relabelled it one quarter off, and editing one on a 17B-extended contract lost
-    // the original-completion-date anchor.
-    let quarterDateForCalculation = measurementDate;
-    if (contract.isExtended
-        && contract.extensionType === '17B'
-        && contract.originalCompletionDate
-        && measurementDate > contract.originalCompletionDate) {
-      quarterDateForCalculation = contract.originalCompletionDate;
-    }
+    // relabelled it one quarter off.
+    //
+    // Always the MEASUREMENT date's quarter — including under a 17B extension, the
+    // same reading creation settled on (GCC 46A.10: UsedIndex = min(current quarter
+    // average, Index_L)). This route kept the older reading, freezing the quarter AT
+    // the original completion date and applying no cap at all, so one edit repriced a
+    // 17B bill on different months from the ones it was created with.
+    const quarterDateForCalculation = measurementDate;
+    const under17BRestriction = !!(contract.isExtended
+      && contract.extensionType === '17B'
+      && contract.originalCompletionDate
+      && measurementDate > contract.originalCompletionDate);
     const { resolvePre2022Setup } = await import('@/lib/pre2022-contract');
     const clauseSetup = resolvePre2022Setup(contract as any);
     let quarter: string;
@@ -528,7 +531,28 @@ export async function PUT(
       pre2022MonthsOverride = pre2022QuarterMonths(quarter, new Date(contract.dateOfOpening));
     }
     const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, calculationMethod, pre2022MonthsOverride);
-    
+
+    // GCC 46A.10: under a 17B extension, each index is capped at Index_L — the index
+    // of the last month of the original completion period. min() applied to the
+    // averages HERE reaches every downstream figure the same way: per-entry PVC and
+    // the dedicated cement/steel amounts alike. Creation does exactly this; the edit
+    // path did not, so editing a 17B bill quietly dropped the cap.
+    let indexCapInfo: { indexL: Record<string, number>; restrictionDate: Date } | null = null;
+    if (under17BRestriction && contract.originalCompletionDate) {
+      const { getCappedIndices } = await import('@/lib/extension-compliance');
+      const capped = await getCappedIndices(
+        new Date(contract.originalCompletionDate),
+        quarterlyAverages,
+        new Date(contract.baseMonth),
+      );
+      for (const qa of quarterlyAverages) {
+        if (capped.cappedIndices[qa.indexName] !== undefined) {
+          qa.average = capped.cappedIndices[qa.indexName];
+        }
+      }
+      indexCapInfo = { indexL: capped.indexL_Values, restrictionDate: new Date(contract.originalCompletionDate) };
+    }
+
     // ===== STEP 10: Compute New Classification Entries with PVC Breakdown =====
     // Collected, not written — the writes happen together in STEP 16's transaction.
     const entryRowsToCreate: any[] = [];
@@ -650,18 +674,22 @@ export async function PUT(
       explosivesPvc: totalClassificationExplosives,
       totalPvc: totalClassificationPvc,
       extensionDetails: {
-        isInExtensionPeriod: false,
+        isInExtensionPeriod: under17BRestriction,
         extensionType: contract.isExtended ? contract.extensionType : null,
-        pvcRestrictionDate: null
+        pvcRestrictionDate: indexCapInfo?.restrictionDate ?? null
       },
       appliedRestrictions: {
-        isRestricted: false,
+        // The cap was applied to the averages themselves, so the totals above ARE the
+        // restricted figures. These flags are what the bill card, the statement and
+        // the detail panel read to show the bill as 17B-restricted; hardcoding them
+        // false stripped those markings off every bill that was ever edited.
+        isRestricted: !!indexCapInfo,
         originalPvcAmount: totalClassificationPvc,
         restrictedPvcAmount: totalClassificationPvc,
         savingsAmount: 0
       }
     };
-    
+
     console.log('💰 ===== PER-ENTRY PVC CALCULATIONS COMPLETE (UPDATE) =====\n');
     
     // ===== STEP 13: Calculate Dedicated Cement and Steel PVC =====
