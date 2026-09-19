@@ -96,8 +96,12 @@ export async function buildAccountsChecklist(billId: string): Promise<ChecklistI
     key: 'quarter',
     label: 'Quarter and measurement date',
     value: `${bill.quarter} · measured ${day(bill.dateOfMeasurement)}`,
-    note: bill.contract.isExtended && bill.contract.extensionType === '17B'
-      ? `17B extension — indices frozen at the original completion date (${day(bill.contract.originalCompletionDate)}).`
+    // Read the bill's own stored flag, not the contract's latest extension type: the
+    // 17B restriction is sticky, so a later 17A extension must not clear this note.
+    // "Capped", not "frozen" — the quarter is still the measurement quarter, and each
+    // index is the lower of that quarter's average and Index_L (GCC 46A.10).
+    note: pvc.isIndexCapped
+      ? `17B extension — each index capped at its value for ${day(bill.contract.originalCompletionDate)}, the last month of the original completion period.`
       : undefined,
     tone: 'info',
   });

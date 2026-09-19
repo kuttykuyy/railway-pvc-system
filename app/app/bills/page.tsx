@@ -1958,7 +1958,7 @@ export default function BillsPage() {
                         {bill.pvcCalculation ? (
                           <div>
                             {/* Show dual amounts for 17B extension bills */}
-                            {bill.contract?.isExtended && bill.contract?.extensionType === '17B' && bill.pvcCalculation.isIndexCapped && bill.pvcCalculation.originalPvcAmount && bill.pvcCalculation.restrictedPvcAmount ? (
+                            {bill.pvcCalculation.isIndexCapped && bill.pvcCalculation.originalPvcAmount && bill.pvcCalculation.restrictedPvcAmount ? (
                               <div className="flex flex-col gap-1">
                                 <div className="font-medium text-green-600" suppressHydrationWarning>
                                   <span className="text-xs text-gray-500 font-normal">Actual PVC (With 17B):</span>
@@ -2405,7 +2405,7 @@ export default function BillsPage() {
                         <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-xl p-3">
                           <p className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400 uppercase tracking-wider mb-1">PVC Amount</p>
                           {bill.pvcCalculation ? (
-                            bill.contract?.isExtended && bill.contract?.extensionType === '17B' && bill.pvcCalculation.isIndexCapped && bill.pvcCalculation.originalPvcAmount && bill.pvcCalculation.restrictedPvcAmount ? (
+                            bill.pvcCalculation.isIndexCapped && bill.pvcCalculation.originalPvcAmount && bill.pvcCalculation.restrictedPvcAmount ? (
                               <div className="flex flex-col gap-0.5">
                                 <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300" suppressHydrationWarning>
                                   ₹{bill.pvcCalculation.restrictedPvcAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}

@@ -11,6 +11,33 @@ import {
   calculateClassificationBasedPvcWithComponentsAndSteps 
 } from './pvc-calculations';
 
+/** An extension row, as far as the PVC restriction is concerned. */
+export type PvcExtensionRow = { extensionType?: string | null };
+
+/**
+ * Has this contract ever been extended under Clause 17B?
+ *
+ * GCC-2022's note under 17B: where time has been allowed once under 17B, a further
+ * 17A extension may be considered in exceptional circumstances and carries no LD,
+ * "However, Price variation during such extension(s) shall be dealt as applicable for
+ * extension(s) of time under clause 17B." So the price-variation restriction is
+ * permanent. One 17B anywhere in the contract's history keeps every later period
+ * capped, whatever the most recent extension happens to be.
+ *
+ * `contract.extensionType` holds only the LATEST extension's type — every write path
+ * overwrites it — so reading that field alone let a 17A granted after a 17B lift the
+ * cap and overpay. The extension rows are the real record. The contract field stays as
+ * the fallback for contracts that carry a type without any rows (older records, and
+ * the Telegram flow, which sets the field directly).
+ */
+export function isPvcRestrictedContract(
+  contract: { extensionType?: string | null },
+  extensions?: PvcExtensionRow[] | null,
+): boolean {
+  if (extensions?.some(e => e.extensionType === '17B')) return true;
+  return contract.extensionType === '17B';
+}
+
 export interface ExtensionDetails {
   isExtended: boolean;
   extensionType?: '17A' | '17B' | null;
@@ -119,9 +146,10 @@ export async function analyzeContractExtension(
 
   logger.log(`📊 Extension Type: ${extensionType || 'null'}`);
 
-  // Determine if PVC restriction applies (17B extensions only)
-  const requiresPvcRestriction = isInExtensionPeriod && extensionType === '17B';
-  
+  // Determine if PVC restriction applies. Sticky: any 17B in the contract's history
+  // keeps the restriction on, even when a later 17A extension made it the latest type.
+  const requiresPvcRestriction = isInExtensionPeriod && isPvcRestrictedContract(contract, contract.extensions);
+
   logger.log(`🚨 PVC Restriction Required: ${requiresPvcRestriction}`);
   
   // For 17B, PVC restriction date is the end of original/17A completion period
@@ -135,7 +163,11 @@ export async function analyzeContractExtension(
 
   return {
     isExtended,
-    extensionType,
+    // The clause the PVC was actually dealt under, which is what every consumer of
+    // this field records and prints. On a contract whose latest extension is a 17A
+    // granted after a 17B, the treatment is still 17B, so reporting the latest type
+    // here would have the statement claim a restriction under clause 17A.
+    extensionType: requiresPvcRestriction ? '17B' : extensionType,
     originalCompletionDate: originalCompletion,
     currentCompletionDate: currentCompletion,
     pvcRestrictionDate,

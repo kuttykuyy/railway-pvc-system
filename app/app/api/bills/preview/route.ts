@@ -71,6 +71,9 @@ export async function POST(request: NextRequest) {
         originalCompletionDate: true,
         userId: true,
         workDescription: true,
+        // The 17B restriction is sticky (GCC-2022 note under 17B), so it is decided
+        // from the whole extension history, not from the latest type on the contract.
+        extensions: { select: { extensionType: true } },
       },
     });
     if (!contract) return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
@@ -82,16 +85,19 @@ export async function POST(request: NextRequest) {
 
     const measurementDate = new Date(dateOfMeasurement);
 
-    // Quarter logic (mirrors main bill route)
-    let quarterDateForCalc = measurementDate;
-    if (
+    // Quarter logic (mirrors main bill route): always the MEASUREMENT date's quarter,
+    // including under a 17B extension. The cap is applied to the averages below as
+    // min(current quarter average, Index_L), not by moving the quarter — this route
+    // kept the older reading and applied no cap at all, so its preview could differ
+    // from the bill it previews.
+    const quarterDateForCalc = measurementDate;
+    const { isPvcRestrictedContract } = await import('@/lib/extension-compliance');
+    const under17BRestriction = !!(
       contract.isExtended &&
-      contract.extensionType === '17B' &&
+      isPvcRestrictedContract(contract, contract.extensions) &&
       contract.originalCompletionDate &&
       measurementDate > contract.originalCompletionDate
-    ) {
-      quarterDateForCalc = contract.originalCompletionDate;
-    }
+    );
     const quarter = getQuarterFromDate(quarterDateForCalc, contract.baseMonth);
 
     // Steel type extraction
@@ -105,6 +111,23 @@ export async function POST(request: NextRequest) {
       'RBI Cement', 'RBI Explosives', ...steelIndexNames,
     ];
     const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, calculationMethod);
+
+    // GCC 46A.10: cap each index at Index_L, the index of the last month of the
+    // original completion period. Applied to the averages here so every figure below
+    // sees the same cap the real bill is priced with.
+    if (under17BRestriction && contract.originalCompletionDate) {
+      const { getCappedIndices } = await import('@/lib/extension-compliance');
+      const capped = await getCappedIndices(
+        new Date(contract.originalCompletionDate),
+        quarterlyAverages,
+        new Date(contract.baseMonth),
+      );
+      for (const qa of quarterlyAverages) {
+        if (capped.cappedIndices[qa.indexName] !== undefined) {
+          qa.average = capped.cappedIndices[qa.indexName];
+        }
+      }
+    }
 
     // Per-entry PVC calculation (no DB writes)
     const { calculateClassificationEntryPvc, getClassificationComponents } = await import('@/lib/pvc-calculations');

@@ -95,8 +95,11 @@ export function BillCard({
   const [isSubmittingForApproval, setIsSubmittingForApproval] = useState(false);
 
   const isCompact = variant === 'compact';
-  const is17BRestricted = bill.contract?.isExtended && bill.contract?.extensionType === '17B';
-  const is17ACapped = bill.pvcCalculation?.isIndexCapped && is17BRestricted;
+  // The bill's own stored flag is the honest signal: it was set when the PVC was
+  // worked out and already accounts for the 17B restriction being sticky. Gating on
+  // the contract's LATEST extension type stripped the marking off a capped bill as
+  // soon as a 17A extension was added after the 17B.
+  const is17ACapped = !!bill.pvcCalculation?.isIndexCapped;
   
   // Check if user can see creator info
   const canSeeCreator = userRole === 'admin' || userRole === 'railway_official';

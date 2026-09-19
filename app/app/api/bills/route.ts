@@ -450,6 +450,9 @@ export async function POST(request: NextRequest) {
         dateOfOpening: true,
         pvcClauseVersion: true,
         pre2022WorkType: true,
+        // The 17B restriction is sticky (GCC-2022 note under 17B), so it is decided
+        // from the whole extension history, not from the latest type on the contract.
+        extensions: { select: { extensionType: true } },
       }
     });
     
@@ -687,11 +690,12 @@ export async function POST(request: NextRequest) {
     // with what Regenerate then computed, and mislabelled the stored quarter. The cap
     // is applied to the averages below.
     const quarterDateForCalculation = measurementDate;
+    const { isPvcRestrictedContract } = await import('@/lib/extension-compliance');
     const under17BRestriction = !!(contract.isExtended
-      && contract.extensionType === '17B'
+      && isPvcRestrictedContract(contract, contract.extensions)
       && contract.originalCompletionDate
       && measurementDate > contract.originalCompletionDate);
-    
+
     // The two clauses count quarters from different months: GCC-2022 from the month
     // after the base month, the older clause from the month after the OPENING month.
     // Every bill was labelled by the 2022 rule, so on an old-clause contract the stored
@@ -947,7 +951,9 @@ export async function POST(request: NextRequest) {
       totalPvc: totalClassificationPvc,
       extensionDetails: {
         isInExtensionPeriod: under17BRestriction,
-        extensionType: contract.isExtended ? contract.extensionType : null,
+        // The clause the PVC was dealt under, not the contract's latest extension:
+        // a 17A granted after a 17B still gets 17B price-variation treatment.
+        extensionType: under17BRestriction ? '17B' : (contract.isExtended ? contract.extensionType : null),
         pvcRestrictionDate: indexCapInfo?.restrictionDate ?? null
       },
       appliedRestrictions: {
