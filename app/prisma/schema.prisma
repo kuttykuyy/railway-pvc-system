@@ -569,6 +569,17 @@ model BillClassificationEntry {
   /// it out of price variation, so it is listed and paid but earns no PVC.
   outsidePvc                  Boolean @default(false)
 
+  /// What the app proposed for this entry, kept even when the user changed it.
+  ///
+  /// The accepted classification overwrote the suggested one, so a correction left no
+  /// trace: nobody could see which items the app keeps getting wrong, and the same item
+  /// had to be fixed again on the next bill. With both recorded, the corrections
+  /// themselves say where the rules need work.
+  suggestedSubClassificationId String?
+  /// True when a person set the classification on this entry rather than accepting the
+  /// app's. Not the same as disagreeing — a user may pick the same code by hand.
+  manualClassification         Boolean @default(false)
+
   // Per-entry PVC breakdown (calculated during bill processing)
   labourPvc         Float? @default(0)
   plantMachineryPvc Float? @default(0)

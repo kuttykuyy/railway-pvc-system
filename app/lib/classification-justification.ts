@@ -34,6 +34,12 @@ export interface JustificationParts {
   subReason?: string;
   /** Where the item's wording came from, when not the bill itself. */
   sourceNote?: string;
+  /**
+   * What the officer has to check by hand, when the app could not settle it. Printed
+   * last and in its own sentence, so it reads as an open question rather than as part
+   * of the reasoning that follows from the evidence.
+   */
+  checkNote?: string;
 }
 
 /**
@@ -50,7 +56,8 @@ export function composeJustification(parts: JustificationParts): string {
     ? `Classified ${code} — ${groupName} (GCC-2022 Cl. 46A.6).`
     : `Classified ${code} (GCC-2022 Cl. 46A.6).`;
 
-  return [evidence, parts.subReason?.trim(), parts.sourceNote?.trim(), conclusion]
+  const check = parts.checkNote?.trim();
+  return [evidence, parts.subReason?.trim(), parts.sourceNote?.trim(), conclusion, check ? `PLEASE CHECK: ${check}` : '']
     .filter(Boolean)
     .join(' ')
     .replace(/\s+/g, ' ')

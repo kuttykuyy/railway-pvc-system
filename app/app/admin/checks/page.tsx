@@ -15,6 +15,7 @@ const AiModel = load(() => import('../ai-model/page'));
 const SteelCityAudit = load(() => import('../steel-city-audit/page'));
 const JpcCrossCheck = load(() => import('../jpc-cross-check/page'));
 const ClassificationAudit = load(() => import('../classification-audit/page'));
+const ClassificationCorrections = load(() => import('../classification-corrections/page'));
 const AccessCompare = load(() => import('../access-compare/page'));
 const BillDeletions = load(() => import('../bill-deletions/page'));
 
@@ -30,6 +31,7 @@ export default function AdminChecksPage() {
         { key: 'steel-city', name: 'Steel city audit', href: '/admin/steel-city-audit', render: () => <SteelCityAudit /> },
         { key: 'jpc', name: 'JPC cross-check', href: '/admin/jpc-cross-check', render: () => <JpcCrossCheck /> },
         { key: 'classification', name: 'Classification %', href: '/admin/classification-audit', render: () => <ClassificationAudit /> },
+        { key: 'corrections', name: 'Corrections', href: '/admin/classification-corrections', render: () => <ClassificationCorrections /> },
         { key: 'access', name: 'Bill access check', href: '/admin/access-compare', render: () => <AccessCompare /> },
         { key: 'deletions', name: 'Bill deletions', href: '/admin/bill-deletions', render: () => <BillDeletions /> },
       ]}

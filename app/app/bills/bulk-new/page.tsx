@@ -84,6 +84,8 @@ interface ClassificationEntry {
   itemRows?: ItemRow[];
   aiReviewed?: boolean;
   manualClassification?: boolean;
+  /** What the app itself proposed, kept when a person overrides the classification. */
+  suggestedSubClassificationId?: string;
   isDerivedCement?: boolean;
 }
 

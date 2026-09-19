@@ -74,3 +74,28 @@ describe('classificationCodeMatchesWork', () => {
     expect(classificationCodeMatchesWork('6B', 'hostel building renovation')).toBe(false);
   });
 });
+
+describe('inferMainClassification — ties', () => {
+  it('reports a tie instead of letting rule order settle it', () => {
+    // The real Name of Work that put a bridge bill in Building Works: "shed" scores
+    // Building once, "RUB" scores Bridges once, and Building is declared first.
+    const result = inferMainClassification(
+      'Improvement to drainage by providing various infrastructures like drain, cover shed, sealing of joints and sump for RUB/Subways',
+    );
+    expect(result.isTied).toBe(true);
+    expect(result.tiedWith?.map(other => other.code)).toContain('6');
+  });
+
+  it('does not call a clear winner a tie', () => {
+    const result = inferMainClassification(
+      'Construction of railway quarters and staff rooms including masonry, plastering and flooring',
+    );
+    expect(result.code).toBe('5');
+    expect(result.isTied).toBe(false);
+    expect(result.tiedWith).toEqual([]);
+  });
+
+  it('leaves a work that names nothing untied', () => {
+    expect(inferMainClassification('Miscellaneous sundry services').isTied).toBeFalsy();
+  });
+});
