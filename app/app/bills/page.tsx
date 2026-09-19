@@ -167,6 +167,7 @@ export default function BillsPage() {
   const [recalculating, setRecalculating] = useState<string | null>(null); // Bill ID being recalculated
   const [generatingBulkReport, setGeneratingBulkReport] = useState(false);
   const [generatingCombinedPDF, setGeneratingCombinedPDF] = useState<string | null>(null); // stores batchId being generated
+  const [regeneratingBatch, setRegeneratingBatch] = useState<string | null>(null); // stores batchId being regenerated
   const [submittingForApproval, setSubmittingForApproval] = useState(false);
   // Open the panel when a filter was carried in from earlier, so a short list never
   // looks like a short list of bills.
@@ -599,6 +600,20 @@ export default function BillsPage() {
     setFilteredBills(filtered);
   };
 
+  /**
+   * What a batch's Regenerate button should offer. Only bills whose SAVED calculation used
+   * provisional indices are worth redoing — the rest would be rewritten to the same numbers.
+   * `nowFinal` marks the case where the real index has since been published for at least one
+   * of them, which is when the button deserves emphasis rather than sitting quiet.
+   */
+  const batchRegenInfo = (batchBills: Bill[]) => {
+    const pending = batchBills.filter(b => b.pvcCalculation?.usedProvisionalIndices);
+    return {
+      count: pending.length,
+      nowFinal: pending.some(b => b.indicesStatus?.isProvisional === false),
+    };
+  };
+
   // Group bills by batch
   const groupBillsByBatch = (billsToGroup: Bill[]): BillGroup[] => {
     const batchMap = new Map<string, Bill[]>();
@@ -799,6 +814,78 @@ export default function BillsPage() {
       toast.error(message);
     } finally {
       setRecalculating(null);
+    }
+  };
+
+  /**
+   * Regenerate every bill in a batch that is still carrying provisional figures.
+   *
+   * A batch is how the bills of one contract arrive, so the action people actually want once
+   * an index is published is "redo all thirteen" — not thirteen separate clicks, which is what
+   * the batch card offered before. Bills already calculated on final indices are skipped:
+   * redoing them changes nothing, and one of them being submitted would fail the request for
+   * no gain.
+   */
+  const regenerateBatch = async (batchBills: Bill[], batchId: string) => {
+    const targets = batchBills.filter(b => b.pvcCalculation?.usedProvisionalIndices);
+    if (targets.length === 0) return;
+
+    setRegeneratingBatch(batchId);
+    const before = targets.reduce((sum, b) => sum + (b.pvcCalculation?.totalPvc || 0), 0);
+    let after = 0;
+    const updates = new Map<string, PvcCalculation>();
+    const failures: string[] = [];
+
+    try {
+      // Sequential on purpose. Each recalculation rewrites the bill and its PVC rows, and
+      // firing thirteen of those at once is how a batch turns into a pile of write conflicts.
+      for (const bill of targets) {
+        setRecalculating(bill.id);
+        try {
+          const response = await fetch(`/api/bills/${bill.id}/recalculate`, { method: 'POST' });
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || errorData.error || 'Failed to recalculate PVC');
+          }
+          const data = await response.json();
+          updates.set(bill.id, data.pvcCalculation);
+          after += data.pvcCalculation?.totalPvc || 0;
+        } catch (error) {
+          // Keep going: one submitted bill in the batch should not stop the other twelve.
+          after += bill.pvcCalculation?.totalPvc || 0;
+          const message = error instanceof Error ? error.message : 'Failed to recalculate PVC';
+          console.error(`Error recalculating bill ${bill.billNo}:`, error);
+          failures.push(`${bill.billNo}: ${message}`);
+        }
+      }
+
+      if (updates.size > 0) {
+        const updatedAt = new Date().toISOString();
+        setBills(prev => prev.map(bill =>
+          updates.has(bill.id)
+            ? { ...bill, pvcCalculation: updates.get(bill.id), updatedAt }
+            : bill
+        ));
+        // Refresh so the provisional/final badges reflect any newly-entered final indices.
+        void fetchBills();
+      }
+
+      // Say what actually happened. A regeneration that changes nothing looks exactly like
+      // one that failed, which is how "it isn't working" starts.
+      const money = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+      if (updates.size === 0) {
+        toast.error(`None of the ${targets.length} bills could be regenerated. ${failures[0] || ''}`.trim(), { duration: 8000 });
+      } else if (Math.abs(after - before) >= 0.01) {
+        toast.success(`Regenerated ${updates.size} of ${targets.length} bills — batch PVC ${money(before)} → ${money(after)}`, { duration: 6000 });
+      } else {
+        toast.success(`Regenerated ${updates.size} of ${targets.length} bills — the total is unchanged, so the indices they used have not moved.`, { duration: 6000 });
+      }
+      if (failures.length > 0 && updates.size > 0) {
+        toast.error(`${failures.length} bill${failures.length === 1 ? '' : 's'} could not be regenerated — ${failures[0]}`, { duration: 8000 });
+      }
+    } finally {
+      setRecalculating(null);
+      setRegeneratingBatch(null);
     }
   };
 
@@ -2108,6 +2195,39 @@ export default function BillsPage() {
                               <><Download className="h-3 w-3 mr-1" />Combined PDF</>
                             )}
                           </Button>
+                          {/* Regenerate the whole batch — the batch row carried no regenerate at
+                              all, so a contractor whose index had just been published had to
+                              expand the batch and redo every bill one at a time. */}
+                          {(() => {
+                            const { count, nowFinal } = batchRegenInfo(group.bills);
+                            if (count === 0) return null;
+                            const busy = regeneratingBatch === batchId;
+                            return (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className={`h-7 px-2 text-xs ${
+                                  nowFinal
+                                    ? 'border-amber-300 text-amber-800 bg-amber-50/60 hover:bg-amber-100/60'
+                                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  regenerateBatch(group.bills, batchId);
+                                }}
+                                disabled={busy}
+                                title={nowFinal
+                                  ? `A final index is now published — regenerate to replace the provisional figures in ${count} of these bills.`
+                                  : `${count} of these bills still hold provisional figures. Regenerating picks up any index published since they were calculated.`}
+                              >
+                                {busy ? (
+                                  <><LoadingSpinner size="sm" className="mr-1" />Regenerating...</>
+                                ) : (
+                                  <><Calculator className="h-3 w-3 mr-1" />Regenerate ({count})</>
+                                )}
+                              </Button>
+                            );
+                          })()}
                           <Button
                             variant="outline"
                             size="sm"
@@ -2663,6 +2783,39 @@ export default function BillsPage() {
                             <><Download className="h-4 w-4" /><span>Combined PDF</span></>
                           )}
                         </Button>
+                        {/* Regenerate the whole batch. Bills of one contract arrive as a batch and
+                            go provisional together, so the card needs the same action the single
+                            bill card has had all along — once, for all of them. */}
+                        {(() => {
+                          const { count, nowFinal } = batchRegenInfo(group.bills);
+                          if (count === 0) return null;
+                          const busy = regeneratingBatch === batchId;
+                          return (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                regenerateBatch(group.bills, batchId);
+                              }}
+                              disabled={busy}
+                              title={nowFinal
+                                ? `A final index is now published — regenerate to replace the provisional figures in ${count} of these bills.`
+                                : `${count} of these bills still hold provisional figures. Regenerating picks up any index published since they were calculated.`}
+                              className={`font-semibold rounded-xl px-4 py-2 h-9 transition-all duration-200 gap-1.5 ${
+                                nowFinal
+                                  ? 'border-amber-200 hover:border-amber-300 bg-amber-50/60 hover:bg-amber-100/60 dark:border-amber-900/50 dark:bg-amber-950/20 dark:hover:bg-amber-950/40 text-amber-800 dark:text-amber-300'
+                                  : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 text-slate-600 dark:text-slate-300'
+                              }`}
+                            >
+                              {busy ? (
+                                <><LoadingSpinner size="sm" /><span>Regenerating...</span></>
+                              ) : (
+                                <><Calculator className="h-4 w-4" /><span>{nowFinal ? `Regenerate ${count} (final ready)` : `Regenerate ${count}`}</span></>
+                              )}
+                            </Button>
+                          );
+                        })()}
                         <Button 
                           variant="outline"
                           size="sm"
@@ -2734,6 +2887,31 @@ export default function BillsPage() {
                                 >
                                   <Send className="h-3.5 w-3.5 mr-1" />Letter
                                 </Button>
+                                {/* Per-bill regenerate, the same rule as the single bill card: shown
+                                    only when the saved calculation used provisional indices. */}
+                                {bill.pvcCalculation?.usedProvisionalIndices && (() => {
+                                  const nowFinal = bill.indicesStatus?.isProvisional === false;
+                                  const busy = recalculating === bill.id;
+                                  return (
+                                    <Button
+                                      onClick={() => recalculateBill(bill.id)}
+                                      disabled={busy || regeneratingBatch === batchId}
+                                      variant="ghost"
+                                      size="sm"
+                                      title={nowFinal
+                                        ? 'The final index is now published — regenerate to replace the provisional figures.'
+                                        : 'Some months of this quarter are still provisional. Regenerating picks up any index published since this bill was calculated.'}
+                                      className={`h-8 px-3 text-xs font-semibold rounded-lg ${
+                                        nowFinal
+                                          ? 'text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30'
+                                          : 'text-slate-650 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-350 dark:hover:bg-slate-800'
+                                      }`}
+                                    >
+                                      {busy ? <LoadingSpinner size="sm" className="mr-1" /> : <Calculator className="h-3.5 w-3.5 mr-1" />}
+                                      Regenerate
+                                    </Button>
+                                  );
+                                })()}
                                 <Button
                                   variant="ghost"
                                   size="sm"
