@@ -16,6 +16,7 @@ import { getAdministeringZone } from '@/lib/jurisdiction';
 import { BillCard } from '@/components/bill-card';
 import { SourceDocuments } from '@/components/documents/source-documents';
 import { resolvePre2022Setup } from '@/lib/pre2022-contract';
+import { PvcClauseDecision } from '@/components/contracts/pvc-clause-decision';
 import { DeleteBillButton } from '@/components/bills/delete-bill-button';
 import { FirstBillFreeTag } from '@/components/billing/first-bill-free-tag';
 import { getServerSession } from 'next-auth';
@@ -171,6 +172,19 @@ export default async function ContractDetailPage({ params }: Props) {
           correct statement; with no bills yet, it says the next step is uploading one,
           so nobody hunts for a "create old PVC" button that rightly does not exist —
           the bill IS the input. */}
+      {/* Which clause governs, when the tender date cannot say. The statement prints this
+          question in red and tells the reader to record the answer; until now there was
+          nowhere to record it, so the answer stayed in the reader's head and every
+          statement went out on the 2022 rules. Shown only where it IS the question: an
+          undecided tender from the changeover window, or one already answered. */}
+      {(pre2022.version === 'uncertain' || pre2022.versionSource === 'recorded') && (
+        <PvcClauseDecision
+          contractId={contract.id}
+          version={pre2022.version}
+          versionSource={pre2022.versionSource}
+        />
+      )}
+
       {pre2022.isPre2022 && (
         <div className="border border-amber-300 bg-amber-50 rounded-lg p-3 space-y-2">
           <p className="text-sm font-semibold text-amber-900 flex items-center gap-2">
