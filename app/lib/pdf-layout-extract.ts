@@ -156,6 +156,13 @@ export async function extractLayoutText(pdfBuffer: Buffer): Promise<string> {
         const col = Math.round(item.x / charWidth);
         // Pad to reach the column position
         while (line.length < col) line += ' ';
+        // A wide token overruns its column and the next one then starts before its own
+        // column is reached, so the padding loop adds nothing and the two words are
+        // printed as one. That is how "Total Amount(Rs.)" came out "TotalAmount(Rs.)",
+        // which no longer matched the patterns that look for the bill's printed totals.
+        // One space is always enough to keep the words apart; the column alignment of
+        // everything that fits is unaffected.
+        if (line && !line.endsWith(' ')) line += ' ';
         line += item.str;
       }
       pageText += line + '\n';

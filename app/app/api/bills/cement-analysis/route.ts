@@ -790,33 +790,73 @@ function scheduleCode(item: any): string {
   return match?.[1] || '';
 }
 
+/**
+ * The rupee figures printed on the Schedule Summary row whose label matches, read off
+ * that one row and nothing else.
+ *
+ * These totals used to be read as "the first figure within the next 500 characters
+ * after the label". That is not the row. The summary prints its figures to the RIGHT
+ * of the label, so on a bill where the label happened to land after them the scan ran
+ * straight past the row and off the end of the page: CC-6 62908's gross total came out
+ * as 9, from the "Page 9 of 10" footer below it. Every AI retry on such a bill was then
+ * judged against a nonsense target and could only ever be reported as failed.
+ */
+function summaryRow(markdown: string, labelPattern: RegExp): string | undefined {
+  // Read from the end: the Schedule Summary is printed after the item table, so the
+  // LAST line carrying the label is the summary's own, never a heading above it.
+  const lines = markdown.split('\n');
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (labelPattern.test(lines[index])) return lines[index];
+  }
+  return undefined;
+}
+
+function summaryRowFigures(markdown: string, labelPattern: RegExp): number[] {
+  const line = summaryRow(markdown, labelPattern);
+  if (!line) return [];
+  const match = line.match(labelPattern);
+  const afterLabel = line.slice((match?.index ?? 0) + (match?.[0].length ?? 0));
+  return (afterLabel.match(/\d[\d,]*(?:\.\d+)?/g) || [])
+    .map(toFiniteNumber)
+    .filter((value): value is number => value !== undefined);
+}
+
+/**
+ * This bill's own figure out of a summary row.
+ *
+ * The row carries three columns — up to the last bill, this bill, and the total up to
+ * date — and it is the middle one that this bill is reconciled against. The row proves
+ * which is which without counting columns: the first two add up to the third. A row
+ * that prints a single figure, such as the net Bill Amount, gives it straight.
+ */
+function currentBillFigure(figures: number[]): number | undefined {
+  if (figures.length >= 3 && Math.abs(figures[0] + figures[1] - figures[2]) <= 1) {
+    if (figures[1] > 0) return figures[1];
+  }
+  return figures.find(value => value > 0);
+}
+
 function extractPrintedBillAmount(markdown: string): number | undefined {
-  const label = markdown.search(/Bill Amount\s*\(Rs\.?\)/i);
-  if (label < 0) return undefined;
-  const numbers = markdown.slice(label, label + 500).match(/\d[\d,]*(?:\.\d+)?/g) || [];
-  return numbers.map(toFiniteNumber).find((value): value is number => value !== undefined && value > 0);
+  return currentBillFigure(summaryRowFigures(markdown, /Bill Amount\s*\(Rs\.?\)/i));
 }
 
 // The gross "Total Amount(Rs.)" from the Schedule Summary (before any rebate).
 // Extracted items carry gross "including special condition" amounts, so they must
 // reconcile against this, not the (possibly rebate-reduced) net Bill Amount.
 function extractPrintedTotalAmount(markdown: string): number | undefined {
-  const label = markdown.search(/Total Amount\s*\(Rs\.?\)/i);
-  if (label < 0) return undefined;
-  const numbers = markdown.slice(label, label + 500).match(/\d[\d,]*(?:\.\d+)?/g) || [];
-  return numbers.map(toFiniteNumber).find((value): value is number => value !== undefined && value > 0);
+  return currentBillFigure(summaryRowFigures(markdown, /Total Amount\s*\(Rs\.?\)/i));
 }
 
 // The "Rebate(xx.xx%)" row: percentage from the label and the rupee amount that
 // follows it. Present only when the work was awarded below the estimated cost.
 function extractPrintedRebate(markdown: string): { percentage?: number; amount?: number } | undefined {
-  const match = markdown.match(/Rebate\s*\(\s*([\d.]+)\s*%\s*\)/i);
-  if (!match) return undefined;
-  const start = (match.index || 0) + match[0].length;
-  const amount = (markdown.slice(start, start + 300).match(/\d[\d,]*(?:\.\d+)?/g) || [])
-    .map(toFiniteNumber)
-    .find((value): value is number => value !== undefined && value > 0);
-  return { percentage: toFiniteNumber(match[1]), amount };
+  const label = /Rebate\s*\(\s*([\d.]+)\s*%\s*\)/i;
+  const line = summaryRow(markdown, label);
+  if (!line) return undefined;
+  return {
+    percentage: toFiniteNumber(line.match(label)?.[1] || ''),
+    amount: currentBillFigure(summaryRowFigures(markdown, label)),
+  };
 }
 
 async function correctSpecialConditionAmounts(
@@ -1068,29 +1108,29 @@ function completeReconciledItems(
   return [...reconciled, ...recovered];
 }
 
+/**
+ * The bill as text for the AI reader, with the table's columns kept where they print.
+ *
+ * This used to join each line's tokens with a space and throw the x position away. An
+ * IREPS item table is nothing but columns of bare figures, so what the model received
+ * was a row reading "0810 7911 1100 9527 1100 1062 1140090 1316366. 1316366. 1271727"
+ * with no way to tell an agreement quantity from an amount, a rate or a cumulative
+ * total, and with the unit and rate on a separate line again. That is why the retry on
+ * CC-6 62908 answered with an item total of Rs 9,84,562 against a bill of Rs 27,65,002:
+ * it was not misreading the bill so much as guessing at an unreadable one.
+ *
+ * extractLayoutText pads each line to the printed column, the way `pdftotext -layout`
+ * does, so the header row and every figure below it line up. It is the same text the
+ * agreement reader and the Telegram bill flow already give their models.
+ */
 async function convertPdfToMarkdown(file: File, _requestOrigin: string): Promise<string> {
-  const { extractPositionedPdfPages } = await import('@/lib/pdf-layout-extract');
+  const { extractLayoutText } = await import('@/lib/pdf-layout-extract');
   const buffer = Buffer.from(await file.arrayBuffer());
-  const pages = await extractPositionedPdfPages(buffer);
+  const markdown = (await extractLayoutText(buffer)).trim();
 
-  if (!pages || pages.length === 0) {
+  if (!markdown) {
     throw new Error('The uploaded PDF appears to be a scanned image or photo and does not contain selectable text. Please upload a digitally generated PDF from IREPS/IPPAS, or enter the bill details manually.');
   }
-
-  // Reconstruct readable text from positioned items, sorted top-to-bottom then left-to-right
-  const markdown = pages.map((page, i) => {
-    const lines = new Map<number, string[]>();
-    for (const item of page.items) {
-      const row = Math.round(item.y);
-      if (!lines.has(row)) lines.set(row, []);
-      lines.get(row)!.push(item.text);
-    }
-    const pageText = Array.from(lines.entries())
-      .sort(([a], [b]) => a - b)
-      .map(([, tokens]) => tokens.join(' '))
-      .join('\n');
-    return `Page ${i + 1} of ${pages.length}\n\n${pageText}`;
-  }).join('\n\n---\n\n').trim();
 
   if (markdown.length < 100) {
     throw new Error('The PDF contained no usable bill text.');
