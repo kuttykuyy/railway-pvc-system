@@ -23,7 +23,32 @@
  * their wording from the code chain and never from position.
  */
 
-const ITEM_OPENERS = /^(?:supply|supplying|providing|provision|fabricat\w*|manufactur\w*|removing|removal|painting|paint|launching|delaunching|cleaning|surface|design|designing|erection|erecting|arresting|casting|laying|fixing|extra|boring|welding|dismantling|excavation|earth|dressing|drilling|filling|grouting|hire|hiring|installation|installing|loading|unloading|making|carriage|transport\w*|replacing|renewal|repair\w*|constructing|construction|cutting|screening|shifting|strengthening|testing|training|widening|jacketing|sealing|anchoring|bailing|dewatering)\b/i;
+// The words a schedule item opens with. Every one of them was taken from an item in
+// the books, not guessed: the list was built by reading each shared-opening case USSOR
+// has and asking whether what followed is a whole item of its own or a variant tail of
+// the item before it ("In hard rock ...", "With two cover coats ...", "12 MT capacity").
+const ITEM_OPENERS = new RegExp('^(?:' + [
+  // Supply and make.
+  'supply|supplying|providing|provision|fabricat\\w*|manufactur\\w*|casting|making|assembl\\w*',
+  // Put in place.
+  'laying|linking|fixing|erection|erecting|installation|installing|launching|delaunching',
+  'constructing|construction|widening|strengthening|jacketing|sealing|anchoring|grouting',
+  'shoring|bending|packing|stacking',
+  // Take away.
+  'removing|removal|dismantling|breaking|cutting|excavation|boring|drilling|taking',
+  // Treat a surface.
+  'painting|paint|applying|cleaning|surface|galvanis\\w*|galvaniz\\w*|anti-?\\s*corrosive',
+  // Track maintenance, which USSOR names by the operation.
+  'through|lubrication|lubricating|opening|overhauling|interchanging|slack|pulling|shifting',
+  'in-?\\s?situ|re-?conditioning|attending|arresting|replacing|renewal|repair\\w*|un-?\\s?loading',
+  // Move, hire and run.
+  'carriage|transport\\w*|loading|unloading|hire|hiring|carrying|arranging',
+  // The rest.
+  'mechani\\w*|design|designing|extra|welding|earth|dressing|filling|screening|testing|training',
+  'conducting|dewatering|bailing',
+  // Two items USSOR opens with the thing being done rather than the doing of it.
+  'foundation preparation|pulse echo test',
+].join('|') + ')\\b', 'i');
 
 /** How much of an item description has to be its own before it counts as one. */
 const MIN_OWN_LENGTH = 120;
@@ -90,4 +115,4 @@ function onePass(items) {
   return stripped;
 }
 
-module.exports = { stripCarriedOverHeadings };
+module.exports = { stripCarriedOverHeadings, ITEM_OPENERS };

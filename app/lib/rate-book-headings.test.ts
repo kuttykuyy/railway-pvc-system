@@ -62,3 +62,77 @@ describe('the shipped USSOR 2021 book', () => {
     expect(stripCarriedOverHeadings(items)).toEqual([]);
   });
 });
+
+const { repairTableReads, collapseRepeatedRuns, dropEmbeddedItemCode } = require('../scripts/repair-table-reads') as {
+  repairTableReads: (items: Array<{ c: string; d: string }>) => string[];
+  collapseRepeatedRuns: (text: string) => string;
+  dropEmbeddedItemCode: (text: string) => string;
+};
+
+describe('repairTableReads', () => {
+  it('cuts at a stray item code when a whole item follows it', () => {
+    // USSOR 211240, as read: the machinery-hire item in front of its own wording.
+    const was = 'Hiring of machinery for minor miscellaneous works for short duration including operator/driver, fuel, lubricants and consumable. '
+      + 'Payment shall be made for actual working hours at site. 211240 Loading of sand/quarry dust filled bags from Railway stacks in to '
+      + "Railway Wagons with all contractor's empty polythene cement bag, tools & plants, machinery, labour, lead and lift, crossing of track "
+      + 'wherever necessary etc., complete as directed by the Engineer In charge.';
+    expect(dropEmbeddedItemCode(was)).toMatch(/^Loading of sand\/quarry dust filled bags/);
+  });
+
+  it('keeps the heading when only a short variant follows the code', () => {
+    // USSOR 103031: "Using H3B electrodes" is this item's variant, not an item of its own.
+    const was = "Reconditioning of worn out 1:8½ tongue rail of all rail sections on Cess or Depot, as directed by engineer in-charge. 103031 Using H3B electrodes";
+    expect(dropEmbeddedItemCode(was)).toBe(
+      "Reconditioning of worn out 1:8½ tongue rail of all rail sections on Cess or Depot, as directed by engineer in-charge. Using H3B electrodes",
+    );
+  });
+
+  it('collapses a line the page break made the reader read twice', () => {
+    expect(collapseRepeatedRuns("Loading of all types of rails on BFRs with Railway's Portal Crane in PQRS Depot, Portal Crane in PQRS Depot, complete in such a complete in such a manner that no damage occurs"))
+      .toBe("Loading of all types of rails on BFRs with Railway's Portal Crane in PQRS Depot, complete in such a manner that no damage occurs");
+  });
+
+  it('leaves a measurement written twice on purpose alone', () => {
+    // USSOR 186160 really does measure a pit 1025mm x 1025mm x 1000mm.
+    const measured = 'Digging of pit of size 1025mm x 1025mm x 1000mm for fixing of the post';
+    expect(collapseRepeatedRuns(measured)).toBe(measured);
+  });
+
+  it('reports the codes it changed and leaves clean items alone', () => {
+    const items = [
+      { c: '1', d: 'Supplying and fixing in position access ladders on bridges as directed by the Engineer in charge.' },
+      { c: '2', d: 'Painting cleaned girders cleaned girders including all scaffolding as directed by the Engineer in charge.' },
+    ];
+    expect(repairTableReads(items)).toEqual(['2']);
+    expect(items[1].d).toBe('Painting cleaned girders including all scaffolding as directed by the Engineer in charge.');
+  });
+});
+
+describe('the shipped USSOR 2021 book, after the table-read repair', () => {
+  it('gives 211240 the wording its rate is for', () => {
+    const item = itemOf('211240');
+    expect(item.d).toMatch(/^Loading of sand\/quarry dust filled bags/);
+    expect(item.d).not.toMatch(/Hiring of machinery/);
+  });
+
+  it('gives 041124 its own capacity, not the item before it', () => {
+    expect(itemOf('041124').d).toMatch(/250 MT Capacity/);
+  });
+
+  it('gives 123100 the track-linking wording, not the slewing item above it', () => {
+    const item = itemOf('123100');
+    expect(item.d).toMatch(/^Assembling, laying and linking of Broad Gauge track/);
+    expect(item.d).not.toMatch(/Shifting \/ Slewing/);
+  });
+
+  it('keeps a pit that really is measured twice', () => {
+    expect(itemOf('186160').d).toMatch(/1025mm x 1025mm x 1000mm/);
+  });
+
+  it('has nothing left for either rule to repair', () => {
+    const items = (ussor as { items: Array<{ c: string; d: string; u: string }> })
+      .items.map(item => ({ ...item }));
+    expect(repairTableReads(items)).toEqual([]);
+    expect(stripCarriedOverHeadings(items)).toEqual([]);
+  });
+});

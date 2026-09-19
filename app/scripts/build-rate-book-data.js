@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { stripCarriedOverHeadings } = require('./strip-carried-over-headings');
+const { repairTableReads } = require('./repair-table-reads');
 
 const [, , edition, source, outFile, ...volumes] = process.argv;
 if (!edition || !source || !outFile || !volumes.length) {
@@ -95,9 +96,14 @@ for (const { item } of byCode.values()) delete item.own;
 const merged = [...byCode.values()].map(entry => entry.item)
   .sort((left, right) => left.c.localeCompare(right.c, undefined, { numeric: true }));
 
-// USSOR only: drop the previous item's wording from the front of an item that carries
-// it. DSR's wording is composed from the code chain above, so it never picks one up.
+// USSOR only. Its wording is read off the page, so it comes back with what the page
+// break left in it: a stray item code, a line read twice, and the item before it sitting
+// in front of its own text. DSR's wording is composed from the code chain above, so it
+// picks up none of the three.
 if (/USSOR/i.test(edition)) {
+  // The stray code and the repeated line first — the heading rule reads the text.
+  const repaired = repairTableReads(merged);
+  console.log(`${edition}: repaired the table read of ${repaired.length} items`);
   const stripped = stripCarriedOverHeadings(merged);
   console.log(`${edition}: stripped a carried-over heading from ${stripped.length} items`);
 }
