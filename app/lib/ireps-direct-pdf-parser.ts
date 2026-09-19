@@ -316,16 +316,22 @@ type SteelCategory = 'TMT' | 'ANGLE_CHANNEL' | 'PLATES' | 'OTHER_SECTIONS';
  */
 function steelCategoriesFor(text: string): SteelCategory[] {
   const found = new Set<SteelCategory>();
-  if (/\b(?:tmt|reinforcement|thermo-?\s*mechanically treated|fe-?500|fe-?550)\b/.test(text)) found.add('TMT');
-  if (/\b(?:angles?|channels?|joists?|\bISA\b|\bISMC\b|\bISMB\b)\b/i.test(text)) found.add('ANGLE_CHANNEL');
+  // Reinforcement is named several ways across the books: DSR 5.22 writes "Steel
+  // reinforcement", USSOR writes the grade ("Fe-500D"), and bills write "HYSD",
+  // "rebars" or "deformed bars" for the same material.
+  if (/\b(?:tmt|reinforcement|thermo-?\s*mechanically treated|rebars?|hysd|deformed\s+bars?|fe-?\s?(?:415|500|550|600))\b/.test(text)) found.add('TMT');
+  // Rolled sections, as the schedules print them — DSR 15.17 lists "R.S. Joists" and
+  // "Channels, angles, tees and flats"; USSOR 195010/195020 name "ISMC 150mm x 75mm"
+  // and "H-beam Sleepers".
+  if (/\b(?:angles?|channels?|joists?|rsj|r\.\s*s\.\s*joists?|isa|ismc|ismb|ishb|h-?beams?)\b/.test(text)) found.add('ANGLE_CHANNEL');
   if (/\bplates?\b|\bchequered\b|\bgussets?\b/.test(text)) found.add('PLATES');
-  if (/\b(?:flats?|rounds?|squares?|tees?|wire rope|rails?)\b/.test(text)) found.add('OTHER_SECTIONS');
+  if (/\b(?:flats?|rounds?|squares?|tees?|wire rope|binding wire|rails?)\b/.test(text)) found.add('OTHER_SECTIONS');
 
   // Structural work that names no section is made of all three structural categories.
   // There is no "structural" category in 46A.9(1) to put it in, and Other Sections is
   // the residue, not the default.
-  const structural = /\bstructural steel\b|\bbuilt[\s-]*up section/.test(text)
-    || /\btruss(?:es)?\b|\bframed work\b|\bgirders?\b|\bgantry\b|\bstanchions?\b/.test(text);
+  const structural = /\bstructural steel\b|\bbuilt[\s-]*up section|\brolled sections?\b/.test(text)
+    || /\btruss(?:es)?\b|\bframed work\b|\bgirders?\b|\bgantry\b|\bstanchions?\b|\bpurlins?\b/.test(text);
   if (structural && !found.has('ANGLE_CHANNEL') && !found.has('PLATES')) {
     found.add('ANGLE_CHANNEL');
     found.add('PLATES');
@@ -389,7 +395,12 @@ export function materialFlags(description: string) {
   const paidExtra = (material: RegExp) =>
     new RegExp(`(?:payment|cost)\\s+(?:for|of)\\b[^.]{0,200}?${material.source}[^.]{0,200}?\\b(?:paid|made)\\s+(?:extra|separately)\\b`).test(text)
     || new RegExp(`${material.source}[^.]{0,200}?\\b(?:shall|will)\\s+be\\s+(?:paid|made)\\s+(?:extra|separately)\\b`).test(text);
-  const steelPaidElsewhere = paidExtra(/\b(?:reinforcement|steel)\b/);
+  // The note has to be about the item's OWN steel. USSOR 195010/195020 supply steel
+  // sleepers by the tonne and end "Cost of steel fittings and GRSP shall be paid
+  // separately" — that is the bolts that go with them, not the sleeper, and reading it
+  // as "the steel is paid elsewhere" stripped the steel off an item that is nothing
+  // but steel.
+  const steelPaidElsewhere = paidExtra(/\b(?:reinforcement|steel)\b(?!\s+(?:fittings?|fixtures?|fastenings?|fasteners?|accessor\w*))/);
   const cementPaidElsewhere = paidExtra(/\bcement\b/);
   // Taking a structure down is not supplying steel, whatever it was built from.
   const demolition = /\b(?:demolish(?:ing|ed)?|dismantl(?:ing|ed)?)\b/.test(text);

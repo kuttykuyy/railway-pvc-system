@@ -20,7 +20,8 @@ import { composeJustification, repairAiJustification, officialGroupName } from '
 import { fillAgreementNumberFromBill } from '@/lib/agreement-number-from-bill';
 import { inferScheduleSubHead, CONTEXT as DSR_CONTEXT } from '@/lib/dsr-subhead-classification';
 import { recordAiUsage, tokensFromUsage } from '@/lib/ai-usage';
-import { parseIrepsBillPdfDirect } from '@/lib/ireps-direct-pdf-parser';
+import { materialFlags, parseIrepsBillPdfDirect } from '@/lib/ireps-direct-pdf-parser';
+import { resolveMaterialSuffix } from '@/lib/steel-supply-classification';
 import { AiProviderCreditsExhaustedError, completeJson, withModelSpec, currentModelSpec, aiProviderConfigured } from '@/lib/ai/llm-client';
 
 export const dynamic = 'force-dynamic';
@@ -309,6 +310,15 @@ function applyDeterministicClassification(
   const contractGovernsGroup = contractMain.code !== '9'
     && contractMain.matchedKeywords.length > 0
     && !contractMain.isMultiScope
+    // ...and only when the Name of Work names that group more than once, the same bar
+    // a sub-work heading has to clear below. One word in a long sentence is not a
+    // statement of scope, and it silently outranked the schedule the bill itself files
+    // the item under: "Improvement to drainage by providing various infrastructures
+    // like drain, cover shed, sealing of joints and sump for RUB/Subways..." names
+    // Building Works once, on "shed", and Bridges once, on "RUB" — a tie settled by
+    // the order of the rules — and that put every item of a bill whose own schedules
+    // read "CHAPTER - 2/4/5 : Bridge Works" into Building Works.
+    && (contractMain.contenders?.[0]?.score ?? 0) >= 2
     // ...and only when the bill is billing one work. Where it prints a heading per
     // sub-work, those headings — not one sentence covering all of them — say which
     // work each item belongs to.
@@ -380,7 +390,6 @@ function applyDeterministicClassification(
 
   const text = itemText.toLowerCase();
   const supportsFabricationClasses = resolvedCode !== '1';
-  const isFabrication = /fabricat|assembl|erect|launch/.test(text);
   // Taking steel OUT is not supplying it. A dismantling item is measured in the same
   // weight units as a supply item and names the same steel — "Dismantling the existing
   // crane rails ... by gas cutting" (MT), "Dismantling of existing LWR/SWR track,
@@ -388,29 +397,29 @@ function applyDeterministicClassification(
   // steel, which prices the whole amount against the steel index. That work is almost
   // entirely labour; no steel is being bought.
   const isRemoval = /dismantl|demolish|removing|removal of|taking out|dispos(?:al|ing)|scrap/.test(text);
-  const excludesSteel = /excluding steel|without steel|steel supplied by railway|free issue steel/.test(text);
-  const includesSteel = /including steel|with steel|contractor.{0,30}suppl/.test(text);
+
+  // The A/B/C/D/E reading of the item's material nature, from its own wording and its
+  // unit. Cement supply already overrides the AI outright above; steel had no
+  // equivalent, so its deterministic rules only ran when the AI offered no suffix at
+  // all. When the AI returns the generic 'A' — what it gives when it recognised
+  // nothing in particular — a steel item was silently filed as general work.
+  const material = resolveMaterialSuffix({
+    description: text,
+    unit: item.unit,
+    isSteelItem: item.isSteelItem,
+    supportsFabricationClasses,
+    isDirectCementSupply: looksLikeDirectCementSupply(item),
+  });
+  const { isSteelSupplyItem, isSteelFabricationItem } = material;
 
   let suffix = 'A';
   let subReason = 'Composite work item — no separate steel or cement supply, no fabrication or erection.';
 
-  // A separate steel-supply item, billed by weight with no fabrication/erection
-  // wording (which would make it D or E). Cement supply already overrides the AI
-  // outright above; steel had no equivalent, so its deterministic rule below only
-  // ran when the AI offered no suffix at all. When the AI returns the generic 'A'
-  // — what it gives when it recognised nothing in particular — a TMT item billed
-  // in Kg was silently filed as general work instead of supply of steel.
-  const isSteelSupplyItem = (() => {
-    const unit = item.unit.trim().toUpperCase().replace(/[\s.]+/g, '');
-    if (!['KG', 'KGS', 'MT', 'TONNE', 'TON', 'METRICTONNE', 'QUINTAL'].includes(unit)) return false;
-    if (/fabricat|assembl|erect|launch/.test(text)) return false;
-    if (isRemoval) return false;
-    return item.isSteelItem || /item\s*-?\s*steel|steel supply/.test(text);
-  })();
-
   if (aiSuffix
     && (supportsFabricationClasses || !['D', 'E'].includes(aiSuffix))
-    && !(aiSuffix === 'A' && isSteelSupplyItem)
+    // A generic 'A' cannot stand over an item whose own wording says it is a supply of
+    // steel (…B), or fabrication of steelwork the contractor buys the steel for (…D).
+    && !(aiSuffix === 'A' && (isSteelSupplyItem || isSteelFabricationItem))
     // The AI reads "rails", "steel" and a weight unit and offers B for a dismantling
     // item too. B means the contractor is supplying steel, so it cannot apply to work
     // that takes steel out; the deterministic branches below settle it instead.
@@ -426,25 +435,8 @@ function applyDeterministicClassification(
     subReason = `Read as ${suffixMeaning[aiSuffix] || 'a specific work type'} on AI review of the item.`;
   } else {
     // Deterministic fallback
-    const fabricationKeyword = text.match(/fabricat\w*|assembl\w*|erect\w*|launch\w*/)?.[0];
-    if (supportsFabricationClasses && isFabrication && excludesSteel) {
-      suffix = 'E';
-      subReason = `Item says "${fabricationKeyword}" and that steel is excluded or railway-supplied.`;
-    } else if (supportsFabricationClasses && isFabrication && includesSteel) {
-      suffix = 'D';
-      subReason = `Item says "${fabricationKeyword}" and that the contractor supplies the steel.`;
-    } else if (looksLikeDirectCementSupply(item)) {
-      suffix = 'C';
-      subReason = `Cement supplied as its own item, billed in ${item.unit}.`;
-    } else if (isSteelSupplyItem) {
-      // isSteelSupplyItem alone, which checks the unit and rules out fabrication and
-      // removal. The looser tests that used to sit here — the steel flag on its own,
-      // or the words "steel supply" appearing anywhere in the item text — put every
-      // item that merely mentioned steel into B whatever its unit, track dismantling
-      // measured in TRM included.
-      suffix = 'B';
-      subReason = `Steel supplied as its own item, billed by weight in ${item.unit}.`;
-    }
+    suffix = material.suffix;
+    subReason = material.reason;
   }
 
   return {
@@ -484,6 +476,34 @@ export interface ExtractedBillDetails {
   amountsReconciled?: boolean;
   warnings?: string[];
   items: ExtractedBillItem[];
+}
+
+/**
+ * Read steel off the rate book's wording too, for items nothing marked as steel.
+ *
+ * A bill prints only what distinguishes a sub-item — "Channels, angles, tees and
+ * flats", "Thermo-Mechanically Treated bars of grade Fe-500D" — and the parent
+ * heading that names the material sits in the schedule of rates, not on the bill.
+ * The direct PDF reader flags materials before that wording is fetched, and the AI
+ * reader marks a TMT row confidently while missing steel worded any other way
+ * ("Structural steel work riveted, bolted or welded in built up sections",
+ * "Fabrication & supply of Galvanized Steel Channel Sleepers made from ISMC
+ * 150mm x 75mm"). Either way the item reached classification with no steel flag on it
+ * and was filed as general work.
+ *
+ * Additive only: an item already marked steel keeps its own flag and type, and the
+ * cement flags are left exactly as they were read. The same exclusions still apply,
+ * since they are re-tested on the bill's own text together with the book's.
+ */
+function addSteelFlagsFromRateBookWording(items: ExtractedBillItem[]): void {
+  for (const item of items) {
+    if (item.isSteelItem) continue;
+    const flags = materialFlags(`${item.rateBookDescription || ''} ${item.description || ''}`.trim());
+    if (!flags.isSteelItem) continue;
+    item.isSteelItem = true;
+    item.steelType = flags.steelType;
+    item.steelTypesUsed = flags.steelTypes as ExtractedBillItem['steelTypesUsed'];
+  }
 }
 
 function isDirectCementSupplyItem(item: ExtractedBillItem): boolean {
@@ -1132,6 +1152,7 @@ export async function extractBillDetailsDirect(pdfBuffer: Buffer, contractId?: s
   // from the schedule of rates before anything is classified from the wording.
   const normalizedItems = parsed.items.map(normalizeExtractedItem);
   await enrichItemsFromRateBook(normalizedItems);
+  addSteelFlagsFromRateBookWording(normalizedItems);
   const severalWorks = billCoversSeveralWorks(normalizedItems);
 
   const billDetails: ExtractedBillDetails = {
@@ -1364,6 +1385,7 @@ async function finalizeExtractedBillDetails(
     ? parsed.items.map(normalizeExtractedItem)
     : [];
   await enrichItemsFromRateBook(normalizedItems);
+  addSteelFlagsFromRateBookWording(normalizedItems);
   const severalWorks = billCoversSeveralWorks(normalizedItems);
   const items = normalizedItems
     .map((item: ExtractedBillItem) => applyDeterministicClassification(item, workDescription, severalWorks));
@@ -2033,7 +2055,10 @@ export async function POST(request: NextRequest) {
           if (looksLikeDirectCementSupply(item)) {
             item.suggestedClassificationCode = `${mainCode}C`;
             item.suggestedClassificationReason = `Under GCC Clause 46A, item${descQuote} (DSR ${coefficient.dsrCode}) is a direct supply of cement and is therefore classified under Sub-classification ${mainCode}C (items for the supply of cement).`;
-          } else {
+          } else if (!/[BD]$/.test(currentCode.toUpperCase())) {
+            // ...but not over a steel item. A cement coefficient says what cement an
+            // item consumes; it is no reason to take a supply of steel (…B) or steel
+            // fabrication (…D) and call it general work.
             item.suggestedClassificationCode = `${mainCode}A`;
             item.suggestedClassificationReason = `Under GCC Clause 46A, item${descQuote} (DSR ${coefficient.dsrCode}) is a general work item classified under Sub-classification ${mainCode}A; the cement it consumes is valued separately from the DSR cement coefficient and grouped under ${mainCode}C.`;
           }
