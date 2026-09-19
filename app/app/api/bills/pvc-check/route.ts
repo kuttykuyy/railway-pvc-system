@@ -67,6 +67,9 @@ export async function POST(request: NextRequest) {
         isExtended: true,
         extensionType: true,
         originalCompletionDate: true,
+        // The 17B restriction is sticky (GCC-2022 note under 17B), so it is decided
+        // from the whole extension history, not from the latest type on the contract.
+        extensions: { select: { extensionType: true } },
       }
     });
 
@@ -120,8 +123,9 @@ export async function POST(request: NextRequest) {
     // quarter at the original completion date and never applied the cap, so a paid
     // check on a 17B contract quoted a figure the bill itself would not produce.
     const quarterDateForCalculation = measurementDate;
+    const { isPvcRestrictedContract } = await import('@/lib/extension-compliance');
     const under17BRestriction = !!(contract.isExtended
-      && contract.extensionType === '17B'
+      && isPvcRestrictedContract(contract, contract.extensions)
       && contract.originalCompletionDate
       && measurementDate > contract.originalCompletionDate);
     const quarter = getQuarterFromDate(quarterDateForCalculation, contract.baseMonth);

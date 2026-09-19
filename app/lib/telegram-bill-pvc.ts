@@ -109,7 +109,12 @@ export interface ProcessUploadedBillResult {
 export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Promise<ProcessUploadedBillResult> {
   const { chatId, contractId, billFileId, billFileName } = args;
 
-  let contract = await prisma.contract.findUnique({ where: { id: contractId } });
+  // extensions: the 17B restriction is sticky (GCC-2022 note under 17B), so it is
+  // decided from the whole history, not from the latest type on the contract.
+  let contract = await prisma.contract.findUnique({
+    where: { id: contractId },
+    include: { extensions: { select: { extensionType: true } } },
+  });
   if (!contract) {
     await sendTelegramMessage(chatId, '❌ Could not find the contract for this bill. Please resend the agreement PDF.');
     return {};
@@ -240,11 +245,15 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
     return { needsInput: true };
   }
 
-  // 17B-extended contracts freeze the quarter at the original completion date.
-  let quarterDate = measurementDate;
-  if (contract.isExtended && contract.extensionType === '17B' && contract.originalCompletionDate && measurementDate > contract.originalCompletionDate) {
-    quarterDate = contract.originalCompletionDate;
-  }
+  // Always the MEASUREMENT date's quarter, including under a 17B extension. The cap is
+  // applied to the averages below as min(current quarter average, Index_L), not by
+  // moving the quarter — this path kept the older reading and applied no cap at all.
+  const quarterDate = measurementDate;
+  const { isPvcRestrictedContract } = await import('./extension-compliance');
+  const under17BRestriction = !!(contract.isExtended
+    && isPvcRestrictedContract(contract, contract.extensions)
+    && contract.originalCompletionDate
+    && measurementDate > contract.originalCompletionDate);
   const quarter = getQuarterFromDate(quarterDate, contract.baseMonth);
 
   // Q0 means the measurement date falls on/before the base month, so no PVC period
@@ -306,6 +315,22 @@ export async function processUploadedBillPvc(args: ProcessUploadedBillArgs): Pro
         `This is the same rule as the website — the PVC can be worked out once the indices for ${quarter} are published.`,
     );
     return {};
+  }
+
+  // GCC 46A.10: cap each index at Index_L, the index of the last month of the
+  // original completion period, so Telegram quotes the same figure as the app.
+  if (under17BRestriction && contract.originalCompletionDate) {
+    const { getCappedIndices } = await import('./extension-compliance');
+    const capped = await getCappedIndices(
+      new Date(contract.originalCompletionDate),
+      quarterlyAverages,
+      new Date(contract.baseMonth),
+    );
+    for (const qa of quarterlyAverages) {
+      if (capped.cappedIndices[qa.indexName] !== undefined) {
+        qa.average = capped.cappedIndices[qa.indexName];
+      }
+    }
   }
 
   const preparedEntries = entries.map((e) => ({
@@ -1004,7 +1029,10 @@ export async function renderAndSendPaidReport(chatId: string, paymentLinkId?: st
   // the most recent, which is what the single slot holds.
   const deliveredLinkId = matched?.linkId ?? data.docPendingPaymentLinkId;
 
-  const contract = await prisma.contract.findUnique({ where: { id: payload.contractId } });
+  const contract = await prisma.contract.findUnique({
+    where: { id: payload.contractId },
+    include: { extensions: { select: { extensionType: true } } },
+  });
   if (!contract) return false;
 
   // Re-render lock: rendering + embedding index docs is heavy, so refuse to start a
@@ -1039,6 +1067,29 @@ export async function renderAndSendPaidReport(chatId: string, paymentLinkId?: st
       contract.baseMonth,
       'auto',
     );
+
+    // GCC 46A.10: the statement must be built on the same capped indices the quoted
+    // figure was worked out from. Without this the rendered PDF showed uncapped
+    // numbers for a 17B contract while the message quoted the capped total.
+    const { isPvcRestrictedContract, getCappedIndices } = await import('./extension-compliance');
+    const reportMeasurementDate = new Date(payload.measurementDate);
+    if (
+      contract.isExtended &&
+      isPvcRestrictedContract(contract, contract.extensions) &&
+      contract.originalCompletionDate &&
+      reportMeasurementDate > contract.originalCompletionDate
+    ) {
+      const capped = await getCappedIndices(
+        new Date(contract.originalCompletionDate),
+        quarterlyAverages,
+        new Date(contract.baseMonth),
+      );
+      for (const qa of quarterlyAverages) {
+        if (capped.cappedIndices[qa.indexName] !== undefined) {
+          qa.average = capped.cappedIndices[qa.indexName];
+        }
+      }
+    }
 
     const pdfBuf = await buildIrReport({
       contract,
