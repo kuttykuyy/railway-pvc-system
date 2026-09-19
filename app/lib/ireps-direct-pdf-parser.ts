@@ -92,16 +92,49 @@ function cellText(
     .replace(/\s+/g, '');
 }
 
-// A table row can straddle a page break: IREPS prints the integer part of each
-// figure at the foot of one page and the remaining digits on the very first line
-// of the next, in the same columns. Returns that first line's items.
+// A piece of a figure carried over the page break: digits, and the decimal point or
+// thousands comma that can fall on the far side of the break with them. Requiring
+// bare digits was why the rows below were lost — a quantity continues as "0.316",
+// and that was thrown away while the "59" paise of its amount were kept, leaving a
+// row whose quantity and amount no longer agreed.
+const CONTINUATION_FRAGMENT = /^[\d,]*\.?[\d,]+$/;
+
+// A table row can straddle a page break: IREPS prints the leading digits of each
+// figure at the foot of one page and the rest at the top of the next, in the same
+// columns. Returns that carried-over block.
+//
+// The block is not always one line. A long figure wraps inside its own narrow cell,
+// so the remainder of one row can print down the first three lines of the next page:
+// item 081031 of CC-6 62908 continues as "0.316" on the first line, its amount's "59"
+// paise on the second and a final "2" of the quantity on the third. Reading only the
+// topmost line kept the row's amount at Rs 13,16,366 against a quantity of 1100,
+// which then failed to multiply out and cost the bill the whole row.
+//
+// The block ends at the first line that is not pure figures. A description, a unit, a
+// "(G)", a chapter heading or the page header all begin the next page's own content,
+// and none of them can be mistaken for the tail of a number.
 function pageTopItems(page: PositionedPdfPage | undefined): PositionedPdfTextItem[] {
   if (!page || !page.items.length) return [];
-  const topY = Math.min(...page.items.map(item => item.y));
-  return page.items.filter(item => item.y <= topY + 3);
+  const sorted = [...page.items].sort((left, right) => left.y - right.y);
+  const lines: PositionedPdfTextItem[][] = [];
+  for (const item of sorted) {
+    const line = lines[lines.length - 1];
+    if (line && Math.abs(line[0].y - item.y) <= 3) line.push(item);
+    else lines.push([item]);
+  }
+  const block: PositionedPdfTextItem[] = [];
+  // Four lines is already more than a figure has ever wrapped into; past that the
+  // page simply opens with numbers of its own, which belong to no row above.
+  for (const line of lines.slice(0, 4)) {
+    if (!line.every(item => CONTINUATION_FRAGMENT.test(item.text.trim()))) break;
+    block.push(...line);
+  }
+  return block;
 }
 
-// The digits continuing a column, taken from the next page's first line.
+// The digits continuing a column, taken from the next page's carried-over block.
+// Read in printing order — down the lines, then left to right within a line — which
+// is the order the wrapped figure was laid out in.
 function continuationDigits(
   nextPage: PositionedPdfPage | undefined,
   topItems: PositionedPdfTextItem[],
@@ -111,9 +144,9 @@ function continuationDigits(
   return topItems
     .filter(item => {
       const x = normalizedX(nextPage, item);
-      return x >= range[0] && x < range[1] && /^\d+$/.test(item.text.trim());
+      return x >= range[0] && x < range[1] && CONTINUATION_FRAGMENT.test(item.text.trim());
     })
-    .sort((left, right) => left.x - right.x)
+    .sort((left, right) => left.y - right.y || left.x - right.x)
     .map(item => item.text.trim())
     .join('');
 }
@@ -935,14 +968,33 @@ export async function parseIrepsBillPdfDirect(pdfBuffer: Buffer): Promise<Determ
       // which Qty x Rate could not tell from the true 1078074.52. Only a row with
       // nothing below it on its page can continue onto the next one.
       const isLastRowOnPage = index === deduped.length - 1;
-      const straddlesPageBreak = isLastRowOnPage
+      const brokenFigure = isLastRowOnPage
         && ([X.agreementRate, X.qtySinceLast, X.amountSinceLast, X.specialAmount] as const)
           .some(range => cellText(page, page.items, range, unitItem.y).endsWith('.'));
-      const readCell = (range: readonly [number, number]) => {
-        const base = cellText(page, page.items, range, unitItem.y);
-        if (!base || !straddlesPageBreak) return base;
+      const pageCell = (range: readonly [number, number]) => cellText(page, page.items, range, unitItem.y);
+      const joinedCell = (range: readonly [number, number]) => {
+        const base = pageCell(range);
+        if (!base) return base;
         return `${base}${continuationDigits(nextPage, nextPageTop, range)}`;
       };
+      // The row itself says whether the carry-over was read right: a row that has been
+      // rejoined correctly multiplies out, and one that has swallowed figures belonging
+      // to the next page's own first row does not. So the joined reading is taken when
+      // it multiplies out, and dropped in favour of the page's own figures when those
+      // multiply out and the joined ones do not — the case the trailing point cannot
+      // tell apart, because a figure wraps inside a page as well as across one. When
+      // neither reads true the joined figures stand, as they always did, and the
+      // Qty x Rate check below still has the last word.
+      const multipliesOut = (read: (range: readonly [number, number]) => string) => {
+        const rate = numericValue(read(X.agreementRate));
+        const rowQuantity = numericValue(read(X.qtySinceLast));
+        const amount = numericValue(read(X.amountSinceLast));
+        if (!rate || !rowQuantity || !amount) return false;
+        return Math.abs(rowQuantity * rate - amount)
+          <= Math.max(1, Math.abs(amount) * 0.001, Math.abs(rate) * 0.01);
+      };
+      const straddlesPageBreak = brokenFigure && (multipliesOut(joinedCell) || !multipliesOut(pageCell));
+      const readCell = straddlesPageBreak ? joinedCell : pageCell;
 
       const agreementRateRaw = readCell(X.agreementRate);
       const quantityRaw = readCell(X.qtySinceLast);

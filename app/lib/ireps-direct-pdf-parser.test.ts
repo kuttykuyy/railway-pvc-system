@@ -104,6 +104,40 @@ function additionalNsBill(): PositionedPdfPage[] {
   return [page16, summary];
 }
 
+/**
+ * The page break that cost CC-6 62908 a whole row.
+ *
+ * Item 081031, Rs 13,16,366.59 of structural steel, is the last row on its page and
+ * every figure it carries is cut in half by the break. The remainder does not print on
+ * one line: the quantity's "0.316" lands on the first line of the next page, the
+ * amount's "59" paise on the second, and the quantity's final "2" on the third. Reading
+ * only the first of those lines left a quantity of 1100 standing against an amount of
+ * Rs 13,16,366, which cannot multiply out, so the row was dropped and the bill came up
+ * short by its whole value.
+ */
+function pageBreakBill(): PositionedPdfPage[] {
+  const page4 = page(4, [
+    ...HEADER,
+    ...words(148, [[304, 'Schedule'], [347, 'B-Execution'], [404, 'of'], [418, 'all'], [438, 'works'], [476, 'under'], [510, 'USSOR'], [550, '2021-Ver-1']]),
+    ...words(530, [[60, 'Chapter'], [102, 'Name:-'], [139, 'Steel'], [171, 'And'], [192, 'Aluminium'], [244, 'Work']]),
+    ...words(544, [[98, '0810'], [300, '7911'], [337, '1100'], [380, '9527'], [413, '1100'], [450, '1062'], [492, '1140090'], [544, '1316366.'], [600, '1316366.'], [659, '1271727']]),
+    ...words(548.5, [[67, '-'], [135, 'Kg'], [184, '87.03'], [237, '119.66625'], [713, 'Now'], [734, 'to'], [750, 'pay'], [771, '100%']]),
+  ]);
+  const page5 = page(5, [
+    ...words(32, [[410, '0.316'], [447, '72.83']]),
+    ...words(37, [[98, '31'], [308, '2.0'], [340, '00.0'], [380, '2.518'], [492, '4.96'], [574, '59'], [630, '59'], [679, '1.55']]),
+    ...words(42, [[429, '2'], [461, '42']]),
+    ...words(49, [[98, '(G)']]),
+    ...words(56, [[135, 'In'], [149, 'RSJ,'], [172, 'tees,'], [200, 'angles'], [232, 'and'], [250, 'channels']]),
+    ...words(300, [[60, 'Schedule'], [110, 'Summary:']]),
+    ...words(361, [[173, '11400904.96'], [286, '1316366.59'], [437, '12717271.55']]),
+    ...words(362, [[55, 'Total'], [79, 'Amount(Rs.)']]),
+    ...words(389, [[286, '1316366.59']]),
+    ...words(390, [[55, 'Bill'], [74, 'Amount'], [100, '(Rs.)'], [123, '(Including'], [165, 'Tax'], [180, '(GST))']]),
+  ]);
+  return [page4, page5];
+}
+
 describe('parseIrepsBillPdfDirect', () => {
   beforeEach(() => {
     extractPositionedPdfPages.mockReset();
@@ -161,6 +195,21 @@ describe('parseIrepsBillPdfDirect', () => {
     expect(ns.description).not.toMatch(/50%|lengt|Reduction/);
     expect(ns.amountSinceLastBill).toBe(445069.5);
     expect(ns.amountAtAgreementRateSinceLastBill).toBe(463614.06);
+    expect(bill.amountsReconciled).toBe(true);
+  });
+
+  it('rejoins a row whose figures continue over the first three lines of the next page', async () => {
+    extractPositionedPdfPages.mockResolvedValue(pageBreakBill());
+    const bill = await parseIrepsBillPdfDirect(Buffer.from('%PDF-1.4 test'));
+
+    expect(bill.items).toHaveLength(1);
+    expect(bill.items[0]).toMatchObject({
+      itemNo: '081031',
+      unit: 'Kg',
+      quantitySinceLastBill: 11000.3162,
+      agreementRate: 119.66625,
+      amountSinceLastBill: 1316366.59,
+    });
     expect(bill.amountsReconciled).toBe(true);
   });
 });
