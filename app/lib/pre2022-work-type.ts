@@ -55,6 +55,22 @@ const IS_A_BOX_STRUCTURE = /\b(rub|rubs|lhs|subway|subways|limited height|box ce
 const MENTIONS_EXPLOSIVES = /\b(explosive|explosives|blasting|controlled blast)\b/;
 const MENTIONS_TUNNELLING = /\btunnel(ling|ing|s)?\b/;
 const IS_PWAY_LINKING = /\b(p-?way|permanent way)\b.*\b(linking|relaying|renewal)\b|\b(linking|relaying)\b.*\b(track|p-?way|permanent way)\b|\bthrough (rail|sleeper) renewal\b/;
+/**
+ * A foot over bridge is a station structure, not a bridge in the clause's sense.
+ *
+ * It carries passengers over the tracks: there is no waterway, no span classified under
+ * the Bridge Manual, and its schedules are RCC foundations, steel fabrication, roofing,
+ * flooring and railings — the trades of a station building, not of earthwork and heavy
+ * plant. But the word "bridge" sits inside its own name, so the earthwork-and-bridges
+ * pattern below swallowed "Construction of foot over bridge at X station" and priced it
+ * at fuel 25% and materials 10% against a building's 5% and 35%. That is the same trap
+ * the box-structure rule above exists for, reached from the other side.
+ *
+ * Written "FOB" as often as spelled out, on IR tenders to the point of being the normal
+ * form, so both are matched.
+ */
+const IS_FOOT_OVER_BRIDGE = /\bf\.?o\.?b\.?s?\b|\bfoot[- ]?over[- ]?bridges?\b|\bfoot[- ]?bridges?\b/;
+
 const IS_BUILDING = /\b(building|buildings|quarters|station building|service building|office block|toilet block|platform shelter)\b/;
 const IS_EARTHWORK_OR_BRIDGE = /\b(earthwork|earth work|formation|embankment|cutting|bridge|bridges|culvert|ballast)\b/;
 
@@ -113,6 +129,19 @@ export function suggestPre2022WorkType(workDescription: string): Pre2022WorkType
       'major-important-bridges',
       'firm',
       'The description names a major or important bridge, which is a defined term in the Bridge Manual and has its own column.'
+    );
+  }
+
+  // Before the buildings test only because it must be before the bridges test; both land
+  // on the same column, and this one carries its own reason.
+  if (IS_FOOT_OVER_BRIDGE.test(text)) {
+    return decide(
+      'building',
+      'needs-checking',
+      'This is a foot over bridge at a station. It is not a major or important bridge and not earthwork — '
+        + 'there is no waterway, and the work is RCC foundations, steel fabrication, roofing and flooring — '
+        + 'so it sits with buildings, on labour (40%) and materials (35%). Confirm it against the price '
+        + 'variation chapter of the tender, which names the type this work was tendered under.'
     );
   }
 

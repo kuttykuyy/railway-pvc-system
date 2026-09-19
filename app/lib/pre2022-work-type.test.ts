@@ -84,6 +84,27 @@ describe('the other work types', () => {
     expect(suggestPre2022WorkType('Construction of station building and staff quarters').workType).toBe('building');
   });
 
+  it('keeps a foot over bridge out of the bridges column, spelled either way', () => {
+    // "Bridge" is inside its own name, so the earthwork-and-bridges pattern used to take
+    // "Construction of foot over bridge" and price it at fuel 25% and materials 10%.
+    const wordings = [
+      'Provision of 1st FOB at Arugul (ARGL) PH, Dhaulimuhan (DLMH) PH and Solari (SLZ) PH stations',
+      'Construction of foot over bridge at Balugaon station',
+      'Provision of foot-over-bridge and its approaches',
+      'Widening of FOBs at three stations',
+    ];
+    for (const wording of wordings) {
+      const s = suggestPre2022WorkType(wording);
+      expect(s.workType, wording).toBe('building');
+      expect(s.reason, wording).toMatch(/tender/i);
+    }
+  });
+
+  it('still sends a named major bridge to its own column, FOB or not', () => {
+    expect(suggestPre2022WorkType('Rebuilding of Major Bridge No. 247 and its approach FOB').workType)
+      .toBe('major-important-bridges');
+  });
+
   it('does not call a subway a building, though its trades look like one', () => {
     // Concrete, shuttering and plaster appear in both. Order of testing decides this.
     expect(suggestPre2022WorkType('Subway construction including building works and plastering').workType)
