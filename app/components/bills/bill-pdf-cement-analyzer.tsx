@@ -124,6 +124,14 @@ export interface AppliedExtractionContext {
   source?: 'pdf' | 'sheet';
 }
 
+/** One bill that has been read, kept so a batch can be looked at as a whole. */
+interface ReadBill {
+  upload: AppliedExtractionContext;
+  data: CementAnalysisData;
+  extractionId: string | null;
+  isUnlocked: boolean;
+}
+
 interface BillPdfCementAnalyzerProps {
   title?: string;
   compact?: boolean;
@@ -187,6 +195,20 @@ function formatAmount(value: number | null | undefined) {
   })}`;
 }
 
+/** How a bill's own item total sits against its Schedule Summary. */
+type ReconciliationState = 'match' | 'rounding' | 'mismatch';
+
+function reconciliationOf(details?: ExtractedBillDetails): ReconciliationState | null {
+  if (!details) return null;
+  if (!details.amountsReconciled) return 'mismatch';
+  const difference = Math.abs((details.itemAmountTotal ?? 0) - (details.scheduleSummaryTotal ?? 0));
+  return difference <= 0.05 ? 'match' : 'rounding';
+}
+
+function itemCountOf(data: CementAnalysisData) {
+  return data.billDetails?.items?.length || data.extractedItems?.length || 0;
+}
+
 function isSpecialConditionOnlyItem(item: ExtractedBillItem) {
   return Number(item.quantitySinceLastBill || 0) === 0
     && Number(item.amountAtAgreementRateSinceLastBill || 0) === 0
@@ -215,7 +237,39 @@ export function BillPdfCementAnalyzer({
   const [readFailed, setReadFailed] = useState(false);
   const analysisStartedAtRef = useRef<number | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [result, setResult] = useState<CementAnalysisData | null>(null);
+  // Every bill read in this run, oldest first. A batch of PDFs used to overwrite one
+  // slot per file, so when the run ended only the last bill was on screen and the rest
+  // of the batch could not be looked at at all. They are all kept now, and the one on
+  // screen is whichever row of the overview is chosen.
+  const [readBills, setReadBills] = useState<ReadBill[]>([]);
+  const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
+  const selectedBill = readBills.find(bill => bill.upload.uploadId === selectedUploadId) ?? null;
+  const result = selectedBill?.data ?? null;
+  const extractionId = selectedBill?.extractionId ?? null;
+  const isUnlocked = selectedBill ? selectedBill.isUnlocked : true;
+  const activeUpload = selectedBill?.upload ?? null;
+  const selectedIndex = readBills.findIndex(bill => bill.upload.uploadId === selectedUploadId);
+  const readBillsGrossTotal = readBills.reduce(
+    (total, bill) => total + (Number(bill.data.billDetails?.grossBillAmount) || 0),
+    0,
+  );
+
+  /** Keeps a freshly read bill and shows it. Outside a multi-file run there is only ever
+   *  one bill on this screen, so a new read replaces it. */
+  const recordRead = (entry: ReadBill) => {
+    setReadBills(previous => (
+      multiple
+        ? [...previous.filter(bill => bill.upload.uploadId !== entry.upload.uploadId), entry]
+        : [entry]
+    ));
+    setSelectedUploadId(entry.upload.uploadId);
+  };
+
+  const updateRead = (uploadId: string, patch: Partial<Omit<ReadBill, 'upload'>>) => {
+    setReadBills(previous => previous.map(bill => (
+      bill.upload.uploadId === uploadId ? { ...bill, ...patch } : bill
+    )));
+  };
   useEffect(() => {
     if (!openFilePickerRef) return;
     openFilePickerRef.current = () => inputRef.current?.click();
@@ -234,15 +288,12 @@ export function BillPdfCementAnalyzer({
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [showAllItems, setShowAllItems] = useState(false);
 
-  const [extractionId, setExtractionId] = useState<string | null>(null);
-  const [isUnlocked, setIsUnlocked] = useState(true);
   const [unlocking, setUnlocking] = useState(false);
   const [unlockCost, setUnlockCost] = useState(0);
 
   // The upload whose result is on screen. Handed to the page with every application of
   // that result so it can tell "the same bill again" from "another bill".
   const uploadCounterRef = useRef(0);
-  const [activeUpload, setActiveUpload] = useState<AppliedExtractionContext | null>(null);
   // Where we are in a multi-PDF run, and which of its files could not be read. Failures
   // stay on screen after the run: a toast is gone by the time the last bill lands, and
   // "one of these nine did not come through" is not a thing to leave the user guessing.
@@ -334,8 +385,7 @@ export function BillPdfCementAnalyzer({
       }
 
       const unlockedData = json.data as CementAnalysisData;
-      setResult(unlockedData);
-      setIsUnlocked(true);
+      if (activeUpload) updateRead(activeUpload.uploadId, { data: unlockedData, isUnlocked: true });
 
       const cementAmount = unlockedData.summary?.cementAmount;
       if (typeof cementAmount === 'number' && cementAmount > 0 && onApplyCementAmount) {
@@ -395,7 +445,7 @@ export function BillPdfCementAnalyzer({
       } : undefined,
       extractedItems: result.extractedItems ? updatedItems : undefined,
     };
-    setResult(updated);
+    if (activeUpload) updateRead(activeUpload.uploadId, { data: updated });
     onApplyBillDetails?.(updated, activeUpload ?? undefined);
     toast.success('Item removed from the extracted list.');
   };
@@ -430,7 +480,6 @@ export function BillPdfCementAnalyzer({
       batch,
       source: 'pdf',
     };
-    setActiveUpload(upload);
 
     try {
       analysisStartedAtRef.current = Date.now();
@@ -512,11 +561,14 @@ export function BillPdfCementAnalyzer({
       }
 
       const data = json.data as CementAnalysisData;
-      setResult(data);
       setReadFailed(false);
       // The server keeps the uploaded PDF for 90 days and names it here. Carried on the
       // upload context so whoever saves the bill can attach it.
       upload.documentId = typeof json.documentId === 'number' ? json.documentId : null;
+
+      const unlocked = !!json.isUnlocked;
+      // Joins the bills already read in this run instead of replacing them.
+      recordRead({ upload, data, extractionId: json.extractionId || null, isUnlocked: unlocked });
 
       // The contract's agreement number can change as a side effect of reading the
       // bill; that must never happen silently, and a refusal because the number is
@@ -527,10 +579,7 @@ export function BillPdfCementAnalyzer({
       } else if (fill?.conflict) {
         toast.error(fill.reason, { duration: 10000 });
       }
-      setExtractionId(json.extractionId || null);
 
-      const unlocked = !!json.isUnlocked;
-      setIsUnlocked(unlocked);
       if (typeof json.cost === 'number') {
         setUnlockCost(json.cost);
       }
@@ -666,10 +715,8 @@ export function BillPdfCementAnalyzer({
       }
 
       const data = json.data as CementAnalysisData;
-      setResult(data);
-      setExtractionId(json.extractionId || null);
-      setIsUnlocked(true);
       upload.documentId = typeof json.documentId === 'number' ? json.documentId : null;
+      recordRead({ upload, data, extractionId: json.extractionId || null, isUnlocked: true });
 
       if (onApplyBillDetails) await onApplyBillDetails(data, upload);
       toast.success(`Read ${data.billDetails?.items?.length || 0} item(s) from the spreadsheet. Check every row before creating the bill.`);
@@ -992,13 +1039,114 @@ export function BillPdfCementAnalyzer({
           </div>
         </div>
 
+        {readBills.length > 1 && (
+          <div className="rounded-lg border bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-slate-50 px-3 py-2">
+              <div className="text-xs font-semibold text-slate-800">
+                All bills read{' '}
+                <span className="font-normal text-muted-foreground">({readBills.length})</span>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Gross total {formatAmount(readBillsGrossTotal)}
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="border-b bg-muted/60">
+                  <tr>
+                    <th className="w-8 px-2 py-2 text-left font-medium">#</th>
+                    <th className="px-2 py-2 text-left font-medium">Bill No</th>
+                    <th className="px-2 py-2 text-left font-medium">Measurement Date</th>
+                    <th className="px-2 py-2 text-right font-medium">Gross Amount</th>
+                    <th className="px-2 py-2 text-right font-medium">Items</th>
+                    <th className="px-2 py-2 text-right font-medium">Steel Items</th>
+                    <th className="px-2 py-2 text-left font-medium">Item total</th>
+                    <th className="px-2 py-2 text-right font-medium">
+                      <span className="sr-only">Open</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {readBills.map((bill, index) => {
+                    const details = bill.data.billDetails;
+                    const state = reconciliationOf(details);
+                    const isShown = bill.upload.uploadId === selectedUploadId;
+                    return (
+                      <tr
+                        key={bill.upload.uploadId}
+                        onClick={() => setSelectedUploadId(bill.upload.uploadId)}
+                        aria-selected={isShown}
+                        className={`cursor-pointer ${isShown ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
+                      >
+                        <td className="px-2 py-2 text-muted-foreground">{index + 1}</td>
+                        <td className="px-2 py-2 font-medium">
+                          {details?.billNo || '-'}
+                          <span
+                            className="block max-w-[220px] truncate text-[11px] font-normal text-muted-foreground"
+                            title={bill.upload.fileName}
+                          >
+                            {bill.upload.fileName}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-2">{details?.measurementDate || '-'}</td>
+                        <td className="whitespace-nowrap px-2 py-2 text-right font-medium">
+                          {formatAmount(details?.grossBillAmount)}
+                        </td>
+                        <td className="px-2 py-2 text-right">{itemCountOf(bill.data)}</td>
+                        <td className="px-2 py-2 text-right">{bill.data.steelItems?.length || 0}</td>
+                        <td className="whitespace-nowrap px-2 py-2">
+                          {state === 'match' ? (
+                            <span className="inline-flex items-center gap-1 text-emerald-800">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Matches
+                            </span>
+                          ) : state === 'rounding' ? (
+                            <span className="inline-flex items-center gap-1 text-amber-800">
+                              <AlertCircle className="h-3.5 w-3.5" />
+                              Off by rounding
+                            </span>
+                          ) : state === 'mismatch' ? (
+                            <span className="inline-flex items-center gap-1 text-amber-800">
+                              <AlertCircle className="h-3.5 w-3.5" />
+                              Does not match
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-2 text-right">
+                          <Button
+                            type="button"
+                            variant={isShown ? 'secondary' : 'ghost'}
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={(event) => { event.stopPropagation(); setSelectedUploadId(bill.upload.uploadId); }}
+                          >
+                            {isShown ? 'Showing' : 'View items'}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {result && (
           <div className="space-y-3 rounded-lg border bg-white p-3">
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <div className="text-[11px] text-muted-foreground">Bill items</div>
-                <Badge variant="secondary">{result.billDetails?.items?.length || result.extractedItems?.length || 0}</Badge>
+                <Badge variant="secondary">{itemCountOf(result)}</Badge>
               </div>
+              {readBills.length > 1 && selectedIndex >= 0 && (
+                <div className="max-w-full truncate text-[11px] text-muted-foreground" title={activeUpload?.fileName}>
+                  Showing bill {selectedIndex + 1} of {readBills.length}
+                  {activeUpload?.fileName ? ` · ${activeUpload.fileName}` : ''}
+                </div>
+              )}
             </div>
 
             {result.billDetails && (
@@ -1022,26 +1170,24 @@ export function BillPdfCementAnalyzer({
               </div>
             )}
 
-            {result.billDetails?.amountsReconciled
-              && Math.abs((result.billDetails.itemAmountTotal ?? 0) - (result.billDetails.scheduleSummaryTotal ?? 0)) <= 0.05 && (
+            {reconciliationOf(result.billDetails) === 'match' && (
               <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
                 <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Item total {formatAmount(result.billDetails.itemAmountTotal)} matches the Schedule Summary amount including special condition.
+                Item total {formatAmount(result.billDetails?.itemAmountTotal)} matches the Schedule Summary amount including special condition.
               </div>
             )}
 
-            {result.billDetails?.amountsReconciled
-              && Math.abs((result.billDetails.itemAmountTotal ?? 0) - (result.billDetails.scheduleSummaryTotal ?? 0)) > 0.05 && (
+            {reconciliationOf(result.billDetails) === 'rounding' && (
               <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Item total {formatAmount(result.billDetails.itemAmountTotal)} is within rounding of the Bill Amount {formatAmount(result.billDetails.scheduleSummaryTotal)} (off by {formatAmount(Math.abs((result.billDetails.itemAmountTotal ?? 0) - (result.billDetails.scheduleSummaryTotal ?? 0)))}). Each row is printed rounded to paise, so a long bill drifts by a few.
+                Item total {formatAmount(result.billDetails?.itemAmountTotal)} is within rounding of the Bill Amount {formatAmount(result.billDetails?.scheduleSummaryTotal)} (off by {formatAmount(Math.abs((result.billDetails?.itemAmountTotal ?? 0) - (result.billDetails?.scheduleSummaryTotal ?? 0)))}). Each row is printed rounded to paise, so a long bill drifts by a few.
               </div>
             )}
 
-            {result.billDetails && !result.billDetails.amountsReconciled && (
+            {reconciliationOf(result.billDetails) === 'mismatch' && (
               <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Item total {formatAmount(result.billDetails.itemAmountTotal)} does not match the Schedule Summary amount {formatAmount(result.billDetails.scheduleSummaryTotal)} (difference {formatAmount(result.billDetails.amountDifference)}). Please review the extracted items below.
+                Item total {formatAmount(result.billDetails?.itemAmountTotal)} does not match the Schedule Summary amount {formatAmount(result.billDetails?.scheduleSummaryTotal)} (difference {formatAmount(result.billDetails?.amountDifference)}). Please review the extracted items below.
               </div>
             )}
 
@@ -1163,15 +1309,15 @@ export function BillPdfCementAnalyzer({
                   </table>
                 </div>
 
-                {(result.billDetails?.items?.length || result.extractedItems?.length || 0) > (compact ? 5 : 12) && (
+                {itemCountOf(result) > (compact ? 5 : 12) && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     {compact || !showAllItems ? (
                       <span>
-                        Showing first {compact ? 5 : 12} of {result.billDetails?.items?.length || result.extractedItems?.length || 0} extracted bill items.
+                        Showing first {compact ? 5 : 12} of {itemCountOf(result)} extracted bill items.
                       </span>
                     ) : (
                       <span>
-                        Showing all {result.billDetails?.items?.length || result.extractedItems?.length || 0} extracted bill items.
+                        Showing all {itemCountOf(result)} extracted bill items.
                       </span>
                     )}
                     {!compact && (
