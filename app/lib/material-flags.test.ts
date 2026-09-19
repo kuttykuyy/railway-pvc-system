@@ -10,6 +10,23 @@ describe('materialFlags', () => {
     expect(structural.steelTypes).toEqual(['ANGLE_CHANNEL', 'PLATES', 'OTHER_SECTIONS']);
   });
 
+  it('reads reinforcement written any of the ways bills write it', () => {
+    for (const wording of ['HYSD bars of grade Fe-415', 'Supply of rebars', 'Deformed bars for RCC work', 'TOR steel Fe 550 bars']) {
+      const flags = materialFlags(wording);
+      expect(flags.isSteelItem, wording).toBe(true);
+    }
+    expect(materialFlags('HYSD bars of grade Fe-415').steelType).toBe('TMT');
+    expect(materialFlags('Deformed bars for RCC work').steelType).toBe('TMT');
+  });
+
+  it('reads rolled sections the schedules name by their section code', () => {
+    // DSR 15.17 and USSOR 195010 / 195020, as printed.
+    expect(materialFlags('R.S. Joists of any section').steelTypes).toContain('ANGLE_CHANNEL');
+    expect(materialFlags('Galvanized Steel Channel Sleepers made from ISMC 150mm x 75mm standard rolled section').steelTypes).toContain('ANGLE_CHANNEL');
+    expect(materialFlags('Galvanized H-beam Sleepers made out of standard Rolled sections conforming to IS 2062').steelTypes).toContain('ANGLE_CHANNEL');
+    expect(materialFlags('Steel work in built up sections with purlins and framed work').steelTypes).toContain('PLATES');
+  });
+
   it('does not read a concrete item as steel because its note says reinforcement is paid extra', () => {
     // USSOR 024010, as printed.
     const flags = materialFlags(
@@ -29,6 +46,15 @@ describe('materialFlags', () => {
     );
     expect(flags.isSteelItem).toBe(false);
     expect(flags.isCementAffected).toBe(false);
+  });
+
+  it('keeps the steel on an item whose note only pays for the FITTINGS separately', () => {
+    // USSOR 195020, as printed: the sleeper itself is steel, billed by the tonne.
+    const flags = materialFlags(
+      'Miscellaneous Fabrication & supply of Galvanized H-beam Sleepers made out of the materials confirming to IS 2062 of standard Rolled sections '
+      + 'as per approved drawing Nos RDSO/B/1636/4/R,5&9 complete and directed by Engineer-in charge. Note: Cost of steel fittings and GRSP shall be paid separately.',
+    );
+    expect(flags.isSteelItem).toBe(true);
   });
 
   it('does not read demolition as steel', () => {
