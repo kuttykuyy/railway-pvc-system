@@ -2510,10 +2510,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // SEPARATE PVC CALCULATION FOR EACH CLASSIFICATION
         
         // Calculate quarters for 17B restrictions
-        let cappedQuarter = '';
         let cappedQuarterDate = '';
         if (is17BRestricted && bill.contract.originalCompletionDate) {
-          cappedQuarter = getQuarterFromDate(new Date(bill.contract.originalCompletionDate), new Date(bill.contract.baseMonth));
           cappedQuarterDate = format(new Date(bill.contract.originalCompletionDate), 'dd MMM yyyy');
         }
         
@@ -2526,10 +2524,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             quarterInfo: `Using Measurement Quarter: ${measurementQuarter} (Measurement Date: ${format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy')})`
           },
           { 
-            title: "PVC CALCULATION BY CLASSIFICATION (WITH 17B RESTRICTION)", 
-            indices: quarterlyAverageIndices, 
+            title: "PVC CALCULATION BY CLASSIFICATION (WITH 17B RESTRICTION)",
+            indices: quarterlyAverageIndices,
             isRestricted: true,
-            quarterInfo: `Using Capped Quarter: ${cappedQuarter} (Original Completion: ${cappedQuarterDate})`
+            // The restricted figures are the MEASUREMENT quarter's averages capped at
+            // Index_L (GCC 46A.10), not the completion-date quarter's averages. The
+            // line used to name that other quarter, so the statement described months
+            // the bill was never priced on.
+            quarterInfo: `Using Measurement Quarter ${measurementQuarter}, each index capped at Index_L`
+              + ` (last month of original completion period: ${cappedQuarterDate})`
           }
         ] : [
           { 
@@ -3713,10 +3716,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // CEMENT WORK SECTION - Separate Table Format
       if (bill.cementAmount && bill.cementAmount > 0) {
         // Calculate quarters for 17B restrictions
-        let cappedQuarterForCement = '';
         let cappedQuarterDateForCement = '';
         if (is17BRestricted && bill.contract.originalCompletionDate) {
-          cappedQuarterForCement = getQuarterFromDate(new Date(bill.contract.originalCompletionDate), new Date(bill.contract.baseMonth));
           cappedQuarterDateForCement = format(new Date(bill.contract.originalCompletionDate), 'dd MMM yyyy');
         }
         
@@ -3728,9 +3729,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             quarterInfo: `Using Measurement Quarter: ${measurementQuarter} (Measurement Date: ${format(new Date(bill.dateOfMeasurement), 'dd MMM yyyy')})`
           },
           { 
-            title: "CEMENT CALCULATION (WITH 17B RESTRICTION)", 
-            quarter: cappedQuarterForCement,
-            quarterInfo: `Using Capped Quarter: ${cappedQuarterForCement} (Original Completion: ${cappedQuarterDateForCement})`,
+            title: "CEMENT CALCULATION (WITH 17B RESTRICTION)",
+            // The restriction is a cap on the MEASUREMENT quarter's index, not a switch
+            // to the completion-date quarter (GCC 46A.10). The printed index is the
+            // stored capped one either way; naming the other quarter only described
+            // months the bill was never priced on.
+            quarter: measurementQuarter,
+            quarterInfo: `Using Measurement Quarter ${measurementQuarter}, index capped at Index_L`
+              + ` (last month of original completion period: ${cappedQuarterDateForCement})`,
             isRestricted: true
           }
         ] : [
@@ -3986,10 +3992,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         ];
         
         // Calculate quarters for 17B restrictions
-        let cappedQuarterForSteel = '';
         let cappedQuarterDateForSteel = '';
         if (is17BRestricted && bill.contract.originalCompletionDate) {
-          cappedQuarterForSteel = getQuarterFromDate(new Date(bill.contract.originalCompletionDate), new Date(bill.contract.baseMonth));
           cappedQuarterDateForSteel = format(new Date(bill.contract.originalCompletionDate), 'dd MMM yyyy');
         }
         
@@ -4002,8 +4006,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           },
           { 
             title: "STEEL CALCULATION (WITH 17B RESTRICTION)", 
-            quarter: cappedQuarterForSteel,
-            quarterInfo: `Using Capped Quarter: ${cappedQuarterForSteel} (Original Completion: ${cappedQuarterDateForSteel})`,
+            // Measurement quarter capped at Index_L — see the cement block above.
+            quarter: measurementQuarter,
+            quarterInfo: `Using Measurement Quarter ${measurementQuarter}, index capped at Index_L`
+              + ` (last month of original completion period: ${cappedQuarterDateForSteel})`,
             isRestricted: true
           }
         ] : [
@@ -4190,10 +4196,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // LEGACY: Single steel amount calculation
         
         // Calculate quarters for 17B restrictions
-        let cappedQuarterForLegacySteel = '';
         let cappedQuarterDateForLegacySteel = '';
         if (is17BRestricted && bill.contract.originalCompletionDate) {
-          cappedQuarterForLegacySteel = getQuarterFromDate(new Date(bill.contract.originalCompletionDate), new Date(bill.contract.baseMonth));
           cappedQuarterDateForLegacySteel = format(new Date(bill.contract.originalCompletionDate), 'dd MMM yyyy');
         }
         
@@ -4206,8 +4210,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           },
           { 
             title: "STEEL CALCULATION (WITH 17B RESTRICTION)", 
-            quarter: cappedQuarterForLegacySteel,
-            quarterInfo: `Using Capped Quarter: ${cappedQuarterForLegacySteel} (Original Completion: ${cappedQuarterDateForLegacySteel})`,
+            // Measurement quarter capped at Index_L — see the cement block above.
+            quarter: measurementQuarter,
+            quarterInfo: `Using Measurement Quarter ${measurementQuarter}, index capped at Index_L`
+              + ` (last month of original completion period: ${cappedQuarterDateForLegacySteel})`,
             isRestricted: true
           }
         ] : [

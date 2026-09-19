@@ -114,11 +114,16 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Calculate quarter
-    let quarterDateForCalculation = measurementDate;
-    if (contract.isExtended && contract.extensionType === '17B' && contract.originalCompletionDate && measurementDate > contract.originalCompletionDate) {
-      quarterDateForCalculation = contract.originalCompletionDate;
-    }
+    // Calculate quarter — always the MEASUREMENT date's quarter, including under a 17B
+    // extension, because that is how the bill this check previews is priced (GCC
+    // 46A.10: UsedIndex = min(current quarter average, Index_L)). This route froze the
+    // quarter at the original completion date and never applied the cap, so a paid
+    // check on a 17B contract quoted a figure the bill itself would not produce.
+    const quarterDateForCalculation = measurementDate;
+    const under17BRestriction = !!(contract.isExtended
+      && contract.extensionType === '17B'
+      && contract.originalCompletionDate
+      && measurementDate > contract.originalCompletionDate);
     const quarter = getQuarterFromDate(quarterDateForCalculation, contract.baseMonth);
 
     // Get quarterly averages
@@ -130,6 +135,24 @@ export async function POST(request: NextRequest) {
       ...steelIndexNames
     ];
     const quarterlyAverages = await getQuarterlyAverages(quarter, allIndices, contract.baseMonth, 'auto');
+
+    // GCC 46A.10: cap each index at Index_L, the index of the last month of the
+    // original completion period. Applied to the averages here so every figure below
+    // — per-entry PVC and the dedicated cement/steel amounts — sees the same cap the
+    // real bill is priced with.
+    if (under17BRestriction && contract.originalCompletionDate) {
+      const { getCappedIndices } = await import('@/lib/extension-compliance');
+      const capped = await getCappedIndices(
+        new Date(contract.originalCompletionDate),
+        quarterlyAverages,
+        new Date(contract.baseMonth),
+      );
+      for (const qa of quarterlyAverages) {
+        if (capped.cappedIndices[qa.indexName] !== undefined) {
+          qa.average = capped.cappedIndices[qa.indexName];
+        }
+      }
+    }
 
     // Calculate PVC per classification entry
     let totalClassificationPvc = 0;
