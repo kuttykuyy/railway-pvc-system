@@ -425,21 +425,33 @@ export default function BulkBillCreationPage() {
 
   // The single-bill flow's decision step, for the batch: Create runs the previews, then a
   // review modal lets each bill choose its method (item-by-item default, or grouped under
-  // its best-matching class), and one confirm saves them all.
+  // one of its nearest-matching classes), and one confirm saves them all.
+  // A choice is 'item', or the id of the class to group that bill under.
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [methodChoices, setMethodChoices] = useState<Record<string, 'item' | 'grouped'>>({});
+  const [methodChoices, setMethodChoices] = useState<Record<string, string>>({});
+  // The shown class plus its near-matching runner-ups, capped so a bill offers three
+  // ways to price it in all — item by item, and the two nearest groupings.
+  const groupedOptionsFor = (preview: any): any[] => {
+    const single = preview && !('error' in preview) ? preview.single : null;
+    if (!single) return [];
+    const options = Array.isArray(single.options) && single.options.length > 0
+      ? single.options
+      : (single.best ? [single.best] : []);
+    return options.slice(0, 2);
+  };
   const handleProcessClick = async () => {
     const validationError = validateBills();
     if (validationError) { toast.error(validationError); return; }
     await previewAllRows();
-    setMethodChoices(Object.fromEntries(billRows.map(row => [row.id, 'item' as const])));
+    setMethodChoices(Object.fromEntries(billRows.map(row => [row.id, 'item'])));
     setReviewOpen(true);
   };
   const handleConfirmCreate = () => {
     const finalRows = billRows.map(row => {
-      if (methodChoices[row.id] !== 'grouped') return row;
-      const best = (previews[row.id] as any)?.single?.best;
-      const next = best ? buildGroupedEntriesForRow(row, best) : null;
+      const choice = methodChoices[row.id] || 'item';
+      if (choice === 'item') return row;
+      const picked = groupedOptionsFor(previews[row.id]).find((option: any) => option.id === choice);
+      const next = picked ? buildGroupedEntriesForRow(row, picked) : null;
       return next ? { ...row, classificationEntries: next } : row;
     });
     setBillRows(finalRows);
@@ -1276,13 +1288,14 @@ export default function BulkBillCreationPage() {
       />
 
       {/* Review before create — the single-bill decision step, per batch row: each bill
-          picks item-by-item (default, tender method) or grouped under its best class. */}
+          picks item-by-item (default, tender method) or one of the two nearest-matching
+          single classes, so three ways to price it sit side by side. */}
       {reviewOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden my-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden my-4">
             <div className="px-6 py-4 bg-emerald-600 text-white flex-shrink-0">
               <h2 className="text-lg font-black">Review before creating {billRows.length} bill{billRows.length > 1 ? 's' : ''}</h2>
-              <p className="text-emerald-100 text-xs mt-0.5">Each bill: item by item (✓ tender method) or grouped under its best-matching class. Steel/cement stay separate either way.</p>
+              <p className="text-emerald-100 text-xs mt-0.5">Each bill: item by item (✓ tender method), or grouped under one of its nearest-matching classes. Steel/cement stay separate either way.</p>
             </div>
             <div className="p-4 space-y-2 flex-1 overflow-y-auto min-h-0">
               {billRows.map((row) => {
@@ -1291,6 +1304,8 @@ export default function BulkBillCreationPage() {
                 const single = ok ? (preview as any).single : null;
                 const itemTotal = ok ? (preview as any).totalPvc : null;
                 const choice = methodChoices[row.id] || 'item';
+                const grouped = ok ? groupedOptionsFor(preview) : [];
+                const columns = 1 + grouped.length;
                 return (
                   <div key={row.id} className="rounded-lg border border-slate-200 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1298,30 +1313,48 @@ export default function BulkBillCreationPage() {
                       {!ok && <span className="text-xs text-red-600">{preview && 'error' in preview ? preview.error : 'no preview'}</span>}
                     </div>
                     {ok && (
-                      <div className="mt-2 flex flex-col sm:flex-row gap-2">
+                      <div className={`mt-2 grid gap-2 grid-cols-1 ${columns >= 3 ? 'sm:grid-cols-3' : columns === 2 ? 'sm:grid-cols-2' : ''}`}>
                         <button
                           type="button"
                           onClick={() => setMethodChoices(prev => ({ ...prev, [row.id]: 'item' }))}
-                          className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm ${choice === 'item' ? 'border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300' : 'border-slate-200 hover:bg-slate-50'}`}
+                          className={`rounded-lg border px-3 py-2 text-left text-sm ${choice === 'item' ? 'border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300' : 'border-slate-200 hover:bg-slate-50'}`}
                         >
-                          <span className="font-semibold">Item by item</span>
-                          <span className="text-[11px] text-emerald-700 block">✓ tender method</span>
-                          <span className="font-bold">₹{Number(itemTotal ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                          <span className="font-semibold block truncate">Item by item</span>
+                          <span className="text-[11px] text-emerald-700 block truncate">✓ tender method</span>
+                          <span className="font-bold block">₹{Number(itemTotal ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                         </button>
-                        {single?.best ? (
-                          <button
-                            type="button"
-                            onClick={() => setMethodChoices(prev => ({ ...prev, [row.id]: 'grouped' }))}
-                            className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm ${choice === 'grouped' ? 'border-indigo-400 bg-indigo-50 ring-1 ring-indigo-300' : 'border-slate-200 hover:bg-slate-50'}`}
-                          >
-                            <span className="font-semibold">Grouped under {single.best.code}</span>
-                            <span className="text-[11px] text-slate-500 block">{single.composite ? 'composite work — item-wise is compliant' : single.best.name}</span>
-                            <span className="font-bold text-indigo-700">₹{Number(single.best.total ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-                          </button>
-                        ) : (
-                          <div className="flex-1 rounded-lg border border-slate-100 px-3 py-2 text-[11px] text-slate-400">No single-class option for this bill</div>
+                        {grouped.map((option: any, index: number) => {
+                          const total = Number(option.total ?? 0);
+                          const diff = total - Number(itemTotal ?? 0);
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              title={option.name}
+                              onClick={() => setMethodChoices(prev => ({ ...prev, [row.id]: option.id }))}
+                              className={`rounded-lg border px-3 py-2 text-left text-sm ${choice === option.id ? 'border-indigo-400 bg-indigo-50 ring-1 ring-indigo-300' : 'border-slate-200 hover:bg-slate-50'}`}
+                            >
+                              <span className="font-semibold block truncate">Grouped under {option.code}</span>
+                              <span className="text-[11px] text-slate-500 block truncate">
+                                {Number.isFinite(option.matchPct) ? `fits ${option.matchPct}% of items` : option.name}
+                                {index === 0 ? ' · nearest' : ''}
+                              </span>
+                              <span className="font-bold text-indigo-700 block">
+                                ₹{total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                <span className="ml-1 text-[10px] font-medium text-slate-400">
+                                  {diff >= 0 ? '+' : '−'}₹{Math.abs(diff).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                        {grouped.length === 0 && (
+                          <div className="rounded-lg border border-slate-100 px-3 py-2 text-[11px] text-slate-400">No single-class option for this bill</div>
                         )}
                       </div>
+                    )}
+                    {ok && single?.composite && grouped.length > 0 && (
+                      <p className="mt-1.5 text-[11px] text-amber-700">Composite work — item by item is the compliant method.</p>
                     )}
                   </div>
                 );

@@ -78,31 +78,62 @@ export async function compareSingleClassification(o: {
   });
   // Candidate SINGLE classes = each group's "All items" (…A) class. A single-scope work
   // has ONE candidate; a COMPOSITE work spans groups, so every group its general items
-  // use is an equally arguable single class — try each.
-  const candidateDigits = new Set<string>([String(main.code).charAt(0)]);
+  // use is an equally arguable single class — try each. These PRIMARY candidates alone
+  // decide the shown class, exactly as before.
+  const primaryDigits = new Set<string>([String(main.code).charAt(0)]);
   if (isCompositeWork) {
-    for (const d of Object.keys(generalByDigit)) candidateDigits.add(d);
+    for (const d of Object.keys(generalByDigit)) primaryDigits.add(d);
   }
-  const candidateClasses = [...candidateDigits]
-    .map((d) => allClasses.find((c) => String(c.code).trim().toUpperCase() === `${d}A`)
-      || allClasses.find((c) => String(c.code).trim() === d))
-    .filter((c): c is NonNullable<typeof c> => !!c);
-  const scored: any[] = [];
-  for (const cls of candidateClasses) {
-    const r = await calculateDynamicClassificationPvc(generalAmount, o.quarterlyAverages, cls.code, o.extractedSteelTypes);
-    if (!r.isProcessingFee) {
-      scored.push({
+  // NEAR-MATCHING alternatives, so the bill can be compared against more than one
+  // grouping: the groups the bill's OWN general items sit in (a runner-up by match is
+  // still an arguable single class), and the other groups the Name of Work names as
+  // scope. They never displace the winner — they are ranked after it, by match.
+  const nearDigits = new Set<string>();
+  for (const d of Object.keys(generalByDigit)) {
+    if (!primaryDigits.has(d)) nearDigits.add(d);
+  }
+  for (const contender of main.contenders || []) {
+    const d = String(contender.code).charAt(0);
+    if (/[1-9]/.test(d) && !primaryDigits.has(d)) nearDigits.add(d);
+  }
+  const classForDigit = (d: string) =>
+    allClasses.find((c) => String(c.code).trim().toUpperCase() === `${d}A`)
+    || allClasses.find((c) => String(c.code).trim() === d);
+  const scoreDigits = async (digits: Set<string>) => {
+    const out: any[] = [];
+    for (const d of digits) {
+      const cls = classForDigit(d);
+      if (!cls || out.some((s) => s.cls.id === cls.id)) continue;
+      const r = await calculateDynamicClassificationPvc(generalAmount, o.quarterlyAverages, cls.code, o.extractedSteelTypes);
+      if (r.isProcessingFee) continue;
+      out.push({
         cls, generalPvc: r.totalPvc,
         matchPct: Math.round(((generalByDigit[String(cls.code).charAt(0)] || 0) / generalAmount) * 100),
       });
     }
-  }
+    return out;
+  };
   // Shown class is picked by MATCH first, payout only as tie-break.
-  scored.sort((a, b) => b.matchPct - a.matchPct || b.generalPvc - a.generalPvc);
+  const byMatch = (a: any, b: any) => b.matchPct - a.matchPct || b.generalPvc - a.generalPvc;
+  const scored = (await scoreDigits(primaryDigits)).sort(byMatch);
   const winner = scored[0];
   if (!winner) return null;
+  const nearScored = (await scoreDigits(nearDigits))
+    .filter((s) => !scored.some((p) => p.cls.id === s.cls.id))
+    .sort(byMatch);
   const allItemsClass = winner.cls;
   const supplyPvc = steelTmtPvc + steelOtherPvc + cementSupplyPvc;
+  // Every grouping worth comparing, the shown class first, then the next-nearest ones.
+  const toOption = (s: any) => ({
+    id: s.cls.id, code: s.cls.code, name: s.cls.name, groupId: s.cls.groupId,
+    fixed: s.cls.fixed, labour: s.cls.labour, steel: s.cls.steel, cement: s.cls.cement,
+    plantMachinery: s.cls.plantMachinery, fuel: s.cls.fuel,
+    otherMaterials: s.cls.otherMaterials, explosives: s.cls.explosives,
+    generalPvc: s.generalPvc,
+    total: s.generalPvc + supplyPvc,
+    matchPct: s.matchPct,
+  });
+  const options = [winner, ...scored.slice(1), ...nearScored].map(toOption);
 
   return {
     mainCode: main.code,
@@ -124,7 +155,9 @@ export async function compareSingleClassification(o: {
       generalPvc: winner.generalPvc,
       total: winner.generalPvc + supplyPvc,
     },
-    candidates: scored.map((s) => ({
+    /** The shown class and every near-matching alternative, ranked — the comparison list. */
+    options,
+    candidates: [...scored, ...nearScored].map((s) => ({
       code: s.cls.code, name: s.cls.name,
       total: s.generalPvc + supplyPvc,
       matchPct: s.matchPct,
